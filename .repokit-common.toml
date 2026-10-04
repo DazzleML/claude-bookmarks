@@ -1,17 +1,13 @@
-# Tooling configuration for claude-bookmarks.
+# git-repokit-common settings for claude-bookmarks.
 #
 # The product is a Claude Code mod (TypeScript, in .claude-plugin/, hooks/ and
-# types/), installed through a plugin marketplace -- it is NOT a Python
-# package, so there is no [project] metadata here. This file configures the
-# Python dev tooling only: the git-repokit-common subtree at
-# scripts/repokit-common/ (version sync, CHANGELOG links, git hooks) and
-# pytest, which the pre-push hook runs.
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = "test_*.py"
-python_functions = "test_*"
-python_classes = "Test*"
+# types/), so there is no pyproject.toml: this is repokit-common's own config
+# file for projects that are not Python packages. It configures the vendored
+# copy at scripts/repokit-common/ (version sync, CHANGELOG links, git hooks).
+# The table header stays [tool.repokit-common], as in a pyproject.toml.
+#
+# Tests: none declared here. The pre-push hook runs tests/ (without the
+# vendored copy), and CI runs `python -m pytest tests/`.
 
 [tool.repokit-common]
 # Source of truth for version components (MAJOR/MINOR/PATCH/PHASE).

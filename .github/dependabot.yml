@@ -1,7 +1,8 @@
 version: 2
 updates:
   # No pip ecosystem: the product is a Claude Code mod with no Python
-  # dependencies (pyproject.toml configures dev tooling only).
+  # dependencies (Python runs repo tooling only, configured in
+  # .repokit-common.toml).
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
