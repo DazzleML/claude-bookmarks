@@ -26,8 +26,10 @@ MANIFEST = ROOT / ".claude-plugin" / "plugin.json"
 
 def test_plugin_manifest_version_matches_version_py():
     """Claude Code reads the plugin's version from plugin.json first, so it
-    must equal version.py's base version. Guards the hand-bump until
-    repokit-common's extra-targets keeps the two in sync automatically."""
+    must equal version.py's base version. The pre-commit hook writes
+    plugin.json from version.py (repokit-common's extra-targets); this
+    catches a mismatch the hook did not see: hooks not installed (a fresh
+    clone, CI) or a commit made with --no-verify."""
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     assert manifest["version"] == get_base_version()
 

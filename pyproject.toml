@@ -24,10 +24,8 @@ tag-prefix = "v"
 tag-format = "human"
 private-patterns = ["private/", "local/", ".env"]
 
-# Keep the plugin manifest's "version" in step with version.py.
-# Inert until git-repokit-common ships extra-targets support (upstreaming in
-# progress); until then tests/test_version.py guards the match.
+# Keep the plugin manifest's "version" in step with version.py: every sync,
+# --bump, --set and --phase writes it too (git-repokit-common v0.3.2+), and
+# tests/test_version.py checks the two still match.
 [[tool.repokit-common.extra-targets]]
 path = ".claude-plugin/plugin.json"
-type = "json"
-field = "version"
