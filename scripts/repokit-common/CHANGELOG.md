@@ -8,6 +8,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-10-04
+
+> **For consuming projects:** the pre-push hook's test summary stays plain text when your environment forces colour. Nothing to change on your side.
+
+### Fixed
+
+- **The pre-push hook's "All tests passed" line carried pytest's colour codes when `FORCE_COLOR` or `PY_COLORS` was set** (CI runners and some terminals set them). pytest coloured its own summary even though the hook captured it, so the line the hook reprints, and any log of it, held raw escape sequences instead of `All tests passed: 12 passed`. The hook now runs pytest with `--color=no` and applies its own colours as before.
+
+### Removed
+
+- **`.github/dependabot.yml`.** It asked for `pip` and `github-actions` updates, and this repository has neither a Python manifest nor workflows, so every scheduled run failed. GitHub's security alerts do not depend on the file.
+
+## [0.3.3] - 2026-10-04
+
+> **For consuming projects:** a bump no longer edits the comment on your `PHASE` line. Nothing else changes.
+
+### Fixed
+
+- **`--bump` (and every write) rewrote the `PHASE` line's comment.** `write_version_components` replaced everything after `PHASE =` with a fixed comment, `# Per-MINOR feature set: None, "alpha", ...`. That overwrote the project's own comment on every bump and called the stable value `None`, although `PHASE` is `""` when stable. Only the value is rewritten now (`""`, `'…'` or `None` forms); whatever follows it is kept byte for byte. A value in an unrecognised form still gets its line replaced, now with an accurate comment (`"" (stable), "alpha", ...`). Found while bumping claude-bookmarks to v0.1.1.
+
+## [0.3.2] - 2026-10-04
+
+> **For consuming projects:**
+> - **Nothing changes unless you opt in.** A project that declares no extra targets gets identical behaviour and output (checked against 37 consuming projects, six modes each).
+> - **A version source with any name now counts fully.** A project whose `version-source` is not named `*_version.py` (a root `version.py`, say) now gets the "Version updated for commit" line and the version-only date rule; before, both looked for `_version.py` alone.
+> - **Projects that kept a local fork of `sync-versions.py` to sync a JSON manifest can drop it** and declare the file instead (see below). claude-session-logger's existing `extra-targets` entries work unchanged.
+
+### Added
+
+- **Extra targets: keep JSON manifests at the project's version.** `[[tool.repokit-common.extra-targets]]` names a file (a Claude Code `plugin.json` or `marketplace.json`, a `package.json`, a browser extension `manifest.json`) whose `version` field the script keeps in step with the version source, in every mode: sync, `--bump`, `--set`, `--phase`, `--check` (exits 1 while stale), `--dry-run`, and `--auto`, which stages the updated files. Keys: `path`, `type` (`json`), `field` (`version`), `match` (`one` by default, `first`, `all`) and `format` (`human` by default, or `base` for `X.Y.Z` only, which browser manifests require).
+
+  The file is edited in place, so formatting, key order, line endings and any BOM survive and a bump is a one-line diff per field. Each edit is cross-checked against a real JSON parse; a missing or non-string field, a repeated key, invalid JSON, or a field the edit cannot locate is reported and the file left untouched, with exit 1 even under `--auto`. Unknown keys are errors. This brings upstream the extra-targets support claude-session-logger carried as a local fork, fixing four things in it: a missing field passed silently, `--check` ignored `match`, problems exited 0 so the hook never showed them, and Windows writes turned LF into CRLF.
+
+### Changed
+
+- `sync-versions.py` reads the `[tool.repokit-common]` table once (`_read_table()`), shared by the existing settings and the new targets. `_load_config()` keeps its return value and messages.
+
+### Fixed
+
+- **`version-source` under any name.** Two places matched the file name `_version.py` instead of the configured `version-source`: the pre-commit hook's "Version updated for commit" line, and the date rule in `__version__` (when only version files changed, keep the last commit's date rather than today's). Both now also accept the configured source, and the date rule the extra targets too. The old `_version.py` match is kept, so existing projects see no change. Parsing the `git status` path now splits instead of slicing at a fixed offset, which the output's outer `strip()` had broken for the first line.
+
 ## [0.3.1] - 2026-09-27
 
 > **For consuming projects:**
@@ -294,7 +335,10 @@ First consumer: `DazzleTools/dazzlelink` (file-association scripts live in `scri
 
 All project-specific hardcoding (`wtf-restarted`, `comfydbg`) was replaced with auto-detection or `$placeholder` variables. Project-level files (`.github/`, `CONTRIBUTING.md`, `.repokit.json`, `.vscode/`) were substituted with real values for `git-repokit-common`.
 
-[Unreleased]: https://github.com/DazzleTools/git-repokit-common/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/DazzleTools/git-repokit-common/compare/v0.3.3...HEAD
+[0.3.4]: https://github.com/DazzleTools/git-repokit-common/compare/v0.3.3...main
+[0.3.3]: https://github.com/DazzleTools/git-repokit-common/compare/764ea2b...v0.3.3
+[0.3.2]: https://github.com/DazzleTools/git-repokit-common/compare/v0.3.1...764ea2b
 [0.3.1]: https://github.com/DazzleTools/git-repokit-common/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/DazzleTools/git-repokit-common/compare/v0.2.13...v0.3.0
 [0.2.13]: https://github.com/DazzleTools/git-repokit-common/compare/v0.2.12...v0.2.13
