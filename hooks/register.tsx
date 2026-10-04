@@ -16,7 +16,11 @@ import type { EngineInterface, Register, Timer } from 'claude-code'
 import type { PaneMode, Row } from '../types'
 
 const PANE = 'bm-poc'
-const TESTED_ON = '2.1.288'
+
+// Claude Code builds the borrowed-action chords (below) were verified on. The
+// start-up tripwire toasts on any other build, because a new build could give a
+// borrowed action a handler of its own. Add a build here after re-verifying.
+const VERIFIED_CLIENTS = ['2.1.288', '2.1.289']
 
 // Engine keybinding actions borrowed for the chord test (B4). Neither should have a
 // handler mounted while the built-in diff mod is enabled; the version check in
@@ -129,6 +133,16 @@ type Marks = Record<string, Mark>
 
 const short = (uuid: string) => uuid.slice(0, 8)
 const head = (text: string) => text.replace(/\s+/g, ' ').trim().slice(0, 60)
+
+// This plugin's own version, from its manifest (the one Claude Code installs by).
+async function pluginVersion($: EngineInterface): Promise<string> {
+  try {
+    const manifest = JSON.parse(await $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`))
+    return typeof manifest.version === 'string' ? manifest.version : '?'
+  } catch {
+    return '?'
+  }
+}
 
 async function allRows($: EngineInterface): Promise<Row[]> {
   return (await read($, rows)) as Row[]
@@ -258,11 +272,14 @@ export const register: Register = on => {
 
     markCache = await loadMarks($)
 
-    // The tracking mechanism for the borrowed actions: say so whenever the build
-    // differs from the one the chords were verified on.
+    // The tracking mechanism for the borrowed actions: say so whenever the build is
+    // not one the chords were verified on.
     const v = await $.session.version()
-    if ((v.base ?? v.version) !== TESTED_ON) {
-      $.ui.toast(`convo-bookmarks: chords verified on ${TESTED_ON}, this is ${v.version}`)
+    if (!VERIFIED_CLIENTS.includes(v.base ?? v.version)) {
+      $.ui.toast(
+        `${$.plugin.name} ${await pluginVersion($)}: chords verified on Claude Code ` +
+          `${VERIFIED_CLIENTS.join(', ')}; this is ${v.version}`,
+      )
     }
     return next(e)
   })
@@ -473,7 +490,8 @@ export const register: Register = on => {
     const list = await allRows($)
     const promptCount = list.filter(r => r.door === 'prompt').length
     $.ui.log(
-      `[bm-poc] version ${v.version} (chords verified on ${TESTED_ON}); session ${await $.session.id()}; ` +
+      `[bm-poc] ${$.plugin.name} ${await pluginVersion($)} on Claude Code ${v.version} ` +
+        `(chords verified on ${VERIFIED_CLIENTS.join(', ')}); session ${await $.session.id()}; ` +
         `captured ${promptCount} prompts, ${list.length - promptCount} replies; ${rendered.size} drawn ids`,
     )
     return {}

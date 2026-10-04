@@ -2,7 +2,7 @@
 
 Highlight a line in your Claude Code terminal conversation, mark it, and jump back to it later. Vim-style marks, a named bookmarks pane, pins. (This is a Claude Code plugin, not a claude.ai browser extension.)
 
-> **Status: proof of concept.** The core loop works (select text, `Ctrl+X m a` marks it and lights it up in place, `Ctrl+X ' a` jumps back), proven on Claude Code 2.1.288. The tool is being rebuilt into a proper release; see the [Roadmap](https://github.com/DazzleML/claude-bookmarks/issues/1).
+> **Status: proof of concept.** The core loop works (select text, `Ctrl+X m a` marks it and lights it up in place, `Ctrl+X ' a` jumps back), proven on Claude Code 2.1.288 and 2.1.289. The tool is being rebuilt into a proper release; see the [Roadmap](https://github.com/DazzleML/claude-bookmarks/issues/1).
 
 The plugin's name is **`convo-bookmarks`** (third-party plugin names may not start with `claude-`).
 

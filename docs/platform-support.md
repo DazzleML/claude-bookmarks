@@ -4,7 +4,7 @@ The plugin runs inside Claude Code, so it goes wherever Claude Code's terminal a
 
 | Platform / setup | Status | Notes |
 |---|---|---|
-| Windows 11, Windows Terminal, fullscreen renderer | **Tested** (proof of concept, Claude Code 2.1.288) | Chords, selection marks, in-place highlight, jumps |
+| Windows 11, Windows Terminal, fullscreen renderer | **Tested** (proof of concept, Claude Code 2.1.288 and 2.1.289) | Chords, selection marks, in-place highlight, jumps |
 | macOS, fullscreen renderer | Expected | Not yet tested |
 | Linux, fullscreen renderer | Expected | Not yet tested |
 | tmux / GNU screen | Unknown | `Ctrl+X` chords should pass through; check prefix keys |
