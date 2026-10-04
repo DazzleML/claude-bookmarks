@@ -1,54 +1,11 @@
-[build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "claude-bookmarks"
-dynamic = ["version"]
-description = "A new project created from git-repokit-template"
-readme = "README.md"
-license = {text = "GPL-3.0-or-later"}
-requires-python = ">=3.10"
-authors = [
-    {name = "djdarcy", email = "djdarcy@users.noreply.github.com"},
-]
-keywords = []
-classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
-    "Environment :: Console",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: Utilities",
-]
-
-dependencies = []
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-]
-
-[project.urls]
-Homepage = "https://github.com/DazzleML/claude-bookmarks"
-Repository = "https://github.com/DazzleML/claude-bookmarks"
-Issues = "https://github.com/DazzleML/claude-bookmarks/issues"
-
-[project.scripts]
-claude-bookmarks = "claude_bookmarks.cli:main"
-
-[tool.setuptools.dynamic]
-version = {attr = "claude_bookmarks._version.PIP_VERSION"}
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["claude_bookmarks", "claude_bookmarks.*"]
+# Tooling configuration for claude-bookmarks.
+#
+# The product is a Claude Code mod (TypeScript, in .claude-plugin/, hooks/ and
+# types/), installed through a plugin marketplace -- it is NOT a Python
+# package, so there is no [project] metadata here. This file configures the
+# Python dev tooling only: the git-repokit-common subtree at
+# scripts/repokit-common/ (version sync, CHANGELOG links, git hooks) and
+# pytest, which the pre-push hook runs.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -57,8 +14,20 @@ python_functions = "test_*"
 python_classes = "Test*"
 
 [tool.repokit-common]
-version-source = "claude_bookmarks/_version.py"
+# Source of truth for version components (MAJOR/MINOR/PATCH/PHASE).
+version-source = "version.py"
 changelog = "CHANGELOG.md"
 repo-url = "https://github.com/DazzleML/claude-bookmarks"
 tag-prefix = "v"
+# "human" tags (v0.1.0, v0.1.0-alpha) match the version Claude Code reads
+# from .claude-plugin/plugin.json.
+tag-format = "human"
 private-patterns = ["private/", "local/", ".env"]
+
+# Keep the plugin manifest's "version" in step with version.py.
+# Inert until git-repokit-common ships extra-targets support (upstreaming in
+# progress); until then tests/test_version.py guards the match.
+[[tool.repokit-common.extra-targets]]
+path = ".claude-plugin/plugin.json"
+type = "json"
+field = "version"

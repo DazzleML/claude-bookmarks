@@ -1,15 +1,7 @@
 version: 2
 updates:
-  # Python dependencies
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
-    labels:
-      - "pip"
-      - "dependencies"
-    versioning-strategy: increase-if-necessary
+  # No pip ecosystem: the product is a Claude Code mod with no Python
+  # dependencies (pyproject.toml configures dev tooling only).
 
   # GitHub Actions
   - package-ecosystem: "github-actions"

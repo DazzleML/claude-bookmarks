@@ -149,7 +149,12 @@ docs/images/bak/
 *.obj
 
 # Project-specific runtime files
-# (add project-specific ignores here)
+# Type declarations Claude Code writes beside a mod each time it loads it
+# (claude-code/, claude-code-tools/, claude-code-mcp/, tsconfig.json).
+.claude-plugin/types/
+# The original proof of concept, preserved in private/revisions/poc/. The
+# root copy stays only while a test session still loads it via --plugin-dir.
+/poc/
 
 # RepoKit Private Content Protection (DO NOT REMOVE)
 CLAUDE.md
