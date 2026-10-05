@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `docs/tutorial.md`: chords, leader keys and vim marks explained for people who haven't used vim, then a hands-on walkthrough of each feature.
+- `docs/usage.md`: each feature in detail (marks, jumps, the reading position, the prompts pane) and what is kept, for how long.
+- `docs/troubleshooting.md`: the known limits and what to do about each (the band doesn't appear, a chord does nothing, a jump is refused).
+
+### Changed
+
+- README rewritten in the shape of the other DazzleML Claude Code projects: badges, the problem it solves, a numbered quick start, a keys table, common workflows, known limits as tips, debug logging, platform support, project structure and how it works.
+
 ## [0.1.4] - 2026-10-04
 
 ### Fixed
