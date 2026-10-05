@@ -41,7 +41,7 @@ A pane opened this way can't take the keyboard (Claude Code keeps it on the band
 
 To use a different key for the leader, rebind Claude Code's `abovePrompt:focus` action in `~/.claude/keybindings.json` (context `Chat`), for example `"ctrl+;": "abovePrompt:focus"`. Keys such as `Ctrl+;` and `Ctrl+,` reach Claude Code only if your terminal reports them; in Windows Terminal, map the key to a `sendInput` of `\u001b[59;5u` (for `Ctrl+;`) in its settings.
 
-Known rough edges: `Esc` doesn't close a pane opened from the band, since the pane never holds the keyboard; the pane closes after a jump or mark, or with its `×`.
+To leave without picking anything, press `Esc`: the band gives the keyboard back to the prompt, and the plugin notices within half a second and closes the pane. Typing in the prompt, or closing the pane with its `×`, does the same.
 
 ## Marks
 
@@ -117,6 +117,18 @@ The list includes prompts from before the plugin was loaded. The first time it s
 
 **Dimmed prompts** are ones Claude Code hasn't drawn on screen since the plugin loaded. Usually that means they are from before the last compaction, which Claude Code no longer loads after a restart or resume, and a jump to one will be refused. A prompt that simply hasn't been scrolled past yet is also dim until it is drawn, so treat the dimming as a hint, not a promise.
 
+### Pinned prompts
+
+Pin the prompts you want to come back to, and they stay at the top of the pane:
+
+| To | Do |
+|----|----|
+| Pin or unpin prompt #21 | Type `*21` in the `#` field and press `Enter` (the pane stays open, so you can pin several) |
+| Pin or unpin your newest prompt | Type `*` and press `Enter` |
+| Pin from the prompt, without the pane | `/bm-pin 21`, or `/bm-pin` for the newest |
+
+A pinned prompt shows a gold star inside its number, `245★) `, both in a **★ pinned** group at the top of the pane (in the order you pinned them) and in its place in the full list. Pins are kept per conversation, like marks.
+
 ## What is kept, and where
 
 | What | Kept for | Notes |
@@ -124,6 +136,7 @@ The list includes prompts from before the plugin was loaded. The first time it s
 | Marks `a`-`z` | This conversation | Survive restarting Claude Code and `claude --resume` |
 | Reading position | This conversation | The same |
 | The prompt list | This conversation | Up to 5000 prompts |
+| Pinned prompts | This conversation | Survive restarting Claude Code and `claude --resume` |
 | The highlight | Two minutes, or until your next prompt | Display only |
 
 Each conversation has its own marks: `a` in one conversation is unrelated to `a` in another. The plugin stores them in Claude Code's own plugin storage, not in the session file.
@@ -137,5 +150,6 @@ The plugin adds a few commands from its proof-of-concept stage. They are useful 
 | `/bm-env` | The plugin's version, the Claude Code version, the session id, and what the plugin has captured |
 | `/bm-marks` | The marks set in this conversation |
 | `/bm-timeline` | The last few plugin events: draws, panes, jumps, toasts |
+| `/bm-pin [N]` | Pins or unpins prompt #N (the newest without a number); see [Pinned prompts](#pinned-prompts) |
 
 These commands are left over from the proof of concept and will be renamed in the rebuild.

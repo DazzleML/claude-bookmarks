@@ -14,6 +14,8 @@ declare module 'claude-code' {
       // When a pane opened from the band can't take the keyboard, the band itself
       // collects the next key; 'idle' shows the usual buttons.
       bandMode: PaneMode | 'idle'
+      // Bumped when the pinned prompts change, so the prompts pane redraws.
+      pinsRev: number
       // What the band shows after a mark or jump: the letter and the marked text.
       shown: { letter: string; text: string } | null
     }

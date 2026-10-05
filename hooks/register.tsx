@@ -45,6 +45,7 @@ const rows = atom({ plugin: 'convo-bookmarks', key: 'rows' } as const, [])
 const paneMode = atom({ plugin: 'convo-bookmarks', key: 'paneMode' } as const, 'list')
 const shown = atom({ plugin: 'convo-bookmarks', key: 'shown' } as const, null)
 const bandMode = atom({ plugin: 'convo-bookmarks', key: 'bandMode' } as const, 'idle')
+const pinsRev = atom({ plugin: 'convo-bookmarks', key: 'pinsRev' } as const, 0)
 
 // The highlight and the band text are temporary (djdarcy, 2026-10-03: "visible temporarily
 // for maybe a minute or two or until the next action like another prompt is sent").
@@ -646,6 +647,13 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
     // as in the pane. A missing element (no reading position) is simply denied.
     if (mode === 'list') await focusBand($, 'band-prompt-number')
     if (mode === 'jump') await focusBand($, 'band-jump-reading')
+    // Esc hands the keyboard back to the prompt, and no event says so (djdarcy,
+    // 2026-10-05: "it goes back to the normal text input bar but the panel stays
+    // open"). $.ui.focus on the band is refused once the band no longer holds the
+    // keys, so ask every BAND_WATCH_MS, onto the element the ring is already on
+    // (no visible move), and close the pane as soon as it is refused.
+    bandWatch?.cancel()
+    bandWatch = $.clock.every(BAND_WATCH_MS, () => void watchBand($, mode))
   }
 }
 
@@ -664,7 +672,42 @@ async function focusBand($: EngineInterface, key: string) {
 }
 
 // Jumps to prompt #n, from the prompts pane's field or the band's.
+// --- Pinned prompts ------------------------------------------------------------------
+// Favourite prompts to come back to (djdarcy, 2026-10-05), per conversation, kept in
+// the order they were pinned. Drawn as `245★)` and listed again at the top of the
+// prompts pane. Toggled by `*21` (or `*` for the newest) in the `#` field, or /bm-pin.
+async function pinsKey($: EngineInterface): Promise<string> {
+  return `pins:${await $.session.id()}`
+}
+async function loadPins($: EngineInterface): Promise<string[]> {
+  return ((await $.store.get(await pinsKey($))) as string[] | undefined) ?? []
+}
+
+// Toggles the pin on prompt #n (the newest when `typed` names none). Returns false when
+// there is no such prompt.
+async function togglePin($: EngineInterface, typed: string): Promise<boolean> {
+  const all = await prompts($)
+  const n = typed.trim() === '' ? all.length : Number(typed.trim())
+  const target = Number.isInteger(n) ? all[n - 1] : undefined
+  if (!target) {
+    $.ui.toast(`no prompt #${typed.trim()} (1-${all.length})`)
+    return false
+  }
+  const pins = await loadPins($)
+  const pinned = pins.includes(target.uuid)
+  await $.store.set(await pinsKey($), pinned ? pins.filter(u => u !== target.uuid) : [...pins, target.uuid])
+  await update($, pinsRev, v => v + 1)
+  $.ui.toast(`${pinned ? 'unpinned' : 'pinned'} #${n}: ${target.head.slice(0, 40)}`)
+  log($, `[bm-poc] ${pinned ? 'unpinned' : 'pinned'} prompt #${n} ${short(target.uuid)}`)
+  return true
+}
+
 async function jumpToPromptNumber($: EngineInterface, typed: string, via: string) {
+  // `*21` toggles the pin on #21, `*` on the newest; the pane stays open to pin more.
+  if (typed.trim().startsWith('*')) {
+    await togglePin($, typed.trim().slice(1))
+    return
+  }
   const all = await prompts($)
   const n = Number(typed.trim())
   const target = Number.isInteger(n) ? all[n - 1] : undefined
@@ -683,9 +726,41 @@ function promptNumberComplete(typed: string, count: number): boolean {
   return /^\d+$/.test(typed) && n >= 1 && n <= count && n * 10 > count
 }
 
+const BAND_WATCH_MS = 400
+let bandWatch: Timer | undefined
+// The band element the focus ring is on, as the ui.focus hook last saw it.
+let bandRing: string | undefined
+
+// An element of the band's key mode that is drawn now, to aim the focus probe at:
+// the ring's own element when it belongs to this mode, else a fixed one per mode.
+async function bandProbeKey($: EngineInterface, mode: PaneMode): Promise<string | undefined> {
+  const prefix = mode === 'list' ? 'band-prompt-number' : `band-${mode}-`
+  if (bandRing?.startsWith(prefix)) return bandRing
+  if (mode === 'list') return 'band-prompt-number'
+  if (mode === 'mark') return 'band-mark-a'
+  const marks = await loadMarks($)
+  if (marks[READING]) return 'band-jump-reading'
+  const first = LETTERS.find(l => marks[l])
+  return first ? `band-jump-${first}` : undefined
+}
+
+async function watchBand($: EngineInterface, mode: PaneMode) {
+  if (!bandId || (await read($, bandMode)) === 'idle') return
+  const key = await bandProbeKey($, mode)
+  if (!key) return // nothing focusable on the band: the timeout or the next edit ends it
+  const r = await $.ui.focus({ requestId: bandId, key })
+  if ('deny' in r && r.deny) {
+    log($, `[bm-poc] band lost the keyboard (${r.deny}): closing the pane`)
+    await closePane($)
+  }
+}
+
 async function endBandMode($: EngineInterface) {
   bandTimer?.cancel()
   bandTimer = undefined
+  bandWatch?.cancel()
+  bandWatch = undefined
+  bandRing = undefined
   if ((await read($, bandMode)) !== 'idle') await update($, bandMode, () => 'idle')
 }
 
@@ -714,6 +789,7 @@ export const register: Register = on => {
       ['bm-env', 'Show version, session id and what the probe has captured'],
       ['bm-timeline', 'Show the last N mod events (draws, appends, pane, store, toast, scroll)'],
       ['bm-sel', 'Selection POC: show what $.ui.selection() returns for your mouse selection'],
+      ['bm-pin', 'Pin or unpin prompt #N in the prompts pane (no number: the newest)'],
     ]
     for (const [name, description] of commands) {
       await $.command.register({ name, description, immediate: true })
@@ -738,6 +814,32 @@ export const register: Register = on => {
   // The next prompt ends the temporary highlight.
   on('prompt.submit', async ($, e, next) => {
     await clearShown($)
+    await endBandMode($)
+    return next(e)
+  })
+
+  // Leaving the band's key mode without picking anything (djdarcy, 2026-10-05: "it
+  // gets stranded if I don't actually want to jump"). Esc hands the keyboard back to
+  // the prompt, but no event says so: ui.focus covers moves within the band only. So
+  // the first edit in the prompt box ends the mode and closes the pane; the edit
+  // itself goes through untouched.
+  on('prompt.edit', async ($, e, next) => {
+    if ((await read($, bandMode)) !== 'idle') {
+      log($, '[bm-poc] prompt edited while the band waited for a key: cancelled')
+      await closePane($)
+    }
+    return next(e)
+  })
+
+  // Where the band's focus ring is, so the keyboard probe (watchBand) aims at the
+  // element already holding it and never moves the ring.
+  on('ui.focus', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.element) bandRing = e.element
+    return next(e)
+  })
+
+  // The person closed the pane (its close mark, or Ctrl+X x): end the band's key mode too.
+  on('ui.close', { id: PANE }, async ($, e, next) => {
     await endBandMode($)
     return next(e)
   })
@@ -869,6 +971,11 @@ export const register: Register = on => {
       log($, `[bm-poc]   #${n} ${short(r.uuid)} ${drawnAs(r)} ${r.head}`)
     })
     strays.slice(0, 20).forEach(id => log($, `[bm-poc]   drawn, not appended: ${id} ${rendered.get(id)}`))
+    return {}
+  })
+
+  on('command.run', { command: 'bm-pin' }, async ($, e) => {
+    await togglePin($, e.args.replace(/^#/, ''))
     return {}
   })
 
@@ -1091,6 +1198,40 @@ export const register: Register = on => {
       const width = String(all.length).length
       const numberLabel = (n: number) => `${String(n).padStart(width)}) `
       const go = (typed: string) => jumpToPromptNumber($, typed, 'prompts pane')
+      // Pinned prompts: listed first, in the order pinned, and starred in the full list.
+      await read($, pinsRev) // read so a pin toggle redraws the pane
+      const pinIds = await loadPins($)
+      const byUuid = new Map(numbered.map(r => [r.uuid, r]))
+      const pinnedRows = pinIds.map(u => byUuid.get(u)).filter((r): r is (typeof numbered)[number] => !!r)
+      const pinSet = new Set(pinIds)
+      type NumberedPrompt = (typeof numbered)[number]
+      const promptRow = (r: NumberedPrompt, group: string) => {
+        // Dim: not drawn since the mod loaded, so possibly not reachable by a jump
+        // (before a compaction). A hint only: one not yet scrolled to is dim too.
+        const dim = !rendered.has(r.uuid)
+        const press = async () => {
+          await jumpTo($, r.uuid, 'prompts pane', `prompt #${r.n}`, r.head)
+          await closePane($)
+        }
+        if (!pinSet.has(r.uuid)) {
+          return <Button key={`${group}-${r.uuid}`} label={`${numberLabel(r.n)}${r.head}`} plain dimColor={dim} onPress={press} />
+        }
+        // `245★) `: a gold star inside the number, so it reads as the row's marker, not
+        // part of the prompt (djdarcy, 2026-10-05, over a background band and a star
+        // before the number). A Button's label takes no colour at rest (2.1.289), so the
+        // number and star are Text beside the Button; flexShrink 0 keeps them from being
+        // squeezed to nothing next to a long label that wraps (seen in the look test).
+        return (
+          <Box key={`${group}-row-${r.uuid}`} flexDirection="row">
+            <Box flexShrink={0}>
+              <Text dimColor={dim}>{String(r.n).padStart(width)}</Text>
+              <Text color={WORDS_FG}>★</Text>
+              <Text dimColor={dim}>{') '}</Text>
+            </Box>
+            <Button key={`${group}-${r.uuid}`} label={r.head} plain dimColor={dim} onPress={press} />
+          </Box>
+        )
+      }
       return (
         <Box flexDirection="column">
           {numbered.length === 0 && <Text dimColor>No prompts yet.</Text>}
@@ -1111,22 +1252,11 @@ export const register: Register = on => {
               for scrolling, but Tab walks the focus ring down the Buttons below from the
               newest, Shift+Tab back up, Enter jumps. A Select was tried: on the terminal
               its arrows open a pop-up list of its own instead (screenshot, 2026-10-04). */}
-          {numbered.length > 0 && <Text dimColor>or Tab / Shift+Tab, Enter</Text>}
-          {numbered.map(r => (
-            <Button
-              key={`p-${r.uuid}`}
-              label={`${numberLabel(r.n)}${r.head}`}
-              plain
-              // Dim: not drawn since the mod loaded, so possibly not reachable by a
-              // jump (before a compaction). A hint only: one not yet scrolled to is
-              // dim too until it is drawn.
-              dimColor={!rendered.has(r.uuid)}
-              onPress={async () => {
-                await jumpTo($, r.uuid, 'prompts pane', `prompt #${r.n}`, r.head)
-                await closePane($)
-              }}
-            />
-          ))}
+          {numbered.length > 0 && <Text dimColor>or Tab / Shift+Tab, Enter; *N pins</Text>}
+          {pinnedRows.length > 0 && <Text dimColor>★ pinned</Text>}
+          {pinnedRows.map(r => promptRow(r, 'pin'))}
+          {pinnedRows.length > 0 && <Text dimColor>all prompts</Text>}
+          {numbered.map(r => promptRow(r, 'p'))}
         </Box>
       )
     }

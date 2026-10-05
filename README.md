@@ -7,7 +7,7 @@
 
 > **Vim-style marks, a reading position, and a numbered prompt history, inside a Claude Code conversation**
 
-A Claude Code plugin (a mod: it draws in Claude Code's terminal app) that lets you select a line of a conversation, mark it with a letter, and jump back to it later from anywhere in the conversation. The plugin's name is **`convo-bookmarks`**, because third-party plugin names (sadly) starting with the prefix `claude-` are verboten. Also, this is not a claude.ai browser extension, but if you're looking for such a thing the [AI Chat Nav](https://chromewebstore.google.com/detail/ai-chatnav/edplgflcieggamnnoecdpckjjhpjlbim?pli=1) extension might help there.
+A Claude Code plugin (a mod: it draws in Claude Code's terminal app) that lets you select a line of a conversation, mark it with a letter, and jump back to it later from anywhere in the conversation. The plugin's name is **`convo-bookmarks`**, because third-party plugin names (sadly) starting with the prefix `claude-` are verboten. This is also not a claude.ai browser extension, but if you're looking for such a thing the [AI Chat Nav](https://chromewebstore.google.com/detail/ai-chatnav/edplgflcieggamnnoecdpckjjhpjlbim?pli=1) extension might help there.
 
 ## The Problem
 
@@ -73,6 +73,7 @@ Restart Claude Code after editing. Without the chords, the band's buttons do the
 - **[Using claude-bookmarks](docs/usage.md)** - Each feature in detail: marks, jumps, the reading position, the prompts pane, and what is kept
 - **[Troubleshooting](docs/troubleshooting.md)** - The band doesn't appear, a chord does nothing, a jump is refused
 - **[Platform support](docs/platform-support.md)** - Terminals and renderers, tested and expected
+- **[Claude Code quirks we work around](docs/engine-quirks.md)** - Each limit of the plugin API we hit, what the plugin does about it, and what a proper fix would be
 
 ## Features
 
@@ -128,6 +129,7 @@ The plugin also adds a few diagnostic commands from its proof-of-concept stage:
 | `/bm-env` | Plugin version, session id, and what it has captured |
 | `/bm-marks` | The marks set in this conversation |
 | `/bm-timeline` | The last few plugin events (draws, panes, jumps) |
+| `/bm-pin [N]` | Pin or unpin prompt #N in the prompts pane (`*N` in its `#` field does the same) |
 
 For each feature in detail, see **[docs/usage.md](docs/usage.md)**.
 

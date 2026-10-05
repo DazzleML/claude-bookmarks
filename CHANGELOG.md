@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-05
+
+### Added
+
+- Pinned prompts: pin the prompts you want to come back to. Type `*21` in the prompts pane's `#` field (or the band's) to pin or unpin #21, or `*` for your newest prompt; `/bm-pin [N]` does the same from the prompt. Pinned prompts show a gold star inside their number (`245★)`), in a **★ pinned** group at the top of the pane and in place in the full list, and are kept per conversation.
+- `docs/engine-quirks.md`: each Claude Code limit the plugin has hit, what you'd notice, why it happens, what the plugin does about it, and what a proper fix would be.
+
+### Fixed
+
+- Leaving the band's key mode: `Esc` now closes a pane opened from the band within about half a second (the plugin checks whether the band still holds the keyboard), and typing in the prompt or closing the pane yourself resets the band too. Previously the pane stayed open until a 15 s timeout.
+
 ## [0.1.5] - 2026-10-05
 
 Experimental: the leader works, with known rough edges listed under Known issues.
@@ -93,7 +104,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.2...v0.1.3
