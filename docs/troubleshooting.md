@@ -12,7 +12,7 @@ Most of what goes wrong comes from a small set of Claude Code rules about when a
 
 ## The band doesn't appear
 
-The band (`bm-poc: mark jump prompts read`) above the prompt means the plugin is loaded. If it's missing:
+The band (`bm: m: mark j: jump p: prompts r: read`) above the prompt means the plugin is loaded. If it's missing:
 
 1. **Check the renderer.** Run `/tui fullscreen`. The classic renderer is not supported.
 2. **Check the version.** Run `claude --version`; plugins of this kind need Claude Code 2.1.287 or later.
@@ -40,15 +40,15 @@ Keep the input box empty when you use a chord. If you were halfway through typin
 Can't jump there: that message isn't on screen (older than a compaction?). Copied "...": press Ctrl+O, then [ ...
 ```
 
-Claude Code can only scroll to messages it still has on screen. After a conversation is compacted, the messages from before the compaction are still in the session file, but Claude Code no longer draws them, so a jump to one is refused.
+Claude Code can only scroll to messages it has loaded. When a session is restarted or resumed, it loads the conversation only from the last compaction onward: earlier messages are still in the session file, but they aren't in the view, so a jump to one is refused. Nothing in Claude Code loads them back into view; `CLAUDE_CODE_DISABLE_PRECOMPACT_SKIP` doesn't change this.
 
-The plugin then copies a short phrase of the message to your clipboard. To find the message:
+The plugin then copies a short phrase of the message to your clipboard. To look for it:
 
 1. Press `Ctrl+O` to open the transcript view.
-2. Press `[`. This writes the full conversation to your terminal's scrollback, including the messages from before the compaction.
+2. Press `[`. This writes the conversation Claude Code holds to your terminal's scrollback.
 3. Use your terminal's Find (`Ctrl+Shift+F` in Windows Terminal, `Cmd+F` on macOS), and paste.
 
-The transcript view's own search (`/`) only searches what the view holds, which after a compaction doesn't include the older messages; the terminal's Find does.
+The transcript view's own search (`/`) only searches what the view holds. If the message is older than what Claude Code has loaded, it may still be in your terminal's scrollback from earlier output (Windows Terminal keeps 9,001 lines by default), or only in the session file. Opening the whole conversation from the session file is planned ([#16](https://github.com/DazzleML/claude-bookmarks/issues/16)).
 
 In the prompts pane, prompts that are likely to be refused are drawn dimmed.
 

@@ -6,8 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-10-05
+
+Experimental: the leader works, with known rough edges listed under Known issues.
+
 ### Added
 
+- The band works as a leader, without borrowing a keybinding action: Claude Code's own `Ctrl+X Tab` (`abovePrompt:focus`, rebindable) puts the keyboard on the band, and its buttons now have hotkeys: `m` mark, `j` jump, `p` prompts, `r` reading position.
+- When a pane opened from the band can't take the keyboard (Claude Code keeps it on the band), the band itself takes the next key: the jump letters with the reading position on Enter, the mark letters, or a `prompt #` field. The pane stays open beside it as the list. The band returns to its buttons after a jump or mark, on the next prompt, or after 15 seconds.
+- `docs/usage.md`: the leader, and how to rebind it to another key (with the Windows Terminal recipe for `Ctrl+;`).
+- Measurement scripts for the planned conversation search (`tests/one-offs/thinking/search-extraction/`): the whole conversation's text loads in one shell pass, under the output cap.
 - `docs/tutorial.md`: chords, leader keys and vim marks explained for people who haven't used vim, then a hands-on walkthrough of each feature.
 - `docs/usage.md`: each feature in detail (marks, jumps, the reading position, the prompts pane) and what is kept, for how long.
 - `docs/troubleshooting.md`: the known limits and what to do about each (the band doesn't appear, a chord does nothing, a jump is refused).
@@ -15,6 +23,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - README rewritten in the shape of the other DazzleML Claude Code projects: badges, the problem it solves, a numbered quick start, a keys table, common workflows, known limits as tips, debug logging, platform support, project structure and how it works.
+- The band's label is now `bm:` (was `bm-poc:`).
+- The docs now give the right cause for unreachable messages: Claude Code loads a resumed or restarted session only from its last compaction onward. They no longer say that compaction itself hides them.
+
+### Known issues
+
+- `Esc` doesn't close a pane opened from the band, because the pane never holds the keyboard.
+- The `Ctrl+X` chords and the band's key mode can both be active in ways that still need ironing out.
+- A mark's "text verified" check compares the plain selection with the message's markdown, so it can report `TEXT NOT IN ROW` for a mark that is fine.
 
 ## [0.1.4] - 2026-10-04
 
@@ -77,7 +93,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.1...v0.1.2

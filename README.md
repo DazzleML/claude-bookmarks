@@ -98,7 +98,9 @@ Restart Claude Code after editing. Without the chords, the band's buttons do the
 | `Ctrl+X Space` | `read` | Set, go to, or return from the reading position |
 | `Esc` | | Close a pane |
 
-In the mark pane, letters already in use show as `a: ●`. In the prompts pane, `Tab` steps through the list as well; prompts drawn dimmed are ones Claude Code hasn't drawn on screen, usually from before a compaction, and a jump to one may be refused (see [Tips](#tips)).
+In the mark pane, letters already in use show as `a: ●`. In the prompts pane, `Tab` steps through the list as well; prompts drawn dimmed are ones Claude Code hasn't drawn on screen, usually from before the last compaction, and a jump to one may be refused (see [Tips](#tips)).
+
+The band also works as a leader with no chords set up: Claude Code's `Ctrl+X Tab`, then `m`, `j`, `p` or `r` (experimental; see [docs/usage.md](docs/usage.md#the-leader-experimental)).
 
 ### Common workflows
 
@@ -135,7 +137,7 @@ The known limits, briefly; **[docs/troubleshooting.md](docs/troubleshooting.md)*
 
 - **Keep the input box empty when you use a chord.** While it holds text, the pane cannot take the letter or number, and it is typed into your prompt instead ([#17](https://github.com/DazzleML/claude-bookmarks/issues/17)).
 - **Chords do nothing while a dialog is up** (a permission prompt, or a question Claude is asking). This is Claude Code's rule for plugin chords; answer the dialog first.
-- **Messages from before a compaction usually can't be jumped to**, because Claude Code no longer has them on screen. The plugin then copies a phrase of the message to your clipboard and tells you where to find it: press `Ctrl+O`, then `[` (writes the full conversation to your terminal's scrollback), then your terminal's Find (`Ctrl+Shift+F` or `Cmd+F`), and paste.
+- **Messages from before the last compaction usually can't be jumped to after a restart or resume**, because Claude Code then loads the conversation only from that compaction onward. The plugin copies a phrase of the message to your clipboard and tells you where to look: press `Ctrl+O`, then `[` (writes what Claude Code holds to your terminal's scrollback), then your terminal's Find (`Ctrl+Shift+F` or `Cmd+F`), and paste. Older messages may only be in the session file; opening it in full is planned ([#16](https://github.com/DazzleML/claude-bookmarks/issues/16)).
 - **"Where you were" is a whole message.** A plugin cannot read or restore the exact scroll offset, so returning from the reading position brings back the message that was at the top of the screen.
 - **If the plugin doesn't load after `/fork`**, the session may be hosted by Claude Code's background daemon, which doesn't load `CLAUDE_CODE_PLUGIN_DIRS`. Stop it with `claude stop <short id>` and resume it from a shell with `claude --resume <session id>`.
 - **If you have disabled Claude Code's built-in diff mod**, the borrowed actions belong to the old diff panel and the chords may act on it instead. While the diff panel is open, `Ctrl+X p` and `Ctrl+X Space` may be taken by it.
@@ -192,7 +194,7 @@ claude-bookmarks/
 
 3. **The highlight is drawn, not written.** While a mark is shown, the plugin redraws that message with the marked line coloured. The session file and what Claude reads are untouched.
 
-4. **Jumps ask Claude Code to scroll.** A jump asks Claude Code to reveal the stored message. If the message is no longer drawn (it was compacted away), Claude Code refuses, and the plugin falls back to the clipboard phrase.
+4. **Jumps ask Claude Code to scroll.** A jump asks Claude Code to reveal the stored message. If the message isn't loaded (it's from before the last compaction and the session was restarted), Claude Code refuses, and the plugin falls back to the clipboard phrase.
 
 5. **The prompt list is back-filled once.** The first time the plugin sees a conversation, it reads the user prompts out of the session's transcript file with one shell command (`Select-String` on Windows, `grep` elsewhere), then keeps the list current as you type.
 

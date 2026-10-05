@@ -44,6 +44,7 @@ const LETTERS = 'abcdefghijklmnopqrstuvwxyz'.split('')
 const rows = atom({ plugin: 'convo-bookmarks', key: 'rows' } as const, [])
 const paneMode = atom({ plugin: 'convo-bookmarks', key: 'paneMode' } as const, 'list')
 const shown = atom({ plugin: 'convo-bookmarks', key: 'shown' } as const, null)
+const bandMode = atom({ plugin: 'convo-bookmarks', key: 'bandMode' } as const, 'idle')
 
 // The highlight and the band text are temporary (djdarcy, 2026-10-03: "visible temporarily
 // for maybe a minute or two or until the next action like another prompt is sent").
@@ -630,6 +631,66 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   // person dragged the pane to wins. `focus` is refused while the composer holds
   // text, so over typed text the letter goes to the prompt instead (issue #4).
   await $.ui.open({ id: PANE, title, focus: true, closeOnEscape: true, columns: 16, rows: 4 })
+  // Pressed from the band (its hotkey after `abovePrompt:focus`, Ctrl+X Tab or a
+  // rebound key), the focus request is refused: "an element of the band ... the person
+  // holds" has the keys, so the pane opened without them and the next letter went
+  // nowhere (djdarcy, 2026-10-05: "the cursor is staying in the normal input box"). A
+  // re-request 120 ms later was refused too (log 12:24:16, 12:24:28): the band still
+  // holds them. So the band itself takes the next key; the pane stays open as the list.
+  if (!(await paneFocused($))) {
+    await update($, bandMode, () => mode)
+    log($, `[bm-poc] pane opened without the keyboard; the band takes the ${mode} key`)
+    bandTimer?.cancel()
+    bandTimer = $.clock.after(BAND_MODE_MS, () => void endBandMode($))
+    // Digits need the field focused; in jump mode Enter goes to the reading position,
+    // as in the pane. A missing element (no reading position) is simply denied.
+    if (mode === 'list') await focusBand($, 'band-prompt-number')
+    if (mode === 'jump') await focusBand($, 'band-jump-reading')
+  }
+}
+
+// How long the band waits for the next key before going back to its buttons.
+const BAND_MODE_MS = 15_000
+let bandTimer: Timer | undefined
+
+// The band's own requestId, as its render hook last saw it: $.ui.focus names the site
+// by it, to put the band's ring on the prompts field or the reading entry.
+let bandId: string | undefined
+
+async function focusBand($: EngineInterface, key: string) {
+  if (!bandId) return
+  const r = await $.ui.focus({ requestId: bandId, key })
+  log($, `[bm-poc] band focus ${key}: ${'deny' in r && r.deny ? `DENY ${r.deny}` : 'ok'}`)
+}
+
+// Jumps to prompt #n, from the prompts pane's field or the band's.
+async function jumpToPromptNumber($: EngineInterface, typed: string, via: string) {
+  const all = await prompts($)
+  const n = Number(typed.trim())
+  const target = Number.isInteger(n) ? all[n - 1] : undefined
+  if (!target) {
+    $.ui.toast(`no prompt #${typed.trim()} (1-${all.length})`)
+    return
+  }
+  await jumpTo($, target.uuid, via, `prompt #${n}`, target.head)
+  await closePane($)
+}
+
+// True once the digits typed can't become a larger prompt number: with 25 prompts,
+// `3` is complete, `2` waits for a second digit or Enter.
+function promptNumberComplete(typed: string, count: number): boolean {
+  const n = Number(typed)
+  return /^\d+$/.test(typed) && n >= 1 && n <= count && n * 10 > count
+}
+
+async function endBandMode($: EngineInterface) {
+  bandTimer?.cancel()
+  bandTimer = undefined
+  if ((await read($, bandMode)) !== 'idle') await update($, bandMode, () => 'idle')
+}
+
+async function paneFocused($: EngineInterface): Promise<boolean> {
+  return (await $.ui.panes()).some(p => p.id === PANE && p.isFocused)
 }
 
 // Set by the pane's render hook (which may not write state): the placement and width
@@ -639,6 +700,7 @@ let paneGeometry: string | undefined
 async function closePane($: EngineInterface) {
   note('pane close')
   if (paneGeometry) log($, `[bm-poc] pane was ${paneGeometry}`)
+  await endBandMode($)
   await $.ui.close({ id: PANE })
 }
 
@@ -676,6 +738,7 @@ export const register: Register = on => {
   // The next prompt ends the temporary highlight.
   on('prompt.submit', async ($, e, next) => {
     await clearShown($)
+    await endBandMode($)
     return next(e)
   })
 
@@ -931,18 +994,73 @@ export const register: Register = on => {
   // chords in keybindings.json, the chords should press them from the prompt.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (BAR_SITE !== 'band') return next(e)
-    const { Box, Button, Text } = $.ui.resolve(e)
+    const elements = $.ui.resolve(e)
+    const { Box, Button, Text } = elements
+    const Input = 'Input' in elements ? elements.Input : undefined
     const theirs = await next(e)
     const last = await read($, shown)
+    bandId = e.requestId
+    const mode = await read($, bandMode)
+
+    // The band takes the next key itself when the pane opened from it couldn't take
+    // the keyboard (see openFor). The pane stays open beside it as the readable list.
+    if (mode !== 'idle') {
+      const marks = await loadMarks($)
+      const done = () => closePane($)
+      let keys: any
+      if (mode === 'jump') {
+        const reading = marks[READING]
+        keys = [
+          <Text key="band-jump-title" dimColor>jump:</Text>,
+          ...(reading
+            ? [<Button key="band-jump-reading" label="reading (Enter)" plain
+                onPress={async () => { await goToReading($, reading, 'band reading'); await done() }} />]
+            : []),
+          ...LETTERS.filter(l => marks[l]).map(l => (
+            <Button key={`band-jump-${l}`} hotkey={l} label={(marks[l]?.head ?? '').slice(0, 12)} plain
+              onPress={async () => { await jumpToMark($, l); await done() }} />
+          )),
+        ]
+      } else if (mode === 'mark') {
+        keys = [
+          <Text key="band-mark-title" dimColor>mark as:</Text>,
+          ...LETTERS.map(l => (
+            <Button key={`band-mark-${l}`} hotkey={l} label={marks[l] ? '●' : '·'} plain dimColor={!marks[l]}
+              onPress={async () => { await setMark($, l); await done() }} />
+          )),
+        ]
+      } else {
+        const count = (await prompts($)).length
+        keys = Input ? (
+          <Input key="band-prompt-number" label="prompt #" placeholder={`1-${count}`} submitLabel="jump"
+            onInput={(typed: string) => { if (promptNumberComplete(typed, count)) void jumpToPromptNumber($, typed, 'band prompts') }}
+            onSubmit={(typed: string) => void jumpToPromptNumber($, typed, 'band prompts')} />
+        ) : <Text dimColor>prompts: no field on this surface</Text>
+      }
+      return (
+        <Box flexDirection="column">
+          {theirs}
+          <Box flexDirection="row" columnGap={1} flexWrap="wrap">
+            <Text dimColor>bm</Text>
+            {keys}
+            <Text dimColor>(Esc)</Text>
+          </Box>
+        </Box>
+      )
+    }
+
     return (
       <Box flexDirection="column">
         {theirs}
         <Box flexDirection="row" columnGap={1}>
-          <Text dimColor>bm-poc:</Text>
-          <Button key="chord-mark" label="mark" plain dimColor action={MARK_ACTION} onPress={() => openFor($, 'mark', MARK_ACTION)} />
-          <Button key="chord-jump" label="jump" plain dimColor action={JUMP_ACTION} onPress={() => openFor($, 'jump', JUMP_ACTION)} />
-          <Button key="chord-prompts" label="prompts" plain dimColor action={PROMPTS_ACTION} onPress={() => openFor($, 'list', PROMPTS_ACTION)} />
-          <Button key="chord-read" label="read" plain dimColor action={READING_ACTION} onPress={() => readingToggle($)} />
+          <Text dimColor>bm:</Text>
+          {/* Leader probe (2026-10-05): Claude Code's own `abovePrompt:focus` (default
+              Ctrl+X Tab, rebindable) puts the keyboard on the band, and a band Button's
+              hotkey then presses it, so the band is a leader that borrows no action. */}
+          <Button key="chord-mark" label="mark" hotkey="m" plain dimColor action={MARK_ACTION} onPress={() => openFor($, 'mark', MARK_ACTION)} />
+          <Button key="chord-jump" label="jump" hotkey="j" plain dimColor action={JUMP_ACTION} onPress={() => openFor($, 'jump', JUMP_ACTION)} />
+          <Button key="chord-prompts" label="prompts" hotkey="p" plain dimColor action={PROMPTS_ACTION} onPress={() => openFor($, 'list', PROMPTS_ACTION)} />
+          <Button key="chord-read" label="read" hotkey="r" plain dimColor action={READING_ACTION} onPress={() => readingToggle($)} />
           {last && (
             <Text wrap="truncate-end">
               | <Text bold>{last.letter}</Text> ▸ {last.text}
@@ -972,16 +1090,7 @@ export const register: Register = on => {
       // over `#21`; also offered `(21) ` and `21| `). One place to change it.
       const width = String(all.length).length
       const numberLabel = (n: number) => `${String(n).padStart(width)}) `
-      const go = async (typed: string) => {
-        const n = Number(typed.trim())
-        const target = Number.isInteger(n) ? all[n - 1] : undefined
-        if (!target) {
-          $.ui.toast(`no prompt #${typed.trim()} (1-${all.length})`)
-          return
-        }
-        await jumpTo($, target.uuid, 'prompts pane', `prompt #${n}`, target.head)
-        await closePane($)
-      }
+      const go = (typed: string) => jumpToPromptNumber($, typed, 'prompts pane')
       return (
         <Box flexDirection="column">
           {numbered.length === 0 && <Text dimColor>No prompts yet.</Text>}
@@ -993,8 +1102,7 @@ export const register: Register = on => {
               submitLabel="jump"
               autoFocus
               onInput={(typed: string) => {
-                const n = Number(typed)
-                if (/^\d+$/.test(typed) && n >= 1 && n <= all.length && n * 10 > all.length) void go(typed)
+                if (promptNumberComplete(typed, all.length)) void go(typed)
               }}
               onSubmit={(typed: string) => void go(typed)}
             />

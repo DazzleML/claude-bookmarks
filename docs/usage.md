@@ -17,7 +17,7 @@ For the known limits and what to do when something doesn't work, see [Troublesho
 When the plugin is loaded, a one-line band sits just above the prompt:
 
 ```
-bm-poc: mark jump prompts read
+bm: m: mark j: jump p: prompts r: read
 ```
 
 Each word is a button, and each chord presses one of them:
@@ -32,6 +32,16 @@ Each word is a button, and each chord presses one of them:
 You can click the buttons instead of using the chords; they do the same things. When a mark has just been set or jumped to, the band also shows it after a bar, as `| a ▸ the marked line`, until the highlight clears.
 
 Every pane closes with `Esc`, and closes by itself once it has done its job.
+
+### The leader (experimental)
+
+The band also works as a leader, without any chords set up. Claude Code's own `Ctrl+X Tab` puts the keyboard on the band, and then the button's letter presses it: `Ctrl+X Tab` then `j` opens the jump pane, `m` the mark pane, `p` the prompts pane, and `r` goes to the reading position.
+
+A pane opened this way can't take the keyboard (Claude Code keeps it on the band), so the band itself takes the next key: it shows the letters to press (`jump: reading (Enter)  a: …  b: …`), and the pane stays open beside it as the list. The band goes back to its buttons after a jump or mark, when you send a prompt, or after 15 seconds.
+
+To use a different key for the leader, rebind Claude Code's `abovePrompt:focus` action in `~/.claude/keybindings.json` (context `Chat`), for example `"ctrl+;": "abovePrompt:focus"`. Keys such as `Ctrl+;` and `Ctrl+,` reach Claude Code only if your terminal reports them; in Windows Terminal, map the key to a `sendInput` of `\u001b[59;5u` (for `Ctrl+;`) in its settings.
+
+Known rough edges: `Esc` doesn't close a pane opened from the band, since the pane never holds the keyboard; the pane closes after a jump or mark, or with its `×`.
 
 ## Marks
 
@@ -64,7 +74,7 @@ A mark is a letter, `a` to `z`, attached to a line of the conversation.
 
 To go to the reading position from this pane, press `Enter`: the pane opens with its focus on the reading-position entry.
 
-If the mark points at a message Claude Code no longer has on screen (usually one from before a compaction), the jump can't happen. The plugin says so, copies a phrase of the message to your clipboard, and tells you how to find it; see [Troubleshooting](troubleshooting.md#a-jump-says-it-cant-go-there).
+If the mark points at a message Claude Code no longer has on screen (usually one from before the last compaction, after the session was restarted or resumed), the jump can't happen. The plugin says so, copies a phrase of the message to your clipboard, and tells you how to find it; see [Troubleshooting](troubleshooting.md#a-jump-says-it-cant-go-there).
 
 ## The reading position
 
@@ -105,7 +115,7 @@ or Tab / Shift+Tab, Enter
 
 The list includes prompts from before the plugin was loaded. The first time it sees a conversation, the plugin reads the prompts from the conversation's transcript file in one pass. After that it adds each prompt as you send it.
 
-**Dimmed prompts** are ones Claude Code hasn't drawn on screen since the plugin loaded. Usually that means they are from before a compaction, and a jump to one will be refused. A prompt that simply hasn't been scrolled past yet is also dim until it is drawn, so treat the dimming as a hint, not a promise.
+**Dimmed prompts** are ones Claude Code hasn't drawn on screen since the plugin loaded. Usually that means they are from before the last compaction, which Claude Code no longer loads after a restart or resume, and a jump to one will be refused. A prompt that simply hasn't been scrolled past yet is also dim until it is drawn, so treat the dimming as a hint, not a promise.
 
 ## What is kept, and where
 
@@ -128,4 +138,4 @@ The plugin adds a few commands from its proof-of-concept stage. They are useful 
 | `/bm-marks` | The marks set in this conversation |
 | `/bm-timeline` | The last few plugin events: draws, panes, jumps, toasts |
 
-These commands and the band's `bm-poc:` label are left over from the proof of concept and will be renamed in the rebuild.
+These commands are left over from the proof of concept and will be renamed in the rebuild.
