@@ -8,11 +8,17 @@ The plugin's name is **`convo-bookmarks`** (third-party plugin names may not sta
 
 ## What it does
 
-- **Mark a spot:** select some text in a reply or prompt with the mouse, press `Ctrl+X m` then a letter. The marked line is highlighted in place for a couple of minutes.
-- **Jump back:** press `Ctrl+X '` then the letter, from anywhere in the conversation.
+- **Mark a spot:** select some text in a reply or prompt with the mouse, press `Ctrl+X m` then a letter. The marked line is highlighted in place for a couple of minutes. Letters already in use show as `a: ●`.
+- **Jump back:** press `Ctrl+X '` then the letter, from anywhere in the conversation. The pane lists only the marks you have.
+- **Reading position:** select some text and press `Ctrl+X Space` to keep your place; press it again from anywhere to go there, and again to return to where you were.
+- **Your prompts:** `Ctrl+X p` lists every prompt of the conversation, numbered from your first; type a number and Enter (or Tab through the list) to jump to it.
 - **Display only:** highlights and tags change what is drawn on screen, never what Claude reads or what is saved in the session file.
 
-Planned for 1.0: aliases (memorable names alongside letters), notes and links on each bookmark, opening a bookmark's URLs and files, a bookmarks pane, and a one-chord reading position (`Ctrl+X r`).
+Keep the input box empty when you use a chord: while it holds text, the pane cannot take the letter or number, and it is typed into the prompt instead.
+
+A message from before the conversation was compacted can't be jumped to: Claude Code no longer has it on screen. The mod then copies a phrase of it to the clipboard and tells you where to find it: `Ctrl+O`, then `[` (writes the full conversation to your terminal), then your terminal's Find, and paste.
+
+Planned for 1.0: aliases (memorable names alongside letters), notes and links on each bookmark, opening a bookmark's URLs and files, a bookmarks pane, and one leader chord for everything.
 
 ## Requirements
 
@@ -30,7 +36,7 @@ claude --plugin-dir /path/to/claude-bookmarks
 
 ### Set up the chords
 
-The mark and jump chords are bound in your own `~/.claude/keybindings.json` (a mod cannot declare keybindings, so the plugin reuses two engine actions that normally have nothing attached):
+The chords are bound in your own `~/.claude/keybindings.json` (a mod cannot declare keybindings, so the plugin reuses four engine actions of the diff panel, which do nothing in a conversation). Back the file up first, then add:
 
 ```json
 {
@@ -39,14 +45,18 @@ The mark and jump chords are bound in your own `~/.claude/keybindings.json` (a m
       "context": "Global",
       "bindings": {
         "ctrl+x m": "app:toggleDiffNoiseFilter",
-        "ctrl+x '": "app:toggleDiffPreSession"
+        "ctrl+x '": "app:toggleDiffPreSession",
+        "ctrl+x p": "app:cycleDiffBase",
+        "ctrl+x space": "app:diffFileListDown"
       }
     }
   ]
 }
 ```
 
-If you have disabled Claude Code's built-in diff mod, those two actions belong to the old diff panel and the chords may toggle its filters instead.
+Restart Claude Code after editing. Without the chords, the same actions are on the band above the prompt: `mark jump prompts read`.
+
+If you have disabled Claude Code's built-in diff mod, those actions belong to the old diff panel and the chords may act on it instead. While the diff panel is open, `Ctrl+X p` and `Ctrl+X Space` may be taken by it.
 
 ## Development
 
