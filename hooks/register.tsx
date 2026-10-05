@@ -33,7 +33,7 @@ const JUMP_ACTION = 'app:toggleDiffPreSession'
 const PROMPTS_ACTION = 'app:cycleDiffBase'
 // A fourth (2026-10-04, user: "Ctrl+x space" for the reading position). Scrolls the
 // diff panel's file list, so idle in a conversation like the other three. `ctrl+x x`,
-// the user's first idea, is Claude Code's own chord for closing a pane.
+// djdarcy's first idea, is Claude Code's own chord for closing a pane.
 const READING_ACTION = 'app:diffFileListDown'
 // The reading position is kept as a mark under this key, so the highlight and the
 // band show it like any other; the panes list only a-z, so it never appears there.
@@ -45,7 +45,7 @@ const rows = atom({ plugin: 'convo-bookmarks', key: 'rows' } as const, [])
 const paneMode = atom({ plugin: 'convo-bookmarks', key: 'paneMode' } as const, 'list')
 const shown = atom({ plugin: 'convo-bookmarks', key: 'shown' } as const, null)
 
-// The highlight and the band text are temporary (user, 2026-10-03: "visible temporarily
+// The highlight and the band text are temporary (djdarcy, 2026-10-03: "visible temporarily
 // for maybe a minute or two or until the next action like another prompt is sent").
 // Only the mark just set or jumped to is shown; it clears after HIGHLIGHT_MS or on the
 // next prompt. Display only: nothing here touches what session.append stores.
@@ -225,7 +225,7 @@ async function allRows($: EngineInterface): Promise<Row[]> {
 
 // The session's prompts in the order they were sent, #1 first. `rows` ($.state) starts
 // empty when the session restarts, so every prompt is also kept in $.store under the
-// session id (user, 2026-10-04: number prompts from the first message). Prompts sent
+// session id (djdarcy, 2026-10-04: number prompts from the first message). Prompts sent
 // before the mod was loaded are not known: reading them needs the transcript (#6).
 type PromptRef = { uuid: string; head: string }
 const PROMPTS_KEPT = 5000
@@ -407,7 +407,7 @@ async function jumpTo($: EngineInterface, uuid: string, via: string, label: stri
   if (result.deny) {
     const text = words ?? rendered.get(uuid) ?? Object.values(markCache).find(m => m.uuid === uuid)?.head
     // The mod cannot open Ctrl+O or fill a search (nothing in $.ui drives the
-    // transcript view), but it can put a search phrase on the clipboard (user,
+    // transcript view), but it can put a search phrase on the clipboard (djdarcy,
     // 2026-10-05: "give the user the text ... so it autopopulates"). The phrase skips
     // the generic openings many prompts share ("RE:{", a pasted-content tag).
     const phrase = searchPhrase(text)
@@ -491,7 +491,7 @@ async function setMark($: EngineInterface, letter: string) {
 }
 
 // --- Reading position: Ctrl+X Space ------------------------------------------------
-// One key, no letter (user, 2026-10-04): with text selected it sets the reading
+// One key, no letter (djdarcy, 2026-10-04): with text selected it sets the reading
 // position there; with nothing selected (or the same selection still up) it jumps to
 // it, and pressed again while it is on screen it swaps back to where the person was,
 // like vim's ``. "On screen" comes from what the render hooks report, not from the
@@ -577,11 +577,29 @@ async function readingToggle($: EngineInterface) {
   }
 
   const state = await readingState($)
-  // Last press went there: swap back to where we were.
-  if (state.at && state.back) {
+  // Go back only while the reading position is actually on screen, judged by the
+  // latest burst of on-screen reports. The there/back state alone was wrong once the
+  // person scrolled elsewhere by hand: the next press "went back" to the old spot
+  // instead of to the mark (djdarcy, 2026-10-04). Old reports alone were wrong after
+  // Ctrl+End (the message left behind still looked visible); the freshness filter
+  // handles that.
+  const onScreenNowFresh = freshOnScreen().some(
+    id => id === reading.uuid || firstFour(id) === firstFour(reading.uuid),
+  )
+  if (state.at && state.back && onScreenNowFresh) {
     await setReadingState($, { at: false, back: null })
     await jumpTo($, state.back, 'reading position (back)', `to ${short(state.back)}`)
     await clearShown($)
+    return
+  }
+  // Already looking at it, with nowhere real to go back to: stay put. Jumping here
+  // recorded the message just above the mark as "where you were", so the next press
+  // swapped between two spots a few lines apart; and pressing at the mark re-jumped
+  // to it over and over (log, 2026-10-05 00:39-00:42 UTC).
+  if (onScreenNowFresh) {
+    await showMark($, READING, reading.snippet ?? reading.head)
+    $.ui.toast("You're at the reading position. Scroll away and press again to come back here.")
+    log($, `[bm-poc] reading position: already on screen, stayed put`)
     return
   }
   // Otherwise: note where we are, then go there.
@@ -607,7 +625,7 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   await update($, paneMode, () => mode)
   const title = mode === 'mark' ? 'mark: press a-z' : mode === 'jump' ? 'jump: press a-z' : 'prompts: press 1-9'
   note(`pane open (${mode}, focus)`)
-  // Narrow on purpose (user, 2026-10-04: "collapse the panel so it has almost no
+  // Narrow on purpose (djdarcy, 2026-10-04: "collapse the panel so it has almost no
   // width"): it only has to take one letter. Both sizes are requests; a size the
   // person dragged the pane to wins. `focus` is refused while the composer holds
   // text, so over typed text the letter goes to the prompt instead (issue #4).
@@ -879,10 +897,10 @@ export const register: Register = on => {
     return {}
   })
 
-  // Experiment (user, 2026-10-04): the bar on the hint line under the prompt instead
+  // Experiment (djdarcy, 2026-10-04): the bar on the hint line under the prompt instead
   // of the band above it, to free the band's row. Its two Buttons are what the chords
   // press; whether a chord reaches a Button on the hint line is what this tests.
-  // Tried 2026-10-04 and reverted: the line sat under the user's status line, below
+  // Tried 2026-10-04 and reverted: the line sat under djdarcy's status line, below
   // the prompt; it reads better above it. Whether a chord reaches a Button on the
   // hint line was not tested (no chord fired while it was there).
   const BAR_SITE = 'band' as 'band' | 'hint'
@@ -944,13 +962,13 @@ export const register: Register = on => {
 
     if (mode === 'list') {
       // Every prompt the mod knows, numbered in the order sent (#1 the first), listed
-      // newest first (user, 2026-10-04). The number is typed into a focused Input
-      // (user: "Ctrl-X p 21 <enter>"): it jumps on Enter, or at once when the digits
+      // newest first (djdarcy, 2026-10-04). The number is typed into a focused Input
+      // (djdarcy: "Ctrl-X p 21 <enter>"): it jumps on Enter, or at once when the digits
       // typed can't become a larger prompt number (with 25 prompts, `3` jumps, `2`
       // waits for 2x or Enter). A hotkey is one character, so it can't do this.
       const all = await prompts($)
       const numbered = all.map((r, i) => ({ ...r, n: i + 1 })).reverse()
-      // `21) text`, numbers right-aligned so the text lines up (user, 2026-10-04,
+      // `21) text`, numbers right-aligned so the text lines up (djdarcy, 2026-10-04,
       // over `#21`; also offered `(21) ` and `21| `). One place to change it.
       const width = String(all.length).length
       const numberLabel = (n: number) => `${String(n).padStart(width)}) `
@@ -981,7 +999,7 @@ export const register: Register = on => {
               onSubmit={(typed: string) => void go(typed)}
             />
           )}
-          {/* One by one through this list (user, 2026-10-04): the pane keeps the arrows
+          {/* One by one through this list (djdarcy, 2026-10-04): the pane keeps the arrows
               for scrolling, but Tab walks the focus ring down the Buttons below from the
               newest, Shift+Tab back up, Enter jumps. A Select was tried: on the terminal
               its arrows open a pop-up list of its own instead (screenshot, 2026-10-04). */}
@@ -1019,9 +1037,9 @@ export const register: Register = on => {
     }
 
     // Jump needs only the letters in use: one per line, `a: <text>`, so the pane can
-    // stay narrow (user, 2026-10-04, "collapsed any smaller").
+    // stay narrow (djdarcy, 2026-10-04, "collapsed any smaller").
     if (mode === 'jump') {
-      // The reading position (Ctrl+X Space) heads the list (user, 2026-10-04). A hotkey
+      // The reading position (Ctrl+X Space) heads the list (djdarcy, 2026-10-04). A hotkey
       // must be a letter or digit, so it can't be pressed by ` or Space; instead the
       // pane's focus starts on it, and Ctrl+X ' then Enter goes there.
       const reading = marks[READING]
@@ -1055,7 +1073,7 @@ export const register: Register = on => {
         <Text dimColor>Mark as: (Esc)</Text>
         <Box flexDirection="row" columnGap={1} flexWrap="wrap">
           {LETTERS.map(l => (
-            // A Button takes no color (the user asked for "slightly grayreddish"), and a
+            // A Button takes no color (djdarcy asked for "slightly grayreddish"), and a
             // non-plain `primary` one draws as a wider `[ a ]` that breaks the grid
             // (screenshot, 2026-10-04). So a letter in use shows a dot, `a: ●`, at
             // full strength; a free one shows itself, dim. Same width either way.

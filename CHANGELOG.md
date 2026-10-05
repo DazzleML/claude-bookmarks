@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-04
+
+### Fixed
+
+- `Ctrl+X Space`: after scrolling somewhere else by hand, the next press goes to the reading position; before, it went back to the spot saved before the last jump.
+- `Ctrl+X Space` on the reading position, with nowhere to go back to, now stays put and says so; before, it swapped between the mark and the line just above it, or re-jumped to the mark.
+
+### Changed
+
+- Checklist: chords do nothing while a Claude Code dialog is up (Claude Code only lets a chord press a plugin's button when no dialog is open).
+
 ## [0.1.3] - 2026-10-04
 
 ### Added
@@ -56,7 +67,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.0...v0.1.1
