@@ -16,6 +16,11 @@ declare module 'claude-code' {
       bandMode: PaneMode | 'idle'
       // Bumped when the pinned prompts change, so the prompts pane redraws.
       pinsRev: number
+      // Bumped after the band's command line runs a command: the field is drawn
+      // under a new key, so it starts empty (POC 2026-10-07).
+      cmdRev: number
+      // The digits of a prompt number typed into the band, one Button press each.
+      bandNum: string
       // What the band shows after a mark or jump: the letter and the marked text.
       shown: { letter: string; text: string } | null
     }

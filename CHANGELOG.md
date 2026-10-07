@@ -6,6 +6,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-10-07
+
+### Added
+
+- The band is the plugin's command line. The leader is Claude Code's own "focus the band" action, `abovePrompt:focus`: `Ctrl+X Tab` by default, and we recommend binding `Ctrl+]` to it. It moves the keyboard to the band, works with a draft in the input box and while Claude is working, and leaves the draft untouched. A small field at the front of the band takes the next key, any key, including `'` and `Space`:
+  - `'` or `j`, then a letter: jump to that mark;
+  - `m`, then a letter: mark;
+  - `Space Space` (or `Space Enter`, or `r`): the reading position, there or back;
+  - `p`, then a number and `Enter`: jump to that prompt;
+  - any other key: a reminder of the keys.
+- Browsing the prompts from the band: in prompt mode, `j`/`k` or the Up/Down arrows move a `▶` through the prompts pane's list, digits type a number (shown in the pane's `#` field, with the list scrolled to it), `s` pins or unpins the prompt under the `▶`, and `Enter` jumps.
+- With no fresh selection, a mark goes on the message at the top of the screen, its first line highlighted. Only a selection made within the last 75 seconds counts, for marks and for the reading position. Claude Code keeps returning the last selection after its highlight is gone, so an old one used to decide where a new mark went.
+- Typed commands `/bm-mark`, `/bm-goto`, `/bm-prompts` and `/bm-read`. From an empty input box, their pane takes the keyboard, so the prompts pane's arrows and `Tab` work there.
+- `/bm-delmarks a b` and `/bm-delmarks all` delete marks.
+- Optional fast keys for power users, documented in `docs/usage.md`: `Ctrl+X Space` for one-step reading. They borrow Claude Code's idle diff-panel actions, so they aren't part of the default setup.
+- `/bm-diag-keys` and `[diag]` lines in the debug log: who held the keyboard around each key, and the draft's length (never its text).
+- The first step of the capability paths (#18): `hooks/engine/select.ts`, and `/bm-env` shows the order the paths are tried in.
+- Verified on Claude Code 2.1.290.
+
+### Changed
+
+- The leader replaces the `Ctrl+X` chords as the way in. The chords still work if bound, but not with text in the input box, and they will be removed in a later version.
+- A mark with no selection no longer marks your latest prompt; the prompts pane and pins cover prompts.
+- A typed prompt number waits for `Enter` instead of jumping as soon as it is complete.
+- After a mark, the view returns to where it was before the pane opened (the pane narrows the conversation, which shifts it).
+- Going back from the reading position, from the very bottom of the conversation, returns to the same text you were reading, even if new replies arrived below it.
+- In mark mode, `Enter` cancels; it used to mark `a`.
+- The first jump on a new Claude Code version asks for `Enter` once while the plugin checks whether it may jump straight from what you type; current Claude Code doesn't allow that, so the band hands the letter to its buttons.
+- README, usage guide, tutorial, troubleshooting and engine quirks rewritten for the leader. The README also points to the companion [dazzle-claude-code-patcher](https://github.com/DazzleML/dazzle-claude-code-patcher), which keeps a resumed session's whole conversation in view so marks can reach messages from before a compaction.
+
+### Fixed
+
+- Clicking a band button with text in the input box closed the pane at once; it now stays open as a list to click.
+- Clicking into the prompts pane's field closed the pane; the pane now keeps the keyboard.
+- Pressing the leader again after a command could land on the band's `mark` button, so `Space` and `Enter` overwrote mark `a`.
+- From the bottom of the conversation, going back from the reading position said "You're at the reading position" instead of going there.
+
+### Known issues
+
+- After a command the keyboard stays on the band; press `Esc` to go back to typing. A plugin can't hand it back.
+- A click on a band button occasionally doesn't reach the plugin at all; the cause isn't known yet.
+- From the bottom, going back occasionally lands on the top message instead of the last message's end.
+- The Left/Right arrows in prompt mode are expected to act like Up/Down (not tested).
+
 ## [0.1.6] - 2026-10-05
 
 ### Added
@@ -104,7 +148,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.7...HEAD
 [0.1.6]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.3...v0.1.4

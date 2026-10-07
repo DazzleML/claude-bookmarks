@@ -1,47 +1,77 @@
 # Using claude-bookmarks
 
-This guide explains each feature in turn: what it does, how to use it, and what it shows you along the way. It assumes the plugin is loaded and the chords are bound; see the [Quick Start](../README.md#quick-start) if not.
+This guide explains each feature in turn: what it does, how to use it, and what it shows you along the way. It assumes the plugin is loaded and the leader key is bound; see the [Quick Start](../README.md#quick-start) if not.
 
+- [The leader key](#the-leader-key)
 - [The band](#the-band)
 - [Marks](#marks)
 - [Jumping to a mark](#jumping-to-a-mark)
 - [The reading position](#the-reading-position)
 - [The prompts pane](#the-prompts-pane)
+- [Optional fast keys](#optional-fast-keys)
+- [Typed commands](#typed-commands)
 - [What is kept, and where](#what-is-kept-and-where)
 - [Diagnostic commands](#diagnostic-commands)
 
 For the known limits and what to do when something doesn't work, see [Troubleshooting](troubleshooting.md).
+
+## The leader key
+
+Every key of the plugin starts with one **leader** key, followed by one or two more keys. Vim users will know the idea; the [tutorial](tutorial.md) explains it from scratch.
+
+The leader is Claude Code's own "focus the band" action, `abovePrompt:focus`. It moves the keyboard from the input box to the plugin's band above it. Its default key is `Ctrl+X Tab`, and it works without any setup. We recommend binding it to a single key, `Ctrl+]`, in `~/.claude/keybindings.json`:
+
+```json
+{
+  "bindings": [
+    {
+      "context": "Chat",
+      "bindings": {
+        "ctrl+]": "abovePrompt:focus"
+      }
+    }
+  ]
+}
+```
+
+If the file already has a `Chat` block, add the one line to it. The examples below write the leader as `Ctrl+]`.
+
+| Keys | Does |
+|------|------|
+| `Ctrl+] '` (or `j`), then a letter | Jumps to that mark |
+| `Ctrl+] m`, then a letter | Marks the selected line, or the top of the screen, with that letter |
+| `Ctrl+] Space`, then `Space` (or `Enter`) | Goes to the reading position, or back to where you were |
+| `Ctrl+] p`, then a number and `Enter` | Jumps to prompt #N |
+| `Ctrl+] p`, then `j`/`k` or the arrow keys, then `Enter` | Browses the prompts one by one, then jumps |
+| `Ctrl+] p`, then pick a prompt, then `s` | Pins or unpins the prompt under the `▶` |
+
+**It works with text in the input box,** and while Claude is working. The leader moves the keyboard to the band without touching your draft.
+
+**Why `Ctrl+]`:** it sends a control code that every terminal passes on, so it needs no terminal setup, over SSH as well. Keys such as `Ctrl+;` or `Ctrl+,` reach Claude Code only if your terminal reports them; see [A leader on `Ctrl+;`](#a-leader-on-ctrl) below. On some non-US keyboard layouts `]` is hard to type with Ctrl; pick another key there.
+
+**Getting back to typing:** after a command the keyboard stays on the band, ready for the next one. Press `Esc` to return to the input box. A plugin can't hand the keyboard back by itself.
+
+**The first jump after an update to Claude Code** ends with a toast asking you to press `Enter`. The plugin is checking, once per Claude Code version, whether it may jump straight from what you type. On current Claude Code it may not, so from then on `'` hands the letter to the band's buttons, which may. A future Claude Code that allows it gets one-step jumps automatically.
+
+### A leader on `Ctrl+;`
+
+To use a key your terminal doesn't report by default, map it in the terminal to the code Claude Code expects. In Windows Terminal, map the key to a `sendInput` of `\u001b[59;5u` (for `Ctrl+;`) in its settings, then bind `"ctrl+;": "abovePrompt:focus"`.
 
 ## The band
 
 When the plugin is loaded, a one-line band sits just above the prompt:
 
 ```
-bm: m: mark j: jump p: prompts r: read
+bm: ' j m p ␣   m: mark  j: jump  p: prompts  r: read
 ```
 
-Each word is a button, and each chord presses one of them:
+The first part is a small field. When the leader puts the keyboard on the band, the field takes the next key, any key, including `'` and `Space`. The words after it are buttons you can click: `mark`, `jump` and `prompts` open their panes, and `read` goes to the reading position. A pane opened by a click stays open as a list to click in; close it with its `×`.
 
-| Button | Chord | Opens or does |
-|--------|-------|---------------|
-| `mark` | `Ctrl+X m` | The mark pane |
-| `jump` | `Ctrl+X '` | The jump pane |
-| `prompts` | `Ctrl+X p` | The prompts pane |
-| `read` | `Ctrl+X Space` | The reading position (no pane) |
+When a mark has just been set or jumped to, the band also shows it after a bar, as `| a ▸ the marked line`, until the highlight clears.
 
-You can click the buttons instead of using the chords; they do the same things. When a mark has just been set or jumped to, the band also shows it after a bar, as `| a ▸ the marked line`, until the highlight clears.
+After the first key, the band shows what it is waiting for, for example `mark as: cancel (Enter) · · ● · …`, with a pane beside it as the readable list. The band goes back to its field after a jump or mark, when you send a prompt, after 15 seconds, or when you press `Esc`.
 
-Every pane closes with `Esc`, and closes by itself once it has done its job.
-
-### The leader (experimental)
-
-The band also works as a leader, without any chords set up. Claude Code's own `Ctrl+X Tab` puts the keyboard on the band, and then the button's letter presses it: `Ctrl+X Tab` then `j` opens the jump pane, `m` the mark pane, `p` the prompts pane, and `r` goes to the reading position.
-
-A pane opened this way can't take the keyboard (Claude Code keeps it on the band), so the band itself takes the next key: it shows the letters to press (`jump: reading (Enter)  a: …  b: …`), and the pane stays open beside it as the list. The band goes back to its buttons after a jump or mark, when you send a prompt, or after 15 seconds.
-
-To use a different key for the leader, rebind Claude Code's `abovePrompt:focus` action in `~/.claude/keybindings.json` (context `Chat`), for example `"ctrl+;": "abovePrompt:focus"`. Keys such as `Ctrl+;` and `Ctrl+,` reach Claude Code only if your terminal reports them; in Windows Terminal, map the key to a `sendInput` of `\u001b[59;5u` (for `Ctrl+;`) in its settings.
-
-To leave without picking anything, press `Esc`: the band gives the keyboard back to the prompt, and the plugin notices within half a second and closes the pane. Typing in the prompt, or closing the pane with its `×`, does the same.
+Typing a key that isn't a command after the leader shows a reminder of the keys, and does nothing else.
 
 ## Marks
 
@@ -49,73 +79,92 @@ A mark is a letter, `a` to `z`, attached to a line of the conversation.
 
 **To set one:**
 
-1. Select some text with the mouse in a reply or a prompt. A few words are enough; the line you select is what gets highlighted later.
-2. Press `Ctrl+X m`. The mark pane opens:
+1. Select some text with the mouse in a reply or a prompt, or just scroll to where you want the mark.
+2. Press `Ctrl+] m`. The mark pane opens, listing the marks you have:
 
    ```
-   Mark as: (Esc)
-   a b ● d e f g ...
-   c ▸ the line you marked earlier
+   mark as: cancel (Enter) · · ● · · …
    ```
 
-   Free letters are drawn dim. A letter already in use shows as `●`, and the marks you have are listed underneath with their text.
-3. Press a letter. The pane closes, a message confirms the mark (`mark a [selection] -> ...`), and the selected line lights up in place.
+   Free letters are drawn as `·`, letters in use as `●`.
+3. Press a letter. The pane closes, a message confirms the mark, and the marked line lights up in place. `Enter` (or `Esc`) cancels without marking.
 
-**With nothing selected**, the letter marks your latest prompt instead, and the message says `[latest prompt]`. This is a quick way to mark "the question I just asked".
+**What gets marked:**
+
+| You have... | The mark goes on |
+|-------------|------------------|
+| Text selected within the last 75 seconds | The selected line (`[selection]`) |
+| An older selection, or none | The message at the top of the screen (`[top of screen]`), its first line highlighted |
+
+Claude Code remembers the last text you selected even after its highlight is gone. The 75 seconds stop an old selection, perhaps one you made to copy a quote, from deciding where a new mark goes. The time will be a setting.
+
+**The view stays where it was.** Opening the pane narrows the conversation, which shifts what's on screen. After the mark, the plugin scrolls back to the message that was at the top before the pane opened.
 
 **Pressing a letter that is already in use moves it**: the old mark under that letter is replaced, as in vim.
+
+**To delete marks:** `/bm-delmarks m`, `/bm-delmarks a b c`, or `/bm-delmarks all`. The reading position isn't a letter and stays.
 
 **The highlight** stays for two minutes, or until you send your next prompt, whichever comes first. It only changes what is drawn on your screen: Claude never sees it, and the session file is not changed.
 
 ## Jumping to a mark
 
-1. Press `Ctrl+X '` from anywhere in the conversation. The jump pane lists only the marks you have, one per line, plus the reading position at the top when you have one.
+1. Press `Ctrl+]`, then `'` (or `j`), from anywhere in the conversation. The jump pane lists the marks you have, plus the reading position when you have one.
 2. Press the mark's letter. The conversation scrolls so the marked message is at the top of the screen, and the marked line lights up again.
 
-To go to the reading position from this pane, press `Enter`: the pane opens with its focus on the reading-position entry.
+`Enter` instead of a letter goes to the reading position.
 
 If the mark points at a message Claude Code no longer has on screen (usually one from before the last compaction, after the session was restarted or resumed), the jump can't happen. The plugin says so, copies a phrase of the message to your clipboard, and tells you how to find it; see [Troubleshooting](troubleshooting.md#a-jump-says-it-cant-go-there).
 
 ## The reading position
 
-The reading position is a single bookmark with its own key, `Ctrl+X Space`, for "this is where I was reading". It works like a two-way switch: one press takes you there, the next takes you back.
+The reading position is a single bookmark for "this is where I was reading". It works like a two-way switch: one press takes you there, the next takes you back.
 
-**To set it:** select some text in the message you are reading and press `Ctrl+X Space`. The message says `reading position set: ...`.
+The keys are `Ctrl+] Space Space`: the first `Space` asks for the reading position, and the second presses it (`Enter` works too). `r` does the same as the first `Space`.
 
-**To use it:** scroll anywhere you like (up to check an earlier answer, down to the newest reply), then press `Ctrl+X Space` with nothing selected:
+**To set it:** select some text in the message you are reading and press `Ctrl+] Space Space`. The message says `reading position set: ...`. As with marks, only a selection made within the last 75 seconds counts.
 
-| You are... | `Ctrl+X Space` does |
-|------------|---------------------|
-| Somewhere else in the conversation | Goes to the reading position, and remembers the message that was at the top of your screen |
-| At the reading position, having just jumped there | Goes back to the message you jumped from |
+**To use it:** scroll anywhere you like, then press `Ctrl+] Space Space` with nothing freshly selected:
+
+| You are... | `Ctrl+] Space Space` does |
+|------------|---------------------------|
+| Somewhere else in the conversation | Goes to the reading position, and remembers where you were |
+| At the reading position, having just jumped there | Goes back to where you were |
 | At the reading position, having scrolled there yourself | Stays put, and says so: there is nowhere to go back to |
 
-So the common rhythm is: set it once, then press `Ctrl+X Space` to visit it and `Ctrl+X Space` again to come back.
+**"Where you were"** is the message at the top of your screen, or, when you were at the very bottom, the last message's end. So going back from the bottom returns you to the same text you were reading, even if new replies have arrived below it. The plugin can't read or restore the exact scroll position, only show a message at the top or bottom of the window. So in the middle of a long message, back lands on that message's start.
 
-**To move it**, select text in a different message and press `Ctrl+X Space` again. A selection inside the message that already holds the reading position doesn't move it; that press counts as "go there". This stops a stray click or half-finished drag from moving your place by accident.
-
-"Back" returns to a whole message, the one at the top of your screen when you jumped, not to your exact scroll offset. A plugin can ask Claude Code to show a message, but it cannot read or restore the scroll position itself.
+**To move it**, select text in a different message and press `Ctrl+] Space Space` again. A selection inside the message that already holds the reading position doesn't move it; that press counts as "go there".
 
 The reading position is kept apart from the letters: it never takes up a letter, and the mark pane doesn't list it.
 
 ## The prompts pane
 
-`Ctrl+X p` opens a list of every prompt you have typed in this conversation, newest first, numbered from your first. At the top is a `#` field for a number (its hint shows the range, such as `1-153`), and under it the list:
+`Ctrl+] p` opens a list of every prompt you have typed in this conversation, newest first, numbered from your first:
 
 ```
-or Tab / Shift+Tab, Enter
-153) Looks good, let's do a small commit for that
-152) Then a recap and a what-next
+# 12
+  153) Looks good, let's do a small commit for that
+  152) Then a recap and a what-next
 ...
+▶ 12) Our readme feels a bit weak
 ```
 
-**To jump by number**, type it into the `#` field. It jumps on `Enter`, or as soon as the digits you have typed can't be the start of a larger prompt number. With 25 prompts, typing `3` jumps at once to #3, while `2` waits, since you might mean #21.
+The band takes the keys, and the pane shows where you are:
 
-**To pick from the list**, press `Tab` to step down through the prompts from the newest, `Shift+Tab` to step back up, and `Enter` to jump to the one in focus.
+| Key | Does |
+|-----|------|
+| Digits | Type a prompt number; it shows in the pane's `#` field, and the list scrolls to that prompt, marked `▶` |
+| `j` / Down | Moves the `▶` one prompt down the list (older); the first press starts at the newest |
+| `k` / Up | Moves it one prompt up (newer) |
+| `Enter` | Jumps to the prompt under the `▶` |
+| `s` | Pins or unpins the prompt under the `▶` (see [Pinned prompts](#pinned-prompts)) |
+| `Esc` | Closes without jumping |
 
 The list includes prompts from before the plugin was loaded. The first time it sees a conversation, the plugin reads the prompts from the conversation's transcript file in one pass. After that it adds each prompt as you send it.
 
 **Dimmed prompts** are ones Claude Code hasn't drawn on screen since the plugin loaded. Usually that means they are from before the last compaction, which Claude Code no longer loads after a restart or resume, and a jump to one will be refused. A prompt that simply hasn't been scrolled past yet is also dim until it is drawn, so treat the dimming as a hint, not a promise.
+
+**With an empty input box,** the typed command `/bm-prompts` opens the same pane with the keyboard in the pane itself. Then `Tab`/`Shift+Tab` step through the list, and the `#` field takes `*21` to pin.
 
 ### Pinned prompts
 
@@ -123,11 +172,41 @@ Pin the prompts you want to come back to, and they stay at the top of the pane:
 
 | To | Do |
 |----|----|
-| Pin or unpin prompt #21 | Type `*21` in the `#` field and press `Enter` (the pane stays open, so you can pin several) |
-| Pin or unpin your newest prompt | Type `*` and press `Enter` |
-| Pin from the prompt, without the pane | `/bm-pin 21`, or `/bm-pin` for the newest |
+| Pin or unpin a prompt while browsing | `Ctrl+] p`, move the `▶` to it (`j`/`k`, the arrows, or its number), then `s`; the band stays open to pin more |
+| Pin or unpin prompt #21 | `/bm-pin 21` |
+| Pin or unpin your newest prompt | `/bm-pin` |
+| Pin from the pane | Type `*21` (or `*` for the newest) in the pane's `#` field and press `Enter`; this needs the keyboard in the pane (`/bm-prompts` from an empty input box) |
 
 A pinned prompt shows a gold star inside its number, `245★) `, both in a **★ pinned** group at the top of the pane (in the order you pinned them) and in its place in the full list. Pins are kept per conversation, like marks.
+
+## Optional fast keys
+
+For one-step actions, a key can press a band button directly. It goes through one of the few actions of Claude Code's diff panel that do nothing in a conversation:
+
+```json
+"ctrl+x space": "app:diffFileListDown"
+```
+
+in the same `Chat` block gives one-step reading: `Ctrl+X Space` goes to the reading position and back, and works with text in the input box too.
+
+These are for power users, and not part of the recommended setup:
+- **They borrow Claude Code's diff-panel actions.** While the diff panel is open, it takes them over, and a future Claude Code may remove them.
+- **Only about four exist,** so they are reserved for the most common one-step actions.
+
+**The older chords** `Ctrl+X m` (`app:toggleDiffNoiseFilter`), `Ctrl+X '` (`app:toggleDiffPreSession`) and `Ctrl+X p` (`app:cycleDiffBase`) still work if bound, but they don't work with text in the input box. The leader replaces them, and they will be removed in a later version.
+
+## Typed commands
+
+| Command | Does |
+|---------|------|
+| `/bm-mark` | Opens the mark pane |
+| `/bm-goto` | Opens the jump pane |
+| `/bm-prompts` | Opens the prompts pane |
+| `/bm-read` | Goes to the reading position, or back |
+| `/bm-delmarks a b`, `/bm-delmarks all` | Deletes marks |
+| `/bm-pin [N]` | Pins or unpins prompt #N (the newest without a number) |
+
+From an empty input box, a pane opened by a command takes the keyboard, so its own keys work: the arrows, `Tab`, `Enter`. A command typed into the input box can't open a pane over other text, so for that the leader is the route.
 
 ## What is kept, and where
 
@@ -150,6 +229,6 @@ The plugin adds a few commands from its proof-of-concept stage. They are useful 
 | `/bm-env` | The plugin's version, the Claude Code version, the session id, and what the plugin has captured |
 | `/bm-marks` | The marks set in this conversation |
 | `/bm-timeline` | The last few plugin events: draws, panes, jumps, toasts |
-| `/bm-pin [N]` | Pins or unpins prompt #N (the newest without a number); see [Pinned prompts](#pinned-prompts) |
+| `/bm-diag-keys` | Turns on (or off) logging of each key typed in the input box, to the plugin's debug log: lengths and key names, never the text |
 
 These commands are left over from the proof of concept and will be renamed in the rebuild.

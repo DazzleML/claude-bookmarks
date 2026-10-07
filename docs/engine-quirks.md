@@ -1,6 +1,6 @@
 # Claude Code quirks we work around
 
-Building this plugin meant running into places where Claude Code's plugin API (as of 2.1.289) doesn't do what a plugin needs. This page lists each one: what you'd notice, why it happens, what the plugin does about it, and what a proper fix in Claude Code would look like. It's for contributors, for anyone writing their own Claude Code plugin, and for us when Claude Code changes and a workaround can go.
+Building this plugin meant running into places where Claude Code's plugin API (as of 2.1.290) doesn't do what a plugin needs. This page lists each one: what you'd notice, why it happens, what the plugin does about it, and what a proper fix in Claude Code would look like. It's for contributors, for anyone writing their own Claude Code plugin, and for us when Claude Code changes and a workaround can go.
 
 Each entry is marked:
 
@@ -19,19 +19,25 @@ Unless stated otherwise, the facts come from Claude Code's plugin type declarati
 
 ### A plugin can't define its own keyboard shortcut — Workaround
 
-**What you notice:** the chords are set up by hand in `keybindings.json`, and they're named after diff-panel actions (`app:toggleDiffNoiseFilter` and so on).
+**What you notice:** the leader is set up by hand in `keybindings.json`, and it's bound to a Claude Code action, not to the plugin.
 
-**Why:** a plugin button can only be pressed by a chord through an existing Claude Code action (`Button.action`); an unknown action name is refused. Claude Code 2.1.289 has 15 such actions, of which five belong to the diff panel and do nothing in a conversation.
+**Why:** a plugin can't add keybindings, and a plugin button can only be pressed by a key through an existing Claude Code action (`Button.action`); an unknown action name is refused.
 
-**What we do:** the four chords borrow four of the five idle diff actions. The fifth is kept free for testing.
+**What we do (since 0.1.7):** the leader is Claude Code's own `abovePrompt:focus` (default `Ctrl+X Tab`; we suggest `Ctrl+]`), which moves the keyboard to the band. It borrows nothing, and it's the only route that works with a draft in the input box. The band's first element is a field (`autoFocus`), which takes the next key, any printable one, `'` and `Space` included; the band then takes the rest itself. See the next entries for why.
 
-**Side effects:** if you've turned off Claude Code's built-in diff mod, or the diff panel is open, those chords may act on the diff panel instead.
+**Also available, and undocumented:** `keybindings.json` accepts `command:<name>`, which runs a slash command "as if typed" (the 2.1.290 schema's words; the keybindings docs don't mention it; `Chat` context only). The plugin's typed commands (`/bm-mark`, `/bm-goto`, `/bm-prompts`, `/bm-read`) can be bound that way. A pane opened by one takes the keyboard from an empty input box, but nothing catches the key when Claude Code refuses it (over a draft). So that route was tried as the leader (2026-10-06) and set aside.
 
-**Proper fix:** let a plugin declare its own namespaced actions (for example `plugin:convo-bookmarks/mark`) that users bind like any other.
+**Before 0.1.7:** four chords borrowed four of the five diff-panel actions that do nothing in a conversation (`app:toggleDiffNoiseFilter` and so on), and the band buttons carry those actions still, for optional one-step keys. If you've turned off Claude Code's built-in diff mod, or the diff panel is open, those keys may act on the diff panel instead.
 
-### The leader needs no borrowed action — (not a quirk; the route we use)
+**Proper fix:** let a plugin declare its own namespaced actions (for example `plugin:convo-bookmarks/mark`) that users bind like any other, and document `command:` bindings.
 
-Claude Code's own `abovePrompt:focus` action (default `Ctrl+X Tab`, rebindable) puts the keyboard on the band above the prompt, and a band button's one-letter `hotkey` then presses it. That's how `Ctrl+X Tab` then `m`/`j`/`p`/`r` works without spending any action.
+### A key can't be both a leader and the start of a chord — Limit
+
+Binding `ctrl+]` to `abovePrompt:focus` and also `ctrl+] space` to something makes `Ctrl+]` alone stop working: Claude Code waits for the chord's second key, and the single binding is shadowed (measured 2026-10-07). So one-step keys use a different prefix (`Ctrl+X Space`).
+
+### A chord pressing a band button doesn't move the keyboard over a draft — Limit
+
+A chord bound to a band button's action presses the button even with a draft in the input box, but the keyboard stays in the input box, so the band can't take a second key (log 2026-10-07, `band focus … DENY that site does not hold the keyboard`). With an empty input box, the band does hold the keyboard after the press. So a borrowed-action key is only useful for a one-step action, such as the reading position.
 
 ### Some keys never reach Claude Code — Limit (terminal)
 
@@ -39,7 +45,7 @@ Claude Code's own `abovePrompt:focus` action (default `Ctrl+X Tab`, rebindable) 
 
 **Why:** those keys have no traditional control code, so most terminals send just `,` or `;` and drop the Ctrl. Only terminals that report extended keys (the Kitty keyboard protocol, or xterm's `modifyOtherKeys`) send the full key, and Claude Code does read those forms. Windows Terminal 1.24 doesn't, without help.
 
-**What to do:** see [Choosing the leader key](usage.md#the-leader-experimental). In Windows Terminal, map the key to a `sendInput` of the extended sequence (`\u001b[59;5u` for `Ctrl+;`).
+**What to do:** see [The leader key](usage.md#the-leader-key). In Windows Terminal, map the key to a `sendInput` of the extended sequence (`\u001b[59;5u` for `Ctrl+;`).
 
 **Keys that always arrive:**
 - `Ctrl+X Tab` (the default);
@@ -49,15 +55,50 @@ Claude Code's own `abovePrompt:focus` action (default `Ctrl+X Tab`, rebindable) 
 
 A terminal sends `Alt+,` as `Esc` followed by `,`, and Claude Code's vim mode takes the `Esc` as "leave insert mode". Avoid Alt for the leader if you use vim mode.
 
-### Chords do nothing while a dialog is up — Limit
+### Keys do nothing while a dialog is up — Limit
 
-A chord presses a plugin button only when no dialog (a permission prompt, a question) is showing. Answer the dialog first.
+A chord presses a plugin button only when no dialog (a permission prompt, a question) is showing, and the band can't be focused then either (not yet tested for the leader). Answer the dialog first.
 
 **Proper fix:** let a plugin mark a navigation-only button as safe to press while a dialog is open.
 
-### A pane can't take the keyboard while the input box holds text — Limit
+### A pane can't take the keyboard over a draft, or often just after a selection — Workaround
 
-`$.ui.open({ focus: true })` is refused while you have text in the input box (or a survey is up), so the pane opens but your next letter goes into the prompt. Keep the input box empty when you use a chord. Tracked in issue #17.
+**What you notice:** nothing; the band takes the keys and the pane shows the list.
+
+**Why:** `$.ui.open({ focus: true })` is refused while you have text in the input box (or a dialog or survey is up, or an element of the band holds the keyboard). It is also often refused right after you select text with the mouse, even with an empty input box. That happened on every route, including the older `Ctrl+X m` chord (2026-10-07).
+
+**What we do:** the band leader holds the keyboard by the person's own focus move, draft or not, and the pane only displays. Typed commands from an empty input box still give a pane the real keyboard. A click into a pane also hands it over (the band steps back, and the pane keeps the keyboard).
+
+**Tried and dropped:** taking the key from the input box. A `prompt.edit` hook can consume a key, but a jump from it is refused (next entry). Setting the draft aside, emptying the box and asking again was refused too. Tracked in issue #17.
+
+### A plugin may scroll the conversation only from a button press — Workaround
+
+**What you notice:** the first jump after a Claude Code update asks you to press `Enter`; after that, `'` hands the letter to the band's buttons.
+
+**Why:** `$.ui.scroll` is refused (`not person-initiated`) unless it runs inside a button press: a band hotkey, a click, `Enter` on a focused button. These are refused, though each comes from the person's own key:
+- typing in a plugin's field (`onInput`), and its `Enter` (`onSubmit`) (log 2026-10-05 17:20, 2026-10-07 07:06–07:12);
+- a `prompt.edit` hook (2026-10-07 06:26);
+- a timer.
+
+18 of 18 scrolls from button presses succeeded.
+
+**What we do:** the band's field takes only the first key and then hands off. The second key (a mark's letter, a digit, `Enter` on the reading entry) is a band button press. A prompt number is typed as digit buttons. The plugin tries one direct scroll from the field once per Claude Code version and remembers the answer, so a build that allows it gets one-step keys with no setting.
+
+**Proper fix:** carry "person-initiated" through `ui.input` (change and submit) and through a `prompt.edit` a plugin consumes, as through `ui.press`.
+
+### A plugin can't hand the keyboard back to the input box — Workaround
+
+**What you notice:** after a command the keyboard stays on the band; `Esc` returns it.
+
+**Why:** no API returns the keyboard to the composer; only the person's `Esc` does. A second `Ctrl+]` while the band holds the keyboard moves the focus along the band instead of starting fresh. Once that landed on the `mark` button, and `Space`, then `Enter`, overwrote mark `a` (2026-10-07).
+
+**What we do:** while the band is idle, a `ui.focus` hook keeps the focus on the field (a move onto a button is redirected back to it). In mark mode the default focus is a `cancel` button, so a stray `Enter` cancels. In prompt mode, a focus move off `go` onto its neighbour is read as an arrow key (`k` before it, `j` after it), which gives Up/Down browsing.
+
+**Proper fix:** a call that returns the keyboard to the composer, and keyboard handoff between a plugin's own band and pane.
+
+### A click on a band button doesn't move the keyboard over a draft — Workaround
+
+A click presses the button, but with a draft in the input box the band never gets the keyboard. The band's keyboard check then took that for "the band lost the keyboard" and closed the pane at once. Now the plugin notices that the band never held the keyboard and leaves the pane open as a clickable list.
 
 ## Panes and the band
 
@@ -67,9 +108,9 @@ A chord presses a plugin button only when no dialog (a permission prompt, a ques
 
 **Why:** Claude Code grants a pane's focus request only while the band isn't holding the keyboard, and it never considers *who* asked, even when the person's own press on the same plugin's band opened the pane. Traced in Claude Code's internals: `ui.open` knows a request came from a person's press, but uses that only to decide where the pane goes. A retry a moment later is refused too.
 
-**What we do:** the band takes the next key itself. It redraws as the row of letters (`jump: reading (Enter)  a: …  b: …`), and the pane stays open beside it as a readable list.
+**What we do:** the band takes the next key itself. It redraws as the row of letters (`jump: reading (Enter)  a: …  b: …`), and the pane stays open beside it as a readable list. In prompt mode the band takes digits, `j`/`k` and the arrows, and the pane shows the number and a `▶` on the prompt.
 
-**Proper fix:** grant the focus when a person's press on a plugin's band opens that same plugin's pane.
+**Proper fix:** grant the focus when a person's press on a plugin's band opens that same plugin's pane, or let `$.ui.focus` move the keyboard between a plugin's own band and pane.
 
 ### Claude Code doesn't say when the band loses the keyboard — Workaround
 
@@ -78,7 +119,7 @@ A chord presses a plugin button only when no dialog (a permission prompt, a ques
 **Why:** `Esc` on the band hands the keyboard back to the prompt silently. The plugin's `ui.focus` event only reports moves *within* the band, never the band losing the keyboard.
 
 **What we do:** three exits plus a backstop:
-- while the band waits for a key, the plugin asks every 400 ms to focus the element the band's focus is already on; Claude Code refuses that once the band no longer holds the keyboard, and the plugin then closes the pane;
+- while the band waits for a key, the plugin asks every 400 ms to focus the element the band's focus is already on; Claude Code refuses that once the band no longer holds the keyboard, and the plugin then closes the pane, unless the keyboard went into the pane (a click in it), which then keeps it;
 - typing in the prompt also cancels (`prompt.edit`);
 - closing the pane resets the band (`ui.close`);
 - a 15 s timeout is the backstop.
@@ -107,11 +148,25 @@ A chord presses a plugin button only when no dialog (a permission prompt, a ques
 
 ### "Where you were" is a whole message — Limit
 
-A plugin can reveal a message but can't read or restore the exact scroll offset, so returning from the reading position brings back the message that was at the top of the screen, not the exact line.
+A plugin can reveal a message (its top, middle or bottom at an edge of the window) but can't read or restore the exact scroll offset. So returning from the reading position brings back the message that was at the top of the screen, not the exact line. From the very bottom, the plugin anchors to the last message's end instead, which is exact there; occasionally the reports don't say the last line showed, and it falls back to the top message.
+
+**Proper fix:** a scroll target with a line offset (`{ requestId, line }`), since `onScreen` already says which lines were showing.
 
 ### On-screen reports go stale after a big jump — Workaround
 
 Claude Code reports a message as on screen when it's drawn, and on a scroll only at the window's edges, so a message left behind by one big jump may still look visible. The reading position uses only the latest burst of reports (within 1.5 s) together with its own record of where the last press went.
+
+A redraw also repeats a message's last report, even when the message is off screen. Clearing the reading position's highlight after "back" redrew it with its old lines, which made it look freshly on screen, and the next press "stayed put" (2026-10-07). Only a report whose lines changed now counts as fresh.
+
+### Opening a pane shifts the conversation — Workaround
+
+**What you notice:** the conversation jumps when a pane opens or closes.
+
+**Why:** the docked pane takes columns from the conversation, which rewraps narrower, so what's on screen shifts; closing it shifts it again.
+
+**What we do:** note where the view is just before the pane opens (the top message, or the last message's end at the bottom), and scroll back to it: at once where Claude Code allows the scroll (the pane was opened by a press), otherwise at the next press, such as the mark's letter. A jump cancels the return. A mark set from "the top of the screen" uses the position from before the pane opened.
+
+**Proper fix:** keep the conversation anchored on its top visible line across a width change.
 
 ## Drawing
 
@@ -153,17 +208,21 @@ A plugin runs programs through `$.process.run` with an argument list. From Windo
 
 On Windows, `Select-String -SimpleMatch` ignores case by default, which picks up extra lines; adding `-CaseSensitive` avoids them.
 
-### Read the selection before opening a pane — Workaround
+### Read the selection after opening the pane — Workaround
 
-Opening an inline pane shifts the layout, and a selection read afterwards resolves one row too high. The plugin reads your selection when the chord fires, before any pane opens.
+Awaiting anything before `$.ui.open({ focus: true })` appears to cost the pane the keyboard. The mark pane, which read your selection first, was refused in 8 of 12 runs; the jump pane, which didn't, almost never was (2026-10-06/07). So the plugin opens the pane first and reads the selection after. The original reason for reading it first was an inline pane shifting the layout, which made the selection resolve one row too high. The pane is docked now, and a mark resolves by the selection's message id, not its screen position.
+
+The selection is what you **last** selected, until you select again, dismiss it, or send your next prompt or command. A keypress takes the highlight down before the plugin runs, so the plugin can't tell a visible selection from an old one. No event says when the selection changes, so the plugin polls it once a second and notes when it changes. A selection older than 75 seconds is ignored, and the mark goes on the message at the top of the screen instead.
 
 ### Recently sent messages can be drawn under temporary ids — Workaround
 
 Rows drawn soon after sending can carry ids that differ from the saved message id (a zero-tailed form, or a random one). Marks are keyed on the saved id, which scrolling still resolves.
 
+A command run from a key (a `command:` binding) is drawn for a moment under a `placeholder…` id. The plugin ignores those ids when it notes what is on screen; otherwise "where you were" pointed at a message that vanished a moment later.
+
 ## Patched builds: trying the proper fix early
 
-Some of these limits sit in Claude Code code that no setting reaches. For those, we also write the proper fix as a patch to our own local copy of Claude Code, using a separate patch tool we're developing, `dcc-patcher` (dazzle-claude-code-patcher; Windows-first, not yet released). It applies structural patches to the native `claude.exe` and writes a patched copy beside the original. It ships patch definitions only, never patched binaries or Anthropic's code. Its first patch lets a resumed session scroll back past its compactions, the fix described under [Scrolling and history](#scrolling-and-history).
+Some of these limits sit in Claude Code code that no setting reaches. For those, we also write the proper fix as a patch to our own local copy of Claude Code, using a separate patch tool we're developing, `dcc-patcher` ([dazzle-claude-code-patcher](https://github.com/DazzleML/dazzle-claude-code-patcher); Windows-first, not yet released). It applies structural patches to the native `claude.exe` and writes a patched copy beside the original. It ships patch definitions only, never patched binaries or Anthropic's code. Its first patch lets a resumed session scroll back past its compactions, the fix described under [Scrolling and history](#scrolling-and-history).
 
 How the patcher fits with this plugin:
 

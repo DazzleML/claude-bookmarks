@@ -14,13 +14,14 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { PaneMode, Row } from '../types'
+import { describePathOrder } from './engine/select'
 
 const PANE = 'bm-poc'
 
 // Claude Code builds the borrowed-action chords (below) were verified on. The
 // start-up tripwire toasts on any other build, because a new build could give a
 // borrowed action a handler of its own. Add a build here after re-verifying.
-const VERIFIED_CLIENTS = ['2.1.288', '2.1.289']
+const VERIFIED_CLIENTS = ['2.1.288', '2.1.289', '2.1.290']
 
 // Engine keybinding actions borrowed for the chord test (B4). Neither should have a
 // handler mounted while the built-in diff mod is enabled; the version check in
@@ -46,6 +47,10 @@ const paneMode = atom({ plugin: 'convo-bookmarks', key: 'paneMode' } as const, '
 const shown = atom({ plugin: 'convo-bookmarks', key: 'shown' } as const, null)
 const bandMode = atom({ plugin: 'convo-bookmarks', key: 'bandMode' } as const, 'idle')
 const pinsRev = atom({ plugin: 'convo-bookmarks', key: 'pinsRev' } as const, 0)
+// The band's command line (design 2026-10-07__02-58-22): bumped after each command so
+// the field is drawn under a new key and starts empty; and the prompt number's digits.
+const cmdRev = atom({ plugin: 'convo-bookmarks', key: 'cmdRev' } as const, 0)
+const bandNum = atom({ plugin: 'convo-bookmarks', key: 'bandNum' } as const, '')
 
 // The highlight and the band text are temporary (djdarcy, 2026-10-03: "visible temporarily
 // for maybe a minute or two or until the next action like another prompt is sent").
@@ -152,8 +157,19 @@ const rendered = new Map<string, string>()
 // go" right after Ctrl+End). Only the latest burst of reports is trusted.
 const onScreenNow = new Map<string, { first: number; last: number; of: number; at: number }>()
 function noteOnScreen(requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
-  if (onScreen) onScreenNow.set(requestId, { ...onScreen, at: Date.now() })
-  else onScreenNow.delete(requestId)
+  // A command run from a key (`command:bm-read`) is drawn for a moment under a
+  // temporary `placeholder…` id; as the newest report it became "where you were", and
+  // the way back was refused once it vanished (log, 2026-10-06 04:03:29). Only real
+  // message ids count.
+  if (!/^[0-9a-f]{8}-/.test(requestId)) return
+  if (!onScreen) return void onScreenNow.delete(requestId)
+  // A redraw that repeats the same lines is not news: clearing the reading position's
+  // highlight after a "back" jump redrew it, off screen, with its old lines, which made
+  // it look freshly on screen, so the next press "stayed put" at the bottom (djdarcy,
+  // 2026-10-07; log 08:15:48 -> 08:15:53). Only a change of lines refreshes the time.
+  const before = onScreenNow.get(requestId)
+  const same = before && before.first === onScreen.first && before.last === onScreen.last && before.of === onScreen.of
+  onScreenNow.set(requestId, { ...onScreen, at: same ? before.at : Date.now() })
 }
 const FRESH_MS = 1500
 function freshOnScreen(): string[] {
@@ -205,7 +221,7 @@ const clock = (t: number) => new Date(t).toISOString().slice(11, 23)
 const firstFour = (uuid: string) => uuid.split('-').slice(0, 4).join('-')
 
 // `snippet`: the selection's first line exactly as selected, for highlighting.
-type Mark = { uuid: string; head: string; markedAt: number; source?: 'selection' | 'latest'; snippet?: string }
+type Mark = { uuid: string; head: string; markedAt: number; source?: 'selection' | 'latest' | 'screen'; snippet?: string }
 type Marks = Record<string, Mark>
 
 const short = (uuid: string) => uuid.slice(0, 8)
@@ -398,15 +414,28 @@ function searchPhrase(text: string | undefined): string | undefined {
   return space > 16 ? cut.slice(0, space) : cut
 }
 
-// B2/B3/B5 share this: scroll, then report exactly what the engine answered.
-async function jumpTo($: EngineInterface, uuid: string, via: string, label: string, words?: string) {
-  const result = await $.ui.scroll({ to: { requestId: uuid }, block: 'start' })
+// B2/B3/B5 share this: scroll, then report exactly what the engine answered. Returns the
+// refusal, if any. `probe`: a try whose "not person-initiated" refusal the caller
+// handles (the band command line's one-time check), so no toast for that one.
+async function jumpTo($: EngineInterface, uuid: string, via: string, label: string, words?: string, probe = false, block: 'start' | 'end' = 'start'): Promise<string | undefined> {
+  const result = await $.ui.scroll({ to: { requestId: uuid }, block })
+  // The jump is where the person wants to be: no going back to before the pane.
+  if (!result.deny) paneAnchor = undefined
   const verdict = result.deny ? `DENY: ${result.deny}` : 'ok'
+  if (probe && result.deny && /person-initiated/i.test(result.deny)) {
+    log($, `[bm-poc] ${via} scroll -> ${verdict} | target ${label} ${short(uuid)} (probe)`)
+    return result.deny
+  }
   // A message Claude Code has not drawn cannot be scrolled to ("nothing drawn under
   // that requestId": prompts from before this conversation's compaction, 2026-10-05).
   // The view stays put, which looked like "it took me somewhere else"; say so, and
   // offer the planned fallback (issue #4): search the transcript view.
-  if (result.deny) {
+  // Any other refusal ("not person-initiated", ...) is not about the message: say what
+  // Claude Code said, not "older than a compaction" (log, 2026-10-07 06:26:12).
+  if (result.deny && !/nothing drawn/i.test(result.deny)) {
+    $.ui.toast(`Can't jump there: Claude Code refused the scroll (${result.deny}).`)
+    log($, `[bm-poc] jump refused for another reason: ${result.deny}`)
+  } else if (result.deny) {
     const text = words ?? rendered.get(uuid) ?? Object.values(markCache).find(m => m.uuid === uuid)?.head
     // The mod cannot open Ctrl+O or fill a search (nothing in $.ui drives the
     // transcript view), but it can put a search phrase on the clipboard (djdarcy,
@@ -429,10 +458,11 @@ async function jumpTo($: EngineInterface, uuid: string, via: string, label: stri
     log($, `[bm-poc] jump refused; search phrase ${copied ? 'copied' : 'shown'}: "${phrase ?? ''}"`)
   }
   note(`scroll ${uuid} via ${via} -> ${verdict}`)
-  log($, 
+  log($,
     `[bm-poc] ${via} scroll -> ${verdict} | target ${label} ${short(uuid)} | ` +
       `drawn since load: ${rendered.has(uuid) ? 'yes' : 'NO'}`,
   )
+  return result.deny
 }
 
 // The selection as it stood when the mark chord fired, read BEFORE the pane opens:
@@ -452,9 +482,100 @@ async function resolveSelectionRow($: EngineInterface, id: string, text: string)
   return { uuid: saved?.uuid ?? id, check }
 }
 
+// Highlight a mark just set from a selection, then put the view back. Redrawing the
+// message under a visible selection drops the view to the bottom, even with following
+// the bottom turned off (djdarcy, 2026-10-06; a stale selection, no longer shown, did
+// not; seen only when the pane held the keyboard). So note the message at the top of
+// the screen first, and scroll back to it once the pane has closed: message-level, like
+// the reading position's return. The scroll must run within the keypress's own handler:
+// one from a timer is refused ("not person-initiated", log 2026-10-06 04:22:20).
+let restoreTo: string | undefined
+// The message at the top of the screen just before a pane opened (openFor): where the
+// view goes back to once the pane has done its job. A jump clears it (jumpTo).
+let paneAnchor: string | undefined
+// The same moment as a scroll can restore it: at the bottom, the last message's end.
+let paneView: { uuid: string; block: 'start' | 'end' } | undefined
+async function highlightInPlace($: EngineInterface, letter: string, text: string) {
+  restoreTo = paneAnchor ?? (await topOnScreen($))
+  await showMark($, letter, text)
+}
+// The shift is Claude Code's, on every route: the old Ctrl+X m chord moved the view by
+// about a screen as well (djdarcy, 2026-10-07, with this scroll-back switched off).
+async function restoreView($: EngineInterface) {
+  // A pane opened and closed: the view was shifted for certain, so go back to where it
+  // was before the pane, whether or not that message is still on screen somewhere.
+  const fromPane = !!paneAnchor
+  const block = (fromPane && paneView?.block) || 'start'
+  const here = (fromPane ? paneView?.uuid ?? paneAnchor : undefined) ?? restoreTo
+  restoreTo = undefined
+  paneAnchor = undefined
+  paneView = undefined
+  if (!here) return
+  // Otherwise only when the view actually moved: scrolling back regardless lined up the
+  // top message's first line and moved a view that had not dropped (djdarcy, 2026-10-07).
+  if (!fromPane && freshOnScreen().some(id => id === here || firstFour(id) === firstFour(here))) {
+    log($, `[bm-poc] view kept after highlight (${short(here)} still on screen)`)
+    return
+  }
+  const r = await $.ui.scroll({ to: { requestId: here }, block })
+  log($, `[bm-poc] view restored after highlight -> ${r.deny ? `DENY: ${r.deny}` : 'ok'} | ${short(here)}`)
+}
+
+// --- Fresh and stale selections ---------------------------------------------------------
+// $.ui.selection() answers what the person LAST selected, even once its highlight is gone
+// (the types' docs), so a mark with nothing selected used a quote selected minutes
+// earlier (2026-10-07 07:13:10, 07:20:21). djdarcy: "if a user selects text we should be
+// attempting to date-time it and if it's older than 1.25 minutes then we should mark the
+// current top-left portion of the screen". No event says when a selection changes, so it
+// is polled once a second and stamped when it does. Becomes a setting (#7).
+const SELECTION_FRESH_SECONDS = 75
+type Selection = Awaited<ReturnType<EngineInterface['ui']['selection']>>
+let selectionSeen: { key: string; at: number } | undefined
+let selectionPoll: Timer | undefined
+const selectionKey = (s: Selection) => (s?.requestId && s.text.trim() ? `${s.requestId}|${s.text}` : '')
+
+async function pollSelection($: EngineInterface) {
+  const key = selectionKey(await $.ui.selection())
+  // The first look has no history: whatever is selected then counts as old.
+  if (!selectionSeen) selectionSeen = { key, at: 0 }
+  else if (key !== selectionSeen.key) selectionSeen = { key, at: Date.now() }
+}
+
+// The selection if it was made within SELECTION_FRESH_SECONDS, else undefined.
+async function freshSelection($: EngineInterface, sel: Selection): Promise<Selection> {
+  const key = selectionKey(sel)
+  if (!key) return undefined
+  // Changed since the last poll: made within the last second.
+  if (selectionSeen && key !== selectionSeen.key) selectionSeen = { key, at: Date.now() }
+  const at = selectionSeen?.key === key ? selectionSeen.at : 0
+  const age = at ? Math.round((Date.now() - at) / 1000) : undefined
+  const fresh = age !== undefined && age <= SELECTION_FRESH_SECONDS
+  log($, `[bm-poc] selection "${sel!.text.trim().slice(0, 24)}" is ${age === undefined ? 'of unknown age' : `${age}s old`}: ${fresh ? 'used' : 'ignored (stale)'}`)
+  return fresh ? sel : undefined
+}
+
+// The message at the top of the screen, as a mark: the fallback when no fresh selection
+// says where (djdarcy: "the current 'screen' they are looking at from the top left").
+// Message-level, like the reading position; its first line is the one highlighted.
+async function screenTopMark($: EngineInterface, before?: string): Promise<Mark | undefined> {
+  const id = before ?? (await topOnScreen($))
+  if (!id) return undefined
+  const list = await allRows($)
+  const row = list.find(r => r.uuid === id) ?? list.find(r => firstFour(r.uuid) === firstFour(id))
+  const text = row?.text ?? rendered.get(id) ?? row?.head ?? ''
+  const first = snippetOf(plainMarkdown(text))
+  return {
+    uuid: row?.uuid ?? id,
+    head: head(text) || '(message at the top of the screen)',
+    markedAt: await $.clock.now(),
+    source: 'screen',
+    ...(first ? { snippet: first } : {}),
+  }
+}
+
 async function setMark($: EngineInterface, letter: string) {
-  // Selection POC: a mouse selection inside one transcript row wins over "latest prompt".
-  const sel = selectionAtChord ?? (await $.ui.selection())
+  // A fresh mouse selection says where; otherwise the top of the screen.
+  const sel = await freshSelection($, selectionAtChord ?? (await $.ui.selection()))
   selectionAtChord = undefined
   note(`selection at mark: ${sel ? `row ${sel.requestId ?? '(none)'} text ${JSON.stringify(sel.text.slice(0, 80))}` : 'none'}`)
   if (sel?.requestId) {
@@ -471,25 +592,28 @@ async function setMark($: EngineInterface, letter: string) {
     await $.store.set(await marksKey($), { ...fresh, [letter]: mark })
     markCache = { ...fresh, [letter]: mark }
     // Writing `shown` redraws the rows and the band that read it.
-    await showMark($, letter, snippetOf(sel.text))
+    await highlightInPlace($, letter, snippetOf(sel.text))
     log($, `[bm-poc] SEL: mark ${letter} -> ${uuid} (drawn as ${sel.requestId}; ${check}) | "${head(sel.text)}"`)
     $.ui.toast(`mark ${letter} [selection] -> ${head(sel.text).slice(0, 40)}`)
     return
   }
 
-  const latest = (await prompts($)).at(-1)
-  if (!latest) {
-    note('toast: no prompt captured')
-    $.ui.toast('No prompt captured since the mod loaded')
+  // No fresh selection: the message at the top of the screen, as it was BEFORE the pane
+  // opened and shifted it (paneAnchor). (The "latest prompt" fallback is gone: prompts
+  // have the prompts pane and pins. djdarcy, 2026-10-07.)
+  const mark = await screenTopMark($, paneAnchor)
+  if (!mark) {
+    $.ui.toast('Nothing on screen to mark yet: scroll a little, or select some text')
     return
   }
   // Read again right before the write: the store is shared and not atomic.
   const fresh = await loadMarks($)
-  const mark: Mark = { uuid: latest.uuid, head: latest.head, markedAt: await $.clock.now(), source: 'latest' }
-  note(`store.set mark ${letter} -> ${latest.uuid}`)
+  note(`store.set mark ${letter} -> ${mark.uuid} (top of screen)`)
   await $.store.set(await marksKey($), { ...fresh, [letter]: mark })
-  note(`toast: mark ${letter}`)
-  $.ui.toast(`mark ${letter} [latest prompt] -> ${latest.head.slice(0, 40)}`)
+  markCache = { ...fresh, [letter]: mark }
+  if (mark.snippet) await highlightInPlace($, letter, mark.snippet)
+  log($, `[bm-poc] mark ${letter} -> ${short(mark.uuid)} (top of screen) | "${mark.head}"`)
+  $.ui.toast(`mark ${letter} [top of screen] -> ${mark.head.slice(0, 40)}`)
 }
 
 // --- Reading position: Ctrl+X Space ------------------------------------------------
@@ -501,7 +625,8 @@ async function setMark($: EngineInterface, letter: string) {
 // The toggle's state, kept explicitly rather than read off the screen (whose reports go
 // stale after a jump, see onScreenNow): `at` true right after going to the reading
 // position, so the next press goes `back`; false otherwise, so the next press goes there.
-type ReadingState = { at: boolean; back: string | null }
+// `backBlock`: which edge of the window `back` was anchored to (viewAnchor).
+type ReadingState = { at: boolean; back: string | null; backBlock?: 'start' | 'end' }
 async function readingStateKey($: EngineInterface): Promise<string> {
   return `readingState:${await $.session.id()}`
 }
@@ -530,25 +655,58 @@ async function topOnScreen($: EngineInterface): Promise<string | undefined> {
   // Only the latest burst of reports: what is on screen now, not what was before a jump.
   const visible = freshOnScreen()
   const known = visible.filter(id => order.has(id)).sort((a, b) => order.get(a)! - order.get(b)!)
+  // Not yet captured (a reply still arriving) sorts last: it is the newest.
+  lastScreenOrder = [...known, ...visible.filter(id => !order.has(id))]
   return known[0] ?? visible[0]
+}
+// The messages on screen, top to bottom, as topOnScreen last ordered them.
+let lastScreenOrder: string[] = []
+
+// Where "back" goes when you left from the bottom of the conversation (a setting, #7):
+//   'where-it-was': the same text you were reading, even if new replies arrived since
+//                   (djdarcy's choice: "I'd rather have it always go to the exact same
+//                   location where the screen was so I'm reading exactly what I was
+//                   reading before");
+//   'newest':       the bottom as it is now, Ctrl+End, new replies included.
+const READING_BACK_FROM_BOTTOM: 'where-it-was' | 'newest' = 'where-it-was'
+
+// Where the view is, as a scroll can put it back: the bottom message's end when its last
+// line shows (at the bottom of the conversation, that is exactly Ctrl+End), else the top
+// message's start. "Back" from the reading position went to the top message's start
+// even from the very bottom, a little above where the person was (djdarcy, 2026-10-07).
+async function viewAnchor($: EngineInterface): Promise<{ uuid: string; block: 'start' | 'end' } | undefined> {
+  const top = await topOnScreen($)
+  if (!top) return undefined
+  const bottom = lastScreenOrder.at(-1)
+  const b = bottom ? onScreenNow.get(bottom) : undefined
+  if (bottom && b && b.last >= b.of - 1) return { uuid: bottom, block: 'end' }
+  return { uuid: top, block: 'start' }
 }
 
 // Go to the reading position, noting where we were so the next Ctrl+X Space swaps back.
 // Shared by the chord and the jump pane's `␣ reading` entry.
 async function goToReading($: EngineInterface, reading: Mark, via: string) {
   const here = await topOnScreen($)
+  const anchor = await viewAnchor($)
   // Already at the reading position (the jump pane's entry used while there, log
   // 2026-10-05 00:06:17): keep the earlier spot to return to, or "back" would go to
   // the reading position itself.
   const atItAlready = !!here && (here === reading.uuid || firstFour(here) === firstFour(reading.uuid))
   const previous = await readingState($)
-  await setReadingState($, { at: true, back: atItAlready ? previous.back : (here ?? null) })
+  await setReadingState(
+    $,
+    atItAlready
+      ? { at: true, back: previous.back, ...(previous.backBlock ? { backBlock: previous.backBlock } : {}) }
+      : { at: true, back: anchor?.uuid ?? null, ...(anchor ? { backBlock: anchor.block } : {}) },
+  )
+  if (anchor) log($, `[bm-poc] reading position: back will be ${short(anchor.uuid)} at the window's ${anchor.block}`)
   await jumpTo($, reading.uuid, via, `from ${here ? short(here) : '(unknown)'}`)
   await showMark($, READING, reading.snippet ?? reading.head)
 }
 
 async function readingToggle($: EngineInterface) {
-  const sel = await $.ui.selection()
+  // Only a fresh selection moves the reading position (a stale one did, 2026-10-07 07:20:21).
+  const sel = await freshSelection($, await $.ui.selection())
   const marks = await loadMarks($)
   const reading = marks[READING]
   const picked = sel?.requestId && sel.text.trim() ? snippetOf(sel.text) : undefined
@@ -567,7 +725,8 @@ async function readingToggle($: EngineInterface) {
     markCache = { ...marks, [READING]: mark }
     // Next press goes there (from wherever the person has scrolled to by then).
     await setReadingState($, { at: false, back: null })
-    await showMark($, READING, picked)
+    await highlightInPlace($, READING, picked)
+    await restoreView($)
     log($, `[bm-poc] reading position set -> ${short(uuid)} (${check}) | "${head(sel.text)}"`)
     $.ui.toast(`reading position set: ${head(sel.text).slice(0, 40)}`)
     return
@@ -590,7 +749,11 @@ async function readingToggle($: EngineInterface) {
   )
   if (state.at && state.back && onScreenNowFresh) {
     await setReadingState($, { at: false, back: null })
-    await jumpTo($, state.back, 'reading position (back)', `to ${short(state.back)}`)
+    // Left from the bottom, and the setting says "the bottom as it is now": the newest
+    // captured message's end instead of the one that was last then.
+    const newest = state.backBlock === 'end' && READING_BACK_FROM_BOTTOM === 'newest' ? (await allRows($)).at(-1)?.uuid : undefined
+    const target = newest ?? state.back
+    await jumpTo($, target, 'reading position (back)', `to ${short(target)} (${state.backBlock ?? 'start'}${newest ? ', newest' : ''})`, undefined, false, state.backBlock ?? 'start')
     await clearShown($)
     return
   }
@@ -601,29 +764,206 @@ async function readingToggle($: EngineInterface) {
   if (onScreenNowFresh) {
     await showMark($, READING, reading.snippet ?? reading.head)
     $.ui.toast("You're at the reading position. Scroll away and press again to come back here.")
-    log($, `[bm-poc] reading position: already on screen, stayed put`)
+    const seen = [...onScreenNow.entries()].find(([id]) => id === reading.uuid || firstFour(id) === firstFour(reading.uuid))?.[1]
+    log($, `[bm-poc] reading position: already on screen, stayed put` +
+      (seen ? ` (reported lines ${seen.first}-${seen.last} of ${seen.of}, ${Date.now() - seen.at} ms ago)` : ''))
     return
   }
   // Otherwise: note where we are, then go there.
   await goToReading($, reading, 'reading position')
 }
 
-async function jumpToMark($: EngineInterface, letter: string) {
+// Returns the scroll's refusal, if any ('unset' when there is no such mark).
+async function jumpToMark($: EngineInterface, letter: string, probe = false): Promise<string | undefined> {
   const mark = (await loadMarks($))[letter]
-  if (mark) {
-    await jumpTo($, mark.uuid, 'B4+B5 chord jump', `mark ${letter}`)
-    await showMark($, letter, mark.snippet ?? mark.head)
-  } else {
+  if (!mark) {
     $.ui.toast(`mark ${letter} is not set`)
+    return 'unset'
+  }
+  const deny = await jumpTo($, mark.uuid, 'B4+B5 chord jump', `mark ${letter}`, undefined, probe)
+  if (!deny) await showMark($, letter, mark.snippet ?? mark.head)
+  return deny
+}
+
+// --- The band's command line -----------------------------------------------------------
+// Design 2026-10-07__02-58-22 (and its POC addendum). The band leader (abovePrompt:focus,
+// Ctrl+] for djdarcy) puts the keyboard on the band, whose first element is a field
+// that takes every printable key, ' and Space included, over a draft and mid-turn.
+// Stock Claude Code refuses a scroll from a field's typing or Enter ("not
+// person-initiated", 2.1.290), so the field takes the FIRST key and hands the rest to
+// band Buttons, whose presses may scroll. A build that allows it (a patched or future
+// one) is found by trying once: the answer is kept per Claude Code version.
+type DirectScroll = 'unknown' | 'ok' | 'deny'
+let directScroll: DirectScroll | undefined
+async function directScrollKey($: EngineInterface): Promise<string> {
+  const v = await $.session.version()
+  return `directScroll:${v.version}`
+}
+async function directScrollState($: EngineInterface): Promise<DirectScroll> {
+  if (!directScroll) directScroll = ((await $.store.get(await directScrollKey($))) as DirectScroll | undefined) ?? 'unknown'
+  return directScroll
+}
+async function setDirectScroll($: EngineInterface, value: DirectScroll) {
+  directScroll = value
+  await $.store.set(await directScrollKey($), value)
+  log($, `[bm-poc] band command line: a scroll from the field is ${value === 'ok' ? 'ALLOWED (one-step keys)' : 'refused (keys hand off to band buttons)'} on this Claude Code`)
+}
+
+const CMD_HINT = "bm: ' or j + letter (jump)  m + letter (mark)  Space or r (reading)  p + number (prompt)"
+let cmdBusy = false
+
+// Draw the field anew, empty.
+async function clearCommandLine($: EngineInterface) {
+  await update($, cmdRev, v => v + 1)
+}
+
+// The band's key mode for `mode`, with the ring on `focusKey` when given (Enter presses
+// it). openFor opens the pane as the list; from the band its focus is refused, so the
+// band takes the key (see openFor).
+async function handOff($: EngineInterface, mode: PaneMode, focusKey?: string) {
+  await openFor($, mode, 'band command line')
+  if (focusKey) await focusBand($, focusKey)
+}
+
+async function runCommandLine($: EngineInterface, typed: string, via: 'input' | 'submit') {
+  if (cmdBusy || typed === '') return
+  cmdBusy = true
+  try {
+    const first = typed[0]!
+    const state = await directScrollState($)
+    log($, `[bm-poc] band command line ${via}: "${typed}" (direct scroll ${state})`)
+
+    if (first === "'" || first === 'j') {
+      // Hand off at once where a field can't scroll; otherwise wait for the letter.
+      if (typed.length === 1) {
+        if (state === 'deny') {
+          await clearCommandLine($)
+          await handOff($, 'jump')
+        }
+        return
+      }
+      const letter = typed[1]!
+      await clearCommandLine($)
+      if (!/^[a-z]$/.test(letter)) return void $.ui.toast(CMD_HINT)
+      const deny = await jumpToMark($, letter, state === 'unknown')
+      if (deny && /person-initiated/i.test(deny)) {
+        await setDirectScroll($, 'deny')
+        // This once, the letter is already typed: put the ring on its Button, Enter jumps.
+        await handOff($, 'jump', `band-jump-${letter}`)
+        $.ui.toast(`Press Enter to jump to ${letter}. (From now on, the band takes the letter after ' itself.)`)
+      } else if (!deny && state === 'unknown') {
+        await setDirectScroll($, 'ok')
+      }
+      return
+    }
+
+    if (first === ' ' || first === 'r') {
+      await clearCommandLine($)
+      if (state === 'ok') return void (await readingToggle($))
+      // Enter presses the reading entry: there, or back (readingToggle).
+      await handOff($, 'jump', 'band-jump-reading')
+      return
+    }
+
+    if (first === 'm') {
+      // A mark scrolls back after its highlight (restoreView), so it is pressed too.
+      await clearCommandLine($)
+      await handOff($, 'mark', 'band-mark-cancel')
+      return
+    }
+
+    if (first === 'p') {
+      await clearCommandLine($)
+      await update($, bandNum, () => '')
+      await handOff($, 'list')
+      return
+    }
+    await clearCommandLine($)
+    $.ui.toast(CMD_HINT)
+  } finally {
+    cmdBusy = false
   }
 }
 
-async function openFor($: EngineInterface, mode: PaneMode, action: string) {
-  log($, `[bm-poc] B4: chord for ${action} pressed the band Button`)
-  if (mode === 'mark') {
-    selectionAtChord = await $.ui.selection()
-    note(`selection at chord: ${selectionAtChord?.requestId ?? 'none'}`)
+// A digit of a prompt number, pressed as a band Button: jumps on the digit that makes
+// the number complete (with 25 prompts, `3` at once, `2` waits), or on `go`.
+async function bandDigit($: EngineInterface, digit: string) {
+  const typed = (await read($, bandNum)) + digit
+  const count = (await prompts($)).length
+  if (promptNumberComplete(typed, count)) {
+    await update($, bandNum, () => '')
+    await jumpToPromptNumber($, typed, 'band prompts')
+    return
   }
+  await update($, bandNum, () => typed)
+  await showPromptInPane($, Number(typed))
+  keepBandWaiting($)
+}
+
+// Bring prompt #n into view in the pane's list, so it can be checked before Enter (its ▶
+// is drawn by the pane). The list is newest first, keyed `p-<uuid>`.
+async function showPromptInPane($: EngineInterface, n: number) {
+  const target = (await prompts($))[n - 1]
+  if (!target) return
+  const r = await $.ui.scroll({ in: PANE, to: { key: `p-${target.uuid}` }, block: 'center' })
+  if (r.deny) log($, `[bm-poc] prompts pane scroll to #${n} -> DENY: ${r.deny}`)
+}
+
+// Browse the prompts one by one from the band, vim's j and k: the band holds the keyboard,
+// so the pane can't take the arrows (djdarcy, 2026-10-07: "the nice thing about the panel
+// is that you can scroll through the prompts 1 by 1"). The list is newest first: j moves
+// the ▶ down (older), k up (newer); the first press lands on the newest. Enter jumps.
+async function bandStep($: EngineInterface, key: 'j' | 'k') {
+  const count = (await prompts($)).length
+  if (count === 0) return
+  const typed = await read($, bandNum)
+  const cur = Number(typed)
+  const n = !typed || !cur ? count : Math.min(count, Math.max(1, cur + (key === 'j' ? -1 : 1)))
+  await update($, bandNum, () => String(n))
+  await showPromptInPane($, n)
+  keepBandWaiting($)
+}
+
+// Pin or unpin the prompt under the ▶, from the band's prompt mode: where the list is in
+// view, so the person sees which prompt it is (djdarcy, 2026-10-07: a pin by number
+// alone, with no list in sight, is not useful). `s` for star: `*` can't be a hotkey.
+// The band stays in prompt mode, to pin several.
+async function bandPin($: EngineInterface) {
+  const typed = await read($, bandNum)
+  if (!typed) {
+    $.ui.toast('Pick a prompt first: j/k or the arrows (or its number), then s to pin it')
+    return
+  }
+  await togglePin($, typed)
+  keepBandWaiting($)
+}
+
+// Browsing takes as long as it takes: each key restarts the band's wait (BAND_MODE_MS).
+function keepBandWaiting($: EngineInterface) {
+  bandTimer?.cancel()
+  bandTimer = $.clock.after(BAND_MODE_MS, () => void endBandMode($))
+}
+async function bandNumberGo($: EngineInterface) {
+  const typed = await read($, bandNum)
+  await update($, bandNum, () => '')
+  if (!typed) return void (await closePane($))
+  await jumpToPromptNumber($, typed, 'band prompts')
+}
+
+// DIAGNOSTIC (2026-10-07): who holds the keyboard around a key, to explain a pane that is
+// kept or refused. Lengths only, never the draft's text. Keystrokes are logged only
+// while /bm-diag-keys is on.
+const diag = { lastEditAt: 0, busy: false, logKeys: false }
+async function diagState($: EngineInterface, when: string) {
+  const draft = (await $.prompt.read()).text
+  const panes = (await $.ui.panes()).map(p => `${p.id}${p.isFocused ? '*' : ''}`).join(',') || 'none'
+  const since = diag.lastEditAt ? `${Date.now() - diag.lastEditAt} ms` : 'never'
+  log($, `[diag] ${when}: draft ${draft.length} chars, last edit ${since} ago, claude ${diag.busy ? 'BUSY' : 'idle'}, panes ${panes}`)
+}
+
+async function openFor($: EngineInterface, mode: PaneMode, action: string) {
+  log($, `[bm-poc] B4: ${action.startsWith('command:') ? `leader ran ${action}` : `chord for ${action} pressed the band Button`}`)
+  await diagState($, `${mode} (before open)`)
   await update($, paneMode, () => mode)
   const title = mode === 'mark' ? 'mark: press a-z' : mode === 'jump' ? 'jump: press a-z' : 'prompts: press 1-9'
   note(`pane open (${mode}, focus)`)
@@ -631,7 +971,52 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   // width"): it only has to take one letter. Both sizes are requests; a size the
   // person dragged the pane to wins. `focus` is refused while the composer holds
   // text, so over typed text the letter goes to the prompt instead (issue #4).
+  // The docked pane narrows the conversation, which rewraps and shifts the view
+  // (djdarcy, 2026-10-07: "the pane itself is what shifts the viewport"). So note the
+  // message at the top of the screen first, a hidden mark, and return to it "as though
+  // the user was auto-firing a ctrl]' to the hidden mark we just created" (djdarcy):
+  // at once where Claude Code allows the scroll (a press: a chord, a click), else at the
+  // next press (the letter), or when the person closes the pane.
+  paneAnchor = await topOnScreen($)
+  paneView = await viewAnchor($)
   await $.ui.open({ id: PANE, title, focus: true, closeOnEscape: true, columns: 16, rows: 4 })
+  if (paneView) {
+    const r = await $.ui.scroll({ to: { requestId: paneView.uuid }, block: paneView.block })
+    log($, `[bm-poc] view back to ${short(paneView.uuid)} (${paneView.block}) after the pane opened -> ${r.deny ? `DENY: ${r.deny} (again at the next press)` : 'ok'}`)
+  }
+  // The selection is read AFTER the pane opens: an awaited call before $.ui.open looks
+  // to cost the pane the keyboard (the mark pane, which read it first, was refused in 8
+  // of 12 runs; the jump pane, which didn't, almost never; log 2026-10-06/07). The
+  // reason for reading it first was an inline pane shifting the transcript (round 1);
+  // the pane is docked now, and the mark resolves by the selection's message id.
+  if (mode === 'mark') {
+    selectionAtChord = await $.ui.selection()
+    note(`selection at chord: ${selectionAtChord?.requestId ?? 'none'}`)
+  }
+  const focused = await paneFocused($)
+  const draft = (await $.prompt.read()).text
+  const selNow = await $.ui.selection()
+  log(
+    $,
+    `[bm-poc] ${mode} pane has the keyboard: ${focused ? 'yes' : 'NO'} (input box holds ${draft.length} chars; ` +
+      `selection ${selNow?.text.trim() ? `"${selNow.text.trim().slice(0, 24)}"` : 'none'})`,
+  )
+  // From a typed command (/bm-mark, /bm-goto, /bm-prompts) the band never holds the
+  // keyboard, so the band key mode below can't take the key (log, 2026-10-07 04:56:51).
+  // Claude Code refuses the pane over a draft, and often just after a mouse selection
+  // (2026-10-06/07); working around that from the input box failed (a scroll from
+  // prompt.edit is "not person-initiated"). So say where the keys work instead: the
+  // band leader holds the keyboard by the person's own focus move, draft or not.
+  if (!focused && action.startsWith('command:')) {
+    await closePane($)
+    $.ui.toast(
+      draft.trim()
+        ? 'The keyboard is in the input box (it holds a draft). Use the band leader, Ctrl+] by default, which works over a draft.'
+        : "Claude Code didn't give the pane the keyboard. Use the band leader, Ctrl+] by default.",
+      { timeoutMs: 8000 },
+    )
+    return
+  }
   // Pressed from the band (its hotkey after `abovePrompt:focus`, Ctrl+X Tab or a
   // rebound key), the focus request is refused: "an element of the band ... the person
   // holds" has the keys, so the pane opened without them and the next letter went
@@ -643,10 +1028,21 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
     log($, `[bm-poc] pane opened without the keyboard; the band takes the ${mode} key`)
     bandTimer?.cancel()
     bandTimer = $.clock.after(BAND_MODE_MS, () => void endBandMode($))
-    // Digits need the field focused; in jump mode Enter goes to the reading position,
-    // as in the pane. A missing element (no reading position) is simply denied.
-    if (mode === 'list') await focusBand($, 'band-prompt-number')
-    if (mode === 'jump') await focusBand($, 'band-jump-reading')
+    // Enter's default: `go` for a prompt number, the reading position for a jump (a
+    // missing element, no reading position, is simply denied), and never a letter for a
+    // mark: Enter on `a` overwrote mark a (djdarcy, 2026-10-07).
+    const deny = await focusBand($, mode === 'list' ? 'band-num-go' : mode === 'jump' ? 'band-jump-reading' : 'band-mark-cancel')
+    // The band never had the keyboard: the button was clicked (over a draft, a click
+    // presses it without moving the keys). The watcher below would then close the pane
+    // at once (djdarcy, 2026-10-07: "the panel popped up for a second but then
+    // disappeared"; log 08:32:22). So it stays open as a list to click, closed by its ×.
+    if (deny && /does not hold the keyboard/i.test(deny)) {
+      bandTimer?.cancel()
+      bandTimer = undefined
+      await update($, bandMode, () => 'idle')
+      log($, `[bm-poc] ${mode} pane opened by a click: it stays open as a list (close it with its ×)`)
+      return
+    }
     // Esc hands the keyboard back to the prompt, and no event says so (djdarcy,
     // 2026-10-05: "it goes back to the normal text input bar but the panel stays
     // open"). $.ui.focus on the band is refused once the band no longer holds the
@@ -665,10 +1061,13 @@ let bandTimer: Timer | undefined
 // by it, to put the band's ring on the prompts field or the reading entry.
 let bandId: string | undefined
 
-async function focusBand($: EngineInterface, key: string) {
-  if (!bandId) return
+// Returns the refusal, if any.
+async function focusBand($: EngineInterface, key: string): Promise<string | undefined> {
+  if (!bandId) return undefined
   const r = await $.ui.focus({ requestId: bandId, key })
-  log($, `[bm-poc] band focus ${key}: ${'deny' in r && r.deny ? `DENY ${r.deny}` : 'ok'}`)
+  const deny = 'deny' in r && r.deny ? String(r.deny) : undefined
+  log($, `[bm-poc] band focus ${key}: ${deny ? `DENY ${deny}` : 'ok'}`)
+  return deny
 }
 
 // Jumps to prompt #n, from the prompts pane's field or the band's.
@@ -719,9 +1118,18 @@ async function jumpToPromptNumber($: EngineInterface, typed: string, via: string
   await closePane($)
 }
 
+// When a typed prompt number jumps (a setting, #7): 'enter' waits for Enter, so the
+// person can check the number first; 'complete' jumps on the digit that makes it complete.
+// Default 'enter': `p 3XX` jumping before Enter was "potentially a problem" (djdarcy,
+// 2026-10-07: "Some users will like just typing the number and going there. Others will
+// want the chance to confirm.").
+const PROMPT_NUMBER_JUMPS_AT: 'enter' | 'complete' = 'enter'
+
 // True once the digits typed can't become a larger prompt number: with 25 prompts,
-// `3` is complete, `2` waits for a second digit or Enter.
+// `3` is complete, `2` waits for a second digit or Enter. Only acted on when
+// PROMPT_NUMBER_JUMPS_AT is 'complete'.
 function promptNumberComplete(typed: string, count: number): boolean {
+  if (PROMPT_NUMBER_JUMPS_AT !== 'complete') return false
   const n = Number(typed)
   return /^\d+$/.test(typed) && n >= 1 && n <= count && n * 10 > count
 }
@@ -734,10 +1142,10 @@ let bandRing: string | undefined
 // An element of the band's key mode that is drawn now, to aim the focus probe at:
 // the ring's own element when it belongs to this mode, else a fixed one per mode.
 async function bandProbeKey($: EngineInterface, mode: PaneMode): Promise<string | undefined> {
-  const prefix = mode === 'list' ? 'band-prompt-number' : `band-${mode}-`
+  const prefix = mode === 'list' ? 'band-num-' : `band-${mode}-`
   if (bandRing?.startsWith(prefix)) return bandRing
-  if (mode === 'list') return 'band-prompt-number'
-  if (mode === 'mark') return 'band-mark-a'
+  if (mode === 'list') return 'band-num-go'
+  if (mode === 'mark') return 'band-mark-cancel'
   const marks = await loadMarks($)
   if (marks[READING]) return 'band-jump-reading'
   const first = LETTERS.find(l => marks[l])
@@ -750,6 +1158,14 @@ async function watchBand($: EngineInterface, mode: PaneMode) {
   if (!key) return // nothing focusable on the band: the timeout or the next edit ends it
   const r = await $.ui.focus({ requestId: bandId, key })
   if ('deny' in r && r.deny) {
+    // Into the pane (a click in it): the band steps back and the pane keeps the keyboard,
+    // its own keys and field included. Closing it there shut the pane the moment its
+    // field was clicked (djdarcy, 2026-10-07).
+    if (await paneFocused($)) {
+      log($, `[bm-poc] the keyboard moved into the pane: the band steps back, the pane stays`)
+      await endBandMode($)
+      return
+    }
     log($, `[bm-poc] band lost the keyboard (${r.deny}): closing the pane`)
     await closePane($)
   }
@@ -761,6 +1177,7 @@ async function endBandMode($: EngineInterface) {
   bandWatch?.cancel()
   bandWatch = undefined
   bandRing = undefined
+  if ((await read($, bandNum)) !== '') await update($, bandNum, () => '')
   if ((await read($, bandMode)) !== 'idle') await update($, bandMode, () => 'idle')
 }
 
@@ -777,6 +1194,11 @@ async function closePane($: EngineInterface) {
   if (paneGeometry) log($, `[bm-poc] pane was ${paneGeometry}`)
   await endBandMode($)
   await $.ui.close({ id: PANE })
+  // The conversation widens again as the pane goes, and shifts. Unless a jump moved the
+  // view on purpose (it clears the anchor), go back to where it was before the pane
+  // opened: the inverse of the return when it opened (djdarcy, 2026-10-07). From a
+  // timer (the band's Esc check) Claude Code refuses the scroll; the log says so.
+  if (paneAnchor) await restoreView($)
 }
 
 export const register: Register = on => {
@@ -786,16 +1208,30 @@ export const register: Register = on => {
       ['bm-jump', 'Probe B2/B3: scroll to a prompt (first | last | N | r<N> | uuid)'],
       ['bm-pane', 'Probe B5: open a pane of prompts; press 1-9 to jump'],
       ['bm-marks', 'List the marks set with the chord test'],
+      ['bm-delmarks', 'Delete marks: /bm-delmarks a b (letters), or /bm-delmarks all'],
       ['bm-env', 'Show version, session id and what the probe has captured'],
       ['bm-timeline', 'Show the last N mod events (draws, appends, pane, store, toast, scroll)'],
       ['bm-sel', 'Selection POC: show what $.ui.selection() returns for your mouse selection'],
       ['bm-pin', 'Pin or unpin prompt #N in the prompts pane (no number: the newest)'],
+      // Typed commands for the same actions as the band leader (they also work as
+      // `command:<name>` keybindings, 2.1.290). A pane they open takes the keyboard from
+      // an empty input box; over a draft they point to the band leader instead.
+      ['bm-mark', 'Set a mark: opens the mark pane, then press a letter'],
+      ['bm-goto', 'Jump to a mark: opens the jump pane, then press a letter'],
+      ['bm-prompts', 'Jump to a prompt: opens the prompts pane, then type its number'],
+      ['bm-read', 'Reading position: go there, or back to where you were'],
+      ['bm-diag-keys', 'Diagnostics: log each keystroke in the input box (on | off | toggle)'],
     ]
     for (const [name, description] of commands) {
       await $.command.register({ name, description, immediate: true })
     }
 
     markCache = await loadMarks($)
+    // Stamp selections as they change, so a stale one is ignored (freshSelection).
+    selectionPoll?.cancel()
+    selectionSeen = undefined
+    await pollSelection($)
+    selectionPoll = $.clock.every(1000, () => void pollSelection($))
     // Not awaited: session start should not wait on a third of a second of PowerShell.
     void backfillPrompts($).catch(err => log($, `[bm-poc] backfill failed: ${String(err)}`))
 
@@ -824,6 +1260,14 @@ export const register: Register = on => {
   // the first edit in the prompt box ends the mode and closes the pane; the edit
   // itself goes through untouched.
   on('prompt.edit', async ($, e, next) => {
+    const now = Date.now()
+    if (diag.logKeys) {
+      const k = e.key
+        ? `${e.key.ctrl ? 'ctrl+' : ''}${e.key.meta ? 'meta+' : ''}${e.key.shift ? 'shift+' : ''}${e.key.key.length === 1 ? 'char' : e.key.key}`
+        : 'paste/burst'
+      log($, `[diag] edit ${k}: draft ${e.text.length} -> +${e.inputText.length}, ${diag.lastEditAt ? now - diag.lastEditAt : '-'} ms since last`)
+    }
+    diag.lastEditAt = now
     if ((await read($, bandMode)) !== 'idle') {
       log($, '[bm-poc] prompt edited while the band waited for a key: cancelled')
       await closePane($)
@@ -834,6 +1278,28 @@ export const register: Register = on => {
   // Where the band's focus ring is, so the keyboard probe (watchBand) aims at the
   // element already holding it and never moves the ring.
   on('ui.focus', { component: 'AbovePrompt' }, async ($, e, next) => {
+    // While the band is idle, the person's focus moves stay on the command field. After
+    // a command the band keeps the keyboard (a plugin can't hand it back; Esc does), so
+    // a second Ctrl+] moved the ring onto the `mark` button, Space pressed it, and Enter
+    // marked `a` (djdarcy, 2026-10-07; log 08:10:23). Clicks and chords still press the
+    // buttons; only the ring is kept on the field.
+    // The arrows in the band's prompt mode: they move the ring (they can't be hotkeys),
+    // so a move off `go` onto its neighbour is read as a step through the pane's list,
+    // k (previous: Up, Left, Shift+Tab) or j (next: Down, Right, Tab), and the ring
+    // stays on `go` for Enter (djdarcy, 2026-10-07: "we'd of course also want to add
+    // <up> <down> if possible").
+    if (e.origin.kind === 'person' && bandRing === 'band-num-go' && (await read($, bandMode)) === 'list' &&
+        (e.element === 'band-num-k' || e.element === 'band-num-j')) {
+      log($, `[bm-poc] band arrow -> ${e.element === 'band-num-k' ? 'k (up)' : 'j (down)'}`)
+      await bandStep($, e.element === 'band-num-k' ? 'k' : 'j')
+      return next({ ...e, element: 'band-num-go' })
+    }
+    if (e.origin.kind === 'person' && e.element?.startsWith('chord-') && (await read($, bandMode)) === 'idle') {
+      const field = `band-cmd-${await read($, cmdRev)}`
+      log($, `[bm-poc] band focus kept on the command field (not ${e.element})`)
+      bandRing = field
+      return next({ ...e, element: field })
+    }
     if (e.element) bandRing = e.element
     return next(e)
   })
@@ -841,7 +1307,34 @@ export const register: Register = on => {
   // The person closed the pane (its close mark, or Ctrl+X x): end the band's key mode too.
   on('ui.close', { id: PANE }, async ($, e, next) => {
     await endBandMode($)
+    const closed = await next(e)
+    // The person closed it (Esc, its ×) without picking anything: back to where the view
+    // was before the pane opened, if Claude Code allows the scroll from here.
+    if (e.origin.kind === 'person' && paneAnchor) await restoreView($)
+    return closed
+  })
+
+  on('command.run', { command: 'bm-diag-keys' }, async ($, e) => {
+    const arg = e.args.trim()
+    diag.logKeys = arg === 'on' ? true : arg === 'off' ? false : !diag.logKeys
+    log($, `[diag] keystroke logging ${diag.logKeys ? 'ON' : 'OFF'}`)
+    $.ui.toast(`bookmarks: keystroke logging ${diag.logKeys ? 'on' : 'off'}`)
+    return {}
+  })
+  on('turn.start', async ($, e, next) => {
+    diag.busy = true
     return next(e)
+  })
+  on('turn.complete', async ($, e, next) => {
+    diag.busy = false
+    return next(e)
+  })
+  // Every focus move in the band or a pane, and whether it was refused.
+  on('ui.focus', async ($, e, next) => {
+    const r = await next(e)
+    const deny = r && typeof r === 'object' && 'deny' in r && r.deny ? ` DENY ${String(r.deny)}` : ''
+    log($, `[diag] focus ${e.component} -> ${e.element ?? '(engine stop)'} by ${e.origin.kind}${deny}`)
+    return r
   })
 
   // Every row stored in the main conversation passes here with its transcript uuid.
@@ -1013,9 +1506,55 @@ export const register: Register = on => {
     return {}
   })
 
+  // The leader (djdarcy, 2026-10-06): `<leader> m`, `<leader> '` / `j`, `<leader> p`,
+  // `<leader> Space`, each a `command:` keybinding to one of these. A command, unlike
+  // a band press, may give the pane the keyboard; openFor's band fallback still covers
+  // the case where Claude Code refuses it (text in the input box).
+  on('command.run', { command: 'bm-mark' }, async $ => {
+    await openFor($, 'mark', 'command:bm-mark')
+    return {}
+  })
+  on('command.run', { command: 'bm-goto' }, async $ => {
+    await openFor($, 'jump', 'command:bm-goto')
+    return {}
+  })
+  on('command.run', { command: 'bm-prompts' }, async $ => {
+    await openFor($, 'list', 'command:bm-prompts')
+    return {}
+  })
+  on('command.run', { command: 'bm-read' }, async $ => {
+    await readingToggle($)
+    return {}
+  })
+
   on('command.run', { command: 'bm-pane' }, async $ => {
     await update($, paneMode, () => 'list')
     await $.ui.open({ id: PANE, title: 'bm-poc', focus: true, closeOnEscape: true })
+    // The slash-command route to a focused pane (typed, or a `command:bm-pane`
+    // keybinding, 2.1.290): record whether the pane actually got the keyboard.
+    log($, `[bm-poc] /bm-pane opened; pane has the keyboard: ${(await paneFocused($)) ? 'yes' : 'NO'}`)
+    return {}
+  })
+
+  // vim's :delmarks a b / :delmarks! (U27, djdarcy 2026-10-07: "How can we delete the
+  // 'm' mark?"). The reading position is not a letter and is left alone.
+  on('command.run', { command: 'bm-delmarks' }, async ($, e) => {
+    const arg = e.args.trim().toLowerCase()
+    const marks = await loadMarks($)
+    const letters = arg === 'all' || arg === '!' ? LETTERS.filter(l => marks[l]) : arg.split(/[\s,]+/).filter(l => /^[a-z]$/.test(l))
+    if (letters.length === 0) {
+      $.ui.toast('Usage: /bm-delmarks a b   (or /bm-delmarks all)')
+      return {}
+    }
+    const gone = letters.filter(l => marks[l])
+    const missing = letters.filter(l => !marks[l])
+    const kept = Object.fromEntries(Object.entries(marks).filter(([l]) => !gone.includes(l)))
+    await $.store.set(await marksKey($), kept)
+    markCache = kept
+    const showing = await read($, shown)
+    if (showing && gone.includes(showing.letter)) await clearShown($)
+    log($, `[bm-poc] deleted marks ${gone.join(' ') || '(none)'}${missing.length ? `; not set: ${missing.join(' ')}` : ''}`)
+    $.ui.toast(gone.length ? `deleted mark${gone.length > 1 ? 's' : ''} ${gone.join(' ')}` : `not set: ${missing.join(' ')}`)
     return {}
   })
 
@@ -1062,7 +1601,8 @@ export const register: Register = on => {
     log($, 
       `[bm-poc] ${$.plugin.name} ${await pluginVersion($)} on Claude Code ${v.version} ` +
         `(chords verified on ${VERIFIED_CLIENTS.join(', ')}); session ${await $.session.id()}; ` +
-        `captured ${promptCount} prompts, ${list.length - promptCount} replies; ${rendered.size} drawn ids`,
+        `captured ${promptCount} prompts, ${list.length - promptCount} replies; ${rendered.size} drawn ids; ` +
+        describePathOrder(),
     )
     return {}
   })
@@ -1121,7 +1661,8 @@ export const register: Register = on => {
           <Text key="band-jump-title" dimColor>jump:</Text>,
           ...(reading
             ? [<Button key="band-jump-reading" label="reading (Enter)" plain
-                onPress={async () => { await goToReading($, reading, 'band reading'); await done() }} />]
+                // There, or back to where you were: the leader's Space (readingToggle).
+                onPress={async () => { await readingToggle($); await done() }} />]
             : []),
           ...LETTERS.filter(l => marks[l]).map(l => (
             <Button key={`band-jump-${l}`} hotkey={l} label={(marks[l]?.head ?? '').slice(0, 12)} plain
@@ -1131,18 +1672,33 @@ export const register: Register = on => {
       } else if (mode === 'mark') {
         keys = [
           <Text key="band-mark-title" dimColor>mark as:</Text>,
+          // The default focus, so a stray Enter cancels rather than overwriting a mark.
+          <Button key="band-mark-cancel" label="cancel (Enter)" plain dimColor onPress={done} />,
           ...LETTERS.map(l => (
             <Button key={`band-mark-${l}`} hotkey={l} label={marks[l] ? '●' : '·'} plain dimColor={!marks[l]}
-              onPress={async () => { await setMark($, l); await done() }} />
+              onPress={async () => { await setMark($, l); await done(); await restoreView($) }} />
           )),
         ]
       } else {
+        // A prompt number, one digit Button per key: a field's typing or Enter can't
+        // scroll ("not person-initiated", 2026-10-05 17:20 and 2026-10-07 07:10), a
+        // Button press can.
         const count = (await prompts($)).length
-        keys = Input ? (
-          <Input key="band-prompt-number" label="prompt #" placeholder={`1-${count}`} submitLabel="jump"
-            onInput={(typed: string) => { if (promptNumberComplete(typed, count)) void jumpToPromptNumber($, typed, 'band prompts') }}
-            onSubmit={(typed: string) => void jumpToPromptNumber($, typed, 'band prompts')} />
-        ) : <Text dimColor>prompts: no field on this surface</Text>
+        const typed = await read($, bandNum)
+        keys = [
+          <Text key="band-num-title" dimColor>prompt #</Text>,
+          <Text key="band-num-typed" bold>{typed || '_'}</Text>,
+          <Text key="band-num-range" dimColor>{`(1-${count})`}</Text>,
+          ...'0123456789'.split('').map(d => (
+            <Button key={`band-num-${d}`} hotkey={d} label={d} plain dimColor onPress={() => bandDigit($, d)} />
+          )),
+          // `go` sits between k and j, so an arrow always has a neighbour to move to:
+          // the ui.focus hook turns that move into k (previous) or j (next).
+          <Button key="band-num-k" hotkey="k" label="k↑" plain dimColor onPress={() => bandStep($, 'k')} />,
+          <Button key="band-num-go" label="go (Enter)" plain onPress={() => bandNumberGo($)} />,
+          <Button key="band-num-j" hotkey="j" label="j↓" plain dimColor onPress={() => bandStep($, 'j')} />,
+          <Button key="band-num-pin" hotkey="s" label="s★ pin" plain dimColor onPress={() => bandPin($)} />,
+        ]
       }
       return (
         <Box flexDirection="column">
@@ -1160,10 +1716,16 @@ export const register: Register = on => {
       <Box flexDirection="column">
         {theirs}
         <Box flexDirection="row" columnGap={1}>
-          <Text dimColor>bm:</Text>
-          {/* Leader probe (2026-10-05): Claude Code's own `abovePrompt:focus` (default
-              Ctrl+X Tab, rebindable) puts the keyboard on the band, and a band Button's
-              hotkey then presses it, so the band is a leader that borrows no action. */}
+          {/* The band leader (abovePrompt:focus: Ctrl+X Tab by default, Ctrl+] for
+              djdarcy) puts the keyboard here; the field takes every key (runCommandLine).
+              The Buttons stay for clicks, Tab, and the borrowed-action chords. */}
+          {Input ? (
+            <Input key={`band-cmd-${await read($, cmdRev)}`} label="bm:" placeholder="' j m p ␣" submitLabel="run" autoFocus
+              onInput={(typed: string) => void runCommandLine($, typed, 'input')}
+              onSubmit={(typed: string) => void runCommandLine($, typed, 'submit')} />
+          ) : (
+            <Text dimColor>bm:</Text>
+          )}
           <Button key="chord-mark" label="mark" hotkey="m" plain dimColor action={MARK_ACTION} onPress={() => openFor($, 'mark', MARK_ACTION)} />
           <Button key="chord-jump" label="jump" hotkey="j" plain dimColor action={JUMP_ACTION} onPress={() => openFor($, 'jump', JUMP_ACTION)} />
           <Button key="chord-prompts" label="prompts" hotkey="p" plain dimColor action={PROMPTS_ACTION} onPress={() => openFor($, 'list', PROMPTS_ACTION)} />
@@ -1205,6 +1767,12 @@ export const register: Register = on => {
       const pinnedRows = pinIds.map(u => byUuid.get(u)).filter((r): r is (typeof numbered)[number] => !!r)
       const pinSet = new Set(pinIds)
       type NumberedPrompt = (typeof numbered)[number]
+      // Digits typed in the band (it holds the keyboard; the pane can't take it) show
+      // here too: in the `#` field, and as a ▶ on the prompt they name (djdarcy,
+      // 2026-10-07: "it would be nice if the number was entered into the panel").
+      const fromBand = (await read($, bandMode)) === 'list' ? await read($, bandNum) : undefined
+      const targetN = fromBand ? Number(fromBand) : undefined
+      const pointer = (n: number) => (fromBand === undefined ? '' : n === targetN ? '▶' : ' ')
       const promptRow = (r: NumberedPrompt, group: string) => {
         // Dim: not drawn since the mod loaded, so possibly not reachable by a jump
         // (before a compaction). A hint only: one not yet scrolled to is dim too.
@@ -1214,7 +1782,7 @@ export const register: Register = on => {
           await closePane($)
         }
         if (!pinSet.has(r.uuid)) {
-          return <Button key={`${group}-${r.uuid}`} label={`${numberLabel(r.n)}${r.head}`} plain dimColor={dim} onPress={press} />
+          return <Button key={`${group}-${r.uuid}`} label={`${pointer(r.n)}${numberLabel(r.n)}${r.head}`} plain dimColor={dim && r.n !== targetN} onPress={press} />
         }
         // `245★) `: a gold star inside the number, so it reads as the row's marker, not
         // part of the prompt (djdarcy, 2026-10-05, over a background band and a star
@@ -1224,7 +1792,7 @@ export const register: Register = on => {
         return (
           <Box key={`${group}-row-${r.uuid}`} flexDirection="row">
             <Box flexShrink={0}>
-              <Text dimColor={dim}>{String(r.n).padStart(width)}</Text>
+              <Text dimColor={dim}>{`${pointer(r.n)}${String(r.n).padStart(width)}`}</Text>
               <Text color={WORDS_FG}>★</Text>
               <Text dimColor={dim}>{') '}</Text>
             </Box>
@@ -1241,6 +1809,7 @@ export const register: Register = on => {
               label="#"
               placeholder={`1-${all.length}`}
               submitLabel="jump"
+              {...(fromBand !== undefined ? { value: fromBand } : {})}
               autoFocus
               onInput={(typed: string) => {
                 if (promptNumberComplete(typed, all.length)) void go(typed)
@@ -1272,6 +1841,7 @@ export const register: Register = on => {
       if (mode === 'mark') await setMark($, l)
       else await jumpToMark($, l)
       await closePane($)
+      await restoreView($)
     }
 
     // Jump needs only the letters in use: one per line, `a: <text>`, so the pane can

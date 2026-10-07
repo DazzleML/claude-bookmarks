@@ -3,8 +3,10 @@
 Most of what goes wrong comes from a small set of Claude Code rules about when a plugin may take keys or scroll the conversation. This page lists each one, how to recognise it, and what to do.
 
 - [The band doesn't appear](#the-band-doesnt-appear)
-- [A chord does nothing](#a-chord-does-nothing)
-- [The letter or number went into my prompt](#the-letter-or-number-went-into-my-prompt)
+- [A key does nothing](#a-key-does-nothing)
+- [Typing goes to the band instead of my prompt](#typing-goes-to-the-band-instead-of-my-prompt)
+- [A jump asks me to press Enter](#a-jump-asks-me-to-press-enter)
+- [The view moves when a pane opens](#the-view-moves-when-a-pane-opens)
 - [A jump says it can't go there](#a-jump-says-it-cant-go-there)
 - [The reading position goes somewhere unexpected](#the-reading-position-goes-somewhere-unexpected)
 - [The diff panel reacts instead](#the-diff-panel-reacts-instead)
@@ -12,7 +14,7 @@ Most of what goes wrong comes from a small set of Claude Code rules about when a
 
 ## The band doesn't appear
 
-The band (`bm: m: mark j: jump p: prompts r: read`) above the prompt means the plugin is loaded. If it's missing:
+The band (`bm: ' j m p ␣   m: mark  j: jump  p: prompts  r: read`) above the prompt means the plugin is loaded. If it's missing:
 
 1. **Check the renderer.** Run `/tui fullscreen`. The classic renderer is not supported.
 2. **Check the version.** Run `claude --version`; plugins of this kind need Claude Code 2.1.287 or later.
@@ -20,19 +22,27 @@ The band (`bm: m: mark j: jump p: prompts r: read`) above the prompt means the p
 4. **Check whether the session is daemon-hosted.** A session that was moved to Claude Code's background daemon, for example after `/fork`, did not load `CLAUDE_CODE_PLUGIN_DIRS` in our testing, even after `claude --resume`. To bring it back as an ordinary session, run `claude stop <short id>` in another terminal (the short id, not the full one), then `claude --resume <session id>` from a shell.
 5. **Run `/bm-env`.** If Claude Code says it is an unknown command, the plugin isn't loaded.
 
-## A chord does nothing
+## A key does nothing
 
-- **A dialog is up.** While Claude Code shows a permission prompt or a question, plugin chords don't fire at all. This is Claude Code's rule for chords that press a plugin's buttons, and nothing in the plugin or `keybindings.json` can get around it. Answer the dialog first.
-- **The chord isn't bound.** Check `~/.claude/keybindings.json` has the four bindings from the [Quick Start](../README.md#set-up-the-chords) in the `Global` context, and that you restarted Claude Code after editing it.
-- **Another binding takes the chord.** If you have bound `ctrl+x` chords of your own, make sure none of them use `m`, `'`, `p` or `space`.
+- **A dialog is up.** While Claude Code shows a permission prompt or a question, the band can't take the keyboard and plugin keys don't fire. Answer the dialog first.
+- **The leader isn't bound.** Check that `~/.claude/keybindings.json` binds your leader to `abovePrompt:focus` in the `Chat` context ([Set up the leader](../README.md#set-up-the-leader)). Claude Code's default, `Ctrl+X Tab`, works without any binding.
+- **The leader key never reaches Claude Code.** Some keys, such as `Ctrl+;` and `Ctrl+,`, aren't sent by most terminals; see [A leader on `Ctrl+;`](usage.md#a-leader-on-ctrl). `Ctrl+]` and `Ctrl+X Tab` always arrive.
+- **A key starts a chord.** A key can't be both a leader on its own and the start of a chord. If you bind `ctrl+]` to `abovePrompt:focus` and also `ctrl+] space` to something, `Ctrl+]` alone stops working.
+- **A click on a band button seems lost.** Now and then a click doesn't reach the plugin at all; click again. If you can say what you did just before, that helps us find the cause.
 
 You can always click the band's buttons instead.
 
-## The letter or number went into my prompt
+## Typing goes to the band instead of my prompt
 
-Claude Code won't give a plugin's pane the keyboard while the input box holds text (or while a survey is showing), so the pane opens, but the letter or number you press next is typed into your prompt.
+After a command the keyboard stays on the band, ready for the next command, and what you type goes into its `bm:` field. Press `Esc` to return to the input box. A plugin can't hand the keyboard back by itself, so this is the one key to remember.
 
-Keep the input box empty when you use a chord. If you were halfway through typing, cut the text, use the chord, then paste it back. A fix is being designed in [#17](https://github.com/DazzleML/claude-bookmarks/issues/17).
+## A jump asks me to press Enter
+
+The first jump after the plugin is installed, or after Claude Code updates, ends with "Press Enter to jump to `a`". The plugin is checking, once per Claude Code version, whether it may jump straight from what you type in the band. Current Claude Code doesn't allow that, so from then on the band hands the letter to its buttons, which may jump. Press `Enter` this once, and it won't ask again.
+
+## The view moves when a pane opens
+
+The pane on the right narrows the conversation, so its text rewraps and what's on screen shifts. After a mark, the plugin scrolls back to the message that was at the top before the pane opened. Jumps move the view anyway.
 
 ## A jump says it can't go there
 
@@ -54,22 +64,22 @@ In the prompts pane, prompts that are likely to be refused are drawn dimmed.
 
 ## The reading position goes somewhere unexpected
 
-- **"Back" lands a little above or below where you were.** "Back" returns to the message that was at the top of your screen when you jumped, not to your exact scroll offset. A plugin cannot read or restore the scroll position.
+- **"Back" lands a little above or below where you were.** "Back" returns to the message that was at the top of your screen when you jumped (or, from the very bottom, to the last message's end), not to your exact scroll offset. A plugin cannot read or restore the scroll position. Occasionally, from the bottom, Claude Code hasn't reported the last message's end, and back uses the top message instead.
 - **It stays put and says "You're at the reading position".** The reading position is already on screen and there is nowhere to go back to, because you scrolled there yourself rather than jumping. Scroll away and press again.
-- **A press moved the reading position instead of going there.** A selection in a different message sets a new reading position. Clear the selection (click once in empty space) before pressing to go there.
+- **A press moved the reading position instead of going there.** A selection made within the last 75 seconds, in a different message, sets a new reading position. Wait, or select nothing, before pressing to go there.
 
 If it still misbehaves, the [debug log](#the-debug-log) records each press and what it decided; its last lines make a good issue report.
 
 ## The diff panel reacts instead
 
-The chords are bound to four actions of Claude Code's diff panel, which do nothing in a conversation. Two things can change that:
+This only concerns the [optional fast keys](usage.md#optional-fast-keys) and the older `Ctrl+X` chords, which are bound to actions of Claude Code's diff panel that do nothing in a conversation. The leader borrows nothing. Two things can change that:
 
 - **While the diff panel is open**, `Ctrl+X p` and `Ctrl+X Space` may act on it instead. Close the diff panel first.
-- **If you have turned off Claude Code's built-in diff mod**, the actions belong to the old diff panel, and the chords may act on it.
+- **If you have turned off Claude Code's built-in diff mod**, the actions belong to the old diff panel, and the keys may act on it.
 
 ## The debug log
 
-Every chord press, pane, jump and decision is written to a log, one file per conversation, kept to its last 400 lines:
+Every key press, pane, jump and decision is written to a log, one file per conversation, kept to its last 400 lines:
 
 ```
 ${CLAUDE_USER_DIR:-~/claude}/bookmarks/debug/<session id>.log
