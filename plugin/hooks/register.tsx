@@ -369,9 +369,9 @@ function promptTextOf(o: any): string | undefined {
 
 // The PowerShell fallbacks are scripts shipped with the plugin (hooks/scripts/*.ps1),
 // run with -File and named parameters. Until v0.3.0 they were inline scripts passed as
-// base64 UTF-16LE through -EncodedCommand, to keep their double quotes intact; a
-// measurement on 2026-10-09 showed -File parameters keep `"type":"user"` verbatim from
-// a non-shell spawn, and base64-encoded PowerShell is what a security scan flags.
+// base64 UTF-16LE text, to keep their double quotes intact; a measurement on 2026-10-09
+// showed -File parameters keep `"type":"user"` verbatim from a non-shell spawn, and
+// base64-encoded PowerShell is what a security scan flags.
 function psScript($: EngineInterface, name: string): string[] {
   return ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', `${$.plugin.root}/hooks/scripts/${name}.ps1`]
 }
@@ -1163,7 +1163,16 @@ async function runCommandLine($: EngineInterface, typed: string, via: 'input' | 
     log($, `[bm-poc] band command line ${via}: "${typed}"`)
 
     if (first === "'" || first === 'j') {
-      if (typed.length === 1) return // wait for the letter
+      if (typed.length === 1) {
+        // The jump pane as the readable list of marks, the band's letter buttons taking
+        // the letter, Enter the reading position: v0.1.7's shape. v0.2.0 waited for the
+        // letter in silence and opened nothing (djdarcy, 2026-10-09: "the panel isn't
+        // opening"). A letter typed fast enough to arrive with the quote still jumps
+        // directly below.
+        await clearCommandLine($)
+        await handOff($, 'jump')
+        return
+      }
       const letter = typed[1]!
       await clearCommandLine($)
       if (!/^[a-z]$/.test(letter)) return void $.ui.toast(CMD_HINT)

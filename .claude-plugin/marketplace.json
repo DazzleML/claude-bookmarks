@@ -20,7 +20,7 @@
     {
       "name": "session-logger",
       "description": "Real-time session logging, command history, and auto-naming for Claude Code",
-      "source": { "source": "github", "repo": "DazzleML/claude-session-logger" },
+      "source": { "source": "url", "url": "https://github.com/DazzleML/claude-session-logger.git" },
       "homepage": "https://github.com/DazzleML/claude-session-logger",
       "license": "GPL-3.0",
       "tags": ["sessions", "logging", "hooks"]
@@ -28,7 +28,7 @@
     {
       "name": "session-backup",
       "description": "Git-backed Claude Code session backup: auto-archives sessions before compaction and on session end",
-      "source": { "source": "github", "repo": "DazzleML/Claude-Session-Backup" },
+      "source": { "source": "url", "url": "https://github.com/DazzleML/Claude-Session-Backup.git" },
       "homepage": "https://github.com/DazzleML/Claude-Session-Backup",
       "license": "GPL-3.0",
       "tags": ["sessions", "backup", "hooks"]

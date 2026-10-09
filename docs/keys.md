@@ -20,7 +20,7 @@ The band's field takes exactly one key (two for the ones that need a letter). An
 
 | Key | Then | Does |
 |-----|------|------|
-| `'` or `j` | a letter `a`-`z` | Jumps to that mark |
+| `'` or `j` | a letter `a`-`z` | Opens the jump pane listing your marks, then jumps to that mark |
 | `'` or `j` | `Enter` | Jumps to the reading position |
 | `m` | a letter `a`-`z` | Marks the selected line (or the message at the top of the screen) with that letter; `Enter` or `Esc` cancels |
 | `Space` or `r` | `Space` or `Enter` | Goes to the reading position, or back to where you were; with fresh selected text, sets it there |

@@ -1,10 +1,10 @@
 # Status: pre-alpha
 
-This page is the honest state of the plugin at the version in the badge, for anyone deciding whether to try it. It is updated with each release; the [CHANGELOG](../CHANGELOG.md) has the history and [issue #1](https://github.com/DazzleML/claude-bookmarks/issues/1) the living roadmap.
+This page is the current state of the plugin at the version in the badge, for anyone deciding whether to try it. It is updated with each release (hopefully); the [CHANGELOG](../CHANGELOG.md) has the history and [issue #1](https://github.com/DazzleML/claude-bookmarks/issues/1) the living roadmap.
 
 ## What works today
 
-Used daily by the author on Windows 11, Windows Terminal, Claude Code 2.1.288 to 2.1.295, in the fullscreen renderer, including a shrunk remote-desktop window:
+Used daily on Windows 11, Windows Terminal, Claude Code 2.1.288 to 2.1.296, in the fullscreen renderer, including a shrunk remote-desktop window. Since 0.3.0 the plugin is named `bookmarks` and lives in the repository's `plugin/` folder, so an install carries the plugin and not the repository's tooling and tests:
 
 - **Marks** (`a`-`z`) on any line, with the in-place highlight, jumps, and the reading position with its go-and-return.
 - **The prompts pane**: every prompt of the conversation numbered from the first, browse or type a number, pins.
@@ -40,8 +40,7 @@ These are decided directions, not promises of dates. Each is an issue you can wa
 - **Conversation search** ([#20](https://github.com/DazzleML/claude-bookmarks/issues/20)): type, see matches, jump, keep one as a mark or bookmark.
 - **Settings in `/config`** ([#7](https://github.com/DazzleML/claude-bookmarks/issues/7)): palette, timings, the command prefix, the debug echo default.
 - **Opening a mark's files and links with handlers** ([#12](https://github.com/DazzleML/claude-bookmarks/issues/12)), the fourth pillar of the [roadmap](../ROADMAP.md).
-- **A repository layout with the plugin in its own folder**, so an install carries the plugin and not the repository's tooling and tests.
-- **The mod split into modules.** `plugin/hooks/register.tsx` is one file today; it will be split along the seams that already exist in it, together with the record change above.
+- **The mod split into modules.** `plugin/hooks/register.tsx` is one massive file that will be refactored / split along the classes / categories that already exist in it, together with the record change above.
 
 ## Reporting
 

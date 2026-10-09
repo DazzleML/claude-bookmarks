@@ -7,21 +7,21 @@
 
 > **Vim-style marks, a reading position, and a numbered prompt history, inside a Claude Code conversation**
 
-A Claude Code plugin (a mod: it draws in Claude Code's terminal app) that lets you select a line of a conversation, mark it with a letter, and jump back to it later from anywhere in the conversation. The plugin's name is **`bookmarks`** (published by DazzleML); this repository is `claude-bookmarks` because third-party plugin names may not start with `claude-`. This is not a claude.ai browser extension, but if you're looking for better web-based navigation [AI Chat Nav](https://chromewebstore.google.com/detail/ai-chatnav/edplgflcieggamnnoecdpckjjhpjlbim?pli=1) might help.
+A Claude Code plugin that lets you mark a line of a conversation with a letter and jump back to it from anywhere, keep your place while you scroll, browse every prompt you have typed, and let Claude cite earlier places as links you can click. It is a mod, meaning it draws inside Claude Code's terminal app, with nothing else to install. In Claude Code's [official directory](https://claude.ai/directory) the plugin is called **`bookmarks`** (published by DazzleML), whereas the Github repository here is `claude-bookmarks`. (It is a terminal plugin, not a browser extension -- for navigating the claude.ai website, [AI Chat Nav](https://chromewebstore.google.com/detail/ai-chatnav/edplgflcieggamnnoecdpckjjhpjlbim?pli=1) does a similar job).
 
 ## The Problem
 
-A long Claude Code conversation is hard to move around in. The answer you need is three hundred messages up, the prompt that started this line of work is somewhere above that, and after you scroll up to check something, finding your way back down to where you were reading is a scroll-and-squint exercise. Claude Code can already jump to the top and the bottom, and its transcript view can search, but it has no way to say "remember this spot" and come back to it.
+A long Claude Code conversation is hard to move around in. The answer you need is three hundred messages up, the prompt that started this line of work is somewhere above that, and after you scroll up to check something, finding your way back down to where you were reading is an exercise in scrolling-squinting-and-praying. Claude Code can already jump to the top and the bottom of the conversation, and its transcript view can search, but it has no way to say "remember this spot" and come back to it.
 
-**claude-bookmarks** gives you named spots in the conversation: letters you set on any line, a reading position you can swap to and back from, and a numbered list of every prompt you have typed, so "go back to where I asked about the cache" is two keystrokes instead of a safari.
+**claude-bookmarks** gives you named spots in the conversation. This includes tagged letters you set on any line (essentially [Vim marks](https://youtu.be/XT_kFia3Ua4?t=25)), a reading position you can swap to and back from, and a numbered list of every prompt you have typed, so "go back to where I asked about the cache" is two keystrokes instead of a text safari.
 
 > [!NOTE]
-> **Pre-alpha (v0.3.x).** Actively part of my daily workflow, been dogfooding since Claude Code 2.1.288 to 2.1.295 on Windows (Windows Terminal, fullscreen and shrunk): marks with an in-place highlight, jumps, the reading position, the prompts pane, and now bookmarks with clickable links in Claude's replies. **Windows is the only tested platform**; macOS and Linux are expected to work and untried (will try on a VPS after a few more minor versions). The pure core under `hooks/core/` is tested and works for the most part. The key layout will still change ([#26](https://github.com/DazzleML/claude-bookmarks/issues/26)). **[docs/status.md](docs/status.md)** has what works, the known issues and what is coming; the [Roadmap](ROADMAP.md) and [issue #1](https://github.com/DazzleML/claude-bookmarks/issues/1) the longer view. Please [file issues](https://github.com/DazzleML/claude-bookmarks/issues) for anything rough.
+> **Pre-alpha (v0.3.x).** `claude-bookmarks` is part of my daily active workflow. I've been dogfooding since Claude Code 2.1.288 (now at 2.1.295) on Win11 using Windows Terminal, fullscreen, and at different sizes. The mod for the most part correctly handles: inserting in-place highlights, jumps, using the reading position, navigating the prompts pane, and now works with bookmarks including clickable links in Claude's replies. **Windows is the only tested platform**. MacOS and Linux are expected to work but is untried (I'll try on a VPS after a few more minor versions). The engine under `hooks/core/` is tested and reasonably solid. Be aware the key layout will still change ([#26](https://github.com/DazzleML/claude-bookmarks/issues/26)). Also note: **[docs/status.md](docs/status.md)** tracks known issues along with what is coming in the [Roadmap](ROADMAP.md) and [issue #1](https://github.com/DazzleML/claude-bookmarks/issues/1) (the longer view). Please [file issues](https://github.com/DazzleML/claude-bookmarks/issues) for anything rough.
 
 ### Screenshot
 <p align="center">
   <picture>
-    <img src="docs/images/prompts-pane-marked-line-and-bookmark-link.png" alt="The prompts pane open on the right, numbered from the first prompt; a marked line in the conversation with its c tag; a bookmark link in a reply; the band above the prompt in prompt mode">
+    <img src="plugin/images/prompts-pane-marked-line-and-bookmark-link.png" alt="The prompts pane open on the right, numbered from the first prompt; a marked line in the conversation with its c tag; a bookmark link in a reply; the band above the prompt in prompt mode">
   </picture>
   <br>
   <sub>In use: the prompts pane (<code>Ctrl+] p</code>) on the right, a marked line with its <code>«c»</code> tag, a <code>⚓</code> bookmark link Claude wrote in a reply, and the band above the input box waiting for a number. <a href="docs/images/jump-pane-marks-and-reading-position.png">The jump pane</a>, with three marks and the reading position.</sub>
@@ -179,9 +179,9 @@ The known limits, briefly; **[docs/troubleshooting.md](docs/troubleshooting.md)*
 
 ### Extended history with the patcher
 
-Marks matter most in long conversations, which is exactly where the compaction limit above bites. The companion project **[dazzle-claude-code-patcher](https://github.com/DazzleML/dazzle-claude-code-patcher)** patches a local copy of Claude Code so that a restarted or resumed session keeps its whole conversation in view, from before every compaction. On a patched build, marks and the prompts pane reach every message. It is also where I plan to prototype other fixes this plugin would like Claude Code to have, such as keyboard handoff between a plugin's band and its pane.
+Marks matter most in long conversations, which is exactly where the compaction limit above hurts. The companion project **[dazzle-claude-code-patcher](https://github.com/DazzleML/dazzle-claude-code-patcher)** patches a local copy of Claude Code so that a restarted or resumed session keeps its whole conversation in view, from before every compaction. On a patched build, marks and the prompts pane reach every message. It is also where I plan to prototype other fixes this plugin would like Claude Code to have, such as keyboard handoff between a plugin's band and its pane.
 
-claude-bookmarks never depends on it: every feature works on stock Claude Code. The patcher is in development and not yet released. See [Patched builds](docs/engine-quirks.md#patched-builds-trying-the-proper-fix-early) for how the two fit together.
+claude-bookmarks never depends on it: every feature works on stock Claude Code. The patcher is also in pre-alpha development and released on PyPi for anyone adventurous enough to try it. See [Patched builds](docs/engine-quirks.md#patched-builds-trying-the-proper-fix-early) for how the two fit together.
 
 ## Configuration
 
@@ -240,7 +240,7 @@ claude-bookmarks/
 
 ## How It Works
 
-1. **The band is the command line.** The leader (`abovePrompt:focus`) moves the keyboard to the band, where a small field takes the next key, any key, `'` and `Space` included. The band then shows what it waits for and takes the rest of the keys itself, while a pane beside the conversation shows the list. Claude Code credits a plugin's scroll or pane to your keystroke only while the key's handler is still running, so every jump happens inside that handler. The band exists because Claude Code refuses a pane the keyboard while the input box holds text; [#26](https://github.com/DazzleML/claude-bookmarks/issues/26) is the plan to land in the pane whenever it is allowed.
+1. **The band is (currently) the command line.** The leader (`abovePrompt:focus`) moves the keyboard to the band, where a small field takes the next key, any key, `'` and `Space` included. The band then shows what it waits for and takes the rest of the keys itself, while a pane beside the conversation shows the list. Claude Code credits a plugin's scroll or pane to your keystroke only while the key's handler is still running, so every jump happens inside that handler. The band exists because Claude Code refuses a pane the keyboard while the input box holds text; [#26](https://github.com/DazzleML/claude-bookmarks/issues/26) is the plan to land in the pane whenever it is allowed.
 
 2. **A mark is a message plus a snippet.** Marking reads your mouse selection, finds the message it sits in, and stores the message id and the selected line under the letter, per conversation.
 

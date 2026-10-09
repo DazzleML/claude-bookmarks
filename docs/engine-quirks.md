@@ -245,16 +245,18 @@ A command run from a key (a `command:` binding) is drawn for a moment under a `p
 
 ## Patched builds: trying the proper fix early
 
-Some of these limits sit in Claude Code code that no setting reaches. For those, we also write the proper fix as a patch to our own local copy of Claude Code, using a separate patch tool we're developing, `dcc-patcher` ([dazzle-claude-code-patcher](https://github.com/DazzleML/dazzle-claude-code-patcher); Windows-first, not yet released). It applies structural patches to the native `claude.exe` and writes a patched copy beside the original. It ships patch definitions only, never patched binaries or Anthropic's code. Its first patch lets a resumed session scroll back past its compactions, the fix described under [Scrolling and history](#scrolling-and-history).
+Some of these limits reside in Claude Code code that no setting reaches. For those, we also write the proper fix as a patch to our own local copy of Claude Code, using a separate patch tool we're developing, `dcc-patcher` ([dazzle-claude-code-patcher](https://github.com/DazzleML/dazzle-claude-code-patcher); Windows-first, now on PyPi). It applies structural patches to the native `claude.exe` and writes a patched copy beside the original. It ships patch definitions only, never patched binaries or Anthropic's code. Its first patch lets a resumed session scroll back past its compactions, the fix described under [Scrolling and history](#scrolling-and-history).
 
-How the patcher fits with this plugin:
+How the patcher and this plugin relate, as things stand:
 
-- **The plugin never depends on it.** Every feature works on stock Claude Code, through the workarounds above. That's the floor, on any machine.
-- **A patch implements the fix we'd propose upstream,** in the same shape we'd ask Anthropic for: a person's press on the band hands the keyboard to the pane, an event says when the band lets the keyboard go, and resume follows the link past a compaction. Where the patch matches the proposal, the plugin's "proper fix" code runs on the patched build unchanged, so the patch is a working prototype of the proposal.
-- **The plugin picks per feature, at run time,** whichever works: the proper API if Claude Code (stock or patched) offers it, otherwise the workaround. A setting or command can force one path for testing. This is planned as part of the core rebuild (issue #5).
-- **Upstream,** Claude Code's source isn't public, so a fix goes to Anthropic as an issue with the proposal and, where useful, a description of the patch. The one part of anthropics/claude-code open to pull requests is the plugin type declarations (`mods/types/claude-code.d.ts`), so a proposed API change can include its documentation.
+- **The plugin never depends on the patcher.** Every feature works on stock Claude Code through the workarounds on this page. That is the floor, on any machine.
+- **What a patched build changes for the plugin today is one thing: history.** On a patched build, a resumed session keeps its whole conversation in view, so marks, prompts and bookmarks from before a compaction can be jumped to. The plugin does nothing special for this; the jump that stock refuses simply succeeds. The other patches in the current set (the banner and version labels, cross-file rows) do not touch the plugin.
+- **The plugin can tell which build it is on.** `/bm-env` prints the patcher's signal (`DCC_PATCHER`, `DCC_PATCHES`, `DCC_PATCH_H`), so a bug report says which build it came from. Nothing else reads the signal yet.
+- **The keyboard handoff is a request, not a patch.** The fix we would most like (a press on the band hands the keyboard to its pane; an event when the band lets the keyboard go) is written up as a patch request for the patcher project and has not been built on either side. Until it exists, the band is the only route over a draft.
+- **The plan, not yet built:** each feature picks at run time between the proper API when Claude Code offers it (stock or patched), a patched build's own route, and the stock workaround; `hooks/engine/select.ts` holds the three path names and their order and nothing more (issue #18).
+- **Upstream:** Claude Code's source is not public, so a fix goes to Anthropic as an issue describing the proposal and, where useful, the patch that prototypes it. The plugin type declarations are the one part of anthropics/claude-code open to pull requests, so a proposed API change can carry its documentation.
 
-A workaround in this list is retired when either the patch's proposal ships in Claude Code itself, or the limit is fixed some other way.
+A workaround on this page is retired when the proposal ships in Claude Code itself, or the limit is fixed another way.
 
 ## When Claude Code changes
 

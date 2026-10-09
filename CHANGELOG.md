@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-09
+
+### Fixed
+
+- `Ctrl+] '` (or `j`) opens the jump pane again, listing your marks and the reading position, and the letter jumps from it. Since 0.2.0 the band waited for the letter in silence and nothing opened, while the docs promised the pane.
+
+### Changed
+
+- The plugin folder's README is the plugin's listing: what it does, a screenshot, the install from one place only (the directory or a marketplace, never both), and a section on everything the plugin runs, reads, writes and sends (two PowerShell scripts on Windows, the transcript it reads, the store and the files under `~/claude` it writes, the clipboard, and no network at all). Links are absolute, so they work wherever the README is shown. `homepage` added to the manifest. The listing's screenshot lives in `plugin/images/` (the one file the listing needs), the other under `docs/images/`; nothing is duplicated.
+
 ## [0.3.0] - 2026-10-09
 
 ### Changed
@@ -213,7 +223,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.0...v0.2.1
