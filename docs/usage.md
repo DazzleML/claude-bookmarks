@@ -51,7 +51,7 @@ If the file already has a `Chat` block, add the one line to it. The examples bel
 
 **Getting back to typing:** after a command the keyboard stays on the band, ready for the next one. Press `Esc` to return to the input box. A plugin can't hand the keyboard back by itself.
 
-**The first jump after an update to Claude Code** ends with a toast asking you to press `Enter`. The plugin is checking, once per Claude Code version, whether it may jump straight from what you type. On current Claude Code it may not, so from then on `'` hands the letter to the band's buttons, which may. A future Claude Code that allows it gets one-step jumps automatically.
+Every key, grouped by where the keyboard is, is on one page: [keys.md](keys.md).
 
 ### A leader on `Ctrl+;`
 

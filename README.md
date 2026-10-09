@@ -16,11 +16,11 @@ A long Claude Code conversation is hard to move around in. The answer you need i
 **claude-bookmarks** gives you named spots in the conversation: letters you set on any line, a reading position you can swap to and back from, and a numbered list of every prompt you have typed, so "go back to where I asked about the cache" is two keystrokes instead of a safari.
 
 > [!NOTE]
-> **Pre-alpha (v0.2.x).** In daily use on Claude Code 2.1.288 to 2.1.295 (Windows Terminal, fullscreen and shrunk): marks with an in-place highlight, jumps, the reading position, the prompts pane, and now bookmarks with clickable links in Claude's replies. The pure core under `hooks/core/` is tested; the mod itself is verified by hand, and the key layout may still change. See the [Roadmap](ROADMAP.md) and [issue #1](https://github.com/DazzleML/claude-bookmarks/issues/1). Please [file issues](https://github.com/DazzleML/claude-bookmarks/issues) for anything rough.
+> **Pre-alpha (v0.2.x).** Actively part of my real workflow, been dogfooding since Claude Code 2.1.288 to 2.1.295 on Windows (Windows Terminal, fullscreen and shrunk): marks with an in-place highlight, jumps, the reading position, the prompts pane, and now bookmarks with clickable links in Claude's replies. **Windows is the only tested platform**; macOS and Linux are expected to work and untried (will try on a VPS after a few more minor versions). The pure core under `hooks/core/` is tested and works for the most part. The key layout will still change ([#26](https://github.com/DazzleML/claude-bookmarks/issues/26)). **[docs/status.md](docs/status.md)** has what works, the known issues and what is coming; the [Roadmap](ROADMAP.md) and [issue #1](https://github.com/DazzleML/claude-bookmarks/issues/1) the longer view. Please [file issues](https://github.com/DazzleML/claude-bookmarks/issues) for anything rough.
 
 ## Quick Start
 
-Installing from the DazzleML plugin catalog is coming. Until then, load a local clone:
+Once the plugin is listed in the Anthropic plugin directory or the DazzleML catalog, one command installs it (`/plugin install convo-bookmarks --marketplace DazzleML/dazzle-claude-plugins`, on Claude Code 2.1.275 or later). Until then, load a local clone:
 
 ```bash
 # 1. Clone the plugin
@@ -66,8 +66,10 @@ That's the whole setup. Without it, use `Ctrl+X Tab` as the leader, or click the
 
 ## Documentation
 
+- **[Status](docs/status.md)** - What works today, the known issues, and the big changes coming; read this first if you are deciding whether to try a pre-alpha
+- **[Every key](docs/keys.md)** - The complete key reference, grouped by where the keyboard is
 - **[Tutorial](docs/tutorial.md)** - Chords, leader keys and vim marks explained, then a hands-on walkthrough
-- **[Using claude-bookmarks](docs/usage.md)** - Each feature in detail: marks, jumps, the reading position, the prompts pane, and what is kept
+- **[Using claude-bookmarks](docs/usage.md)** - Each feature in detail: marks, jumps, the reading position, the prompts pane, bookmarks, and what is kept
 - **[Troubleshooting](docs/troubleshooting.md)** - The band doesn't appear, a key does nothing, a jump is refused
 - **[Platform support](docs/platform-support.md)** - Terminals and renderers, tested and expected
 - **[Claude Code quirks to work around](docs/engine-quirks.md)** - Each limit of the plugin API I hit, what the plugin does about it, and what a proper fix would be
@@ -154,7 +156,6 @@ For each feature in detail, see **[docs/usage.md](docs/usage.md)**.
 The known limits, briefly; **[docs/troubleshooting.md](docs/troubleshooting.md)** has the details.
 
 - **Press `Esc` to go back to typing.** After a command the keyboard stays on the band; a plugin can't hand it back to the input box itself.
-- **The first jump after a Claude Code update asks for `Enter` once,** while the plugin checks what that version allows.
 - **The keys do nothing while a dialog is up** (a permission prompt, or a question Claude is asking); answer the dialog first.
 - **Messages from before the last compaction usually can't be jumped to after a restart or resume**, because Claude Code then loads the conversation only from that compaction onward. The plugin copies a phrase of the message to your clipboard and tells you where to look: press `Ctrl+O`, then `[` (writes what Claude Code holds to your terminal's scrollback), then your terminal's Find (`Ctrl+Shift+F` or `Cmd+F`), and paste. Older messages may only be in the session file; opening it in full is planned ([#16](https://github.com/DazzleML/claude-bookmarks/issues/16)). The companion patcher below removes this limit (see [Extended history with the patcher](#extended-history-with-the-patcher)).
 - **"Where you were" is a whole message.** A plugin cannot read or restore the exact scroll offset, so returning from the reading position brings back the message that was at the top of the screen (or, from the very bottom, the last message's end).
@@ -217,7 +218,7 @@ claude-bookmarks/
 
 ## How It Works
 
-1. **The band is the command line.** The leader (`abovePrompt:focus`) moves the keyboard to the band, where a small field takes the next key, any key, `'` and `Space` included. The band then shows what it waits for and takes the rest of the keys itself, as button presses, while a pane beside the conversation shows the list. Claude Code lets a plugin scroll the conversation only from a button press, so every jump is one.
+1. **The band is the command line.** The leader (`abovePrompt:focus`) moves the keyboard to the band, where a small field takes the next key, any key, `'` and `Space` included. The band then shows what it waits for and takes the rest of the keys itself, while a pane beside the conversation shows the list. Claude Code credits a plugin's scroll or pane to your keystroke only while the key's handler is still running, so every jump happens inside that handler. The band exists because Claude Code refuses a pane the keyboard while the input box holds text; [#26](https://github.com/DazzleML/claude-bookmarks/issues/26) is the plan to land in the pane whenever it is allowed.
 
 2. **A mark is a message plus a snippet.** Marking reads your mouse selection, finds the message it sits in, and stores the message id and the selected line under the letter, per conversation.
 

@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-09
+
+### Added
+
+- `docs/keys.md`: every key in one place, grouped by where the keyboard is (the input box, the band, the band with a pane open, a pane that holds the keyboard, typed commands, optional keys).
+- `docs/status.md`: what works today, the known issues with where each is tracked, and the big changes coming (#26 the pane takes the keyboard, #25 references by name, the mark record change, search, settings).
+
+### Changed
+
+- README: the status and key pages lead the documentation list; the pre-alpha notice says Windows is the only tested platform; the install section names the one-command install for when the plugin is listed; "How it works" describes the attribution rule rather than "only from a button press".
+- Usage and the README no longer describe the once-per-version "press Enter" probe, which v0.2.0 removed.
+
 ## [0.2.1] - 2026-10-09
 
 ### Fixed
@@ -191,7 +203,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.7...v0.2.0
 [0.1.7]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.6...v0.1.7
