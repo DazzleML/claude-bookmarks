@@ -71,20 +71,43 @@ A chord presses a plugin button only when no dialog (a permission prompt, a ques
 
 **Tried and dropped:** taking the key from the input box. A `prompt.edit` hook can consume a key, but a jump from it is refused (next entry). Setting the draft aside, emptying the box and asking again was refused too. Tracked in issue #17.
 
-### A plugin may scroll the conversation only from a button press — Workaround
+### A plugin's work counts as the person's only while the handler is still running — Rule (was a misread)
 
-**What you notice:** the first jump after a Claude Code update asks you to press `Enter`; after that, `'` hands the letter to the band's buttons.
+**What you notice:** before 2026-10-09, every band command logged `view back ... -> DENY: not person-initiated`, and in a narrow terminal (under about 110 columns) `Ctrl+] p` opened nothing at all. Both are gone.
 
-**Why:** `$.ui.scroll` is refused (`not person-initiated`) unless it runs inside a button press: a band hotkey, a click, `Enter` on a focused button. These are refused, though each comes from the person's own key:
-- typing in a plugin's field (`onInput`), and its `Enter` (`onSubmit`) (log 2026-10-05 17:20, 2026-10-07 07:06–07:12);
-- a `prompt.edit` hook (2026-10-07 06:26);
-- a timer.
+**Why:** `$.ui.scroll` on a conversation row, and placing a pane in a narrow terminal, are allowed only while the plugin is answering the person's own input: a button press, a click on a link the plugin drew, typing or `Enter` in the plugin's field. The credit lasts exactly as long as the control's handler runs. The band's field used to hand its work off as fire-and-forget (`onInput={(typed) => void runCommandLine(...)}`), so the handler had returned before the scroll or the pane open ran, and the engine saw a plugin acting on its own. Earlier versions of this page blamed the field itself ("typing in a plugin's field is refused though it comes from the person's own key"); that was the misread. Returning the promise from `onInput` and `onSubmit` fixed both symptoms in the same shrunk terminal (log 2026-10-09 11:41–11:49: `view back ... -> ok`, `pane was dock, 48 body columns`, a jump to the conversation's first prompt `ok`).
 
-18 of 18 scrolls from button presses succeeded.
+Still true: a timer, a `prompt.edit` hook and anything else the person did not press cannot scroll the conversation. Also verified 2026-10-09: a plain click on a link in the plugin's own `Markdown` (its `onLinkPress`) is the person's input, so a link in a reply can jump; and the engine's `$.ui.open` answer says whether the pane was placed, so the plugin can now say why it wasn't.
 
-**What we do:** the band's field takes only the first key and then hands off. The second key (a mark's letter, a digit, `Enter` on the reading entry) is a band button press. A prompt number is typed as digit buttons. The plugin tries one direct scroll from the field once per Claude Code version and remembers the answer, so a build that allows it gets one-step keys with no setting.
+**What we do:** every handler on the band's field returns its promise; the pane-open result is read and a toast names the engine's reason when the pane isn't drawn. The one-time `Enter` probe per Claude Code version is no longer needed and will be removed.
 
-**Proper fix:** carry "person-initiated" through `ui.input` (change and submit) and through a `prompt.edit` a plugin consumes, as through `ui.press`.
+**Proper fix:** none needed from Claude Code; this one was ours.
+
+### Windows won't open a `file:` link that carries a `#` fragment — Limit (OS)
+
+**What you notice:** a ctrl-click on a plain `file:///C:/...md` link in a reply opens the file in its default application (verified 2026-10-09, Windows Terminal); the same link with anything after a `#` does nothing, whether the link is the surface's own or one the plugin answers.
+
+**Why:** the terminal hands the URL to the OS, and the OS open fails on the fragment. The plugin never sees a ctrl-click (it is the terminal's by design), so it can't strip the fragment.
+
+**What we do:** a bookmark link's position rides in a **query string**, which Windows does open: `.../bookmarks/sessions/<session>/<uuid8>.md?u=<uuid>&l=<line>&b=<start>-<end>&q=<words>` (an encoded `%23` fails too; `?v=1` and `?u=...&l=...` both opened, 2026-10-09). The default application ignores the query, so a ctrl-click lands at the top of the file; the plain click, which the plugin answers, is what uses the position. See the anchors design (`2026-10-09__06-55-30__dev-workflow-process__claude-anchors-persistent-marks-and-click-to-jump.md`).
+
+### Arrow keys never reach the band — Limit
+
+**What you notice:** `Ctrl+]` then `←` does nothing, and the log shows the leader press with nothing after it (2026-10-09).
+
+**Why:** the band's field is a text input; the engine consumes arrows as caret movement and never reports them as typed text, and a `Button.hotkey` takes only a letter or a digit.
+
+**What we do:** `o` and `i` (vim's jumplist keys) carry back and forward. For `Alt+←` / `Alt+→`, a terminal mapping sends the leader byte (`\u001d`, which is `Ctrl+]`) followed by the key: see `docs/usage.md`, "Back and forward". No engine change is needed for that.
+
+**Proper fix:** let a band `Input` report arrow and other non-text keys to the plugin (an `onKey`), or allow arrow names as `Button.hotkey` values.
+
+### No editor opens a markdown file at a position from the outside — Limit (editors)
+
+**What you notice:** a ctrl-click on a bookmark link opens its file at the top, not at the bookmarked words.
+
+**Why:** Typora takes `file.md#heading` on its command line as a filename ("This file cannot be opened in Typora", 2026-10-09) and registers no URL scheme; Windows won't pass a `#` fragment anyway. VS Code (`--goto path:line`) and Vim (`+line`) do take a line, but only from a launcher, which is the plugin's plain-click path with pillar 4's handlers, not the terminal's ctrl-click.
+
+**What we do:** the export puts the quoted message right under the title with the bookmarked words in bold, and for a long message a link to a heading just above them that Typora follows within the document.
 
 ### A plugin can't hand the keyboard back to the input box — Workaround
 

@@ -15,6 +15,19 @@ import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { PaneMode, Row } from '../types'
 import { describePathOrder } from './engine/select'
+import {
+  anchorHref, anchorMarkdown, anchorPath, markLinks, markdownLinks, ownerOf, parseAnchor,
+  type AnchorOwner, type AnchorRecord, type MarkerStyle,
+} from './core/anchor'
+import {
+  addOrRelabel, emptyRegister, exportMarkdown, exportNotesOf, findRecord, listOf, parseRegister, prune, remove, serializeRegister, share,
+  type Mint, type Register as BookmarkRegister, type Retention,
+} from './core/register-file'
+
+// How long a `temporary` bookmark is kept before it is pruned (to a tombstone). A
+// setting with the archive-retention picker (#7, #10); a constant until then.
+const TEMPORARY_RETENTION: Retention = '30d'
+import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution, type TranscriptRow } from './core/transcript-lines'
 
 const PANE = 'bm-poc'
 
@@ -51,6 +64,18 @@ const pinsRev = atom({ plugin: 'convo-bookmarks', key: 'pinsRev' } as const, 0)
 // the field is drawn under a new key and starts empty; and the prompt number's digits.
 const cmdRev = atom({ plugin: 'convo-bookmarks', key: 'cmdRev' } as const, 0)
 const bandNum = atom({ plugin: 'convo-bookmarks', key: 'bandNum' } as const, '')
+// The bookmarks pane shows one group at a time, cycled from the band (djdarcy, 2026-10-09:
+// start on "their" bookmarks, a key cycles to Claude's, and a third group such as team
+// members' can join later). An ordered list, so a group is one entry, not a code path.
+// The keys are vim's sideways pair; `o`/`i` already mean back/forward at the band's top
+// level. Both become settings (#7).
+const bandGroup = atom({ plugin: 'convo-bookmarks', key: 'bandGroup' } as const, 0)
+const BOOKMARK_GROUPS: { owner: AnchorOwner | 'all'; title: string }[] = [
+  { owner: 'user', title: 'yours' },
+  { owner: 'claude', title: "Claude's" },
+  { owner: 'all', title: 'all' },
+]
+const GROUP_KEYS = { prev: 'h', next: 'l' } as const
 
 // The highlight and the band text are temporary (djdarcy, 2026-10-03: "visible temporarily
 // for maybe a minute or two or until the next action like another prompt is sent").
@@ -195,17 +220,45 @@ const logLines: string[] = []
 let logPath: string | null | undefined // undefined: not looked up yet; null: no usable place
 let flushing: Promise<void> = Promise.resolve()
 
-function log($: EngineInterface, line: string) {
-  $.ui.log(line)
+// Whether log lines are also echoed into the transcript as dim rows. Off by default: the
+// file log is always written, the echo is for debugging one session and was spamming
+// every session the plugin loads in (djdarcy, 2026-10-09). `/bm-debug on|off` keeps the
+// choice across sessions; CONVO_BOOKMARKS_DEBUG=1 in the environment turns it on too.
+let uiEcho: boolean | undefined
+async function uiEchoEnabled($: EngineInterface): Promise<boolean> {
+  if (uiEcho === undefined) {
+    const env = await $.env.get('CONVO_BOOKMARKS_DEBUG')
+    if (env !== undefined && env !== '') uiEcho = env !== '0' && env.toLowerCase() !== 'off' && env.toLowerCase() !== 'false'
+    else uiEcho = (await $.store.get('debug:uiEcho')) === true
+  }
+  return uiEcho
+}
+async function setUiEcho($: EngineInterface, on: boolean) {
+  uiEcho = on
+  await $.store.set('debug:uiEcho', on)
+}
+
+function log($: EngineInterface, line: string, opts?: { always?: boolean }) {
+  if (opts?.always) $.ui.log(line)
+  else void uiEchoEnabled($).then(on => { if (on) $.ui.log(line) }).catch(() => {})
   logLines.push(`${new Date().toISOString()} ${line}`)
   if (logLines.length > LOG_LINES) logLines.splice(0, logLines.length - LOG_LINES)
   flushing = flushing.then(() => flushLog($)).catch(() => {})
 }
 
+// The data root: where this plugin keeps what is the person's (bookmarks, exports, the
+// debug log). `CLAUDE_USER_DIR`, else `<home>/claude`; never under `~/.claude`, which is
+// Claude Code's to clean (#6). Forward slashes, no trailing slash.
+async function dataRoot($: EngineInterface): Promise<string | undefined> {
+  const fromEnv = await $.env.get('CLAUDE_USER_DIR')
+  if (fromEnv) return fromEnv.replace(/\\/g, '/').replace(/\/+$/, '')
+  const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME'))
+  return home ? `${home.replace(/\\/g, '/')}/claude` : undefined
+}
+
 async function flushLog($: EngineInterface) {
   if (logPath === undefined) {
-    const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME'))
-    const root = (await $.env.get('CLAUDE_USER_DIR')) ?? (home ? `${home}/claude` : undefined)
+    const root = await dataRoot($)
     logPath = root ? `${root}/bookmarks/debug/${await $.session.id()}.log` : null
     // A reload starts the module over: keep what the file already holds.
     if (logPath && (await $.fs.exists(logPath))) {
@@ -343,6 +396,57 @@ async function userRows($: EngineInterface, path: string) {
   return undefined
 }
 
+// `grep -bn` over the transcript: every line containing `pattern`, as `line:byteoffset:
+// text`. sh + grep first on every platform (29 ms on a 10 MB file here; Git Bash has
+// grep on Windows); PowerShell second, computing the byte offsets itself since
+// Select-String has none. The output cap (4 MiB) cuts the newest matches first; a cut
+// line fails to parse and is skipped.
+async function grepTranscript($: EngineInterface, path: string, pattern: string) {
+  const sh = () => ['sh', '-c', 'grep -bnF -- "$1" "$2"', 'sh', pattern, path]
+  const powershell = () => {
+    const q = (s: string) => s.replace(/'/g, "''")
+    const script =
+      '[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); ' +
+      `$p = '${q(pattern)}'; $i = 0; $off = 0; ` +
+      `foreach ($line in [IO.File]::ReadLines('${q(path)}', [Text.Encoding]::UTF8)) { $i++; ` +
+      `if ($line.Contains($p)) { "$i" + ':' + "$off" + ':' + $line }; ` +
+      `$off += [Text.Encoding]::UTF8.GetByteCount($line) + 1 }`
+    return ['powershell', '-NoProfile', '-NonInteractive', '-EncodedCommand', base64Utf16le(script)]
+  }
+  for (const [via, argv] of [['sh', sh()], ['powershell', powershell()]] as const) {
+    try {
+      const started = Date.now()
+      const r = await $.process.run(argv, { timeoutMs: 60_000 })
+      // grep exits 1 for "no match" with empty output: that is an answer, not a failure.
+      if (r.exitCode === 0 || r.exitCode === 1 || r.stdout) return { via, ms: Date.now() - started, ...r }
+    } catch {
+      // That tool is not there: try the next one.
+    }
+  }
+  return undefined
+}
+
+// The message a request names, with its line and byte range: by uuid (full or 8+
+// prefix), or by a fragment of its text (earliest real message that contains it; several
+// are returned as candidates). The anchors DWP's resolver (2026-10-09).
+type ResolveOutcome =
+  | { kind: 'one'; row: TranscriptRow; via: string; ms: number }
+  | { kind: 'many'; rows: TranscriptRow[]; earliest: TranscriptRow; via: string; ms: number }
+  | { kind: 'none'; via?: string; ms?: number; reason: string }
+
+async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment?: string }): Promise<ResolveOutcome> {
+  const path = await transcriptPath($)
+  if (!path) return { kind: 'none', reason: 'transcript not found' }
+  const pattern = want.uuid ? uuidPattern(want.uuid) : want.fragment ? jsonEscaped(want.fragment) : undefined
+  if (!pattern) return { kind: 'none', reason: 'nothing to look for' }
+  const g = await grepTranscript($, path, pattern)
+  if (!g) return { kind: 'none', reason: 'neither sh + grep nor PowerShell ran' }
+  const rows = rowsFromGrep(g.stdout)
+  const r: Resolution = resolveRows(rows, want)
+  if (r.kind === 'none') return { kind: 'none', via: g.via, ms: g.ms, reason: g.isStdoutTruncated ? 'no match (output was cut at 4 MiB)' : 'no match' }
+  return { ...r, via: g.via, ms: g.ms }
+}
+
 async function backfillPrompts($: EngineInterface) {
   const doneKey = `backfilled:${await $.session.id()}`
   if (await $.store.get(doneKey)) return
@@ -414,13 +518,246 @@ function searchPhrase(text: string | undefined): string | undefined {
   return space > 16 ? cut.slice(0, space) : cut
 }
 
+// --- Bookmark anchors (anchors DWP 2026-10-09) -----------------------------------------
+// The URL format, its parser and the link finder live in hooks/core/anchor.ts (pure, with
+// tests under `node --test`). This file holds what needs the engine: the press, the jump,
+// the highlight, the tool and the register's I/O.
+
+// The transient mark an anchor press shows: the words the anchor names, highlighted on
+// the target row like a letter's selection, under a key no letter can take. Display
+// only; never written to the store (djdarcy, 2026-10-09: "highlighted yellow like how we
+// handle a mark when we do <leader>'<mark-key>").
+const ANCHOR_KEY = '@'
+
+// --- The register: <dataRoot>/bookmarks/sessions/<sessionId>.json, and one export per
+// bookmark beside it. The file is the source of truth (#6); this cache is a copy of what
+// was last read or written. `.bak` is written before the file, since `$.fs.write` is not
+// atomic; a main file that fails to parse falls back to it.
+let registerCache: BookmarkRegister | undefined
+
+async function registerPath($: EngineInterface): Promise<string | undefined> {
+  const root = await dataRoot($)
+  return root ? `${root}/bookmarks/sessions/${await $.session.id()}.json` : undefined
+}
+
+async function loadRegister($: EngineInterface): Promise<BookmarkRegister> {
+  if (registerCache) return registerCache
+  const path = await registerPath($)
+  let reg: BookmarkRegister | undefined
+  if (path) {
+    for (const p of [path, `${path}.bak`]) {
+      if (!(await $.fs.exists(p))) continue
+      reg = parseRegister(await $.fs.read(p))
+      if (reg) {
+        if (p !== path) log($, `[bm] register: ${path} unreadable; loaded its .bak (rev ${reg.rev})`)
+        break
+      }
+      log($, `[bm] register: ${p} is not a register file`)
+    }
+  }
+  if (!reg) {
+    const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME'))
+    const configDir = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? (home ? `${home.replace(/\\/g, '/')}/.claude` : undefined)
+    reg = emptyRegister(await $.session.id(), `${$.plugin.name} ${await pluginVersion($)}`, await $.clock.now(), {
+      ...(configDir ? { configDir } : {}),
+      cwd: (await $.session.cwd()).replace(/\\/g, '/'),
+    })
+  }
+  registerCache = reg
+  return reg
+}
+
+async function saveRegister($: EngineInterface, reg: BookmarkRegister) {
+  const path = await registerPath($)
+  if (!path) return
+  if (await $.fs.exists(path)) await $.fs.write(`${path}.bak`, await $.fs.read(path))
+  await $.fs.write(path, serializeRegister({ ...reg, writer: `${$.plugin.name} ${await pluginVersion($)}` }))
+  registerCache = reg
+}
+
+// Mint a bookmark: add or relabel the record, save the register, write the export, and
+// hand back the anchor URL and the markdown link a reply writes.
+async function mintBookmark($: EngineInterface, mint: Mint, messageText: string) {
+  const reg = await loadRegister($)
+  const now = await $.clock.now()
+  const { register, record, added } = addOrRelabel(reg, mint, now)
+  await saveRegister($, register)
+  const exportPath = await writeExport($, register, record, messageText, now)
+  const root = await dataRoot($)
+  const href = root ? anchorHref(record, root) : undefined
+  const markdown = root ? anchorMarkdown(record, root) : undefined
+  log($, `[bm] bookmark ${added ? 'added' : 'relabelled'}: ${short(record.uuid)} "${record.label}" (${ownerOf(record)}'s list; ${record.by}/${record.source}) rev ${register.rev}`)
+  return { record, added, href, markdown, exportPath, rev: register.rev }
+}
+
+// One export per message, shared by both lists. A rewrite keeps whatever was written under
+// the notes marker (a person's or Claude's notes, links, context: pillar 3, #11).
+async function writeExport($: EngineInterface, register: BookmarkRegister, record: Mint | { uuid: string; sessionId: string }, messageText: string, now: number) {
+  const root = await dataRoot($)
+  if (!root) return undefined
+  const sessionId = 'sessionId' in record ? record.sessionId : register.sessionId
+  const exportPath = anchorPath(root, sessionId, record.uuid)
+  const existing = (await $.fs.exists(exportPath)) ? await $.fs.read(exportPath) : undefined
+  // A relabel or share has no message text in hand: read it from the transcript again,
+  // and if that fails leave the file as it is rather than write an empty message.
+  if (!messageText) {
+    const found = await resolveTarget($, { uuid: record.uuid })
+    if (found.kind === 'one') messageText = found.row.text
+    else if (existing) return exportPath
+  }
+  const owners = (['user', 'claude'] as AnchorOwner[]).filter(o => findRecord(register, record.uuid, o))
+  // The record to describe: the person's copy first, since the file is theirs to read.
+  const main = findRecord(register, record.uuid, 'user') ?? findRecord(register, record.uuid)
+  if (!main) return exportPath
+  const minted = `${new Date(now).toISOString()} by ${main.by} (${main.source})`
+  await $.fs.write(exportPath, exportMarkdown(main, messageText, { minted, owners, notes: exportNotesOf(existing) }))
+  return exportPath
+}
+
+// How link kinds are told apart in a reply (djdarcy, 2026-10-09: "how can we denote that
+// a link has secondary metadata ... so I don't have to ctrl-click every link"). Settings
+// in a later version (#7); constants until then.
+const LINK_MARKERS: MarkerStyle = 'glyph'
+const LINK_LEGEND = true
+
+// Replies whose links were already logged and queued (a reply is drawn many times).
+const anchorRowsLogged = new Set<string>()
+
+// A bookmark link written by hand (or by an older session) is a bookmark too: once drawn,
+// any anchor the register does not know is resolved by uuid and recorded with
+// `by: 'prose'`. Off the render path (a clock tick), one attempt per uuid per load.
+const proseQueued = new Set<string>()
+function queueProseAnchors($: EngineInterface, anchors: ReturnType<typeof markdownLinks>) {
+  for (const l of anchors) {
+    const a = l.anchor
+    if (!a || proseQueued.has(a.uuid8)) continue
+    proseQueued.add(a.uuid8)
+    $.clock.after(0, () => {
+      void (async () => {
+        const reg = await loadRegister($)
+        if (reg.perma.some(r => r.uuid.toLowerCase().startsWith(a.uuid8))) return
+        if (a.sessionId && a.sessionId !== (await $.session.id())) return // another conversation's bookmark
+        const found = await resolveTarget($, { uuid: a.uuid })
+        if (found.kind !== 'one') {
+          log($, `[bm] prose bookmark ${a.uuid8} not recorded: ${found.kind === 'none' ? found.reason : 'ambiguous uuid'}`)
+          return
+        }
+        const row = found.row
+        await mintBookmark(
+          $,
+          {
+            uuid: row.uuid,
+            label: l.label.replace(/^(⚓|▤|\[bm\]|\[file\])\s*/, '') || `bookmark ${a.uuid8}`,
+            ...(a.words && row.text.includes(a.words) ? { words: a.words } : {}),
+            line: row.line,
+            bytes: [row.byteStart, row.byteEnd],
+            head: headOf(row.text),
+            owner: 'claude',
+            by: 'prose',
+            source: 'prose',
+            transcript: (await transcriptPath($))?.replace(/\\/g, '/'),
+            role: row.role,
+            ...(row.timestamp ? { timestamp: row.timestamp } : {}),
+          },
+          row.text,
+        )
+      })().catch(err => log($, `[bm] prose bookmark ${a.uuid8} failed: ${String(err)}`))
+    })
+  }
+}
+
+// The press on an anchor link: resolve a uuid prefix against the rows this mod knows,
+// then the same jump as a mark (with its refused-jump fallbacks).
+async function onAnchorPress($: EngineInterface, href: string) {
+  const a = parseAnchor(href)
+  log($, `[bm-poc] M1: anchor link pressed: ${href.slice(0, 120)} -> ${a ? `uuid ${a.uuid}` : 'NOT an anchor'}`)
+  if (!a) return
+  let uuid = a.uuid
+  if (uuid.length < 36) {
+    const row = (await allRows($)).find(r => r.uuid.startsWith(uuid))
+    if (row) uuid = row.uuid
+    else log($, `[bm-poc] M1: no known row starts with ${uuid}; trying it as written`)
+  }
+  // The jump records itself in the jumplist (jumpTo), so <leader> o comes back here. The
+  // reading position is left alone: it is the person's (djdarcy, 2026-10-09).
+  // The words to highlight (and, on a refused jump, the phrase the fallback copies): the
+  // link's `q`, else the register's record.
+  const words = a.words ?? (await loadRegister($)).perma.find(r => r.uuid === uuid)?.words
+  const deny = await jumpTo($, uuid, 'anchor press', `anchor ${short(uuid)}${a.line ? ` (line ${a.line})` : ''}`, words)
+  if (deny || !words) return
+  await highlightWords($, uuid, words)
+  log($, `[bm] anchor words highlighted on ${short(uuid)}: "${words.slice(0, 60)}"`)
+}
+
+// --- Jumplist: back and forward over every jump (vim's Ctrl+O / Ctrl+I) ------------------
+// djdarcy, 2026-10-09: a back button "like <leader><space><space>", but separate from the
+// reading position, which is a place the person set on purpose. Browser-style history of
+// view positions: `entries[index]` is where the view is now; a new jump drops anything
+// after `index`, records where we left from, and appends where we landed. Kept per
+// session in the store, capped at 100.
+type JumpEntry = { uuid: string; block: 'start' | 'end' }
+type Jumplist = { entries: JumpEntry[]; index: number }
+const JUMPLIST_MAX = 100
+let jumplistCache: Jumplist | undefined
+let jumplistMoving = false
+
+async function jumplistKey($: EngineInterface): Promise<string> {
+  return `jumplist:${await $.session.id()}`
+}
+async function loadJumplist($: EngineInterface): Promise<Jumplist> {
+  if (!jumplistCache) jumplistCache = ((await $.store.get(await jumplistKey($))) as Jumplist | undefined) ?? { entries: [], index: -1 }
+  return jumplistCache
+}
+async function saveJumplist($: EngineInterface, jl: Jumplist) {
+  jumplistCache = jl
+  await $.store.set(await jumplistKey($), jl)
+}
+const sameEntry = (a: JumpEntry | undefined, b: JumpEntry) => !!a && (a.uuid === b.uuid || firstFour(a.uuid) === firstFour(b.uuid))
+
+async function recordJump($: EngineInterface, from: JumpEntry | undefined, to: JumpEntry) {
+  if (jumplistMoving) return // a back or forward move is a walk, not a new jump
+  const jl = await loadJumplist($)
+  let entries = jl.entries.slice(0, jl.index + 1)
+  if (from && !sameEntry(entries.at(-1), from)) entries.push(from)
+  if (!sameEntry(entries.at(-1), to)) entries.push(to)
+  entries = entries.slice(-JUMPLIST_MAX)
+  await saveJumplist($, { entries, index: entries.length - 1 })
+}
+
+async function jumplistMove($: EngineInterface, step: -1 | 1) {
+  const jl = await loadJumplist($)
+  const next = jl.index + step
+  if (next < 0 || next >= jl.entries.length) {
+    $.ui.toast(step < 0 ? 'Nothing to go back to' : 'Nothing to go forward to')
+    return
+  }
+  const target = jl.entries[next]!
+  jumplistMoving = true
+  try {
+    const deny = await jumpTo($, target.uuid, step < 0 ? 'jumplist back' : 'jumplist forward', `${step < 0 ? 'back' : 'forward'} to ${short(target.uuid)}`, undefined, false, target.block)
+    if (!deny) {
+      await saveJumplist($, { ...jl, index: next })
+      const where = rendered.get(target.uuid) ?? Object.values(markCache).find(m => m.uuid === target.uuid)?.head
+      $.ui.toast(`${step < 0 ? 'back' : 'forward'}${where ? `: ${where.slice(0, 40)}` : ''} (${next + 1}/${jl.entries.length})`)
+    }
+  } finally {
+    jumplistMoving = false
+  }
+}
+
 // B2/B3/B5 share this: scroll, then report exactly what the engine answered. Returns the
 // refusal, if any. `probe`: a try whose "not person-initiated" refusal the caller
 // handles (the band command line's one-time check), so no toast for that one.
 async function jumpTo($: EngineInterface, uuid: string, via: string, label: string, words?: string, probe = false, block: 'start' | 'end' = 'start'): Promise<string | undefined> {
+  // Where the person is leaving from, for the jumplist: the view before the pane opened
+  // when a pane is up (the pane shifts the view), else the view now.
+  const from = paneView ?? (await viewAnchor($))
   const result = await $.ui.scroll({ to: { requestId: uuid }, block })
   // The jump is where the person wants to be: no going back to before the pane.
-  if (!result.deny) paneAnchor = undefined
+  if (!result.deny) {
+    paneAnchor = undefined
+    await recordJump($, from, { uuid, block })
+  }
   const verdict = result.deny ? `DENY: ${result.deny}` : 'ok'
   if (probe && result.deny && /person-initiated/i.test(result.deny)) {
     log($, `[bm-poc] ${via} scroll -> ${verdict} | target ${label} ${short(uuid)} (probe)`)
@@ -789,27 +1126,15 @@ async function jumpToMark($: EngineInterface, letter: string, probe = false): Pr
 // Design 2026-10-07__02-58-22 (and its POC addendum). The band leader (abovePrompt:focus,
 // Ctrl+] for djdarcy) puts the keyboard on the band, whose first element is a field
 // that takes every printable key, ' and Space included, over a draft and mid-turn.
-// Stock Claude Code refuses a scroll from a field's typing or Enter ("not
-// person-initiated", 2.1.290), so the field takes the FIRST key and hands the rest to
-// band Buttons, whose presses may scroll. A build that allows it (a patched or future
-// one) is found by trying once: the answer is kept per Claude Code version.
-type DirectScroll = 'unknown' | 'ok' | 'deny'
-let directScroll: DirectScroll | undefined
-async function directScrollKey($: EngineInterface): Promise<string> {
-  const v = await $.session.version()
-  return `directScroll:${v.version}`
-}
-async function directScrollState($: EngineInterface): Promise<DirectScroll> {
-  if (!directScroll) directScroll = ((await $.store.get(await directScrollKey($))) as DirectScroll | undefined) ?? 'unknown'
-  return directScroll
-}
-async function setDirectScroll($: EngineInterface, value: DirectScroll) {
-  directScroll = value
-  await $.store.set(await directScrollKey($), value)
-  log($, `[bm-poc] band command line: a scroll from the field is ${value === 'ok' ? 'ALLOWED (one-step keys)' : 'refused (keys hand off to band buttons)'} on this Claude Code`)
-}
+// The field's typing and Enter DO scroll the conversation, as long as the handler is
+// still running when the scroll is asked (the engine credits the work to the keystroke
+// only until the handler returns; a fire-and-forget `void` lost it, 2026-10-09). So the
+// keys below act directly; the once-per-version probe that used to decide this is gone.
 
-const CMD_HINT = "bm: ' or j + letter (jump)  m + letter (mark)  Space or r (reading)  p + number (prompt)"
+const CMD_HINT = "bm: ' or j + letter (jump)  m + letter (mark)  Space or r (reading)  p + number (prompt)  b (bookmarks)  P + letter (promote)  o / i (back / forward)"
+
+// The two list-shaped pane modes share the band's number entry (digits, j/k, Enter).
+const listLike = (m: PaneMode | 'idle') => m === 'list' || m === 'bookmarks'
 let cmdBusy = false
 
 // Draw the field anew, empty.
@@ -830,38 +1155,20 @@ async function runCommandLine($: EngineInterface, typed: string, via: 'input' | 
   cmdBusy = true
   try {
     const first = typed[0]!
-    const state = await directScrollState($)
-    log($, `[bm-poc] band command line ${via}: "${typed}" (direct scroll ${state})`)
+    log($, `[bm-poc] band command line ${via}: "${typed}"`)
 
     if (first === "'" || first === 'j') {
-      // Hand off at once where a field can't scroll; otherwise wait for the letter.
-      if (typed.length === 1) {
-        if (state === 'deny') {
-          await clearCommandLine($)
-          await handOff($, 'jump')
-        }
-        return
-      }
+      if (typed.length === 1) return // wait for the letter
       const letter = typed[1]!
       await clearCommandLine($)
       if (!/^[a-z]$/.test(letter)) return void $.ui.toast(CMD_HINT)
-      const deny = await jumpToMark($, letter, state === 'unknown')
-      if (deny && /person-initiated/i.test(deny)) {
-        await setDirectScroll($, 'deny')
-        // This once, the letter is already typed: put the ring on its Button, Enter jumps.
-        await handOff($, 'jump', `band-jump-${letter}`)
-        $.ui.toast(`Press Enter to jump to ${letter}. (From now on, the band takes the letter after ' itself.)`)
-      } else if (!deny && state === 'unknown') {
-        await setDirectScroll($, 'ok')
-      }
+      await jumpToMark($, letter)
       return
     }
 
     if (first === ' ' || first === 'r') {
       await clearCommandLine($)
-      if (state === 'ok') return void (await readingToggle($))
-      // Enter presses the reading entry: there, or back (readingToggle).
-      await handOff($, 'jump', 'band-jump-reading')
+      await readingToggle($)
       return
     }
 
@@ -878,6 +1185,32 @@ async function runCommandLine($: EngineInterface, typed: string, via: 'input' | 
       await handOff($, 'list')
       return
     }
+
+    // Bookmarks: `b` lists them (number + Enter jumps); `P` + a letter promotes that mark
+    // into a bookmark (the letter stays).
+    if (first === 'b') {
+      await clearCommandLine($)
+      await update($, bandNum, () => '')
+      await update($, bandGroup, () => 0) // start on the person's own bookmarks
+      await handOff($, 'bookmarks')
+      return
+    }
+    if (first === 'P') {
+      if (typed.length === 1) return // wait for the letter
+      const letter = typed[1]!
+      await clearCommandLine($)
+      if (!/^[a-z`]$/.test(letter)) return void $.ui.toast('P then a mark letter (a-z) promotes that mark into a bookmark')
+      await promoteLetter($, letter)
+      return
+    }
+
+    // The jumplist: `o` back, `i` forward (vim). `<leader> ←` / `→` are wanted too; whether
+    // an arrow reaches this field at all is the open probe (the log above shows what typed).
+    if (first === 'o' || first === 'i') {
+      await clearCommandLine($)
+      await jumplistMove($, first === 'o' ? -1 : 1)
+      return
+    }
     await clearCommandLine($)
     $.ui.toast(CMD_HINT)
   } finally {
@@ -887,26 +1220,36 @@ async function runCommandLine($: EngineInterface, typed: string, via: 'input' | 
 
 // A digit of a prompt number, pressed as a band Button: jumps on the digit that makes
 // the number complete (with 25 prompts, `3` at once, `2` waits), or on `go`.
+// The list the band's number entry works on: the prompts, or the bookmarks.
+async function listCount($: EngineInterface): Promise<number> {
+  return (await read($, paneMode)) === 'bookmarks' ? (await bookmarkList($)).length : (await prompts($)).length
+}
+async function jumpToListNumber($: EngineInterface, typed: string, via: string) {
+  if ((await read($, paneMode)) === 'bookmarks') await jumpToBookmarkNumber($, typed, via)
+  else await jumpToPromptNumber($, typed, via)
+}
+
 async function bandDigit($: EngineInterface, digit: string) {
   const typed = (await read($, bandNum)) + digit
-  const count = (await prompts($)).length
+  const count = await listCount($)
   if (promptNumberComplete(typed, count)) {
     await update($, bandNum, () => '')
-    await jumpToPromptNumber($, typed, 'band prompts')
+    await jumpToListNumber($, typed, 'band list')
     return
   }
   await update($, bandNum, () => typed)
-  await showPromptInPane($, Number(typed))
+  await showInPane($, Number(typed))
   keepBandWaiting($)
 }
 
-// Bring prompt #n into view in the pane's list, so it can be checked before Enter (its ▶
-// is drawn by the pane). The list is newest first, keyed `p-<uuid>`.
-async function showPromptInPane($: EngineInterface, n: number) {
-  const target = (await prompts($))[n - 1]
+// Bring item #n into view in the pane's list, so it can be checked before Enter (its ▶
+// is drawn by the pane). Prompts are keyed `p-<uuid>`, bookmarks `b-<uuid>`.
+async function showInPane($: EngineInterface, n: number) {
+  const bookmarks = (await read($, paneMode)) === 'bookmarks'
+  const target = bookmarks ? (await bookmarkList($))[n - 1] : (await prompts($))[n - 1]
   if (!target) return
-  const r = await $.ui.scroll({ in: PANE, to: { key: `p-${target.uuid}` }, block: 'center' })
-  if (r.deny) log($, `[bm-poc] prompts pane scroll to #${n} -> DENY: ${r.deny}`)
+  const r = await $.ui.scroll({ in: PANE, to: { key: `${bookmarks ? 'b' : 'p'}-${target.uuid}` }, block: 'center' })
+  if (r.deny) log($, `[bm-poc] pane scroll to #${n} -> DENY: ${r.deny}`)
 }
 
 // Browse the prompts one by one from the band, vim's j and k: the band holds the keyboard,
@@ -914,13 +1257,13 @@ async function showPromptInPane($: EngineInterface, n: number) {
 // is that you can scroll through the prompts 1 by 1"). The list is newest first: j moves
 // the ▶ down (older), k up (newer); the first press lands on the newest. Enter jumps.
 async function bandStep($: EngineInterface, key: 'j' | 'k') {
-  const count = (await prompts($)).length
+  const count = await listCount($)
   if (count === 0) return
   const typed = await read($, bandNum)
   const cur = Number(typed)
   const n = !typed || !cur ? count : Math.min(count, Math.max(1, cur + (key === 'j' ? -1 : 1)))
   await update($, bandNum, () => String(n))
-  await showPromptInPane($, n)
+  await showInPane($, n)
   keepBandWaiting($)
 }
 
@@ -947,7 +1290,7 @@ async function bandNumberGo($: EngineInterface) {
   const typed = await read($, bandNum)
   await update($, bandNum, () => '')
   if (!typed) return void (await closePane($))
-  await jumpToPromptNumber($, typed, 'band prompts')
+  await jumpToListNumber($, typed, 'band list')
 }
 
 // DIAGNOSTIC (2026-10-07): who holds the keyboard around a key, to explain a pane that is
@@ -965,7 +1308,7 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   log($, `[bm-poc] B4: ${action.startsWith('command:') ? `leader ran ${action}` : `chord for ${action} pressed the band Button`}`)
   await diagState($, `${mode} (before open)`)
   await update($, paneMode, () => mode)
-  const title = mode === 'mark' ? 'mark: press a-z' : mode === 'jump' ? 'jump: press a-z' : 'prompts: press 1-9'
+  const title = mode === 'mark' ? 'mark: press a-z' : mode === 'jump' ? 'jump: press a-z' : mode === 'bookmarks' ? 'bookmarks: type #' : 'prompts: press 1-9'
   note(`pane open (${mode}, focus)`)
   // Narrow on purpose (djdarcy, 2026-10-04: "collapse the panel so it has almost no
   // width"): it only has to take one letter. Both sizes are requests; a size the
@@ -979,7 +1322,14 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   // next press (the letter), or when the person closes the pane.
   paneAnchor = await topOnScreen($)
   paneView = await viewAnchor($)
-  await $.ui.open({ id: PANE, title, focus: true, closeOnEscape: true, columns: 16, rows: 4 })
+  const opened = (await $.ui.open({ id: PANE, title, focus: true, closeOnEscape: true, columns: 16, rows: 4 })) as
+    { isPlaced?: boolean; reason?: string } | undefined
+  // Probe (2026-10-09): below the engine's width floor the pane waits undrawn and the
+  // person sees nothing. Say why, instead of looking broken (djdarcy's shrunk RDP terminal).
+  if (opened && opened.isPlaced === false) {
+    log($, `[bm-poc] pane not placed: ${opened.reason ?? '(no reason given)'}`)
+    $.ui.toast(`Claude Code didn't draw the pane: ${opened.reason ?? 'no reason given'}. A wider terminal (or a smaller font, Ctrl+-) fixes it.`, { timeoutMs: 8000 })
+  }
   if (paneView) {
     const r = await $.ui.scroll({ to: { requestId: paneView.uuid }, block: paneView.block })
     log($, `[bm-poc] view back to ${short(paneView.uuid)} (${paneView.block}) after the pane opened -> ${r.deny ? `DENY: ${r.deny} (again at the next press)` : 'ok'}`)
@@ -1031,7 +1381,7 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
     // Enter's default: `go` for a prompt number, the reading position for a jump (a
     // missing element, no reading position, is simply denied), and never a letter for a
     // mark: Enter on `a` overwrote mark a (djdarcy, 2026-10-07).
-    const deny = await focusBand($, mode === 'list' ? 'band-num-go' : mode === 'jump' ? 'band-jump-reading' : 'band-mark-cancel')
+    const deny = await focusBand($, listLike(mode) ? 'band-num-go' : mode === 'jump' ? 'band-jump-reading' : 'band-mark-cancel')
     // The band never had the keyboard: the button was clicked (over a draft, a click
     // presses it without moving the keys). The watcher below would then close the pane
     // at once (djdarcy, 2026-10-07: "the panel popped up for a second but then
@@ -1128,6 +1478,79 @@ const PROMPT_NUMBER_JUMPS_AT: 'enter' | 'complete' = 'enter'
 // True once the digits typed can't become a larger prompt number: with 25 prompts,
 // `3` is complete, `2` waits for a second digit or Enter. Only acted on when
 // PROMPT_NUMBER_JUMPS_AT is 'complete'.
+// --- Bookmarks in the pane and the band ---------------------------------------------------
+// Numbered in the order minted (#1 the first), so a number read off the pane stays good.
+async function bookmarkList($: EngineInterface) {
+  return [...(await loadRegister($)).perma].sort((a, b) => a.createdAt - b.createdAt)
+}
+
+// Highlight `words` on a message, as a letter's jump does, through a transient entry in
+// the mark cache (reloaded from the store on the next mark write).
+async function highlightWords($: EngineInterface, uuid: string, words: string) {
+  markCache = { ...markCache, [ANCHOR_KEY]: { uuid, head: words, markedAt: await $.clock.now(), source: 'selection', snippet: words } }
+  await showMark($, ANCHOR_KEY, words)
+}
+
+// Jump to a bookmark and highlight its words. Returns the scroll's refusal, if any.
+async function arriveAtBookmark($: EngineInterface, record: { uuid: string; words?: string; label: string }, via: string): Promise<string | undefined> {
+  const deny = await jumpTo($, record.uuid, via, `bookmark "${record.label.slice(0, 30)}"`, record.words)
+  if (!deny && record.words) await highlightWords($, record.uuid, record.words)
+  return deny
+}
+
+// Cycle the bookmarks pane's group from the band: yours -> Claude's -> all -> yours.
+async function bandGroupStep($: EngineInterface, step: -1 | 1) {
+  await update($, bandGroup, g => (g + step + BOOKMARK_GROUPS.length) % BOOKMARK_GROUPS.length)
+  keepBandWaiting($)
+}
+
+async function jumpToBookmarkNumber($: EngineInterface, typed: string, via: string) {
+  const all = await bookmarkList($)
+  const n = Number(typed.trim())
+  const target = Number.isInteger(n) ? all[n - 1] : undefined
+  if (!target) {
+    $.ui.toast(`no bookmark #${typed.trim()} (1-${all.length})`)
+    return
+  }
+  await arriveAtBookmark($, target, via)
+  await closePane($)
+}
+
+// Promote one of the person's marks (a letter, or ` for the reading position) into a
+// bookmark: same message, the mark's words, `by: 'user'`. The letter is left as it is.
+// The markdown link goes to the clipboard, ready to paste into a note.
+async function promoteLetter($: EngineInterface, letter: string) {
+  const mark = (await loadMarks($))[letter]
+  if (!mark) return void $.ui.toast(`mark ${letter} is not set`)
+  const found = await resolveTarget($, { uuid: mark.uuid })
+  if (found.kind !== 'one') {
+    $.ui.toast(`Can't promote ${letter}: ${found.kind === 'none' ? found.reason : 'the message is ambiguous in the transcript'}`)
+    return
+  }
+  const row = found.row
+  const words = mark.snippet && row.text.includes(mark.snippet) ? mark.snippet : undefined
+  const minted = await mintBookmark(
+    $,
+    {
+      uuid: row.uuid,
+      label: (words ?? mark.head).slice(0, 80),
+      ...(words ? { words } : {}),
+      line: row.line,
+      bytes: [row.byteStart, row.byteEnd],
+      head: headOf(row.text),
+      owner: 'user',
+      by: 'user',
+      source: 'promote',
+      transcript: (await transcriptPath($))?.replace(/\\/g, '/'),
+      role: row.role,
+      ...(row.timestamp ? { timestamp: row.timestamp } : {}),
+    },
+    row.text,
+  )
+  const copied = minted.markdown ? (await $.ui.copy({ text: minted.markdown })).isCopied : false
+  $.ui.toast(`${minted.added ? 'bookmarked' : 'already a bookmark, relabelled'}: ${minted.record.label.slice(0, 40)}${copied ? ' (link copied)' : ''}`, { timeoutMs: 6000 })
+}
+
 function promptNumberComplete(typed: string, count: number): boolean {
   if (PROMPT_NUMBER_JUMPS_AT !== 'complete') return false
   const n = Number(typed)
@@ -1142,9 +1565,9 @@ let bandRing: string | undefined
 // An element of the band's key mode that is drawn now, to aim the focus probe at:
 // the ring's own element when it belongs to this mode, else a fixed one per mode.
 async function bandProbeKey($: EngineInterface, mode: PaneMode): Promise<string | undefined> {
-  const prefix = mode === 'list' ? 'band-num-' : `band-${mode}-`
+  const prefix = listLike(mode) ? 'band-num-' : `band-${mode}-`
   if (bandRing?.startsWith(prefix)) return bandRing
-  if (mode === 'list') return 'band-num-go'
+  if (listLike(mode)) return 'band-num-go'
   if (mode === 'mark') return 'band-mark-cancel'
   const marks = await loadMarks($)
   if (marks[READING]) return 'band-jump-reading'
@@ -1220,10 +1643,55 @@ export const register: Register = on => {
       ['bm-goto', 'Jump to a mark: opens the jump pane, then press a letter'],
       ['bm-prompts', 'Jump to a prompt: opens the prompts pane, then type its number'],
       ['bm-read', 'Reading position: go there, or back to where you were'],
+      ['bm-bookmarks', 'List the bookmarks of this conversation; type a number and Enter to jump'],
+      ['bm-promote', 'Promote a mark into a bookmark: /bm-promote a'],
       ['bm-diag-keys', 'Diagnostics: log each keystroke in the input box (on | off | toggle)'],
+      ['bm-debug', 'Echo the plugin\'s log lines into this conversation as dim rows (on | off | status); off by default'],
     ]
     for (const [name, description] of commands) {
       await $.command.register({ name, description, immediate: true })
+    }
+
+    // The model's tool (anchors DWP, 2026-10-09): mint a durable bookmark for a place in
+    // this conversation and get back the markdown link to cite it with. Kept in front
+    // (isDeferred: false) so citing is one call; the description stays short since it is
+    // sent every turn.
+    try {
+      const t = await $.tool.register({
+        name: 'bookmark',
+        description:
+          'Bookmark a message: give a verbatim fragment (or uuid) and a label, get a markdown link to cite; a click jumps ' +
+          'there. owner: your list or the person\'s. Actions: add, relabel, remove, share, list.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'A short verbatim fragment of the message to bookmark (the earliest message containing it)' },
+            uuid: { type: 'string', description: 'The message uuid instead of a fragment (full, or its first 8+ characters)' },
+            label: { type: 'string', description: 'What the bookmark is for: the link text, a few words' },
+            why: { type: 'string', description: 'One or two sentences on why this place matters' },
+            words: { type: 'string', description: 'The exact words to highlight on arrival; defaults to query' },
+            temporary: { type: 'boolean', description: 'Prune after the retention period instead of keeping forever' },
+            owner: { type: 'string', enum: ['claude', 'user'], description: "Whose list: your own (default) or the person's, when they asked you to bookmark it for them" },
+            action: { type: 'string', enum: ['add', 'relabel', 'remove', 'share', 'list'], description: 'add (default); relabel/remove act on `owner`\'s list; share copies from `owner`\'s list to the other; list shows both' },
+          },
+        },
+        isDeferred: false,
+      })
+      log($, `[bm] tool registered: ${t.tool}`)
+    } catch (err) {
+      log($, `[bm] tool.register failed: ${String(err)}`, { always: true })
+    }
+    try {
+      const reg = await loadRegister($)
+      log($, `[bm] register: ${reg.perma.length} bookmark(s), rev ${reg.rev}, ${await registerPath($)}`)
+      // Temporary bookmarks age out (a setting later, #7); each leaves a tombstone.
+      const { register: pruned, pruned: gone } = prune(reg, TEMPORARY_RETENTION, await $.clock.now())
+      if (gone.length > 0) {
+        await saveRegister($, pruned)
+        log($, `[bm] register: pruned ${gone.length} temporary bookmark(s) older than ${TEMPORARY_RETENTION}`)
+      }
+    } catch (err) {
+      log($, `[bm] register failed to load: ${String(err)}`, { always: true })
     }
 
     markCache = await loadMarks($)
@@ -1365,8 +1833,37 @@ export const register: Register = on => {
     // Highlight POC: a prompt row is plain text, so the mark shows as a «a» tag
     // in front of the selected words. Display only -- the model never reads it.
     const text = e.props.text ?? ''
+    const onRow = marksOnRow(e.requestId, (await read($, shown))?.letter)
+    // A prompt row drawn in colour, as a reply's marked line is (2026-10-09, for anchor
+    // presses: "highlighted yellow like a mark"). The lines before the marked one keep
+    // the engine's prompt styling; the marked line and the rest are drawn here.
+    const [first] = onRow
+    const colored = first && colorSplit(text, first[0], first[1].snippet)
+    if (colored) {
+      const { Box, Text } = $.ui.resolve(e)
+      const { before, pre, snippet, post, after, letter, gapAbove, gapBelow } = colored
+      const line = (
+        <Text backgroundColor={LINE_BG}>
+          {pre}
+          <Text color={WORDS_FG} bold>
+            «{letter}» {snippet}
+          </Text>
+          {post}
+        </Text>
+      )
+      const engine = before ? await next({ ...e, props: { ...e.props, text: before } }) : null
+      return (
+        <Box flexDirection="column">
+          {engine}
+          {gapAbove && <Text> </Text>}
+          {line}
+          {gapBelow && <Text> </Text>}
+          {after && <Text>{after}</Text>}
+        </Box>
+      )
+    }
     let marked = text
-    for (const [letter, m] of marksOnRow(e.requestId, (await read($, shown))?.letter)) {
+    for (const [letter, m] of onRow) {
       if (m.snippet && marked.includes(m.snippet)) marked = marked.replace(m.snippet, `«${letter}» ${m.snippet}`)
     }
     return marked === text ? next(e) : next({ ...e, props: { ...e.props, text: marked } })
@@ -1378,7 +1875,76 @@ export const register: Register = on => {
   // is where a jump lands. Only rows carrying a mark are touched.
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     noteOnScreen(e.requestId, e.props.onScreen)
-    const marks = marksOnRow(e.requestId, (await read($, shown))?.letter)
+
+    // Probe M1/M2 (anchors DWP, 2026-10-09): a reply carrying bookmark-anchor links is
+    // drawn as the mod's own Markdown, so a plain click on such a link reaches the mod
+    // (onLinkPress) and tries the jump; the log says what the engine answered. A ctrl-click
+    // stays the terminal's own open. Replies without anchors take the usual path below.
+    const links = markdownLinks(e.props.text)
+    const anchors = links.filter(l => l.kind === 'anchor')
+    const marksHere = marksOnRow(e.requestId, (await read($, shown))?.letter)
+    if (anchors.length > 0) {
+      const { Box, Markdown, Text } = $.ui.resolve(e)
+      if (!anchorRowsLogged.has(e.requestId)) {
+        anchorRowsLogged.add(e.requestId)
+        log($, `[bm] reply ${short(e.requestId)}: ${anchors.length} bookmark link(s), ${links.filter(l => l.kind === 'file').length} file link(s)`)
+        queueProseAnchors($, anchors)
+      }
+      // Kind markers go on the drawn labels only (the transcript is untouched); the hrefs
+      // stay as written so `pressableLinks` matches them. A one-line legend teaches the
+      // two clicks (a setting later, #7). A mark on this reply keeps its highlight: the
+      // bold «a» form, since this branch draws markdown and can't colour a line.
+      const pressable = anchors.map(a => a.href)
+      const md = (t: string, k: string) => (
+        <Markdown key={k} text={markLinks(t, LINK_MARKERS)} pressableLinks={pressable} onLinkPress={link => onAnchorPress($, link.href)} />
+      )
+      const legend = LINK_LEGEND ? (
+        <Text dimColor>
+          {LINK_MARKERS === 'glyph' ? '⚓' : '[bm]'} click: jump there · ctrl-click: open the bookmark's file
+          {links.some(l => l.kind === 'file') ? `  ${LINK_MARKERS === 'glyph' ? '▤' : '[file]'} ctrl-click: open the file` : ''}
+        </Text>
+      ) : null
+      // A mark on this reply gets the same coloured line as any other message: the text
+      // before and after the marked line are drawn as markdown (links clickable), the
+      // line itself as coloured Text. If the marked line carries a link, that link is
+      // plain text for as long as the highlight shows.
+      const [first] = marksHere
+      const colored = first && colorSplit(e.props.text, first[0], first[1].snippet)
+      if (colored) {
+        const { before, pre, snippet, post, after, letter, gapAbove, gapBelow } = colored
+        return (
+          <Box flexDirection="column">
+            {before && md(before, `anchors-${e.requestId}-a`)}
+            {gapAbove && <Text> </Text>}
+            <Text backgroundColor={LINE_BG}>
+              {pre}
+              <Text color={WORDS_FG} bold>
+                «{letter}» {snippet}
+              </Text>
+              {post}
+            </Text>
+            {gapBelow && <Text> </Text>}
+            {after && md(after, `anchors-${e.requestId}-b`)}
+            {legend}
+          </Box>
+        )
+      }
+      // A mark whose words don't sit on one line: the bold «a» form.
+      let text = e.props.text
+      for (const [letter, m] of marksHere) {
+        const s = m.snippet
+        if (s && !/[*`_]/.test(s) && text.includes(s)) text = text.replace(s, `**«${letter}» ${s}**`)
+        else text = `> **«${letter}» ${s ?? m.head}**\n\n${text}`
+      }
+      return (
+        <Box flexDirection="column">
+          {md(text, `anchors-${e.requestId}`)}
+          {legend}
+        </Box>
+      )
+    }
+
+    const marks = marksHere
     if (marks.length === 0) return next(e)
 
     // Round 4: draw the marked LINE ourselves, so it can carry a background and the
@@ -1522,6 +2088,21 @@ export const register: Register = on => {
     await openFor($, 'list', 'command:bm-prompts')
     return {}
   })
+  on('command.run', { command: 'bm-bookmarks' }, async $ => {
+    await update($, bandNum, () => '')
+    await update($, bandGroup, () => 0)
+    await openFor($, 'bookmarks', 'command:bm-bookmarks')
+    return {}
+  })
+  on('command.run', { command: 'bm-promote' }, async ($, e) => {
+    const letter = (e.args ?? '').trim()
+    if (!/^[a-z`]$/.test(letter)) {
+      $.ui.toast('/bm-promote <letter>: promote that mark into a bookmark')
+      return {}
+    }
+    await promoteLetter($, letter)
+    return {}
+  })
   on('command.run', { command: 'bm-read' }, async $ => {
     await readingToggle($)
     return {}
@@ -1594,15 +2175,162 @@ export const register: Register = on => {
     return {}
   })
 
+  // Probe M3, second half: answer the model's call to the stub tool. The engine strips
+  // nothing from `e` for a plugin's own tool, so the arguments sit beside the envelope.
+  on('tool.call', { tool: 'mcp__convo-bookmarks__bookmark' }, async ($, e) => {
+    const { tool, tool_use_id, agentId, requestMeta, ...input } = e as unknown as Record<string, unknown>
+    void agentId
+    void requestMeta
+    log($, `[bm] ${String(tool)} called (${String(tool_use_id).slice(0, 12)}) with ${JSON.stringify(input).slice(0, 160)}`)
+    // The result the model reads is a string (or MCP content blocks), not an object:
+    // an object is refused as "does not match its output shape" (2.1.295, 2026-10-09).
+    const answer = (o: unknown) => ({ result: JSON.stringify(o, null, 2) })
+    const query = typeof input.query === 'string' ? input.query.trim() : ''
+    const uuid = typeof input.uuid === 'string' ? input.uuid.trim() : ''
+    const label = typeof input.label === 'string' && input.label.trim() ? input.label.trim() : undefined
+    const action = input.action === 'relabel' || input.action === 'remove' || input.action === 'share' || input.action === 'list' ? input.action : 'add'
+    if (action !== 'list' && !query && !uuid) return answer({ error: 'give `query` (a short verbatim fragment of the message) or `uuid`' })
+    // Whose list: Claude's own by default; the person's when they asked for the bookmark.
+    const owner: AnchorOwner = input.owner === 'user' ? 'user' : 'claude'
+    const root = await dataRoot($)
+    const describe = (r: AnchorRecord) => ({
+      uuid: r.uuid, owner: ownerOf(r), label: r.label, why: r.why, words: r.words, line: r.line, sharedFrom: r.sharedFrom,
+      ...(root ? { anchor: anchorHref(r, root), markdown: anchorMarkdown(r, root) } : {}),
+    })
+
+    if (action === 'list') {
+      const reg = await loadRegister($)
+      return answer({ yours: listOf(reg, 'user').map(describe), claudes: listOf(reg, 'claude').map(describe), tombstones: reg.tombstones.length })
+    }
+
+    if (action === 'relabel' || action === 'remove' || action === 'share') {
+      // These act on a record that exists: by uuid (full or 8+ prefix) on `owner`'s list.
+      const reg = await loadRegister($)
+      let target = uuid ? findRecord(reg, uuid, owner) : undefined
+      if (!target && query) {
+        const found = await resolveTarget($, { fragment: query })
+        if (found.kind === 'one') target = findRecord(reg, found.row.uuid, owner)
+        else if (found.kind === 'many') target = found.rows.map(r => findRecord(reg, r.uuid, owner)).find(Boolean)
+      }
+      if (!target) return answer({ error: `no bookmark for that on ${owner === 'user' ? "the person's" : "Claude's"} list`, hint: 'action: "list" shows both lists with their uuids' })
+      const now = await $.clock.now()
+      if (action === 'remove') {
+        const r = remove(reg, target.uuid, owner, `claude${owner === 'user' ? ' (on the person\'s behalf)' : ''}`, now)
+        if ('error' in r) return answer(r)
+        await saveRegister($, r.register)
+        log($, `[bm] bookmark removed from ${owner}'s list: ${short(target.uuid)} "${target.label}" (tombstoned)`)
+        return answer({ ok: true, removed: describe(r.removed), note: 'archived as a tombstone in the register, not deleted' })
+      }
+      if (action === 'share') {
+        const to: AnchorOwner = owner === 'claude' ? 'user' : 'claude'
+        const r = share(reg, target.uuid, owner, to, now)
+        if ('error' in r) return answer(r)
+        await saveRegister($, r.register)
+        await writeExport($, r.register, { uuid: target.uuid, sessionId: r.register.sessionId }, '', now)
+        log($, `[bm] bookmark shared ${owner} -> ${to}: ${short(target.uuid)} "${r.record.label}"`)
+        return answer({ ok: true, added: r.added, shared: describe(r.record), note: `now on ${to === 'user' ? "the person's" : "Claude's"} list too; the original stays` })
+      }
+      // relabel
+      if (!label && typeof input.why !== 'string' && typeof input.words !== 'string') return answer({ error: 'relabel needs `label`, `why` or `words`' })
+      const minted = await mintBookmark(
+        $,
+        {
+          uuid: target.uuid,
+          owner,
+          label: label ?? target.label,
+          ...(typeof input.why === 'string' ? { why: input.why.trim() } : {}),
+          ...(typeof input.words === 'string' && input.words.trim() ? { words: input.words.trim() } : {}),
+          ...(input.temporary === true ? { temporary: true } : {}),
+          head: target.head,
+          by: 'claude',
+          source: target.source,
+        },
+        '',
+      )
+      return answer({ ok: true, relabelled: describe(minted.record) })
+    }
+
+    if (!label) return answer({ error: 'give `label`: what the bookmark is for, a few words' })
+    const found = await resolveTarget($, uuid ? { uuid } : { fragment: query })
+    const brief = (r: TranscriptRow) => ({ uuid: r.uuid, role: r.role, line: r.line, bytes: [r.byteStart, r.byteEnd], head: headOf(r.text), timestamp: r.timestamp })
+    log($, `[bm] bookmark: ${found.kind}${'via' in found && found.via ? ` via ${found.via} in ${found.ms} ms` : ''}${found.kind === 'none' ? `: ${found.reason}` : ''}`)
+    if (found.kind === 'none') return answer({ error: found.reason, hint: 'use a verbatim fragment that appears in the message itself, or its uuid' })
+    if (found.kind === 'many') {
+      return answer({
+        ambiguous: true,
+        note: 'several messages contain that fragment; the earliest is where it was first said. Call again with `uuid` to choose, or a longer fragment.',
+        earliest: brief(found.earliest),
+        candidates: found.rows.slice(0, 12).map(brief),
+      })
+    }
+    const row = found.row
+    const words = typeof input.words === 'string' && input.words.trim() ? input.words.trim() : query || undefined
+    const minted = await mintBookmark(
+      $,
+      {
+        uuid: row.uuid,
+        owner,
+        label,
+        ...(typeof input.why === 'string' && input.why.trim() ? { why: input.why.trim() } : {}),
+        ...(words && row.text.includes(words) ? { words } : {}),
+        ...(input.temporary === true ? { temporary: true } : {}),
+        line: row.line,
+        bytes: [row.byteStart, row.byteEnd],
+        head: headOf(row.text),
+        by: 'claude',
+        source: 'tool',
+        transcript: (await transcriptPath($))?.replace(/\\/g, '/'),
+        role: row.role,
+        ...(row.timestamp ? { timestamp: row.timestamp } : {}),
+      },
+      row.text,
+    )
+    return answer({
+      ok: true,
+      added: minted.added,
+      owner,
+      anchor: minted.href,
+      markdown: minted.markdown,
+      ...brief(row),
+      words: minted.record.words,
+      export: minted.exportPath,
+      note: `on ${owner === 'user' ? "the person's" : "Claude's"} list. Write \`markdown\` in your reply as the citation; a plain click jumps there, a ctrl-click opens the export`,
+    })
+  })
+
+  on('command.run', { command: 'bm-debug' }, async ($, e) => {
+    const arg = (e.args ?? '').trim().toLowerCase()
+    if (arg === 'on' || arg === 'off') {
+      await setUiEcho($, arg === 'on')
+      $.ui.toast(`convo-bookmarks: log echo ${arg} (the file log is always written)`)
+      log($, `[bm] log echo turned ${arg}`, { always: true })
+      return {}
+    }
+    const echo = await uiEchoEnabled($)
+    const env = await $.env.get('CONVO_BOOKMARKS_DEBUG')
+    log($, `[bm] log echo is ${echo ? 'on' : 'off'}${env ? ` (CONVO_BOOKMARKS_DEBUG=${env})` : ''}; file log: ${logPath ?? '(not yet written)'}; /bm-debug on|off`, { always: true })
+    return {}
+  })
+
   on('command.run', { command: 'bm-env' }, async $ => {
     const v = await $.session.version()
     const list = await allRows($)
     const promptCount = list.filter(r => r.door === 'prompt').length
-    log($, 
+    // dcc-patcher's build signal (its H patch README, "For plugin authors"): DCC_PATCH_H is
+    // set by the history patch itself; DCC_PATCHES and DCC_PATCHER by its launcher.
+    // Stock started by that launcher has none of them.
+    const dccH = await $.env.get('DCC_PATCH_H')
+    const dccPatches = await $.env.get('DCC_PATCHES')
+    const dccVersion = await $.env.get('DCC_PATCHER')
+    log($,
       `[bm-poc] ${$.plugin.name} ${await pluginVersion($)} on Claude Code ${v.version} ` +
         `(chords verified on ${VERIFIED_CLIENTS.join(', ')}); session ${await $.session.id()}; ` +
         `captured ${promptCount} prompts, ${list.length - promptCount} replies; ${rendered.size} drawn ids; ` +
         describePathOrder(),
+    )
+    log($,
+      `[bm-poc] dcc-patcher: ${dccVersion ? `v${dccVersion}` : 'none seen'}; ` +
+        `DCC_PATCH_H=${dccH ?? '(unset)'}; DCC_PATCHES=${dccPatches ?? '(unset)'}`,
     )
     return {}
   })
@@ -1683,10 +2411,11 @@ export const register: Register = on => {
         // A prompt number, one digit Button per key: a field's typing or Enter can't
         // scroll ("not person-initiated", 2026-10-05 17:20 and 2026-10-07 07:10), a
         // Button press can.
-        const count = (await prompts($)).length
+        const bookmarks = mode === 'bookmarks'
+        const count = bookmarks ? (await bookmarkList($)).length : (await prompts($)).length
         const typed = await read($, bandNum)
         keys = [
-          <Text key="band-num-title" dimColor>prompt #</Text>,
+          <Text key="band-num-title" dimColor>{bookmarks ? 'bookmark #' : 'prompt #'}</Text>,
           <Text key="band-num-typed" bold>{typed || '_'}</Text>,
           <Text key="band-num-range" dimColor>{`(1-${count})`}</Text>,
           ...'0123456789'.split('').map(d => (
@@ -1697,7 +2426,13 @@ export const register: Register = on => {
           <Button key="band-num-k" hotkey="k" label="k↑" plain dimColor onPress={() => bandStep($, 'k')} />,
           <Button key="band-num-go" label="go (Enter)" plain onPress={() => bandNumberGo($)} />,
           <Button key="band-num-j" hotkey="j" label="j↓" plain dimColor onPress={() => bandStep($, 'j')} />,
-          <Button key="band-num-pin" hotkey="s" label="s★ pin" plain dimColor onPress={() => bandPin($)} />,
+          ...(bookmarks
+            ? [
+                <Button key="band-num-h" hotkey={GROUP_KEYS.prev} label={`${GROUP_KEYS.prev}◂`} plain dimColor onPress={() => bandGroupStep($, -1)} />,
+                <Text key="band-num-group" dimColor>{BOOKMARK_GROUPS[await read($, bandGroup)]?.title ?? ''}</Text>,
+                <Button key="band-num-l" hotkey={GROUP_KEYS.next} label={`▸${GROUP_KEYS.next}`} plain dimColor onPress={() => bandGroupStep($, 1)} />,
+              ]
+            : [<Button key="band-num-pin" hotkey="s" label="s★ pin" plain dimColor onPress={() => bandPin($)} />]),
         ]
       }
       return (
@@ -1721,8 +2456,8 @@ export const register: Register = on => {
               The Buttons stay for clicks, Tab, and the borrowed-action chords. */}
           {Input ? (
             <Input key={`band-cmd-${await read($, cmdRev)}`} label="bm:" placeholder="' j m p ␣" submitLabel="run" autoFocus
-              onInput={(typed: string) => void runCommandLine($, typed, 'input')}
-              onSubmit={(typed: string) => void runCommandLine($, typed, 'submit')} />
+              onInput={(typed: string) => runCommandLine($, typed, 'input')}
+              onSubmit={(typed: string) => runCommandLine($, typed, 'submit')} />
           ) : (
             <Text dimColor>bm:</Text>
           )}
@@ -1826,6 +2561,88 @@ export const register: Register = on => {
           {pinnedRows.map(r => promptRow(r, 'pin'))}
           {pinnedRows.length > 0 && <Text dimColor>all prompts</Text>}
           {numbered.map(r => promptRow(r, 'p'))}
+        </Box>
+      )
+    }
+
+    if (mode === 'bookmarks') {
+      // Every bookmark of this conversation, numbered in the order minted (#1 the first,
+      // so a number stays good), listed newest first like the prompts. Digits typed in
+      // the band show in the `#` field and as a ▶; Enter jumps and highlights the words.
+      const all = await bookmarkList($)
+      const numbered = all.map((r, i) => ({ ...r, n: i + 1 })).reverse()
+      const width = String(all.length).length
+      const fromBand = (await read($, bandMode)) === 'bookmarks' ? await read($, bandNum) : undefined
+      const targetN = fromBand ? Number(fromBand) : undefined
+      const pointer = (n: number) => (fromBand === undefined ? '' : n === targetN ? '▶' : ' ')
+      const go = (typed: string) => jumpToBookmarkNumber($, typed, 'bookmarks pane')
+      const now = Date.now()
+      const age = (t: number) => {
+        const m = Math.round((now - t) / 60_000)
+        return m < 60 ? `${m}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`
+      }
+      // One group at a time, one numbering across all of them. The band's h/l cycle the
+      // group; the header shows where you are.
+      const groupIndex = await read($, bandGroup)
+      const group = BOOKMARK_GROUPS[groupIndex] ?? BOOKMARK_GROUPS[0]!
+      const inGroup = (g: (typeof BOOKMARK_GROUPS)[number]) => (g.owner === 'all' ? numbered : numbered.filter(r => ownerOf(r) === g.owner))
+      const shownRows = inGroup(group)
+      // The group tabs with their counts, the active one in brackets (styled like the
+      // prompts pane's pinned group: a coloured marker beside a plain Button, since a
+      // Button's label takes no colour at rest).
+      const header = BOOKMARK_GROUPS.map(g => (g === group ? `[${g.title} ${inGroup(g).length}]` : `${g.title} ${inGroup(g).length}`)).join('  ')
+      const who = (r: (typeof numbered)[number]) => {
+        const said = r.role ? (r.role === 'user' ? 'you said it' : 'Claude said it') : ''
+        const minted = ownerOf(r) === 'claude' ? "Claude's" : r.sharedFrom ? 'shared by Claude' : r.source === 'promote' ? 'promoted' : 'yours'
+        return [age(r.createdAt), said, minted, r.temporary ? 'temporary' : ''].filter(Boolean).join(' · ')
+      }
+      const row = (r: (typeof numbered)[number]) => {
+        const dim = !rendered.has(r.uuid) && r.n !== targetN
+        return (
+          <Box key={`b-row-${r.uuid}-${ownerOf(r)}`} flexDirection="column">
+            <Box flexDirection="row">
+              <Box flexShrink={0}>
+                <Text dimColor={dim}>{`${pointer(r.n)}${String(r.n).padStart(width)}) `}</Text>
+                {LINK_MARKERS === 'glyph' && <Text color={WORDS_FG}>⚓ </Text>}
+              </Box>
+              <Button
+                key={`b-${r.uuid}-${ownerOf(r)}`}
+                label={r.label}
+                plain
+                dimColor={dim}
+                onPress={async () => {
+                  await arriveAtBookmark($, r, 'bookmarks pane')
+                  await closePane($)
+                }}
+              />
+            </Box>
+            <Text dimColor wrap="truncate-end">
+              {`${' '.repeat(width + 4)}${who(r)}${r.why ? ` · ${r.why}` : ''}`}
+            </Text>
+          </Box>
+        )
+      }
+      return (
+        <Box flexDirection="column">
+          {numbered.length === 0 && <Text dimColor>No bookmarks yet. Claude mints them with its bookmark tool; P + a letter promotes one of your marks.</Text>}
+          {numbered.length > 0 && Input && (
+            <Input
+              key="bookmark-number"
+              label="#"
+              placeholder={`1-${all.length}`}
+              submitLabel="jump"
+              {...(fromBand !== undefined ? { value: fromBand } : {})}
+              autoFocus
+              onInput={(typed: string) => {
+                if (promptNumberComplete(typed, all.length)) void go(typed)
+              }}
+              onSubmit={(typed: string) => void go(typed)}
+            />
+          )}
+          {numbered.length > 0 && <Text>{header}</Text>}
+          {numbered.length > 0 && shownRows.length === 0 && <Text dimColor>{`No bookmarks in "${group.title}" yet.`}</Text>}
+          {shownRows.map(row)}
+          {numbered.length > 0 && <Text dimColor>{`${GROUP_KEYS.prev}/${GROUP_KEYS.next} group · j/k move · Enter jump · Esc close`}</Text>}
         </Box>
       )
     }

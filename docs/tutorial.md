@@ -109,7 +109,11 @@ To browse instead, press `Ctrl+] p`, then `j` (or Down) to move a `▶` down the
 
 You jump to mark `a`, and your words are still in the input box, untouched. The leader moves the keyboard to the band without touching your draft, and `Esc` brings you back to it. (The keys do nothing while Claude Code is showing a dialog, such as a permission prompt.)
 
-The very first jump after the plugin is installed, or after Claude Code updates, ends with "press Enter": the plugin is checking, once, what this version of Claude Code allows.
+### 7. Let Claude bookmark the places that matter
+
+Ask: *"Where should I read in this conversation to catch up? Bookmark each place."* Claude answers with a list, each item a link drawn with a `⚓` marker. Click one: the view jumps to that message and the words the link names light up. `Ctrl+] o` brings you back to the list; `Ctrl+] i` goes forward again. Ctrl-click the same link and the bookmark's own file opens in your markdown editor, with the message and a Notes section for you.
+
+Those bookmarks are permanent and separate from your marks. `Ctrl+] b` lists yours and Claude's. To keep a mark of your own for good, `Ctrl+] P` then its letter promotes it into a bookmark and copies its link to your clipboard.
 
 ## Where next
 

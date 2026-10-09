@@ -36,9 +36,13 @@ You can always click the band's buttons instead.
 
 After a command the keyboard stays on the band, ready for the next command, and what you type goes into its `bm:` field. Press `Esc` to return to the input box. A plugin can't hand the keyboard back by itself, so this is the one key to remember.
 
-## A jump asks me to press Enter
+## A bookmark link does nothing on ctrl-click
 
-The first jump after the plugin is installed, or after Claude Code updates, ends with "Press Enter to jump to `a`". The plugin is checking, once per Claude Code version, whether it may jump straight from what you type in the band. Current Claude Code doesn't allow that, so from then on the band hands the letter to its buttons, which may jump. Press `Enter` this once, and it won't ask again.
+Windows will not open a `file:` link whose address carries a `#`. Bookmark links written since v0.2.0 put their position in a `?` query string instead, which does open; a link written by hand with a `#` still jumps on a plain click but can't be opened outside. Rewrite it with `?` in place of `#`.
+
+## Alt+arrow doesn't go back
+
+Arrow keys never reach the band, so `Ctrl+] ←` can't work. Use `Ctrl+] o` (back) and `Ctrl+] i` (forward), or add the terminal mapping in [Back and forward](usage.md#back-and-forward), which types the leader and the key for you.
 
 ## The view moves when a pane opens
 

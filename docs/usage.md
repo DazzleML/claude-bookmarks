@@ -179,6 +179,89 @@ Pin the prompts you want to come back to, and they stay at the top of the pane:
 
 A pinned prompt shows a gold star inside its number, `245★) `, both in a **★ pinned** group at the top of the pane (in the order you pinned them) and in its place in the full list. Pins are kept per conversation, like marks.
 
+## Bookmarks
+
+A mark is a letter you can reassign in a second. A **bookmark** is permanent: a durable address of one message in this conversation, kept in a readable file under your own folder, that still resolves in a later session and that a link can point at. Claude places bookmarks while it answers, and you can promote any mark into one.
+
+### Links in Claude's replies
+
+When Claude cites an earlier place in the conversation, it writes an ordinary markdown link, drawn with a `⚓` marker and a legend line under the reply:
+
+```
+As you said when we chose the name (⚓ the catalog name decision), ...
+⚓ click: jump there · ctrl-click: open the bookmark's file
+```
+
+| On the link | Does |
+|-------------|------|
+| Click | Jumps to that message and highlights the words the bookmark names (the same colours as a mark) |
+| Ctrl-click | Opens the bookmark's own file in your default markdown application |
+| Hover (Windows Terminal) | Shows the full address |
+
+A `▤` marker on a link means it opens a file (a document, a source file); web links carry no marker. The markers are added when the reply is drawn; nothing in the transcript changes.
+
+### Two lists
+
+Bookmarks come in two lists that never mix: **yours** and **Claude's**. Claude bookmarks places for its own discussion without touching your list; when you ask it to "bookmark this for me", it goes on yours. Claude can also relabel or remove a bookmark on request (a removal is archived, not deleted), and **share** one of its own onto your list.
+
+### The bookmarks pane
+
+`Ctrl+] b` opens the list on your own bookmarks, numbered in the order they were made (so a number stays good), and `l` / `h` switch the group: yours, Claude's, all:
+
+```
+# _
+[yours] · Claude's · all   (h/l switch group; or Tab / Shift+Tab, Enter)
+  3) ⚓ Set a mark on any message
+     (12m, you said it)
+```
+
+The band takes the keys, as for prompts: digits type a number, `j`/`k` move the `▶`, `l`/`h` switch the group (the band shows which), `Enter` jumps and highlights the bookmark's words, `Esc` closes. Numbers are shared across the groups, so #3 is #3 in every view. `/bm-bookmarks` from an empty input box puts the keyboard in the pane itself.
+
+### Promote a mark into a bookmark
+
+`Ctrl+] P` then the mark's letter (`` ` `` for the reading position) makes a bookmark of that mark's message, with the mark's words, on your list. The letter stays as it was. The bookmark's markdown link is copied to your clipboard, ready to paste into a note or an issue. `/bm-promote a` does the same.
+
+### Back and forward
+
+Every jump (a bookmark link, a mark, a prompt number, the reading position) is remembered, like vim's jumplist:
+
+| Keys | Does |
+|------|------|
+| `Ctrl+] o` | Back to where you were before the last jump |
+| `Ctrl+] i` | Forward again |
+
+The reading position is separate and is never moved by a jump. Arrow keys can't reach the band, so for `Alt+←` / `Alt+→` add a terminal mapping that types the leader and the key for you; in Windows Terminal's `settings.json`, under `actions`:
+
+```json
+{ "command": { "action": "sendInput", "input": "\u001do" }, "keys": "alt+left" },
+{ "command": { "action": "sendInput", "input": "\u001di" }, "keys": "alt+right" }
+```
+
+(`\u001d` is `Ctrl+]`.) The same trick works for any leader command.
+
+### What Claude's tool does
+
+Claude has a `bookmark` tool. It gives a verbatim fragment of the message (or its uuid) and a label, and gets back the markdown link to cite with. The tool resolves the fragment against the conversation's transcript (the earliest message that contains it; if several do, it asks rather than guessing), records the bookmark, writes its file, and returns the link. Its other actions: `relabel`, `remove`, `share`, and `list` (both lists with their links).
+
+### Where bookmarks live
+
+Under your own folder, never under `~/.claude` (Claude Code cleans that):
+
+```
+~/claude/bookmarks/sessions/<session id>.json        the register: every bookmark of the conversation, readable JSON
+~/claude/bookmarks/sessions/<session id>/<uuid8>.md  one file per bookmarked message: the text, every field, a verify recipe, and a Notes section
+```
+
+(`CLAUDE_USER_DIR`, if set, replaces `~/claude`.) The link's address names that file, with the message's uuid, its line in the transcript and its byte range in the query string:
+
+```
+file:///C:/Users/you/claude/bookmarks/sessions/<session>/12d637fb.md?u=<uuid>&l=5768&b=9763906-9765751&q=the%20words&v=1
+```
+
+The file's **Notes** section is yours: anything below its marker line survives when the bookmark is relabelled. Add context, links, or your own notes there.
+
+**By hand, with no plugin:** a bookmark is only a transcript line. `grep -n` the words in the session's `.jsonl` for the line number, `head -n <line-1> | wc -c` for the byte offset, and write the link in the form above; the plugin recognises it when drawn and records it.
+
 ## Optional fast keys
 
 For one-step actions, a key can press a band button directly. It goes through one of the few actions of Claude Code's diff panel that do nothing in a conversation:
@@ -203,6 +286,8 @@ These are for power users, and not part of the recommended setup:
 | `/bm-goto` | Opens the jump pane |
 | `/bm-prompts` | Opens the prompts pane |
 | `/bm-read` | Goes to the reading position, or back |
+| `/bm-bookmarks` | Opens the bookmarks pane |
+| `/bm-promote a` | Promotes mark `a` into a bookmark on your list |
 | `/bm-delmarks a b`, `/bm-delmarks all` | Deletes marks |
 | `/bm-pin [N]` | Pins or unpins prompt #N (the newest without a number) |
 
@@ -216,9 +301,11 @@ From an empty input box, a pane opened by a command takes the keyboard, so its o
 | Reading position | This conversation | The same |
 | The prompt list | This conversation | Up to 5000 prompts |
 | Pinned prompts | This conversation | Survive restarting Claude Code and `claude --resume` |
+| Bookmarks (yours and Claude's) | Forever | In `~/claude/bookmarks/sessions/`, readable JSON and markdown; never under `~/.claude` |
+| The jumplist (back/forward) | This conversation | Up to 100 jumps |
 | The highlight | Two minutes, or until your next prompt | Display only |
 
-Each conversation has its own marks: `a` in one conversation is unrelated to `a` in another. The plugin stores them in Claude Code's own plugin storage, not in the session file.
+Each conversation has its own marks: `a` in one conversation is unrelated to `a` in another. Marks, pins and the reading position live in Claude Code's own plugin storage; bookmarks live in your own folder (see [Where bookmarks live](#where-bookmarks-live)). Nothing is written to the session file.
 
 ## Diagnostic commands
 

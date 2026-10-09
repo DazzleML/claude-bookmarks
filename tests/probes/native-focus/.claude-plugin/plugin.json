@@ -1,0 +1,8 @@
+{
+  "name": "focus-probe",
+  "version": "0.0.1",
+  "description": "Probe only, not shipped: a plain band and pane (mark, jump, prompts, read) that do nothing but open panes and log every focus move, to see how Claude Code's own focus keys behave with nothing customised.",
+  "author": { "name": "djdarcy", "github": "https://github.com/djdarcy" },
+  "license": "GPL-3.0",
+  "types": "./types/index.d.ts"
+}

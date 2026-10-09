@@ -16,7 +16,7 @@ A long Claude Code conversation is hard to move around in. The answer you need i
 **claude-bookmarks** gives you named spots in the conversation: letters you set on any line, a reading position you can swap to and back from, and a numbered list of every prompt you have typed, so "go back to where I asked about the cache" is two keystrokes instead of a safari.
 
 > [!NOTE]
-> **Proof of concept (v0.1.x).** The core loop works and is in active use on Claude Code 2.1.288 and 2.1.289 (Windows Terminal, fullscreen): marks with an in-place highlight, jumps, the reading position, and the prompts pane. The code is being rebuilt into a tested core before 1.0, and the key layout may still change. See the [Roadmap](ROADMAP.md) and [issue #1](https://github.com/DazzleML/claude-bookmarks/issues/1). Please [file issues](https://github.com/DazzleML/claude-bookmarks/issues) for anything rough.
+> **Pre-alpha (v0.2.x).** In daily use on Claude Code 2.1.288 to 2.1.295 (Windows Terminal, fullscreen and shrunk): marks with an in-place highlight, jumps, the reading position, the prompts pane, and now bookmarks with clickable links in Claude's replies. The pure core under `hooks/core/` is tested; the mod itself is verified by hand, and the key layout may still change. See the [Roadmap](ROADMAP.md) and [issue #1](https://github.com/DazzleML/claude-bookmarks/issues/1). Please [file issues](https://github.com/DazzleML/claude-bookmarks/issues) for anything rough.
 
 ## Quick Start
 
@@ -79,6 +79,8 @@ That's the whole setup. Without it, use `Ctrl+X Tab` as the leader, or click the
 - **Jumps** - `Ctrl+] '` and a letter scrolls back to that mark from anywhere in the conversation; the jump pane lists only the marks you have
 - **Reading position** - Select a line and press `Ctrl+] Space Space` to keep your place; press it again from anywhere to go there, and again to return to where you were
 - **Prompt history** - `Ctrl+] p` lists every prompt of the conversation, numbered from your first, including prompts from before the plugin was loaded; type a number, or browse with `j`/`k` or the arrows, then Enter to jump
+- **Bookmarks** - Permanent, addressable places in the conversation, kept as readable files in your own folder. Claude places them while it answers and cites them as links in its reply: click one to jump there with the words highlighted, ctrl-click to open the bookmark's file. Your bookmarks and Claude's are separate lists (`Ctrl+] b`); promote any mark into a bookmark with `Ctrl+] P` and its letter
+- **Back and forward** - `Ctrl+] o` returns to where you were before the last jump, `Ctrl+] i` goes forward again, like vim's jumplist
 - **Works while you type** - The leader works with a draft in the input box and while Claude is working; your draft is untouched
 - **Per conversation** - Marks, the reading position and the prompt list belong to the conversation they were made in, and survive restarting Claude Code and `--resume`
 - **Display only** - Highlights change what is drawn on screen, never what Claude reads or what is saved in the session file
@@ -97,6 +99,10 @@ That's the whole setup. Without it, use `Ctrl+X Tab` as the leader, or click the
 | `Ctrl+] p` then a number, `Enter` | `prompts` | Jump to prompt #N |
 | `Ctrl+] p` then `j`/`k` or Down/Up, `Enter` | `prompts` | Browse the prompts one by one, then jump |
 | `Ctrl+] p`, pick a prompt, then `s` | `prompts` | Pin or unpin it (the band stays open to pin more) |
+| `Ctrl+] b` then a number, `Enter` | | Open the bookmarks pane (yours, then Claude's) and jump to bookmark #N |
+| `Ctrl+] P` then `a`-`z` | | Promote that mark into a bookmark on your list (its link is copied to the clipboard) |
+| `Ctrl+] o` / `Ctrl+] i` | | Back to before the last jump / forward again |
+| Click a `⚓` link in a reply | | Jump to the bookmarked message, words highlighted; ctrl-click opens its file |
 | `Esc` | | Leave the band and go back to typing |
 
 After a command the keyboard stays on the band, ready for the next one; `Esc` returns to the input box. In the mark pane, letters already in use show as `●`. Prompts drawn dimmed in the prompts pane are ones Claude Code hasn't drawn on screen, usually from before the last compaction, and a jump to one may be refused (see [Tips](#tips)).
@@ -118,6 +124,14 @@ Ctrl+] Space Space again                                  (and back to where you
 
 # Go back to where a line of work started
 Ctrl+] p  12  Enter                                       (prompt #12)
+
+# Ask Claude where to read, and click your way there
+"Where should I read to catch up? Bookmark each place."    (Claude answers with ⚓ links)
+click a link                                              (jump; the words light up)
+Ctrl+] o                                                  (back to the answer)
+
+# Keep a mark for good
+Ctrl+] P  a                                               (mark a becomes a bookmark; link on the clipboard)
 ```
 
 ### Commands
@@ -125,6 +139,7 @@ Ctrl+] p  12  Enter                                       (prompt #12)
 | Command | What it does |
 |---------|--------------|
 | `/bm-mark`, `/bm-goto`, `/bm-prompts`, `/bm-read` | The same as the leader keys, typed; from an empty input box their pane takes the keyboard |
+| `/bm-bookmarks`, `/bm-promote a` | Open the bookmarks pane; promote mark `a` into a bookmark |
 | `/bm-delmarks a b`, `/bm-delmarks all` | Delete marks |
 | `/bm-pin [N]` | Pin or unpin prompt #N in the prompts pane (`*N` in its `#` field does the same) |
 | `/bm-env` | Plugin version, session id, and what it has captured |

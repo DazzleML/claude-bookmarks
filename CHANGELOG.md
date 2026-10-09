@@ -6,6 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-09
+
+### Added
+
+- **Bookmarks**: permanent, addressable places in the conversation, kept as readable files under your own folder (`~/claude/bookmarks/sessions/`, or `CLAUDE_USER_DIR`): a JSON register per conversation and one markdown file per bookmarked message, with the message text, every field, a verify-by-hand recipe and a Notes section that survives rewrites. A bookmark's address is a `file:` link to that file with the message's uuid, transcript line and byte range in its query string.
+- **Claude cites with bookmarks.** A `bookmark` tool for the model: a verbatim fragment (or a uuid) and a label in, a markdown link out. The tool resolves the fragment against the transcript (the earliest message containing it; several matches are returned as candidates, never guessed), and can also `relabel`, `remove` (archived as a tombstone, never deleted), `share` and `list`.
+- **Clickable links in replies.** A bookmark link is drawn with a `⚓` marker and a legend line; a plain click jumps to the message and highlights the words the link names in the mark colours; a ctrl-click opens the bookmark's file. File links get a `▤` marker. A bookmark link written by hand is recognised when drawn and recorded.
+- **Two lists.** Your bookmarks and Claude's are separate: Claude's own citations never land on your list unless you ask ("bookmark this for me") or Claude shares one. `Ctrl+] b` (and `/bm-bookmarks`) opens on your list; `l` and `h` switch to Claude's and to all; numbers are shared across the groups; a number and `Enter` jumps. Each row shows the label, then its age, who said the message, where the bookmark came from, and the "why".
+- `/bm-debug on|off|status`: the plugin's log lines are no longer echoed into every conversation as dim rows; the echo is off by default and switched per machine by this command (or `CONVO_BOOKMARKS_DEBUG=1`). The file log under `~/claude/bookmarks/debug/` is always written.
+- **Promote a mark**: `Ctrl+] P` then its letter (or `/bm-promote a`) makes a bookmark of that mark's message on your list, keeps the letter, and copies the bookmark's link to the clipboard.
+- **Back and forward**, vim's jumplist: every jump is remembered; `Ctrl+] o` goes back, `Ctrl+] i` forward. The reading position is never moved by a jump. A terminal mapping recipe gives `Alt+←` / `Alt+→` (arrows can't reach the band).
+- `/bm-env` shows the dcc-patcher build signal (`DCC_PATCH_H`, `DCC_PATCHES`, `DCC_PATCHER`) so you can see which Claude Code build you're on.
+- When Claude Code doesn't draw a pane (a terminal too narrow), a toast says so and gives the engine's reason.
+- Pure core modules under `hooks/core/` (anchor URL, transcript resolver, register file) with tests that run under `node --test` and a debugger.
+
+### Changed
+
+- The band's `'`, `j` and `Space` act directly from the field: a letter jumps, `Space` toggles the reading position. The once-per-version "press Enter" probe is gone.
+- The plugin calls itself pre-alpha now rather than a proof of concept (README; `version.py` reports `PREALPHA 0.2.0`): it is in daily use, and the pure core is tested.
+
+### Fixed
+
+- In a narrow terminal (under about 110 columns, a shrunk RDP window), `Ctrl+] p` and the other band commands opened nothing, and every band command logged a refused scroll-back. Cause: the band's field handed its work off without waiting, so Claude Code no longer counted it as your keystroke. The field now returns its promise; the pane is drawn and the view returns where it was.
+- A prompt row with a mark on it is drawn in colour, like a reply's marked line, instead of only a `«a»` tag.
+- A reply that carries bookmark links keeps its mark highlight (the coloured line) as any other message does.
+
+### Known issues
+
+- After `Ctrl+] o` or `i` the keyboard stays on the band (as after every band command); `Esc` returns it. Text typed before `Esc` goes into the band's field.
+- Ctrl-click opens the bookmark's file at the top: no markdown editor takes a position from the outside (Typora refuses a `#heading` on its command line). The bookmarked words are bold in the file, and a long message has a link to them.
+
 ## [0.1.7] - 2026-10-07
 
 ### Added
@@ -148,7 +179,9 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.7...v0.2.0
+[0.1.7]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.3...v0.1.4
