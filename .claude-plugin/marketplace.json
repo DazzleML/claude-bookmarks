@@ -1,0 +1,37 @@
+{
+  "name": "dazzle-claude-plugins",
+  "owner": {
+    "name": "DazzleML",
+    "url": "https://github.com/DazzleML"
+  },
+  "metadata": {
+    "description": "Claude Code plugins by DazzleML: session logging, session backup, and conversation bookmarks.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "bookmarks",
+      "description": "Bookmarks and vim-style marks inside Claude Code conversations: mark a line, jump back, keep a reading position, browse your prompts, and let Claude cite earlier places as clickable links",
+      "source": "./plugin",
+      "homepage": "https://github.com/DazzleML/claude-bookmarks",
+      "license": "GPL-3.0",
+      "tags": ["bookmarks", "navigation", "mod"]
+    },
+    {
+      "name": "session-logger",
+      "description": "Real-time session logging, command history, and auto-naming for Claude Code",
+      "source": { "source": "github", "repo": "DazzleML/claude-session-logger" },
+      "homepage": "https://github.com/DazzleML/claude-session-logger",
+      "license": "GPL-3.0",
+      "tags": ["sessions", "logging", "hooks"]
+    },
+    {
+      "name": "session-backup",
+      "description": "Git-backed Claude Code session backup: auto-archives sessions before compaction and on session end",
+      "source": { "source": "github", "repo": "DazzleML/Claude-Session-Backup" },
+      "homepage": "https://github.com/DazzleML/Claude-Session-Backup",
+      "license": "GPL-3.0",
+      "tags": ["sessions", "backup", "hooks"]
+    }
+  ]
+}

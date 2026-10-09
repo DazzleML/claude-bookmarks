@@ -1,13 +1,13 @@
 # claude-bookmarks
 
-[![Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FDazzleML%2Fclaude-bookmarks%2Fmain%2F.claude-plugin%2Fplugin.json&query=%24.version&label=version&color=brightgreen)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FDazzleML%2Fclaude-bookmarks%2Fmain%2Fplugin%2F.claude-plugin%2Fplugin.json&query=%24.version&label=version&color=brightgreen)](CHANGELOG.md)
 [![Claude Code 2.1.287+](https://img.shields.io/badge/Claude%20Code-2.1.287%2B-d97757.svg)](https://code.claude.com/docs)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](docs/platform-support.md)
 
 > **Vim-style marks, a reading position, and a numbered prompt history, inside a Claude Code conversation**
 
-A Claude Code plugin (a mod: it draws in Claude Code's terminal app) that lets you select a line of a conversation, mark it with a letter, and jump back to it later from anywhere in the conversation. The plugin's name is **`convo-bookmarks`**, because third-party plugin names (sadly) starting with the prefix `claude-` are verboten. This is not a claude.ai browser extension, but if you're looking for better web-based navigation [AI Chat Nav](https://chromewebstore.google.com/detail/ai-chatnav/edplgflcieggamnnoecdpckjjhpjlbim?pli=1) might help.
+A Claude Code plugin (a mod: it draws in Claude Code's terminal app) that lets you select a line of a conversation, mark it with a letter, and jump back to it later from anywhere in the conversation. The plugin's name is **`bookmarks`** (published by DazzleML); this repository is `claude-bookmarks` because third-party plugin names may not start with `claude-`. This is not a claude.ai browser extension, but if you're looking for better web-based navigation [AI Chat Nav](https://chromewebstore.google.com/detail/ai-chatnav/edplgflcieggamnnoecdpckjjhpjlbim?pli=1) might help.
 
 ## The Problem
 
@@ -16,20 +16,35 @@ A long Claude Code conversation is hard to move around in. The answer you need i
 **claude-bookmarks** gives you named spots in the conversation: letters you set on any line, a reading position you can swap to and back from, and a numbered list of every prompt you have typed, so "go back to where I asked about the cache" is two keystrokes instead of a safari.
 
 > [!NOTE]
-> **Pre-alpha (v0.2.x).** Actively part of my real workflow, been dogfooding since Claude Code 2.1.288 to 2.1.295 on Windows (Windows Terminal, fullscreen and shrunk): marks with an in-place highlight, jumps, the reading position, the prompts pane, and now bookmarks with clickable links in Claude's replies. **Windows is the only tested platform**; macOS and Linux are expected to work and untried (will try on a VPS after a few more minor versions). The pure core under `hooks/core/` is tested and works for the most part. The key layout will still change ([#26](https://github.com/DazzleML/claude-bookmarks/issues/26)). **[docs/status.md](docs/status.md)** has what works, the known issues and what is coming; the [Roadmap](ROADMAP.md) and [issue #1](https://github.com/DazzleML/claude-bookmarks/issues/1) the longer view. Please [file issues](https://github.com/DazzleML/claude-bookmarks/issues) for anything rough.
+> **Pre-alpha (v0.3.x).** Actively part of my daily workflow, been dogfooding since Claude Code 2.1.288 to 2.1.295 on Windows (Windows Terminal, fullscreen and shrunk): marks with an in-place highlight, jumps, the reading position, the prompts pane, and now bookmarks with clickable links in Claude's replies. **Windows is the only tested platform**; macOS and Linux are expected to work and untried (will try on a VPS after a few more minor versions). The pure core under `hooks/core/` is tested and works for the most part. The key layout will still change ([#26](https://github.com/DazzleML/claude-bookmarks/issues/26)). **[docs/status.md](docs/status.md)** has what works, the known issues and what is coming; the [Roadmap](ROADMAP.md) and [issue #1](https://github.com/DazzleML/claude-bookmarks/issues/1) the longer view. Please [file issues](https://github.com/DazzleML/claude-bookmarks/issues) for anything rough.
+
+### Screenshot
+<p align="center">
+  <picture>
+    <img src="docs/images/prompts-pane-marked-line-and-bookmark-link.png" alt="The prompts pane open on the right, numbered from the first prompt; a marked line in the conversation with its c tag; a bookmark link in a reply; the band above the prompt in prompt mode">
+  </picture>
+  <br>
+  <sub>In use: the prompts pane (<code>Ctrl+] p</code>) on the right, a marked line with its <code>«c»</code> tag, a <code>⚓</code> bookmark link Claude wrote in a reply, and the band above the input box waiting for a number. <a href="docs/images/jump-pane-marks-and-reading-position.png">The jump pane</a>, with three marks and the reading position.</sub>
+</p>
 
 ## Quick Start
 
-Once the plugin is listed in the Anthropic plugin directory or the DazzleML catalog, one command installs it (`/plugin install convo-bookmarks --marketplace DazzleML/dazzle-claude-plugins`, on Claude Code 2.1.275 or later). Until then, load a local clone:
+One command installs it on Claude Code 2.1.275 or later, since this repository is also a marketplace:
+
+```
+/plugin install bookmarks --marketplace DazzleML/claude-bookmarks
+```
+
+To work on it, or to run a version before it was listed, load a local clone:
 
 ```bash
 # 1. Clone the plugin
 git clone https://github.com/DazzleML/claude-bookmarks.git
 
-# 2. Load it. For one session:
-claude --plugin-dir /path/to/claude-bookmarks
+# 2. Load it (the plugin is the repository's plugin/ folder). For one session:
+claude --plugin-dir /path/to/claude-bookmarks/plugin
 #    ...or for every session, add it to ~/.claude/settings.json:
-#    "env": { "CLAUDE_CODE_PLUGIN_DIRS": "/path/to/claude-bookmarks" }
+#    "env": { "CLAUDE_CODE_PLUGIN_DIRS": "/path/to/claude-bookmarks/plugin" }
 
 # 3. Bind the leader key in ~/.claude/keybindings.json (see "Set up the leader" below)
 
@@ -44,7 +59,7 @@ When the plugin is loaded, a one-line band sits above the prompt: a small `bm:` 
 
 ### Set up the leader
 
-The plugin's keys all start with one **leader** key: Claude Code's own "focus the band" action, `abovePrompt:focus`, which moves the keyboard to the band. Its default key is `Ctrl+X Tab` and works with no setup. I recommend one key instead, `Ctrl+]`, which every terminal passes on. Add it to your `~/.claude/keybindings.json` (back the file up first):
+The plugin's keys all start with one **leader** key, **`Ctrl+]`**: a single key that every terminal passes on, over SSH as well. It is Claude Code's own "focus the band" action, `abovePrompt:focus`, bound to that key. A plugin cannot add a keybinding for you, so add this once to your `~/.claude/keybindings.json` (back the file up first; if the file already has a `Chat` block, add the one line to it):
 
 ```json
 {
@@ -59,7 +74,7 @@ The plugin's keys all start with one **leader** key: Claude Code's own "focus th
 }
 ```
 
-That's the whole setup. Without it, use `Ctrl+X Tab` as the leader, or click the band's buttons.
+That's the whole setup. Every key in these docs is written as `Ctrl+]`. Until the binding is in place, Claude Code's built-in key for the same action, `Ctrl+X Tab` (two keys), does the same job, and the band's buttons can be clicked.
 
 > [!TIP]
 > **New to vim-style keys?** Start with the **[tutorial](docs/tutorial.md)**: it explains chords, leader keys and vim marks in plain terms, then walks you through each feature in about five minutes.
@@ -201,18 +216,25 @@ Details, including tmux, IDE terminals and the Desktop app: [docs/platform-suppo
 
 ```
 claude-bookmarks/
+├── plugin/                   # The plugin, as Claude Code installs it (point --plugin-dir here)
+│   ├── .claude-plugin/
+│   │   └── plugin.json       # Plugin manifest (name: bookmarks)
+│   ├── hooks/
+│   │   ├── hooks.json        # Points Claude Code at the mod
+│   │   ├── register.tsx      # The mod: the band, panes, highlight, bookmarks, back-fill
+│   │   ├── core/             # Pure modules with their node --test suites (anchor URL, transcript, register)
+│   │   └── scripts/          # PowerShell fallbacks for reading the transcript on Windows
+│   ├── types/index.d.ts      # Declared $.state values
+│   ├── README.md, LICENSE    # What the plugin directory requires inside the plugin folder
+│   └── tsconfig.json         # Type-check the mod: npx tsc -p plugin --noEmit
 ├── .claude-plugin/
-│   └── plugin.json           # Plugin manifest (name: convo-bookmarks)
-├── hooks/
-│   ├── hooks.json            # Points Claude Code at the mod
-│   └── register.tsx          # The mod: the band, panes, highlight, back-fill
-├── types/index.d.ts          # Declared $.state values
-├── docs/                     # Tutorial, usage guide, troubleshooting, platform support
+│   └── marketplace.json      # This repository as a marketplace (dazzle-claude-plugins)
+├── docs/                     # Status, keys, tutorial, usage, troubleshooting, platform support, engine quirks
 ├── scripts/repokit-common/   # Shared repo tooling (git subtree from DazzleTools/git-repokit-common)
 ├── tests/
 │   ├── checklists/           # Human test checklists
 │   └── one-offs/             # Probes and measurements
-├── .repokit-common.toml      # Repo tooling settings (version sync into plugin.json)
+├── .repokit-common.toml      # Repo tooling settings (version sync into plugin/.claude-plugin/plugin.json)
 └── version.py                # Version source for the repo tooling
 ```
 

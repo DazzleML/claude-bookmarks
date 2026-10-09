@@ -8,7 +8,7 @@ export type PaneMode = 'list' | 'mark' | 'jump' | 'bookmarks'
 
 declare module 'claude-code' {
   interface PluginState {
-    'convo-bookmarks': {
+    'bookmarks': {
       rows: Row[]
       paneMode: PaneMode
       // When a pane opened from the band can't take the keyboard, the band itself

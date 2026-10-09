@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { anchorHref, parseAnchor, markdownLinks, markLinks, parsePosition, anchorMarkdown, type AnchorRecord } from '../../../../hooks/core/anchor.ts'
+import { anchorHref, parseAnchor, markdownLinks, markLinks, parsePosition, anchorMarkdown, type AnchorRecord } from '../../../../plugin/hooks/core/anchor.ts'
 
 const SID = '8f0f9b27-33fc-4054-806a-22a6d569dfb5'
 const UUID = '230c29e3-f948-454d-87f6-048bc4eefc2e'

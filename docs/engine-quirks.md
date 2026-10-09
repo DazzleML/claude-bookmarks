@@ -29,7 +29,7 @@ Unless stated otherwise, the facts come from Claude Code's plugin type declarati
 
 **Before 0.1.7:** four chords borrowed four of the five diff-panel actions that do nothing in a conversation (`app:toggleDiffNoiseFilter` and so on), and the band buttons carry those actions still, for optional one-step keys. If you've turned off Claude Code's built-in diff mod, or the diff panel is open, those keys may act on the diff panel instead.
 
-**Proper fix:** let a plugin declare its own namespaced actions (for example `plugin:convo-bookmarks/mark`) that users bind like any other, and document `command:` bindings.
+**Proper fix:** let a plugin declare its own namespaced actions (for example `plugin:bookmarks/mark`) that users bind like any other, and document `command:` bindings.
 
 ### A key can't be both a leader and the start of a chord — Limit
 

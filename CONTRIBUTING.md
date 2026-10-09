@@ -17,23 +17,26 @@ Thank you for considering contributing to claude-bookmarks!
 git clone https://github.com/DazzleML/claude-bookmarks.git
 cd claude-bookmarks
 bash scripts/repokit-common/install-hooks.sh
-claude --plugin-dir .        # the mod reloads live when you save a file
+claude --plugin-dir ./plugin # the mod reloads live when you save a file
 ```
 
 ### Checks
 
 ```bash
-claude plugin validate .           # manifest + hooks module, as Claude Code reads them
+claude plugin validate ./plugin    # manifest + hooks module, as Claude Code reads them
+claude plugin validate .           # the repository as a marketplace (.claude-plugin/marketplace.json)
+npx tsc -p plugin --noEmit         # type-check the mod against the engine's generated types
+node --test plugin/hooks/core/anchor.test.ts plugin/hooks/core/transcript-lines.test.ts plugin/hooks/core/register-file.test.ts
 python -m pytest tests/ -v         # version.py and plugin.json stay in step
 ```
 
 ## Project Structure
 
 ```
-.claude-plugin/plugin.json   # plugin manifest (name: convo-bookmarks)
-hooks/hooks.json             # points Claude Code at the hooks module
-hooks/register.tsx           # the mod
-types/index.d.ts             # declared $.state values
+plugin/.claude-plugin/plugin.json   # plugin manifest (name: bookmarks)
+plugin/hooks/hooks.json             # points Claude Code at the hooks module
+plugin/hooks/register.tsx           # the mod
+plugin/types/index.d.ts             # declared $.state values
 version.py                   # version source for the repo tooling
 tests/                       # tooling checks; one-offs/ for quick probes
 scripts/repokit-common/      # shared tooling (git subtree)

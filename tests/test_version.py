@@ -21,7 +21,7 @@ get_version, get_base_version = _version.get_version, _version.get_base_version
 get_display_version, get_pip_version = _version.get_display_version, _version.get_pip_version
 __app_name__ = _version.__app_name__
 
-MANIFEST = ROOT / ".claude-plugin" / "plugin.json"
+MANIFEST = ROOT / "plugin" / ".claude-plugin" / "plugin.json"
 
 
 def test_plugin_manifest_version_matches_version_py():
@@ -38,7 +38,7 @@ def test_plugin_manifest_name_is_not_reserved():
     """Third-party plugin names may not start with "claude-" (and others);
     `claude plugin validate` refuses them."""
     name = json.loads(MANIFEST.read_text(encoding="utf-8"))["name"]
-    assert name == "convo-bookmarks"
+    assert name == "bookmarks"
     assert not name.startswith(("claude-", "anthropic-", "anthropics-", "cc-plugin-"))
 
 

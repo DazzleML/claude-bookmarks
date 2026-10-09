@@ -2,7 +2,7 @@
 
 The plugin has few keys, but what a key does depends on where the keyboard is: the input box, the band, or a pane. This page lists every binding in one place, grouped that way. [Usage](usage.md) explains each feature; this is the reference.
 
-The examples write the leader as `Ctrl+]`, the recommended binding of Claude Code's own `abovePrompt:focus` action (default `Ctrl+X Tab`; see [The leader key](usage.md#the-leader-key)).
+The leader is `Ctrl+]`, Claude Code's own `abovePrompt:focus` action bound to one key (see [The leader key](usage.md#the-leader-key) for the one-line binding; until it is in place, Claude Code's built-in `Ctrl+X Tab` does the same).
 
 ## 1. From the input box
 

@@ -19,7 +19,7 @@ For the known limits and what to do when something doesn't work, see [Troublesho
 
 Every key of the plugin starts with one **leader** key, followed by one or two more keys. Vim users will know the idea; the [tutorial](tutorial.md) explains it from scratch.
 
-The leader is Claude Code's own "focus the band" action, `abovePrompt:focus`. It moves the keyboard from the input box to the plugin's band above it. Its default key is `Ctrl+X Tab`, and it works without any setup. We recommend binding it to a single key, `Ctrl+]`, in `~/.claude/keybindings.json`:
+The leader is `Ctrl+]`: Claude Code's own "focus the band" action, `abovePrompt:focus`, bound to a single key that every terminal passes on. It moves the keyboard from the input box to the plugin's band above it. A plugin cannot add a keybinding for you, so bind it once in `~/.claude/keybindings.json` (until then, Claude Code's built-in two-key chord for the same action, `Ctrl+X Tab`, does the same job):
 
 ```json
 {
@@ -112,6 +112,8 @@ Claude Code remembers the last text you selected even after its highlight is gon
 2. Press the mark's letter. The conversation scrolls so the marked message is at the top of the screen, and the marked line lights up again.
 
 `Enter` instead of a letter goes to the reading position.
+
+![The jump pane listing the reading position and marks a, b and c with the first words of each marked line; the band shows the same as buttons](images/jump-pane-marks-and-reading-position.png)
 
 If the mark points at a message Claude Code no longer has on screen (usually one from before the last compaction, after the session was restarted or resumed), the jump can't happen. The plugin says so, copies a phrase of the message to your clipboard, and tells you how to find it; see [Troubleshooting](troubleshooting.md#a-jump-says-it-cant-go-there).
 

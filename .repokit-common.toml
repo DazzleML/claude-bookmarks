@@ -24,4 +24,4 @@ private-patterns = ["private/", "local/", ".env"]
 # --bump, --set and --phase writes it too (git-repokit-common v0.3.2+), and
 # tests/test_version.py checks the two still match.
 [[tool.repokit-common.extra-targets]]
-path = ".claude-plugin/plugin.json"
+path = "plugin/.claude-plugin/plugin.json"

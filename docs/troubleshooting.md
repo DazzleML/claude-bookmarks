@@ -18,7 +18,7 @@ The band (`bm: ' j m p ␣   m: mark  j: jump  p: prompts  r: read`) above the p
 
 1. **Check the renderer.** Run `/tui fullscreen`. The classic renderer is not supported.
 2. **Check the version.** Run `claude --version`; plugins of this kind need Claude Code 2.1.287 or later.
-3. **Check how it is loaded.** With `--plugin-dir`, it loads for that session only. For every session, set `CLAUDE_CODE_PLUGIN_DIRS` in the `env` block of `~/.claude/settings.json`, then start Claude Code again.
+3. **Check how it is loaded.** With `--plugin-dir`, it loads for that session only. For every session, set `CLAUDE_CODE_PLUGIN_DIRS` in the `env` block of `~/.claude/settings.json`, then start Claude Code again. Either way the path is the repository's `plugin/` folder (the one holding `.claude-plugin/plugin.json`), not the repository root.
 4. **Check whether the session is daemon-hosted.** A session that was moved to Claude Code's background daemon, for example after `/fork`, did not load `CLAUDE_CODE_PLUGIN_DIRS` in our testing, even after `claude --resume`. To bring it back as an ordinary session, run `claude stop <short id>` in another terminal (the short id, not the full one), then `claude --resume <session id>` from a shell.
 5. **Run `/bm-env`.** If Claude Code says it is an unknown command, the plugin isn't loaded.
 

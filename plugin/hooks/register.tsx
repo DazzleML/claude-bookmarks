@@ -55,21 +55,21 @@ const READING = '`'
 
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz'.split('')
 
-const rows = atom({ plugin: 'convo-bookmarks', key: 'rows' } as const, [])
-const paneMode = atom({ plugin: 'convo-bookmarks', key: 'paneMode' } as const, 'list')
-const shown = atom({ plugin: 'convo-bookmarks', key: 'shown' } as const, null)
-const bandMode = atom({ plugin: 'convo-bookmarks', key: 'bandMode' } as const, 'idle')
-const pinsRev = atom({ plugin: 'convo-bookmarks', key: 'pinsRev' } as const, 0)
+const rows = atom({ plugin: 'bookmarks', key: 'rows' } as const, [])
+const paneMode = atom({ plugin: 'bookmarks', key: 'paneMode' } as const, 'list')
+const shown = atom({ plugin: 'bookmarks', key: 'shown' } as const, null)
+const bandMode = atom({ plugin: 'bookmarks', key: 'bandMode' } as const, 'idle')
+const pinsRev = atom({ plugin: 'bookmarks', key: 'pinsRev' } as const, 0)
 // The band's command line (design 2026-10-07__02-58-22): bumped after each command so
 // the field is drawn under a new key and starts empty; and the prompt number's digits.
-const cmdRev = atom({ plugin: 'convo-bookmarks', key: 'cmdRev' } as const, 0)
-const bandNum = atom({ plugin: 'convo-bookmarks', key: 'bandNum' } as const, '')
+const cmdRev = atom({ plugin: 'bookmarks', key: 'cmdRev' } as const, 0)
+const bandNum = atom({ plugin: 'bookmarks', key: 'bandNum' } as const, '')
 // The bookmarks pane shows one group at a time, cycled from the band (djdarcy, 2026-10-09:
 // start on "their" bookmarks, a key cycles to Claude's, and a third group such as team
 // members' can join later). An ordered list, so a group is one entry, not a code path.
 // The keys are vim's sideways pair; `o`/`i` already mean back/forward at the band's top
 // level. Both become settings (#7).
-const bandGroup = atom({ plugin: 'convo-bookmarks', key: 'bandGroup' } as const, 0)
+const bandGroup = atom({ plugin: 'bookmarks', key: 'bandGroup' } as const, 0)
 const BOOKMARK_GROUPS: { owner: AnchorOwner | 'all'; title: string }[] = [
   { owner: 'user', title: 'yours' },
   { owner: 'claude', title: "Claude's" },
@@ -367,25 +367,13 @@ function promptTextOf(o: any): string | undefined {
   return texts.length > 0 ? texts.join(' ') : undefined
 }
 
-// PowerShell's -EncodedCommand takes UTF-16LE in base64; written out here rather
-// than assuming btoa exists in the mod's environment. Passing the script this way
-// also keeps its double quotes intact: as a plain argv entry, quotes reaching a
-// Windows program can be stripped (the POC's probe C').
-function base64Utf16le(text: string): string {
-  const bytes: number[] = []
-  for (let i = 0; i < text.length; i++) {
-    const c = text.charCodeAt(i)
-    bytes.push(c & 0xff, c >> 8)
-  }
-  const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-  let out = ''
-  for (let i = 0; i < bytes.length; i += 3) {
-    const [a, b, c] = [bytes[i]!, bytes[i + 1], bytes[i + 2]]
-    out += abc[a >> 2]! + abc[((a & 3) << 4) | ((b ?? 0) >> 4)]!
-    out += b === undefined ? '=' : abc[((b & 15) << 2) | ((c ?? 0) >> 6)]!
-    out += c === undefined ? '=' : abc[c & 63]!
-  }
-  return out
+// The PowerShell fallbacks are scripts shipped with the plugin (hooks/scripts/*.ps1),
+// run with -File and named parameters. Until v0.3.0 they were inline scripts passed as
+// base64 UTF-16LE through -EncodedCommand, to keep their double quotes intact; a
+// measurement on 2026-10-09 showed -File parameters keep `"type":"user"` verbatim from
+// a non-shell spawn, and base64-encoded PowerShell is what a security scan flags.
+function psScript($: EngineInterface, name: string): string[] {
+  return ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', `${$.plugin.root}/hooks/scripts/${name}.ps1`]
 }
 
 // The session's transcript: <config dir>/projects/<project>/<session id>.jsonl. The
@@ -408,14 +396,7 @@ async function transcriptPath($: EngineInterface): Promise<string | undefined> {
 // The user rows of the transcript, one JSON line each, from the platform's own tool.
 async function userRows($: EngineInterface, path: string) {
   const windows = /^[A-Za-z]:[\\/]/.test(path)
-  const powershell = () => {
-    const literal = path.replace(/'/g, "''")
-    const script =
-      '[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); ' +
-      `Select-String -LiteralPath '${literal}' -SimpleMatch -Pattern '${USER_ROW}' -Encoding UTF8 | ` +
-      `Where-Object { -not $_.Line.Contains('${TOOL_RESULT_ROW}') } | ForEach-Object { $_.Line }`
-    return ['powershell', '-NoProfile', '-NonInteractive', '-EncodedCommand', base64Utf16le(script)]
-  }
+  const powershell = () => [...psScript($, 'user-rows'), '-Path', path, '-UserRow', USER_ROW, '-ToolResultRow', TOOL_RESULT_ROW]
   const sh = () => ['sh', '-c', `grep -F '${USER_ROW}' "$1" | grep -vF '${TOOL_RESULT_ROW}'`, 'sh', path]
   for (const [via, argv] of windows ? [['powershell', powershell()], ['sh', sh()]] as const : [['sh', sh()]] as const) {
     try {
@@ -436,16 +417,7 @@ async function userRows($: EngineInterface, path: string) {
 // line fails to parse and is skipped.
 async function grepTranscript($: EngineInterface, path: string, pattern: string) {
   const sh = () => ['sh', '-c', 'grep -bnF -- "$1" "$2"', 'sh', pattern, path]
-  const powershell = () => {
-    const q = (s: string) => s.replace(/'/g, "''")
-    const script =
-      '[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); ' +
-      `$p = '${q(pattern)}'; $i = 0; $off = 0; ` +
-      `foreach ($line in [IO.File]::ReadLines('${q(path)}', [Text.Encoding]::UTF8)) { $i++; ` +
-      `if ($line.Contains($p)) { "$i" + ':' + "$off" + ':' + $line }; ` +
-      `$off += [Text.Encoding]::UTF8.GetByteCount($line) + 1 }`
-    return ['powershell', '-NoProfile', '-NonInteractive', '-EncodedCommand', base64Utf16le(script)]
-  }
+  const powershell = () => [...psScript($, 'grep-offsets'), '-Path', path, '-Pattern', pattern]
   for (const [via, argv] of [['sh', sh()], ['powershell', powershell()]] as const) {
     try {
       const started = Date.now()
@@ -2210,7 +2182,9 @@ export const register: Register = on => {
 
   // Probe M3, second half: answer the model's call to the stub tool. The engine strips
   // nothing from `e` for a plugin's own tool, so the arguments sit beside the envelope.
-  on('tool.call', { tool: 'mcp__convo-bookmarks__bookmark' }, async ($, e) => {
+  // Matched by pattern, not by the literal name: the engine generates the tool-name type
+  // from the manifest on a session start, so a rename leaves the literal red until then.
+  on('tool.call', { tool: /^mcp__bookmarks__bookmark$/ }, async ($, e) => {
     const { tool, tool_use_id, agentId, requestMeta, ...input } = e as unknown as Record<string, unknown>
     void agentId
     void requestMeta
@@ -2337,14 +2311,14 @@ export const register: Register = on => {
     if (a === 'on' || a === 'off' || a === 'reset') {
       await setSessionEcho($, a === 'reset' ? undefined : a === 'on')
       const line = await echoStateLine($)
-      $.ui.toast(`convo-bookmarks: log echo ${line}`)
+      $.ui.toast(`bookmarks: log echo ${line}`)
       log($, `[bm] log echo ${line} (the file log is always written)`, { always: true })
       return {}
     }
     if ((a === 'default' || a === 'force') && (b === 'on' || b === 'off')) {
       await setEchoPolicy($, { default: b === 'on', forced: a === 'force' })
       const line = await echoStateLine($)
-      $.ui.toast(`convo-bookmarks: log echo ${line}`)
+      $.ui.toast(`bookmarks: log echo ${line}`)
       log($, `[bm] log echo ${line}`, { always: true })
       return {}
     }

@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-09
+
+### Changed
+
+- **The plugin is named `bookmarks`** (published by DazzleML; the repository stays `claude-bookmarks`, since plugin names may not start with `claude-`). Claude's tool is therefore `mcp__bookmarks__bookmark`, and the dim log rows read `bookmarks:`. Claude Code keeps a plugin's marks, pins, reading positions and jumplists in a store file named after the plugin, so on a machine that ran 0.2.x those move to the new file once; the bookmark files under `~/claude/bookmarks/` are unaffected. (The manifest's author is now DazzleML, the publisher the directory shows.)
+- **The plugin lives in the repository's `plugin/` folder.** An install carries the plugin (the manifest, the mod, its pure core, the PowerShell fallbacks, a README and the licence), not the repository's tests, docs and tooling. Point `--plugin-dir` or `CLAUDE_CODE_PLUGIN_DIRS` at `<repo>/plugin`.
+- **This repository is also a marketplace** (`.claude-plugin/marketplace.json`, named `dazzle-claude-plugins`): `/plugin install bookmarks --marketplace DazzleML/claude-bookmarks` installs it in one step on Claude Code 2.1.275 or later.
+- README: a screenshot of the plugin in use at the top (the prompts pane, a marked line, a bookmark link, the band); usage shows the jump pane.
+- The two PowerShell fallbacks for reading the transcript on Windows are scripts shipped with the plugin (`hooks/scripts/`), run with `-File`, in place of base64-encoded inline commands. Their output is unchanged: the row list and the byte offsets agree with `grep` line for line on a 4 MB transcript, and the user-row match is now case-sensitive, as `grep -F` is.
+
 ## [0.2.2] - 2026-10-09
 
 ### Added
@@ -203,7 +213,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.7...v0.2.0

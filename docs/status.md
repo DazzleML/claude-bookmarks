@@ -11,7 +11,7 @@ Used daily by the author on Windows 11, Windows Terminal, Claude Code 2.1.288 to
 - **Bookmarks**: durable, addressable places kept as readable files in your own folder; Claude's `bookmark` tool and the clickable `⚓` links in its replies (click to jump with the words highlighted, ctrl-click to open the file); your list and Claude's, promotion of a mark, the bookmarks pane with its groups.
 - **Back and forward** through every jump.
 - **The band leader** that works over a draft and while Claude is working.
-- The pure core (`hooks/core/`: the anchor URL, the transcript reader, the register file) has an automated test suite; the mod itself is verified by hand with the checklists under `tests/checklists/`.
+- The pure core (`plugin/hooks/core/`: the anchor URL, the transcript reader, the register file) has an automated test suite; the mod itself is verified by hand with the checklists under `tests/checklists/`.
 
 The complete key list is [keys.md](keys.md).
 
@@ -41,7 +41,7 @@ These are decided directions, not promises of dates. Each is an issue you can wa
 - **Settings in `/config`** ([#7](https://github.com/DazzleML/claude-bookmarks/issues/7)): palette, timings, the command prefix, the debug echo default.
 - **Opening a mark's files and links with handlers** ([#12](https://github.com/DazzleML/claude-bookmarks/issues/12)), the fourth pillar of the [roadmap](../ROADMAP.md).
 - **A repository layout with the plugin in its own folder**, so an install carries the plugin and not the repository's tooling and tests.
-- **The mod split into modules.** `hooks/register.tsx` is one file today; it will be split along the seams that already exist in it, together with the record change above.
+- **The mod split into modules.** `plugin/hooks/register.tsx` is one file today; it will be split along the seams that already exist in it, together with the record change above.
 
 ## Reporting
 

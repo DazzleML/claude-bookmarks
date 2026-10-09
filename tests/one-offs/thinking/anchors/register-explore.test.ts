@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { emptyRegister, addOrRelabel, prune, serializeRegister, parseRegister, exportNotesOf, exportMarkdown, EXPORT_NOTES_MARKER, listOf, type Mint } from '../../../../hooks/core/register-file.ts'
-import type { AnchorRecord } from '../../../../hooks/core/anchor.ts'
+import { emptyRegister, addOrRelabel, prune, serializeRegister, parseRegister, exportNotesOf, exportMarkdown, EXPORT_NOTES_MARKER, listOf, type Mint } from '../../../../plugin/hooks/core/register-file.ts'
+import type { AnchorRecord } from '../../../../plugin/hooks/core/anchor.ts'
 
 const SID = '8f0f9b27-33fc-4054-806a-22a6d569dfb5'
 const mint = (uuid: string, o: Partial<Mint> = {}): Mint => ({ uuid, owner: 'claude', label: 'L', head: 'h', by: 'claude', source: 'tool', ...o })
