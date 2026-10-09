@@ -143,6 +143,7 @@ Ctrl+] P  a                                               (mark a becomes a book
 | `/bm-delmarks a b`, `/bm-delmarks all` | Delete marks |
 | `/bm-pin [N]` | Pin or unpin prompt #N in the prompts pane (`*N` in its `#` field does the same) |
 | `/bm-env` | Plugin version, session id, and what it has captured |
+| `/bm-debug on\|off` | Echo the plugin's log into this conversation as dim rows (this conversation only; `default on\|off` and `force on\|off` reach every conversation) |
 | `/bm-marks` | The marks set in this conversation |
 | `/bm-timeline` | The last few plugin events (draws, panes, jumps) |
 

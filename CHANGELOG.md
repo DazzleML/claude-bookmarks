@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-09
+
+### Fixed
+
+- `/bm-debug` is per conversation. In 0.2.0 the echo switch was one setting for the whole machine, so `/bm-debug off` in one session silenced every other. Now `/bm-debug on|off` affects only the conversation it is typed in: the choice lives in that session's own environment, survives the plugin reloading, reaches processes the session starts, and ends with the session (a resumed conversation starts from the default). `CONVO_BOOKMARKS_DEBUG=1 claude` gives the same signal from the shell. `/bm-debug reset` drops the choice.
+- `/bm-env` printed nothing while the echo was off; a command's answer is now always drawn.
+
+### Added
+
+- `/bm-debug default on|off` sets the default every conversation without a choice of its own follows; `/bm-debug force on|off` makes every conversation echo, or stay silent, with no exceptions, and reaches open sessions on their next log line. `/bm-debug status` and `/bm-env` say which is in effect. A fresh install is off and overridable; the only thing written to disk is that one default-and-force setting.
+- Troubleshooting: why a pane does not open in a narrow terminal (under about 110 columns), and the remedy.
+
 ## [0.2.0] - 2026-10-09
 
 ### Added
@@ -179,7 +191,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.7...v0.2.0
 [0.1.7]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/DazzleML/claude-bookmarks/compare/v0.1.5...v0.1.6

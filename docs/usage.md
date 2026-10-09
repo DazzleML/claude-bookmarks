@@ -317,5 +317,20 @@ The plugin adds a few commands from its proof-of-concept stage. They are useful 
 | `/bm-marks` | The marks set in this conversation |
 | `/bm-timeline` | The last few plugin events: draws, panes, jumps, toasts |
 | `/bm-diag-keys` | Turns on (or off) logging of each key typed in the input box, to the plugin's debug log: lengths and key names, never the text |
+| `/bm-debug ...` | Whether the plugin's log lines are also drawn in the conversation as dim rows (see below) |
 
 These commands are left over from the proof of concept and will be renamed in the rebuild.
+
+### The log echo
+
+The plugin always writes its log to a file, one per conversation (see [the debug log](troubleshooting.md#the-debug-log)). It can also echo each line into the conversation as a dim row while you watch it work. The echo is off unless asked for, and it is asked for per conversation:
+
+| Command | Effect |
+|---------|--------|
+| `/bm-debug on`, `/bm-debug off` | This conversation only. The choice is kept in this session's own environment, so it survives the plugin reloading, reaches any process this session starts, and ends when the session does: a resumed conversation starts from the default again. |
+| `/bm-debug reset` | This conversation follows the default again. |
+| `/bm-debug default on`, `/bm-debug default off` | The default for every conversation that has made no choice of its own. |
+| `/bm-debug force on`, `/bm-debug force off` | Every conversation, no exceptions, until lifted with `/bm-debug default on` or `off`. Use it to watch every open session at once, or to guarantee silence everywhere. A session's own `on` is remembered and applies once the force is lifted. |
+| `/bm-debug status` | Which of these is in effect, and the log file's path. |
+
+The same per-conversation signal can be given from the shell: `CONVO_BOOKMARKS_DEBUG=1 claude` starts a session with the echo on (`0`, `off` or `false` for an explicit off). The default and the force are the only settings written to disk; a conversation's choice never is.

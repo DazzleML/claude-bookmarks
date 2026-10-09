@@ -48,6 +48,10 @@ Arrow keys never reach the band, so `Ctrl+] ←` can't work. Use `Ctrl+] o` (bac
 
 The pane on the right narrows the conversation, so its text rewraps and what's on screen shifts. After a mark, the plugin scrolls back to the message that was at the top before the pane opened. Jumps move the view anyway.
 
+## A pane doesn't open in a narrow terminal
+
+Claude Code refuses to draw a pane when the terminal is too narrow for one beside the conversation (under roughly 110 columns on 2.1.295: a shrunk window, or a remote desktop at a large font). The plugin says so in a toast with Claude Code's reason. Widen the window or reduce the terminal font a step; the pane then opens as usual. The band and the typed commands keep working without a pane.
+
 ## A jump says it can't go there
 
 ```
@@ -90,3 +94,5 @@ ${CLAUDE_USER_DIR:-~/claude}/bookmarks/debug/<session id>.log
 ```
 
 `/bm-env` shows the session id. When something behaves oddly, the last lines of this file show what the plugin saw and did, and they are the most useful thing to attach to an [issue](https://github.com/DazzleML/claude-bookmarks/issues).
+
+To watch the same lines appear in the conversation as you reproduce a problem, type `/bm-debug on`; it affects this conversation only, and `/bm-debug off` ends it. The other forms (`default`, `force`) are in [usage](usage.md#the-log-echo).

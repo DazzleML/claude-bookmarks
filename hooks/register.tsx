@@ -221,21 +221,54 @@ let logPath: string | null | undefined // undefined: not looked up yet; null: no
 let flushing: Promise<void> = Promise.resolve()
 
 // Whether log lines are also echoed into the transcript as dim rows. Off by default: the
-// file log is always written, the echo is for debugging one session and was spamming
-// every session the plugin loads in (djdarcy, 2026-10-09). `/bm-debug on|off` keeps the
-// choice across sessions; CONVO_BOOKMARKS_DEBUG=1 in the environment turns it on too.
-let uiEcho: boolean | undefined
-async function uiEchoEnabled($: EngineInterface): Promise<boolean> {
-  if (uiEcho === undefined) {
-    const env = await $.env.get('CONVO_BOOKMARKS_DEBUG')
-    if (env !== undefined && env !== '') uiEcho = env !== '0' && env.toLowerCase() !== 'off' && env.toLowerCase() !== 'false'
-    else uiEcho = (await $.store.get('debug:uiEcho')) === true
-  }
-  return uiEcho
+// file log is always written; the echo is for the person debugging one conversation, and
+// a single global switch was spamming every session the plugin loads in (djdarcy,
+// 2026-10-09). Two things are kept, one volatile and one persisted (the 14-17-44 DWP):
+// - this conversation's choice lives in its own process environment, CONVO_BOOKMARKS_DEBUG.
+//   `/bm-debug on|off` sets it with $.env.set, so it survives a hot reload, reaches the
+//   processes this session starts, and dies with the session: a resumed session forgets.
+//   `CONVO_BOOKMARKS_DEBUG=1 claude` is the same signal given from the shell.
+// - the machine-wide policy, one store key: the default every conversation without a
+//   choice follows, and whether a conversation may choose at all (`forced`), so "on
+//   everywhere" and "off everywhere" can be guaranteed from any one session (djdarcy's
+//   six states: forced on, forced off, and a session's on/off/unset over an overridable
+//   default). Nothing is cached: a force typed in one session must reach the others on
+//   their very next log line.
+const ECHO_POLICY_KEY = 'debug:echo'
+type EchoPolicy = { default: boolean; forced: boolean }
+async function echoPolicy($: EngineInterface): Promise<EchoPolicy> {
+  const v = (await $.store.get(ECHO_POLICY_KEY)) as Partial<EchoPolicy> | undefined
+  return { default: v?.default === true, forced: v?.forced === true }
 }
-async function setUiEcho($: EngineInterface, on: boolean) {
-  uiEcho = on
-  await $.store.set('debug:uiEcho', on)
+async function setEchoPolicy($: EngineInterface, policy: EchoPolicy) {
+  await $.store.set(ECHO_POLICY_KEY, policy)
+}
+/** This conversation's own choice, from its environment; undefined when it made none. */
+async function sessionEchoChoice($: EngineInterface): Promise<boolean | undefined> {
+  const env = await $.env.get('CONVO_BOOKMARKS_DEBUG')
+  if (env === undefined || env === '') return undefined
+  return env !== '0' && env.toLowerCase() !== 'off' && env.toLowerCase() !== 'false'
+}
+/** Sets this conversation's choice; `undefined` drops it, so the default applies again. */
+async function setSessionEcho($: EngineInterface, on: boolean | undefined) {
+  await $.env.set('CONVO_BOOKMARKS_DEBUG', on === undefined ? undefined : on ? '1' : '0')
+}
+async function uiEchoEnabled($: EngineInterface): Promise<boolean> {
+  const policy = await echoPolicy($)
+  if (policy.forced) return policy.default
+  return (await sessionEchoChoice($)) ?? policy.default
+}
+/** The state in one line, for `/bm-debug status` and `/bm-env`. */
+async function echoStateLine($: EngineInterface): Promise<string> {
+  const policy = await echoPolicy($)
+  const mine = await sessionEchoChoice($)
+  const word = (b: boolean) => (b ? 'on' : 'off')
+  if (policy.forced) {
+    const asked = mine !== undefined && mine !== policy.default ? `; this conversation asked for ${word(mine)}, which applies once the force is lifted` : ''
+    return `${word(policy.default)} everywhere, forced (/bm-debug default ${word(policy.default)} lifts it${asked})`
+  }
+  if (mine !== undefined) return `${word(mine)} here only (this conversation's choice; the default is ${word(policy.default)})`
+  return `${word(policy.default)}, the default (every conversation without a choice of its own)`
 }
 
 function log($: EngineInterface, line: string, opts?: { always?: boolean }) {
@@ -2299,16 +2332,23 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'bm-debug' }, async ($, e) => {
-    const arg = (e.args ?? '').trim().toLowerCase()
-    if (arg === 'on' || arg === 'off') {
-      await setUiEcho($, arg === 'on')
-      $.ui.toast(`convo-bookmarks: log echo ${arg} (the file log is always written)`)
-      log($, `[bm] log echo turned ${arg}`, { always: true })
+    const [a, b] = (e.args ?? '').trim().toLowerCase().split(/\s+/)
+    const usage = '/bm-debug on|off|reset (this conversation) | default on|off (every conversation without a choice) | force on|off (every conversation, no choice) | status'
+    if (a === 'on' || a === 'off' || a === 'reset') {
+      await setSessionEcho($, a === 'reset' ? undefined : a === 'on')
+      const line = await echoStateLine($)
+      $.ui.toast(`convo-bookmarks: log echo ${line}`)
+      log($, `[bm] log echo ${line} (the file log is always written)`, { always: true })
       return {}
     }
-    const echo = await uiEchoEnabled($)
-    const env = await $.env.get('CONVO_BOOKMARKS_DEBUG')
-    log($, `[bm] log echo is ${echo ? 'on' : 'off'}${env ? ` (CONVO_BOOKMARKS_DEBUG=${env})` : ''}; file log: ${logPath ?? '(not yet written)'}; /bm-debug on|off`, { always: true })
+    if ((a === 'default' || a === 'force') && (b === 'on' || b === 'off')) {
+      await setEchoPolicy($, { default: b === 'on', forced: a === 'force' })
+      const line = await echoStateLine($)
+      $.ui.toast(`convo-bookmarks: log echo ${line}`)
+      log($, `[bm] log echo ${line}`, { always: true })
+      return {}
+    }
+    log($, `[bm] log echo ${await echoStateLine($)}; file log: ${logPath ?? '(not yet written)'}; ${usage}`, { always: true })
     return {}
   })
 
@@ -2322,15 +2362,19 @@ export const register: Register = on => {
     const dccH = await $.env.get('DCC_PATCH_H')
     const dccPatches = await $.env.get('DCC_PATCHES')
     const dccVersion = await $.env.get('DCC_PATCHER')
+    // A command's answer is always drawn, whatever the echo setting.
     log($,
       `[bm-poc] ${$.plugin.name} ${await pluginVersion($)} on Claude Code ${v.version} ` +
         `(chords verified on ${VERIFIED_CLIENTS.join(', ')}); session ${await $.session.id()}; ` +
         `captured ${promptCount} prompts, ${list.length - promptCount} replies; ${rendered.size} drawn ids; ` +
         describePathOrder(),
+      { always: true },
     )
     log($,
       `[bm-poc] dcc-patcher: ${dccVersion ? `v${dccVersion}` : 'none seen'}; ` +
-        `DCC_PATCH_H=${dccH ?? '(unset)'}; DCC_PATCHES=${dccPatches ?? '(unset)'}`,
+        `DCC_PATCH_H=${dccH ?? '(unset)'}; DCC_PATCHES=${dccPatches ?? '(unset)'}; ` +
+        `log echo ${await echoStateLine($)}`,
+      { always: true },
     )
     return {}
   })
