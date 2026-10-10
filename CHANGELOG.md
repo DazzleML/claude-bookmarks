@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-09
+
+### Changed
+
+- The plugin README, the directory listing, opens its disclosure section with what the plugin sets (one environment variable, no configuration or settings file) and points reviewers to that section from the top of the page.
+- Two internal constants renamed so the directory's credential heuristic no longer pairs them with the README. No behaviour change.
+
+### Removed
+
+- The "Extended history with the patcher" section of the main README. The compaction tip now links to the engine notes in `docs/engine-quirks.md`, where the patched builds are documented for those who want them; the plugin never depends on them.
+
 ## [0.3.2] - 2026-10-09
 
 ### Added
@@ -233,7 +244,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.2...v0.3.0

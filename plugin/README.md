@@ -10,7 +10,9 @@ Vim-style marks, a reading position, a numbered prompt history and durable bookm
   <sub>In use: the prompts pane on the right, a marked line with its tag, a bookmark link Claude wrote in a reply, and the band above the input box.</sub>
 </p>
 
-**Pre-alpha.** In daily use by its author on Windows (Windows Terminal, Claude Code 2.1.288 to 2.1.296, fullscreen renderer). macOS and Linux are expected to work and have not been tried. The key layout will still change. The honest state of the plugin, with every known issue and what is coming, is in [docs/status.md](https://github.com/DazzleML/claude-bookmarks/blob/main/docs/status.md).
+**Pre-alpha.** In daily use in Win11 (Windows Terminal, Claude Code 2.1.288 to 2.1.296, fullscreen renderer). macOS and Linux are expected to work but have not been tried. The key layout will still change. The state of the plugin, with every known issue and what is coming, is in [docs/status.md](https://github.com/DazzleML/claude-bookmarks/blob/main/docs/status.md).
+
+*Reviewers: everything the plugin sets, runs, reads, writes and sends is listed under [What it runs, reads, writes and sends](#what-it-runs-reads-writes-and-sends) below.*
 
 ## What it does
 
@@ -41,11 +43,13 @@ Then bind the leader (one line in `~/.claude/keybindings.json`), switch to the f
 
 The plugin is a Claude Code mod: TypeScript that runs inside Claude Code's own process through its plugin API. It installs nothing and needs no package manager.
 
+**Sets.** One environment variable, `CONVO_BOOKMARKS_DEBUG`, in the plugin's own process when you type `/bm-debug on` or `off`: it turns the debug echo on or off for that conversation and dies with the process. No configuration file, settings file, start-up file or instructions file is written or edited.
+
 **Runs.** To list the prompts of a conversation and to resolve a bookmark to its transcript line, it reads the conversation's transcript file with the shell your system already has: `sh` with `grep` where they exist (macOS, Linux, Git Bash on Windows); on Windows without them, two PowerShell scripts shipped in this folder, `hooks/scripts/user-rows.ps1` and `hooks/scripts/grep-offsets.ps1`, run as `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <script>` with the file path and the search text as named parameters. Nothing else is executed.
 
 **Reads.** The conversation's transcript, which Claude Code keeps on disk under its config folder (`~/.claude/projects/<project>/<session id>.jsonl`, or `CLAUDE_CONFIG_DIR`): it is read, never written. The environment variables `CLAUDE_CONFIG_DIR`, `CLAUDE_USER_DIR`, `HOME` or `USERPROFILE` (to find those folders), `CONVO_BOOKMARKS_DEBUG` (the debug echo), and `DCC_PATCH_H`, `DCC_PATCHES`, `DCC_PATCHER` (shown by `/bm-env` when the companion patched build of Claude Code is in use; absent otherwise). Your mouse selection, through the plugin API, to know which line to mark.
 
-**Writes.** Marks, pinned prompts, reading positions, prompt lists and the jumplist, per conversation, in Claude Code's own plugin store (`~/.claude/plugins/store/bookmarks_inline-<id>.json`). Bookmarks in your own folder, `~/claude/bookmarks/` (or `CLAUDE_USER_DIR`): one JSON register per conversation under `sessions/` and one markdown file per bookmarked message, which you can read and edit. A debug log per conversation, `~/claude/bookmarks/debug/<session id>.log`, kept to its last 400 lines, holding key names, pane and jump events and never the text you type. The clipboard, when you promote a mark (the bookmark's link) or when a jump is refused (a phrase of the message to search for). `CONVO_BOOKMARKS_DEBUG` in the plugin's own process environment when you type `/bm-debug on`. Nothing is written into the session file, and nothing under `~/.claude` other than the plugin store.
+**Writes.** Marks, pinned prompts, reading positions, prompt lists and the jumplist, per conversation, in Claude Code's own plugin store (`~/.claude/plugins/store/bookmarks_inline-<id>.json`). Bookmarks in your own folder, `~/claude/bookmarks/` (or `CLAUDE_USER_DIR`): one JSON register per conversation under `sessions/` and one markdown file per bookmarked message, which you can read and edit. A debug log per conversation, `~/claude/bookmarks/debug/<session id>.log`, kept to its last 400 lines, holding key names, pane and jump events and never the text you type. The clipboard, when you promote a mark (the bookmark's link) or when a jump is refused (a phrase of the message to search for). Every path is computed from your home folder and the conversation's id; none is a file another tool runs or obeys. Nothing is written into the session file, and nothing under `~/.claude` other than the plugin store.
 
 **Sends.** Nothing. The plugin makes no network connections and contacts no service. The one thing the model sees is its own `bookmark` tool and the links it returns.
 

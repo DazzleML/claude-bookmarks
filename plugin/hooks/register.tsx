@@ -234,14 +234,14 @@ let flushing: Promise<void> = Promise.resolve()
 //   six states: forced on, forced off, and a session's on/off/unset over an overridable
 //   default). Nothing is cached: a force typed in one session must reach the others on
 //   their very next log line.
-const ECHO_POLICY_KEY = 'debug:echo'
+const ECHO_POLICY_ENTRY = 'debug:echo'
 type EchoPolicy = { default: boolean; forced: boolean }
 async function echoPolicy($: EngineInterface): Promise<EchoPolicy> {
-  const v = (await $.store.get(ECHO_POLICY_KEY)) as Partial<EchoPolicy> | undefined
+  const v = (await $.store.get(ECHO_POLICY_ENTRY)) as Partial<EchoPolicy> | undefined
   return { default: v?.default === true, forced: v?.forced === true }
 }
 async function setEchoPolicy($: EngineInterface, policy: EchoPolicy) {
-  await $.store.set(ECHO_POLICY_KEY, policy)
+  await $.store.set(ECHO_POLICY_ENTRY, policy)
 }
 /** This conversation's own choice, from its environment; undefined when it made none. */
 async function sessionEchoChoice($: EngineInterface): Promise<boolean | undefined> {
@@ -533,7 +533,7 @@ function searchPhrase(text: string | undefined): string | undefined {
 // the target row like a letter's selection, under a key no letter can take. Display
 // only; never written to the store (djdarcy, 2026-10-09: "highlighted yellow like how we
 // handle a mark when we do <leader>'<mark-key>").
-const ANCHOR_KEY = '@'
+const ANCHOR_MARK = '@'
 
 // --- The register: <dataRoot>/bookmarks/sessions/<sessionId>.json, and one export per
 // bookmark beside it. The file is the source of truth (#6); this cache is a copy of what
@@ -1502,8 +1502,8 @@ async function bookmarkList($: EngineInterface) {
 // Highlight `words` on a message, as a letter's jump does, through a transient entry in
 // the mark cache (reloaded from the store on the next mark write).
 async function highlightWords($: EngineInterface, uuid: string, words: string) {
-  markCache = { ...markCache, [ANCHOR_KEY]: { uuid, head: words, markedAt: await $.clock.now(), source: 'selection', snippet: words } }
-  await showMark($, ANCHOR_KEY, words)
+  markCache = { ...markCache, [ANCHOR_MARK]: { uuid, head: words, markedAt: await $.clock.now(), source: 'selection', snippet: words } }
+  await showMark($, ANCHOR_MARK, words)
 }
 
 // Jump to a bookmark and highlight its words. Returns the scroll's refusal, if any.

@@ -172,16 +172,10 @@ The known limits, briefly; **[docs/troubleshooting.md](docs/troubleshooting.md)*
 
 - **Press `Esc` to go back to typing.** After a command the keyboard stays on the band; a plugin can't hand it back to the input box itself.
 - **The keys do nothing while a dialog is up** (a permission prompt, or a question Claude is asking); answer the dialog first.
-- **Messages from before the last compaction usually can't be jumped to after a restart or resume**, because Claude Code then loads the conversation only from that compaction onward. The plugin copies a phrase of the message to your clipboard and tells you where to look: press `Ctrl+O`, then `[` (writes what Claude Code holds to your terminal's scrollback), then your terminal's Find (`Ctrl+Shift+F` or `Cmd+F`), and paste. Older messages may only be in the session file; opening it in full is planned ([#16](https://github.com/DazzleML/claude-bookmarks/issues/16)). The companion patcher below removes this limit (see [Extended history with the patcher](#extended-history-with-the-patcher)).
+- **Messages from before the last compaction usually can't be jumped to after a restart or resume**, because Claude Code then loads the conversation only from that compaction onward. The plugin copies a phrase of the message to your clipboard and tells you where to look: press `Ctrl+O`, then `[` (writes what Claude Code holds to your terminal's scrollback), then your terminal's Find (`Ctrl+Shift+F` or `Cmd+F`), and paste. Older messages may only be in the session file; opening it in full is planned ([#16](https://github.com/DazzleML/claude-bookmarks/issues/16)). For long conversations there is a way to keep the whole history in view after a restart, described in the [engine notes](docs/engine-quirks.md#patched-builds-trying-the-proper-fix-early); the plugin never depends on it.
 - **"Where you were" is a whole message.** A plugin cannot read or restore the exact scroll offset, so returning from the reading position brings back the message that was at the top of the screen (or, from the very bottom, the last message's end).
 - **If the plugin doesn't load after `/fork`**, the session may be hosted by Claude Code's background daemon, which doesn't load `CLAUDE_CODE_PLUGIN_DIRS`. Stop it with `claude stop <short id>` and resume it from a shell with `claude --resume <session id>`.
 - **If you use the optional `Ctrl+X` fast keys** and have disabled Claude Code's built-in diff mod, or have the diff panel open, the diff panel may take those keys.
-
-### Extended history with the patcher
-
-Marks matter most in long conversations, which is exactly where the compaction limit above hurts. The companion project **[dazzle-claude-code-patcher](https://github.com/DazzleML/dazzle-claude-code-patcher)** patches a local copy of Claude Code so that a restarted or resumed session keeps its whole conversation in view, from before every compaction. On a patched build, marks and the prompts pane reach every message. It is also where I plan to prototype other fixes this plugin would like Claude Code to have, such as keyboard handoff between a plugin's band and its pane.
-
-claude-bookmarks never depends on it: every feature works on stock Claude Code. The patcher is also in pre-alpha development and released on PyPi for anyone adventurous enough to try it. See [Patched builds](docs/engine-quirks.md#patched-builds-trying-the-proper-fix-early) for how the two fit together.
 
 ## Configuration
 
