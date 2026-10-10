@@ -6,8 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-10-09
+
+### Added
+
+- `SECURITY.md`: how to report a vulnerability privately (GitHub's private reporting, with an issue as the fallback), what to include, what to expect, and what is in scope. The directory's terms ask for a reporting mechanism; GitHub shows this page under the repository's Security tab.
+
 ### Changed
 
+- The two places the plugin runs a program now spell the whole command out at the call: program name, flags and script path as plain text, with only the transcript path and the search text as variables. Same programs, same order, same timeouts; the change is for anyone reading the code, including the directory's own reader.
+- The plugin README says what the prompt hooks do: catch the plugin's own `/bm-` commands and keep your draft intact while a pane is open; anything else typed passes through untouched.
 - The directory listing's Support link points at the issue tracker (`supportUrl` in the manifest) instead of the repository front page, and its Documentation link at the `docs/` folder (`documentationUrl`) instead of the status page alone. Both listing-only; Claude Code ignores the fields.
 - `docs/README.md`: an index of the documentation, which GitHub shows when the `docs/` folder is opened.
 - The listing's Terms of service link points at the GPL-3.0 licence (`termsOfServiceUrl`): there is no hosted service and no agreement beyond the licence.
@@ -256,7 +264,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.1...v0.3.2

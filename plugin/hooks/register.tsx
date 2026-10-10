@@ -353,9 +353,6 @@ async function keepPrompt($: EngineInterface, p: PromptRef) {
 // POC in tests/one-offs/thinking/prompt-history/ (2026-10-04: 152/152 prompts,
 // identical text; ~1 MB of output; 328 ms PowerShell, 81 ms sh + grep). Runs once per
 // conversation; after that the live capture keeps the list current.
-const USER_ROW = '"type":"user"'
-const TOOL_RESULT_ROW = '"type":"tool_result"'
-
 // A typed user prompt's text, or undefined for tool results, meta and sidechain rows.
 // The same rule as the POC's reference parse.
 function promptTextOf(o: any): string | undefined {
@@ -372,10 +369,10 @@ function promptTextOf(o: any): string | undefined {
 // run with -File and named parameters. Until v0.3.0 they were inline scripts passed as
 // base64 UTF-16LE text, to keep their double quotes intact; a measurement on 2026-10-09
 // showed -File parameters keep `"type":"user"` verbatim from a non-shell spawn, and
-// base64-encoded PowerShell is what a security scan flags.
-function psScript($: EngineInterface, name: string): string[] {
-  return ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', `${$.plugin.root}/hooks/scripts/${name}.ps1`]
-}
+// base64-encoded PowerShell is what a security scan flags. Each $.process.run below
+// receives its argv as a literal array at the call, program name and flags spelled
+// out, so a static reader can see what runs; only the file path, the search text and
+// the plugin's own folder are variables.
 
 // The session's transcript: <config dir>/projects/<project>/<session id>.jsonl. The
 // project folder is the cwd with every non-alphanumeric character turned into `-`;
@@ -411,16 +408,31 @@ async function transcriptPath($: EngineInterface): Promise<string | undefined> {
 // The user rows of the transcript, one JSON line each, from the platform's own tool.
 async function userRows($: EngineInterface, path: string) {
   const windows = /^[A-Za-z]:[\\/]/.test(path)
-  const powershell = () => [...psScript($, 'user-rows'), '-Path', path, '-UserRow', USER_ROW, '-ToolResultRow', TOOL_RESULT_ROW]
-  const sh = () => ['sh', '-c', `grep -F '${USER_ROW}' "$1" | grep -vF '${TOOL_RESULT_ROW}'`, 'sh', path]
-  for (const [via, argv] of windows ? [['powershell', powershell()], ['sh', sh()]] as const : [['sh', sh()]] as const) {
+  if (windows) {
+    // Windows PowerShell 5.1 first on a Windows path. The row markers ("type":"user",
+    // "type":"tool_result") are spelled out at each call so the command reads as fixed
+    // text; the sh form below uses the same two.
     try {
       const started = Date.now()
-      const r = await $.process.run(argv, { timeoutMs: 60_000 })
-      if (r.exitCode === 0 || r.stdout) return { via, ms: Date.now() - started, ...r }
+      const r = await $.process.run(
+        ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', `${$.plugin.root}/hooks/scripts/user-rows.ps1`,
+          '-Path', path, '-UserRow', '"type":"user"', '-ToolResultRow', '"type":"tool_result"'],
+        { timeoutMs: 60_000 },
+      )
+      if (r.exitCode === 0 || r.stdout) return { via: 'powershell' as const, ms: Date.now() - started, ...r }
     } catch {
-      // That tool is not there: try the next one.
+      // PowerShell is not there: try sh.
     }
+  }
+  try {
+    const started = Date.now()
+    const r = await $.process.run(
+      ['sh', '-c', 'grep -F \'"type":"user"\' "$1" | grep -vF \'"type":"tool_result"\'', 'sh', path],
+      { timeoutMs: 60_000 },
+    )
+    if (r.exitCode === 0 || r.stdout) return { via: 'sh' as const, ms: Date.now() - started, ...r }
+  } catch {
+    // sh is not there either.
   }
   return undefined
 }
@@ -431,17 +443,27 @@ async function userRows($: EngineInterface, path: string) {
 // Select-String has none. The output cap (4 MiB) cuts the newest matches first; a cut
 // line fails to parse and is skipped.
 async function grepTranscript($: EngineInterface, path: string, pattern: string) {
-  const sh = () => ['sh', '-c', 'grep -bnF -- "$1" "$2"', 'sh', pattern, path]
-  const powershell = () => [...psScript($, 'grep-offsets'), '-Path', path, '-Pattern', pattern]
-  for (const [via, argv] of [['sh', sh()], ['powershell', powershell()]] as const) {
-    try {
-      const started = Date.now()
-      const r = await $.process.run(argv, { timeoutMs: 60_000 })
-      // grep exits 1 for "no match" with empty output: that is an answer, not a failure.
-      if (r.exitCode === 0 || r.exitCode === 1 || r.stdout) return { via, ms: Date.now() - started, ...r }
-    } catch {
-      // That tool is not there: try the next one.
-    }
+  try {
+    const started = Date.now()
+    const r = await $.process.run(
+      ['sh', '-c', 'grep -bnF -- "$1" "$2"', 'sh', pattern, path],
+      { timeoutMs: 60_000 },
+    )
+    // grep exits 1 for "no match" with empty output: that is an answer, not a failure.
+    if (r.exitCode === 0 || r.exitCode === 1 || r.stdout) return { via: 'sh' as const, ms: Date.now() - started, ...r }
+  } catch {
+    // sh is not there: try PowerShell.
+  }
+  try {
+    const started = Date.now()
+    const r = await $.process.run(
+      ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', `${$.plugin.root}/hooks/scripts/grep-offsets.ps1`,
+        '-Path', path, '-Pattern', pattern],
+      { timeoutMs: 60_000 },
+    )
+    if (r.exitCode === 0 || r.exitCode === 1 || r.stdout) return { via: 'powershell' as const, ms: Date.now() - started, ...r }
+  } catch {
+    // PowerShell is not there either.
   }
   return undefined
 }
