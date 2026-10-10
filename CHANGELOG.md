@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-10-09
+
+### Added
+
+- `PRIVACY.md`: what the plugin reads, writes, runs and sends (nothing), and how to remove everything it stored. Linked from the manifest as the privacy policy, so the directory listing shows it, and from the plugin README.
+
 ## [0.3.3] - 2026-10-09
 
 ### Changed
@@ -244,7 +250,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.0...v0.3.1

@@ -1,11 +1,12 @@
 {
   "name": "bookmarks",
   "displayName": "Bookmarks",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Bookmarks and vim-style marks inside Claude Code conversations: mark a line, jump back, keep a reading position, browse your prompts, and let Claude cite earlier places as clickable links.",
   "author": { "name": "DazzleML", "github": "https://github.com/DazzleML" },
   "repository": "https://github.com/DazzleML/claude-bookmarks",
   "homepage": "https://github.com/DazzleML/claude-bookmarks",
+  "privacyPolicyUrl": "https://github.com/DazzleML/claude-bookmarks/blob/main/PRIVACY.md",
   "license": "GPL-3.0",
   "keywords": ["bookmarks", "pins", "marks", "vim-marks", "vim", "navigation", "conversation", "jump-to-message", "tui", "claude-code"],
   "types": "./types/index.d.ts"

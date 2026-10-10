@@ -394,6 +394,20 @@ async function transcriptPath($: EngineInterface): Promise<string | undefined> {
   return undefined
 }
 
+// --- For reviewers: the only two places this plugin runs a program ----------------
+// userRows() and grepTranscript() below are the plugin's only $.process.run calls.
+// Why a program at all: the transcript is often larger than the 4 MiB that $.fs.read
+// accepts (it rejects above that), so the file is searched by a tool already on the
+// machine. What runs: `sh -c 'grep ...'` where sh and grep exist, else `powershell
+// -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <one of the two .ps1 files
+// shipped in hooks/scripts/>`. The transcript path and the search text are always
+// separate argv elements ("$1"/"$2" to sh, named -Path/-Pattern parameters to
+// PowerShell), never spliced into the command string, so selected or model-chosen
+// text cannot become a command. Output is read back here and parsed as JSON lines;
+// it is not sent anywhere, and the plugin opens no network connection. Each run is
+// capped at 60 seconds and at 4 MiB of output by the engine. See README "What it
+// runs, reads, writes and sends" and PRIVACY.md.
+
 // The user rows of the transcript, one JSON line each, from the platform's own tool.
 async function userRows($: EngineInterface, path: string) {
   const windows = /^[A-Za-z]:[\\/]/.test(path)
