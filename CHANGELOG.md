@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- The directory listing's Support link points at the issue tracker (`supportUrl` in the manifest) instead of the repository front page, and its Documentation link at the `docs/` folder (`documentationUrl`) instead of the status page alone. Both listing-only; Claude Code ignores the fields.
+- `docs/README.md`: an index of the documentation, which GitHub shows when the `docs/` folder is opened.
+- The listing's Terms of service link points at the GPL-3.0 licence (`termsOfServiceUrl`): there is no hosted service and no agreement beyond the licence.
+
 ## [0.3.4] - 2026-10-09
 
 ### Added

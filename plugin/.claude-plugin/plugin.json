@@ -7,6 +7,9 @@
   "repository": "https://github.com/DazzleML/claude-bookmarks",
   "homepage": "https://github.com/DazzleML/claude-bookmarks",
   "privacyPolicyUrl": "https://github.com/DazzleML/claude-bookmarks/blob/main/PRIVACY.md",
+  "supportUrl": "https://github.com/DazzleML/claude-bookmarks/issues",
+  "documentationUrl": "https://github.com/DazzleML/claude-bookmarks/tree/main/docs",
+  "termsOfServiceUrl": "https://github.com/DazzleML/claude-bookmarks/blob/main/LICENSE",
   "license": "GPL-3.0",
   "keywords": ["bookmarks", "pins", "marks", "vim-marks", "vim", "navigation", "conversation", "jump-to-message", "tui", "claude-code"],
   "types": "./types/index.d.ts"
