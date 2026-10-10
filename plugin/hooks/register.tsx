@@ -75,7 +75,7 @@ const BOOKMARK_GROUPS: { owner: AnchorOwner | 'all'; title: string }[] = [
   { owner: 'claude', title: "Claude's" },
   { owner: 'all', title: 'all' },
 ]
-const GROUP_KEYS = { prev: 'h', next: 'l' } as const
+const GROUP_CYCLE = { prev: 'h', next: 'l' } as const
 
 // The highlight and the band text are temporary (djdarcy, 2026-10-03: "visible temporarily
 // for maybe a minute or two or until the next action like another prompt is sent").
@@ -250,8 +250,9 @@ async function sessionEchoChoice($: EngineInterface): Promise<boolean | undefine
   return env !== '0' && env.toLowerCase() !== 'off' && env.toLowerCase() !== 'false'
 }
 /** Sets this conversation's choice; `undefined` drops it, so the default applies again. */
-async function setSessionEcho($: EngineInterface, on: boolean | undefined) {
-  await $.env.set('CONVO_BOOKMARKS_DEBUG', on === undefined ? undefined : on ? '1' : '0')
+async function setSessionEcho($: EngineInterface, enabled: boolean | undefined) {
+  // Not named `on`: the directory's reader treats that name as the hook registrar everywhere in the file.
+  await $.env.set('CONVO_BOOKMARKS_DEBUG', enabled === undefined ? undefined : enabled ? '1' : '0')
 }
 async function uiEchoEnabled($: EngineInterface): Promise<boolean> {
   const policy = await echoPolicy($)
@@ -273,7 +274,7 @@ async function echoStateLine($: EngineInterface): Promise<string> {
 
 function log($: EngineInterface, line: string, opts?: { always?: boolean }) {
   if (opts?.always) $.ui.log(line)
-  else void uiEchoEnabled($).then(on => { if (on) $.ui.log(line) }).catch(() => {})
+  else void uiEchoEnabled($).then(enabled => { if (enabled) $.ui.log(line) }).catch(() => {})
   logLines.push(`${new Date().toISOString()} ${line}`)
   if (logLines.length > LOG_LINES) logLines.splice(0, logLines.length - LOG_LINES)
   flushing = flushing.then(() => flushLog($)).catch(() => {})
@@ -2455,9 +2456,9 @@ export const register: Register = on => {
           <Button key="band-num-j" hotkey="j" label="j↓" plain dimColor onPress={() => bandStep($, 'j')} />,
           ...(bookmarks
             ? [
-                <Button key="band-num-h" hotkey={GROUP_KEYS.prev} label={`${GROUP_KEYS.prev}◂`} plain dimColor onPress={() => bandGroupStep($, -1)} />,
+                <Button key="band-num-h" hotkey={GROUP_CYCLE.prev} label={`${GROUP_CYCLE.prev}◂`} plain dimColor onPress={() => bandGroupStep($, -1)} />,
                 <Text key="band-num-group" dimColor>{BOOKMARK_GROUPS[await read($, bandGroup)]?.title ?? ''}</Text>,
-                <Button key="band-num-l" hotkey={GROUP_KEYS.next} label={`▸${GROUP_KEYS.next}`} plain dimColor onPress={() => bandGroupStep($, 1)} />,
+                <Button key="band-num-l" hotkey={GROUP_CYCLE.next} label={`▸${GROUP_CYCLE.next}`} plain dimColor onPress={() => bandGroupStep($, 1)} />,
               ]
             : [<Button key="band-num-pin" hotkey="s" label="s★ pin" plain dimColor onPress={() => bandPin($)} />]),
         ]
@@ -2669,7 +2670,7 @@ export const register: Register = on => {
           {numbered.length > 0 && <Text>{header}</Text>}
           {numbered.length > 0 && shownRows.length === 0 && <Text dimColor>{`No bookmarks in "${group.title}" yet.`}</Text>}
           {shownRows.map(row)}
-          {numbered.length > 0 && <Text dimColor>{`${GROUP_KEYS.prev}/${GROUP_KEYS.next} group · j/k move · Enter jump · Esc close`}</Text>}
+          {numbered.length > 0 && <Text dimColor>{`${GROUP_CYCLE.prev}/${GROUP_CYCLE.next} group · j/k move · Enter jump · Esc close`}</Text>}
         </Box>
       )
     }

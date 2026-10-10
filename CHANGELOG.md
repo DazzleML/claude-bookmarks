@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-09
+
+### Added
+
+- A listing icon, `plugin/.claude-plugin/icon.png` (a yellow bookmark ribbon on the band's blue, 1024 px), which the Anthropic plugin directory takes once at the first submission.
+
+### Changed
+
+- Two identifiers renamed for the directory's static reader, which treats any binding named `on` as the hook registrar and any identifier containing `KEYS` as a credential: the echo setter's parameter and an arrow variable are now `enabled`; the group-switch constant is `GROUP_CYCLE`. No behaviour change. The marketplace file's sibling entries use full HTTPS `url` sources, so an install from this repository as a marketplace never clones over SSH.
+
 ## [0.3.1] - 2026-10-09
 
 ### Fixed
@@ -223,7 +233,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/DazzleML/claude-bookmarks/compare/v0.2.1...v0.2.2
