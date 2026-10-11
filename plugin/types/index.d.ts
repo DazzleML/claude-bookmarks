@@ -16,6 +16,9 @@ declare module 'claude-code' {
       bandMode: PaneMode | 'idle'
       // Bumped when the pinned prompts change, so the prompts pane redraws.
       pinsRev: number
+      // Bumped when the prompt nearest the view changes while the prompts pane is
+      // open, so its yellow row follows a scroll.
+      viewRev: number
       // Bumped after the band's command line runs a command: the field is drawn
       // under a new key, so it starts empty (POC 2026-10-07).
       cmdRev: number

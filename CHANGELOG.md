@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-11
+
+### Added
+
+- The prompts pane shows where you are: the prompt nearest your view has its number in yellow, and the list opens scrolled to it instead of to the newest prompt. The prompt whose exchange (the prompt and the replies after it) fills most of your screen wins, and when two are close the earlier one does, so you get the context above as well as below. The highlight follows the view while the pane is open, and the list slides the least that keeps the yellow row showing, never while you are picking a row from the band.
+
+### Fixed
+
+- Messages typed while Claude was working are in the prompts list. Claude Code queues such a message and stores it as an attachment rather than a user row, so the list skipped it, both when reading the transcript and as it arrived. Conversations already read are read once more at their next start to pick them up.
+- The prompts list no longer carries rows that are not prompts: interruption notices and slash-command echoes the live capture had kept before it could tell them apart. When the transcript was re-read, those rows were appended after the real prompts, so every number past that point was too high and the yellow row sat on the wrong prompt. The list is rebuilt once more at the next start, and such rows are dropped as they arrive.
+
 ## [0.3.5] - 2026-10-09
 
 ### Added
@@ -264,7 +275,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.5...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.5...v0.4.0
 [0.3.5]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.2...v0.3.3

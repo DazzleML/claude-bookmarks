@@ -28,6 +28,8 @@ import {
 // setting with the archive-retention picker (#7, #10); a constant until then.
 const TEMPORARY_RETENTION: Retention = '30d'
 import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution, type TranscriptRow } from './core/transcript-lines'
+import { promptNearView } from './core/view-position'
+import { looksLikePrompt, promptTextOf, unwrapQueued } from './core/prompt-rows'
 
 const PANE = 'bm-poc'
 
@@ -70,6 +72,9 @@ const bandNum = atom({ plugin: 'bookmarks', key: 'bandNum' } as const, '')
 // The keys are vim's sideways pair; `o`/`i` already mean back/forward at the band's top
 // level. Both become settings (#7).
 const bandGroup = atom({ plugin: 'bookmarks', key: 'bandGroup' } as const, 0)
+// Bumped when the prompt nearest the view changes while the prompts pane is open, so
+// the pane redraws its yellow row as the person scrolls (djdarcy, 2026-10-11).
+const viewRev = atom({ plugin: 'bookmarks', key: 'viewRev' } as const, 0)
 const BOOKMARK_GROUPS: { owner: AnchorOwner | 'all'; title: string }[] = [
   { owner: 'user', title: 'yours' },
   { owner: 'claude', title: "Claude's" },
@@ -114,6 +119,9 @@ const snippetOf = (text: string) => (text.split('\n').find(l => l.trim()) ?? '')
 // LINE_BG: darker than the selection blue #264F78 so it reads as a soft band.
 const LINE_BG = '#1B3754'
 const WORDS_FG = 'yellow'
+// The prompts pane's "nearest to your view" row number (djdarcy, 2026-10-11: "a
+// yellowish coloring"). Same family as the pin star so the pane stays two-colour.
+const HERE_FG = 'yellow'
 // A letter already in use, in the mark pane's list: a muted grey-red, "this one is taken".
 const USED_FG = '#B07A7A'
 
@@ -180,7 +188,9 @@ const rendered = new Map<string, string>()
 // only the messages at the viewport's edges, so one that leaves the screen in a single
 // jump (Ctrl+End) is never reported gone and goes stale here (2026-10-04: "nowhere to
 // go" right after Ctrl+End). Only the latest burst of reports is trusted.
-const onScreenNow = new Map<string, { first: number; last: number; of: number; at: number }>()
+// `grew`: the latest report added rows to the message (`of` rose), which is a reply
+// streaming in, drawn at the bottom whether or not the person is looking there.
+const onScreenNow = new Map<string, { first: number; last: number; of: number; at: number; grew: boolean }>()
 function noteOnScreen(requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
   // A command run from a key (`command:bm-read`) is drawn for a moment under a
   // temporary `placeholder…` id; as the newest report it became "where you were", and
@@ -194,7 +204,8 @@ function noteOnScreen(requestId: string, onScreen: { first: number; last: number
   // 2026-10-07; log 08:15:48 -> 08:15:53). Only a change of lines refreshes the time.
   const before = onScreenNow.get(requestId)
   const same = before && before.first === onScreen.first && before.last === onScreen.last && before.of === onScreen.of
-  onScreenNow.set(requestId, { ...onScreen, at: same ? before.at : Date.now() })
+  const grew = !!before && onScreen.of > before.of
+  onScreenNow.set(requestId, { ...onScreen, at: same ? before.at : Date.now(), grew })
 }
 const FRESH_MS = 1500
 function freshOnScreen(): string[] {
@@ -355,15 +366,8 @@ async function keepPrompt($: EngineInterface, p: PromptRef) {
 // conversation; after that the live capture keeps the list current.
 // A typed user prompt's text, or undefined for tool results, meta and sidechain rows.
 // The same rule as the POC's reference parse.
-function promptTextOf(o: any): string | undefined {
-  if (o?.type !== 'user' || o.isMeta || o.isSidechain) return undefined
-  const content = o.message?.content
-  if (typeof content === 'string') return content
-  if (!Array.isArray(content)) return undefined
-  if (content.some((b: any) => b?.type === 'tool_result')) return undefined
-  const texts = content.filter((b: any) => b?.type === 'text').map((b: any) => String(b.text ?? ''))
-  return texts.length > 0 ? texts.join(' ') : undefined
-}
+// Which rows are prompts, and the words of a queued one: core/prompt-rows.ts (tested),
+// shared by the transcript back-fill below and the live capture in session.append.
 
 // The PowerShell fallbacks are scripts shipped with the plugin (hooks/scripts/*.ps1),
 // run with -File and named parameters. Until v0.3.0 they were inline scripts passed as
@@ -416,7 +420,7 @@ async function userRows($: EngineInterface, path: string) {
       const started = Date.now()
       const r = await $.process.run(
         ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', `${$.plugin.root}/hooks/scripts/user-rows.ps1`,
-          '-Path', path, '-UserRow', '"type":"user"', '-ToolResultRow', '"type":"tool_result"'],
+          '-Path', path, '-UserRow', '"type":"user"', '-QueuedRow', '"type":"queued_command"', '-ToolResultRow', '"type":"tool_result"'],
         { timeoutMs: 60_000 },
       )
       if (r.exitCode === 0 || r.stdout) return { via: 'powershell' as const, ms: Date.now() - started, ...r }
@@ -427,7 +431,7 @@ async function userRows($: EngineInterface, path: string) {
   try {
     const started = Date.now()
     const r = await $.process.run(
-      ['sh', '-c', 'grep -F \'"type":"user"\' "$1" | grep -vF \'"type":"tool_result"\'', 'sh', path],
+      ['sh', '-c', 'grep -F -e \'"type":"user"\' -e \'"type":"queued_command"\' "$1" | grep -vF \'"type":"tool_result"\'', 'sh', path],
       { timeoutMs: 60_000 },
     )
     if (r.exitCode === 0 || r.stdout) return { via: 'sh' as const, ms: Date.now() - started, ...r }
@@ -490,7 +494,14 @@ async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment
 }
 
 async function backfillPrompts($: EngineInterface) {
-  const doneKey = `backfilled:${await $.session.id()}`
+  // The key's number marks what the back-fill knows: `2` learnt queued prompts
+  // (attachment rows); `3` drops rows the live capture kept before it had the prompt
+  // filter ("[Request interrupted…]", command echoes), which the merge had appended
+  // after the file's prompts, so from there the list's numbering ran eight too high and
+  // the yellow row sat on the wrong prompt (djdarcy, 2026-10-11: "the screen is
+  // currently at prompt #307 but the list is showing #297"). A conversation marked done
+  // under an older key is read once more.
+  const doneKey = `backfilled3:${await $.session.id()}`
   if (await $.store.get(doneKey)) return
   const path = await transcriptPath($)
   if (!path) {
@@ -514,9 +525,10 @@ async function backfillPrompts($: EngineInterface) {
     const text = promptTextOf(o)
     if (text !== undefined && typeof o.uuid === 'string') found.push({ uuid: o.uuid, head: head(text) })
   }
-  // Transcript order first, then anything the live capture holds that the file did not.
+  // Transcript order first, then anything the live capture holds that the file did not
+  // (prompts sent while the file was being read), minus rows that are not prompts.
   const have = new Set(found.map(p => p.uuid))
-  const merged = [...found, ...(await keptPrompts($)).filter(p => !have.has(p.uuid))]
+  const merged = [...found, ...(await keptPrompts($)).filter(p => !have.has(p.uuid) && looksLikePrompt(p.head))]
   await $.store.set(await promptsKey($), merged.slice(-PROMPTS_KEPT))
   // A cut-off read is left unmarked, so a later session start tries again.
   if (!rows.isStdoutTruncated) await $.store.set(doneKey, true)
@@ -1019,7 +1031,7 @@ async function setReadingState($: EngineInterface, state: ReadingState) {
 // The message at the top of the view: of those on screen, the earliest in the
 // conversation. Order is known for every prompt (back-filled) and for the replies
 // captured since load (each placed after the prompt before it).
-async function topOnScreen($: EngineInterface): Promise<string | undefined> {
+async function conversationOrder($: EngineInterface): Promise<Map<string, number>> {
   const order = new Map<string, number>()
   const promptList = await prompts($)
   promptList.forEach((p, i) => order.set(p.uuid, i * 1000))
@@ -1031,6 +1043,10 @@ async function topOnScreen($: EngineInterface): Promise<string | undefined> {
       k = 0
     } else order.set(r.uuid, base + ++k)
   }
+  return order
+}
+async function topOnScreen($: EngineInterface): Promise<string | undefined> {
+  const order = await conversationOrder($)
   // Only the latest burst of reports: what is on screen now, not what was before a jump.
   const visible = freshOnScreen()
   const known = visible.filter(id => order.has(id)).sort((a, b) => order.get(a)! - order.get(b)!)
@@ -1040,6 +1056,90 @@ async function topOnScreen($: EngineInterface): Promise<string | undefined> {
 }
 // The messages on screen, top to bottom, as topOnScreen last ordered them.
 let lastScreenOrder: string[] = []
+
+// The prompt the person is nearest to, for the prompts pane: the earliest prompt on
+// screen, else the last prompt at or above the top of the screen (djdarcy, 2026-10-11:
+// between two prompts, the higher one, "so the person has more context"). The rule is
+// core/view-position.ts; this gathers its inputs.
+async function promptHere($: EngineInterface): Promise<string | undefined> {
+  const top = await topOnScreen($)
+  const order = await conversationOrder($)
+  const ids = (await prompts($)).map(p => p.uuid)
+  // A message drawn on screen reports a requestId that shares its uuid's first four
+  // groups and differs in the last (measured 2026-10-11: 5 on screen, 0 placed by exact
+  // id), the same relation marksOnRow() and sameEntry() already allow for. Compare by
+  // the first four groups throughout.
+  const byFour = new Map<string, number>()
+  for (const [u, o] of order) byFour.set(firstFour(u), o)
+  // Each on-screen message with how many of its lines show, so the exchange that fills
+  // the screen wins, not the prompt that happens to peek in at the bottom.
+  // A reply streaming in is reported as freshly drawn at every growth, so while the
+  // person is scrolled up it is the only "fresh" message and the yellow row would jump
+  // to the newest exchange (2026-10-11: at #256, a scroll up jumped to #309). A growing
+  // message never decides the view: it is dropped from the weights, and when nothing
+  // else is fresh the answer is the one before.
+  const stable = lastScreenOrder.filter(id => !onScreenNow.get(id)?.grew)
+  if (stable.length === 0 && lastScreenOrder.length > 0) return lastHere
+  const visible = stable.map(id => {
+    const seen = onScreenNow.get(id)
+    return { id: firstFour(id), lines: seen ? seen.last - seen.first + 1 : 1 }
+  })
+  const stableTop = stable.includes(top ?? '') ? top : stable[0]
+  const i = promptNearView(ids.map(firstFour), visible, stableTop && firstFour(stableTop), k => byFour.get(k))
+  // Nothing placeable in the latest burst of reports happens when a new prompt or a
+  // streaming reply is drawn below a view that stays scrolled up (djdarcy, 2026-10-11:
+  // sending a prompt "wipes out the yellow"): the view did not move, so the answer is
+  // the one before.
+  if (i === undefined && !visible.some(m => byFour.has(m.id))) return lastHere
+  return i === undefined ? undefined : ids[i]
+}
+// The row the pane last drew yellow, and the debounce behind the dynamic update.
+let lastHere: string | undefined
+// The prompt the list should centre on at the pane's next draw (set when it opens).
+let pendingCentre: string | undefined
+let viewTimer: Timer | undefined
+const VIEW_MOVED_MS = 150
+// Called by the message render hooks on every screen report. A short debounce later,
+// if the prompts pane is open and the nearest prompt has moved, viewRev is bumped so
+// the pane redraws its yellow row (djdarcy, 2026-10-11: "as a user scrolls up the
+// color changes dynamically"). The bump runs in the timer, outside the render hook,
+// which may not write state.
+function noteViewMoved($: EngineInterface) {
+  viewTimer?.cancel()
+  viewTimer = $.clock.after(VIEW_MOVED_MS, () => {
+    void (async () => {
+      if ((await read($, paneMode)) !== 'list') return
+      if (!(await $.ui.panes()).some(p => p.id === PANE)) return
+      const here = await promptHere($)
+      if (here === lastHere) return
+      // Diagnostic (2026-10-11): the yellow row flipped between #295 and #34 within one
+      // screen; list what was on screen and where each was placed.
+      const order = await conversationOrder($)
+      const byFour = new Map<string, number>()
+      for (const [u, o] of order) byFour.set(firstFour(u), o)
+      const seen = lastScreenOrder
+        .map(id => {
+          const s = onScreenNow.get(id)
+          return `${id.slice(0, 13)}:${byFour.get(firstFour(id)) ?? '?'}:${s ? s.last - s.first + 1 : '?'}L`
+        })
+        .join(' ')
+      log($, `[bm-poc] nearest prompt moved: ${lastHere ? short(lastHere) : '(none)'} -> ${here ? short(here) : '(none)'} | on screen (id:order:lines) ${seen}`)
+      await update($, viewRev, v => v + 1)
+      // Keep the yellow row in the pane's view, moving the list the least that does it
+      // ('nearest': no move while the row is already showing), and not while the person
+      // is browsing the list from the band (a number or j/k typed), so the list never
+      // jumps under them (djdarcy, 2026-10-11). A setting later (#7): FOLLOW_HERE.
+      if (here && FOLLOW_HERE !== 'never' && (FOLLOW_HERE === 'always' || (await read($, bandNum)) === '')) {
+        const r = await $.ui.scroll({ in: PANE, to: { key: `p-${here}` }, block: 'nearest' })
+        log($, `[bm-poc] pane follow to ${short(here)} -> ${r.deny ? `DENY: ${r.deny}` : 'ok'}`)
+      }
+    })()
+  })
+}
+// Whether the prompts pane scrolls its list to keep the yellow row showing as the
+// conversation is scrolled: 'when-idle' (the default: not while a number or j/k is being
+// typed in the band), 'always', or 'never' (the list stays where the person left it).
+const FOLLOW_HERE: 'always' | 'when-idle' | 'never' = 'when-idle'
 
 // Where "back" goes when you left from the bottom of the conversation (a setting, #7):
 //   'where-it-was': the same text you were reading, even if new replies arrived since
@@ -1373,6 +1473,10 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   // next press (the letter), or when the person closes the pane.
   paneAnchor = await topOnScreen($)
   paneView = await viewAnchor($)
+  // For the prompts pane: the prompt nearest the view, read before the pane shifts it,
+  // so the list can open centred on it instead of on the newest (djdarcy, 2026-10-11:
+  // scrolled up 30 or 40 pages, "the user doesn't have to scroll in the panel").
+  const hereAtOpen = mode === 'list' ? await promptHere($) : undefined
   const opened = (await $.ui.open({ id: PANE, title, focus: true, closeOnEscape: true, columns: 16, rows: 4 })) as
     { isPlaced?: boolean; reason?: string } | undefined
   // Probe (2026-10-09): below the engine's width floor the pane waits undrawn and the
@@ -1385,6 +1489,10 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
     const r = await $.ui.scroll({ to: { requestId: paneView.uuid }, block: paneView.block })
     log($, `[bm-poc] view back to ${short(paneView.uuid)} (${paneView.block}) after the pane opened -> ${r.deny ? `DENY: ${r.deny} (again at the next press)` : 'ok'}`)
   }
+  // The row cannot be scrolled to before the pane has drawn it (DENY: "no element of
+  // its own is drawn under that key", 2026-10-11): the pane's render hook does it right
+  // after its first draw, through pendingCentre.
+  if (hereAtOpen) pendingCentre = hereAtOpen
   // The selection is read AFTER the pane opens: an awaited call before $.ui.open looks
   // to cost the pane the keyboard (the mark pane, which read it first, was refused in 8
   // of 12 runs; the jump pane, which didn't, almost never; log 2026-10-06/07). The
@@ -1640,6 +1748,16 @@ async function watchBand($: EngineInterface, mode: PaneMode) {
       await endBandMode($)
       return
     }
+    // A list pane (prompts, bookmarks) is a reference the person reads while typing:
+    // the band steps back and the list stays open, with its yellow row following the
+    // view (djdarcy, 2026-10-11: a click in the input box "auto-closes the Panel on the
+    // right, which it shouldn't"). The mark and jump panes only exist for the next
+    // letter, so they still close.
+    if (listLike(mode)) {
+      log($, `[bm-poc] band lost the keyboard (${r.deny}): the band steps back, the list stays`)
+      await endBandMode($)
+      return
+    }
     log($, `[bm-poc] band lost the keyboard (${r.deny}): closing the pane`)
     await closePane($)
   }
@@ -1860,9 +1978,15 @@ export const register: Register = on => {
   on('session.append', async ($, e, next) => {
     const stored = await next(e)
     const isWanted = e.door === 'prompt' || e.door === 'response'
-    if (!e.agentId && isWanted && !e.message.isMeta) {
-      const text = e.message.content.map(block => (block.type === 'text' ? block.text : '')).join(' ')
-      if (text.trim()) {
+    // A message typed while Claude was working arrives as an attachment named
+    // `queued_command`, its text wrapped in the engine's reminder prose (the transcript
+    // keeps the raw text in `attachment.prompt`, which this event does not carry). It is
+    // the person's prompt: unwrap it and keep it as one (djdarcy, 2026-10-11).
+    const queued = !e.agentId && e.message.type === 'attachment' && e.message.name === 'queued_command'
+    if (queued || (!e.agentId && isWanted && !e.message.isMeta)) {
+      const raw = e.message.content.map(block => (block.type === 'text' ? block.text : '')).join(' ')
+      const text = queued ? unwrapQueued(raw) : raw
+      if (looksLikePrompt(text)) {
         // `text` (first 4000 chars) lets a selection mark check it landed in the right row.
         const row: Row = { uuid: e.uuid, door: e.door as Row['door'], head: head(text), text: text.slice(0, 4000) }
         note(`append ${e.door} ${e.uuid} ${row.head.slice(0, 30)}`)
@@ -1876,6 +2000,7 @@ export const register: Register = on => {
   // Observe only: note the id, draw nothing different.
   on('ui.render', { component: 'UserMessage' }, async ($, e, next) => {
     noteOnScreen(e.requestId, e.props.onScreen)
+    noteViewMoved($)
     if (!rendered.has(e.requestId)) {
       const text = head(e.props.text ?? '')
       rendered.set(e.requestId, text)
@@ -1926,6 +2051,7 @@ export const register: Register = on => {
   // is where a jump lands. Only rows carrying a mark are touched.
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     noteOnScreen(e.requestId, e.props.onScreen)
+    noteViewMoved($)
 
     // Probe M1/M2 (anchors DWP, 2026-10-09): a reply carrying bookmark-anchor links is
     // drawn as the mod's own Markdown, so a plain click on such a link reaches the mod
@@ -2561,6 +2687,9 @@ export const register: Register = on => {
       const go = (typed: string) => jumpToPromptNumber($, typed, 'prompts pane')
       // Pinned prompts: listed first, in the order pinned, and starred in the full list.
       await read($, pinsRev) // read so a pin toggle redraws the pane
+      await read($, viewRev) // and so a scroll that moves the nearest prompt redraws it
+      // Drawn ids share a uuid's first four groups (see promptHere); compare dimming by those.
+      const drawnFour = new Set([...rendered.keys()].map(firstFour))
       const pinIds = await loadPins($)
       const byUuid = new Map(numbered.map(r => [r.uuid, r]))
       const pinnedRows = pinIds.map(u => byUuid.get(u)).filter((r): r is (typeof numbered)[number] => !!r)
@@ -2572,15 +2701,41 @@ export const register: Register = on => {
       const fromBand = (await read($, bandMode)) === 'list' ? await read($, bandNum) : undefined
       const targetN = fromBand ? Number(fromBand) : undefined
       const pointer = (n: number) => (fromBand === undefined ? '' : n === targetN ? '▶' : ' ')
+      // The prompt nearest the view, drawn with its number in yellow (djdarcy, 2026-10-11:
+      // "so the user knows roughly where they are" and can read what they were thinking
+      // above and below). Redrawn on every render, so it follows the view while the pane
+      // is open.
+      const here = await promptHere($)
+      lastHere = here
+      // Centre the list on the nearest prompt once the rows below exist (set by
+      // openFor). A timer, since a render hook may not scroll; by then the draw is done.
+      if (pendingCentre) {
+        const target = pendingCentre
+        pendingCentre = undefined
+        // The rows are not scrollable-to the instant after the first draw (DENY "no
+        // element of its own is drawn under that key" at +7 ms, 2026-10-11) but are a
+        // few hundred ms later, when the follow scrolls succeed. Try at 60, 180, 420 and
+        // 900 ms after the draw and stop at the first that lands.
+        const attempt = (n: number) => {
+          $.clock.after(60 * 2 ** n - (n === 0 ? 0 : 60), () => {
+            void $.ui.scroll({ in: PANE, to: { key: `p-${target}` }, block: 'center' }).then(r => {
+              if (r.deny && n < 3) return attempt(n + 1)
+              log($, `[bm-poc] prompts pane centred on ${short(target)} (nearest to the view) -> ${r.deny ? `DENY after ${n + 1} tries: ${r.deny}` : `ok (try ${n + 1})`}`)
+            })
+          })
+        }
+        attempt(0)
+      }
       const promptRow = (r: NumberedPrompt, group: string) => {
         // Dim: not drawn since the mod loaded, so possibly not reachable by a jump
         // (before a compaction). A hint only: one not yet scrolled to is dim too.
-        const dim = !rendered.has(r.uuid)
+        const isHere = r.uuid === here
+        const dim = !drawnFour.has(firstFour(r.uuid)) && !isHere
         const press = async () => {
           await jumpTo($, r.uuid, 'prompts pane', `prompt #${r.n}`, r.head)
           await closePane($)
         }
-        if (!pinSet.has(r.uuid)) {
+        if (!pinSet.has(r.uuid) && !isHere) {
           return <Button key={`${group}-${r.uuid}`} label={`${pointer(r.n)}${numberLabel(r.n)}${r.head}`} plain dimColor={dim && r.n !== targetN} onPress={press} />
         }
         // `245★) `: a gold star inside the number, so it reads as the row's marker, not
@@ -2588,12 +2743,13 @@ export const register: Register = on => {
         // before the number). A Button's label takes no colour at rest (2.1.289), so the
         // number and star are Text beside the Button; flexShrink 0 keeps them from being
         // squeezed to nothing next to a long label that wraps (seen in the look test).
+        // The nearest-to-view row uses the same shape with its number in yellow.
         return (
           <Box key={`${group}-row-${r.uuid}`} flexDirection="row">
             <Box flexShrink={0}>
-              <Text dimColor={dim}>{`${pointer(r.n)}${String(r.n).padStart(width)}`}</Text>
-              <Text color={WORDS_FG}>★</Text>
-              <Text dimColor={dim}>{') '}</Text>
+              <Text dimColor={dim} color={isHere ? HERE_FG : undefined} bold={isHere}>{`${pointer(r.n)}${String(r.n).padStart(width)}`}</Text>
+              {pinSet.has(r.uuid) && <Text color={WORDS_FG}>★</Text>}
+              <Text dimColor={dim} color={isHere ? HERE_FG : undefined} bold={isHere}>{') '}</Text>
             </Box>
             <Button key={`${group}-${r.uuid}`} label={r.head} plain dimColor={dim} onPress={press} />
           </Box>
@@ -2621,6 +2777,11 @@ export const register: Register = on => {
               newest, Shift+Tab back up, Enter jumps. A Select was tried: on the terminal
               its arrows open a pop-up list of its own instead (screenshot, 2026-10-04). */}
           {numbered.length > 0 && <Text dimColor>or Tab / Shift+Tab, Enter; *N pins</Text>}
+          {here && (
+            <Text dimColor>
+              <Text color={HERE_FG}>yellow</Text> = nearest to your view
+            </Text>
+          )}
           {pinnedRows.length > 0 && <Text dimColor>★ pinned</Text>}
           {pinnedRows.map(r => promptRow(r, 'pin'))}
           {pinnedRows.length > 0 && <Text dimColor>all prompts</Text>}

@@ -162,7 +162,9 @@ The band takes the keys, and the pane shows where you are:
 | `s` | Pins or unpins the prompt under the `▶` (see [Pinned prompts](#pinned-prompts)) |
 | `Esc` | Closes without jumping |
 
-The list includes prompts from before the plugin was loaded. The first time it sees a conversation, the plugin reads the prompts from the conversation's transcript file in one pass. After that it adds each prompt as you send it.
+The list includes prompts from before the plugin was loaded. The first time it sees a conversation, the plugin reads the prompts from the conversation's transcript file in one pass. After that it adds each prompt as you send it, including messages you typed while Claude was still working, which Claude Code queues and delivers mid-turn.
+
+**The yellow number** is the prompt nearest to where you are in the conversation, and the list opens scrolled so that row is in the middle rather than at the newest prompt. A prompt and the replies after it are one exchange; the exchange that takes most of your screen is where you are, and when two take about the same, the earlier one wins, so you have the context above as well as below. A prompt peeking in at the bottom of a long reply does not take the yellow from that reply's prompt. With nothing placeable on screen, it is the last prompt above the top of your screen. Scroll with the pane open and the yellow moves with you; the list slides only as far as it must to keep the yellow row showing, and never while you are typing a number.
 
 **Dimmed prompts** are ones Claude Code hasn't drawn on screen since the plugin loaded. Usually that means they are from before the last compaction, which Claude Code no longer loads after a restart or resume, and a jump to one will be refused. A prompt that simply hasn't been scrolled past yet is also dim until it is drawn, so treat the dimming as a hint, not a promise.
 
