@@ -798,7 +798,7 @@ function queueProseAnchors($: EngineInterface, anchors: ReturnType<typeof markdo
     $.clock.after(0, () => {
       void (async () => {
         const reg = await loadRegister($)
-        if (reg.perma.some(r => r.uuid.toLowerCase().startsWith(a.uuid8))) return
+        if (findRecord(reg, a.uuid8)) return
         if (a.sessionId && a.sessionId !== (await $.session.id())) return // another conversation's bookmark
         const found = await resolveTarget($, { uuid: a.uuid })
         if (found.kind !== 'one') {
