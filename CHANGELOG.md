@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.23] - 2026-10-12
+
+### Added
+
+- **Filter the prompts list** ([#28](https://github.com/DazzleML/claude-bookmarks/issues/28)). Type `/` and some words in the prompts pane's `#` field (`/bm-prompts` from an empty input box) to list only the prompts containing all of them, in any order and any case. Prompts keep their numbers, pinned prompts are filtered too, and a line above the list says `N of M match`. With a filter active, the first `Esc` clears it and the second closes the pane.
+- The filter searches the whole text of your prompts, not only the excerpt the list shows. That text is kept per conversation in `~/claude/bookmarks/prompttext/`, up to "Prompt text kept for the filter (bytes)" in `/config`, 2 MB by default, newest first; `0` keeps everything, and lowering it frees the space at once. Conversations are read once more to collect the text of their earlier prompts.
+
+### Changed
+
+- The band's hint for the prompts list no longer offers `/ filter`: a band key is one letter or digit, so the filter lives in the pane's own field.
+- **The plugin's storage stays small** ([#15](https://github.com/DazzleML/claude-bookmarks/issues/15)). Claude Code gives a plugin one storage file for every conversation, refused past 4 MiB in all, and the plugin never removed anything from it. Now a conversation not opened for 30 days gives up its prompt list and footnotes, which are read again from the transcript when you reopen it; its marks, pins and reading position stay. Conversations already stored count from today.
+
 ## [0.4.22] - 2026-10-12
 
 ### Added
@@ -428,7 +440,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.22...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.23...HEAD
+[0.4.23]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.22...v0.4.23
 [0.4.22]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.21...v0.4.22
 [0.4.21]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.20...v0.4.21
 [0.4.20]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.19...v0.4.20

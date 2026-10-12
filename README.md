@@ -187,6 +187,8 @@ Open `/config` and find the plugin's settings under its name. A change takes eff
 | Prompts list opens at | `nearest`, `newest` | Where the prompts list opens: centred on the prompt nearest your view, or at the newest |
 | Prompts list follows the view | `when-idle`, `always`, `never` | Whether the list scrolls to keep the yellow row showing as you scroll the conversation (`when-idle`: not while you type a number) |
 | Closeness for the earlier prompt | `0.6` (0 to 1) | How much of the screen an earlier exchange must hold to count as nearest |
+| Footnotes in the prompts list | `folded`, `shown`, `hidden` | Your slash commands, `!` shell commands and interruptions, listed as `N.k` under the prompt they followed: folded behind `… N footnotes`, always listed, or never |
+| Prompt text kept for the filter (bytes) | `2000000` (0 = unlimited) | How much of your prompts the `/words` filter searches, newest first; past the budget the oldest prompts are matched only on the short excerpt the list shows |
 | A list after a jump | `close`, `stay` | Whether the prompts or bookmarks list closes after you jump from it |
 | A list while you type | `stay`, `close` | Whether an open list stays while you type in the input box |
 | Keyboard after an action | `input`, `band` | Where the keyboard should go after an action (`input` waits on Claude Code allowing it) |

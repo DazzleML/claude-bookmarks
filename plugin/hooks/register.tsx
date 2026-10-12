@@ -30,6 +30,9 @@ import { lineHint, linePlaceholder, listHint, parseListNumber, route, type Pane 
 import { afterAction, isList, type Cause } from './core/after-action'
 import { debugTextMode, installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
 import { resolvePalette, type Palette, type Role, type Style } from './core/palette'
+import { shard, withinBudget, type PromptText } from './core/text-store'
+import { filterPrompts, matchLegend } from './core/filter'
+import { pruneStore, type Seen } from './core/store-prune'
 import { footnoteOf, looksLikePrompt, numberFootnotes, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompt-rows'
 import { byFirstFour, findByMessage, firstFour, sameMessage } from './core/message-id'
 
@@ -522,6 +525,77 @@ async function footnotesKey($: EngineInterface): Promise<string> {
 async function keptFootnotes($: EngineInterface): Promise<FootnoteRef[]> {
   return ((await $.store.get(await footnotesKey($))) as FootnoteRef[] | undefined) ?? []
 }
+
+// The prompts' text for the filter (#28): held in memory while the plugin runs, kept as
+// much as the `promptTextBudget` setting allows (0 = unlimited; core/text-store.ts) in
+// files under the data root, <dataRoot>/bookmarks/prompttext/<sid>.json (the piece
+// count) and <sid>.<i>.json (pieces under the 4 MiB that $.fs.read takes). Not in the
+// plugin store: its 4 MiB is for the whole store, every conversation's marks and pins
+// included, and a store over it refuses every write (typings, `store.set`; measured
+// 2026-10-12: 620 KB live, 216 KB of it this text from one day's dev build).
+// djdarcy, 2026-10-12: free memory where appropriate, keep a cache where there is room;
+// search (#20) reuses it.
+const TEXT_PIECE_BYTES = 3_500_000
+// The cache carries its conversation: after /clear or /resume the plugin stays loaded,
+// and a save from the old conversation's cache would overwrite the new one's pieces.
+let promptTextCache: { sid: string; texts: Map<string, string> } | undefined
+let promptTextSave: Timer | undefined
+async function promptTextBase($: EngineInterface, sid: string): Promise<string | undefined> {
+  const root = await dataRoot($)
+  return root ? `${root}/bookmarks/prompttext/${sid}` : undefined
+}
+async function readJson($: EngineInterface, path: string): Promise<unknown> {
+  try {
+    return (await $.fs.exists(path)) ? JSON.parse(await $.fs.read(path)) : undefined
+  } catch {
+    return undefined // a piece cut short by a write that did not finish: that text is lost, the rest stands
+  }
+}
+async function promptTexts($: EngineInterface): Promise<Map<string, string>> {
+  const sid = await $.session.id()
+  if (promptTextCache?.sid === sid) return promptTextCache.texts
+  await dropStoredPromptText($)
+  const cache = new Map<string, string>()
+  const base = await promptTextBase($, sid)
+  const count = base ? Number(((await readJson($, `${base}.json`)) as { pieces?: number } | undefined)?.pieces ?? 0) : 0
+  for (let i = 0; i < count; i++) {
+    const piece = await readJson($, `${base}.${i}.json`)
+    if (Array.isArray(piece)) for (const t of piece as PromptText[]) cache.set(t.uuid, t.text)
+  }
+  promptTextCache = { sid, texts: cache }
+  return cache
+}
+async function savePromptTexts($: EngineInterface) {
+  const sid = await $.session.id()
+  const cache = await promptTexts($)
+  const order = (await keptPrompts($)).map(p => p.uuid).reverse() // newest first
+  const kept = withinBudget(order.filter(u => cache.has(u)).map(u => ({ uuid: u, text: cache.get(u)! })), currentSettings().promptTextBudget)
+  // Drop what fell outside the budget from memory too.
+  promptTextCache = { sid, texts: new Map(kept.map(t => [t.uuid, t.text])) }
+  const base = await promptTextBase($, sid)
+  if (!base) return // no data root: the text lives in memory until the plugin unloads
+  const before = Number(((await readJson($, `${base}.json`)) as { pieces?: number } | undefined)?.pieces ?? 0)
+  const pieces = shard(kept, TEXT_PIECE_BYTES)
+  for (let i = 0; i < pieces.length; i++) await $.fs.write(`${base}.${i}.json`, JSON.stringify(pieces[i]))
+  await $.fs.write(`${base}.json`, JSON.stringify({ pieces: pieces.length }))
+  // $.fs has no delete: a piece no longer counted is emptied, so a smaller budget frees the disk too.
+  for (let i = pieces.length; i < before; i++) await $.fs.write(`${base}.${i}.json`, '[]')
+}
+// 0.4.23 development builds kept this text in the plugin store as `prompttext:` keys;
+// they are removed once per load. One machine ran that build (the maintainer's, never
+// released; counted 2026-10-12); take this out at 0.5.0.
+let storedPromptTextDropped = false
+async function dropStoredPromptText($: EngineInterface) {
+  if (storedPromptTextDropped) return
+  storedPromptTextDropped = true
+  for (const key of await $.store.keys()) if (key.startsWith('prompttext:')) await $.store.delete(key)
+}
+// A prompt's text joins the cache; the files are written a moment later, once per burst.
+async function keepPromptText($: EngineInterface, uuid: string, text: string) {
+  ;(await promptTexts($)).set(uuid, text)
+  promptTextSave?.cancel()
+  promptTextSave = $.clock.after(2000, () => void savePromptTexts($))
+}
 async function keepFootnote($: EngineInterface, f: FootnoteRef) {
   const kept = await keptFootnotes($)
   if (kept.some(k => k.uuid === f.uuid)) return
@@ -667,6 +741,27 @@ async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment
   return { ...r, via: g.via, ms: g.ms }
 }
 
+// The back-fill's version; the done flag is `backfilled<N>:<sessionId>`.
+const BACKFILL_VERSION = 6
+// A conversation not opened for this long gives up what its transcript rebuilds (#15).
+const PRUNE_AFTER_MS = 30 * 86_400_000
+
+// Keep the plugin store small: it is one file for every conversation, refused past 4 MiB
+// in all (core/store-prune.ts). Once per conversation opened, before its back-fill.
+async function pruneStoreNow($: EngineInterface) {
+  const { drop, seen } = pruneStore(
+    await $.store.keys(),
+    ((await $.store.get('seen')) as Seen | undefined) ?? {},
+    await $.clock.now(),
+    PRUNE_AFTER_MS,
+    await $.session.id(),
+    BACKFILL_VERSION,
+  )
+  for (const key of drop) await $.store.delete(key)
+  await $.store.set('seen', seen)
+  if (drop.length) log($, `[bm] store: pruned ${drop.length} keys (${[...new Set(drop.map(k => k.split(':')[0]))].join(', ')})`)
+}
+
 async function backfillPrompts($: EngineInterface) {
   // The key's number marks what the back-fill knows: `2` learnt queued prompts
   // (attachment rows); `3` drops rows the live capture kept before it had the prompt
@@ -679,7 +774,9 @@ async function backfillPrompts($: EngineInterface) {
   // had kept (2026-10-11, djdarcy: two of his mid-turn messages missing above #316).
   // `5`: footnotes -- the person's slash commands, `!` shell commands and interruptions,
   // kept with the prompt each follows (#33).
-  const doneKey = `backfilled5:${await $.session.id()}`
+  // `6`: the prompts' whole text for the filter (#28), which a conversation read under
+  // `5` never collected.
+  const doneKey = `backfilled${BACKFILL_VERSION}:${await $.session.id()}`
   if (await $.store.get(doneKey)) return
   const path = await transcriptPath($)
   if (!path) {
@@ -705,6 +802,7 @@ async function backfillPrompts($: EngineInterface) {
     const text = promptTextOf(o)
     if (text !== undefined) {
       found.push({ uuid: o.uuid, head: headOf(text) })
+      ;(await promptTexts($)).set(o.uuid, text)
       continue
     }
     const fn = footnoteOf(o)
@@ -716,6 +814,7 @@ async function backfillPrompts($: EngineInterface) {
   const have = new Set(found.map(p => p.uuid))
   const merged = [...found, ...(await keptPrompts($)).filter(p => !have.has(p.uuid) && looksLikePrompt(p.head))]
   await $.store.set(await promptsKey($), merged.slice(-PROMPTS_KEPT))
+  await savePromptTexts($)
   // A cut-off read is left unmarked, so a later session start tries again.
   if (!rows.isStdoutTruncated) await $.store.set(doneKey, true)
   log(
@@ -1331,6 +1430,9 @@ let pendingCentre: string | undefined
 // The prompts whose footnotes the person unfolded (`.` or a press on the ellipsis row),
 // by number; folded is the default (the `footnotes` setting).
 const unfoldedFootnotes = new Set<number>()
+// The prompts filter (#28): the words typed after `/` in the prompts pane's number field
+// (djdarcy, 2026-10-12: "Pane field only"); empty when no filter is active.
+let paneFilter = ''
 let viewTimer: Timer | undefined
 const VIEW_MOVED_MS = 150
 // Called by the message render hooks on every screen report. A short debounce later,
@@ -1882,6 +1984,12 @@ async function jumpToPromptNumber($: EngineInterface, typed: string, via: string
     await togglePin($, typed.trim().slice(1))
     return
   }
+  // `/words` with Enter: the filter (#28), as typing it does.
+  if (typed.trim().startsWith('/')) {
+    paneFilter = typed.trim().slice(1)
+    await update($, viewRev, v => v + 1)
+    return
+  }
   const all = await prompts($)
   // `3.` unfolds #3's footnotes; `3.1` jumps to its first (#33).
   const parsed = parseListNumber(typed)
@@ -2096,6 +2204,8 @@ export const register: Register = (on, options) => {
     const result = await next(e)
     if (!result.deny) {
       machineOptions = { ...machineOptions, [e.key.slice('bookmarks.'.length)]: result.value }
+      // A smaller text budget frees memory and store now, not at the next prompt.
+      if (e.key === 'bookmarks.promptTextBudget') await savePromptTexts($)
       await update($, settingsRev, v => v + 1)
     }
     return result
@@ -2193,7 +2303,10 @@ export const register: Register = (on, options) => {
     await pollSelection($)
     selectionPoll = $.clock.every(1000, () => void pollSelection($))
     // Not awaited: session start should not wait on a third of a second of PowerShell.
-    void backfillPrompts($).catch(err => log($, `[bm] backfill failed: ${String(err)}`))
+    void pruneStoreNow($)
+      .catch(err => log($, `[bm] store prune failed: ${String(err)}`))
+      .then(() => backfillPrompts($))
+      .catch(err => log($, `[bm] backfill failed: ${String(err)}`))
 
     // The tracking mechanism for the borrowed actions: say so whenever the build is
     // not one the chords were verified on.
@@ -2273,6 +2386,13 @@ export const register: Register = (on, options) => {
 
   // The person closed the pane (its close mark, or Ctrl+X x): end the band's key mode too.
   on('ui.close', { id: PANE }, async ($, e, next) => {
+    // Esc with a filter active (#28): the first clears the filter, the second closes.
+    if (e.origin.kind === 'person' && paneFilter) {
+      log($, '[bm] Esc cleared the prompts filter; the pane stays')
+      paneFilter = ''
+      await update($, viewRev, v => v + 1)
+      return { deny: 'the prompts filter was cleared; Esc again closes the list' }
+    }
     await endBandMode($)
     const closed = await next(e)
     // The person closed it (Esc, its ×) without picking anything: back to where the view
@@ -2327,7 +2447,10 @@ export const register: Register = (on, options) => {
         const row: Row = { uuid: e.uuid, door: (queued ? 'prompt' : e.door) as Row['door'], head: headOf(text), text: text.slice(0, 4000) }
         note(`append ${e.door} ${e.uuid} ${row.head.slice(0, 30)}`)
         await update($, rows, list => [...(list as Row[]), row].slice(-500))
-        if (row.door === 'prompt') await keepPrompt($, { uuid: row.uuid, head: row.head })
+        if (row.door === 'prompt') {
+          await keepPrompt($, { uuid: row.uuid, head: row.head })
+          await keepPromptText($, row.uuid, text)
+        }
       }
     }
     // A footnote (#33): the person's slash command, `!` shell command or interruption,
@@ -3084,7 +3207,12 @@ export const register: Register = (on, options) => {
       const drawnFour = new Set([...rendered.keys()].map(firstFour))
       const pinIds = await loadPins($)
       const byUuid = new Map(numbered.map(r => [r.uuid, r]))
-      const pinnedRows = pinIds.map(u => byUuid.get(u)).filter((r): r is (typeof numbered)[number] => !!r)
+      // The filter (#28): only the prompts matching `/words` in the field; numbers kept.
+      const texts = await promptTexts($)
+      const filtered = filterPrompts(numbered, paneFilter, r => texts.get(r.uuid) ?? r.head)
+      const listed = new Set(filtered.shown.map(r => r.uuid))
+      const matchLine = matchLegend(filtered.shown.length, filtered.of, paneFilter)
+      const pinnedRows = pinIds.map(u => byUuid.get(u)).filter((r): r is (typeof numbered)[number] => !!r && listed.has(r.uuid))
       const pinSet = new Set(pinIds)
       type NumberedPrompt = (typeof numbered)[number]
       // Digits typed in the band (it holds the keyboard; the pane can't take it) show
@@ -3154,11 +3282,19 @@ export const register: Register = (on, options) => {
             <Input
               key="prompt-number"
               label="#"
-              placeholder={`1-${all.length}`}
+              placeholder={`1-${all.length}, or /words to filter`}
               submitLabel="jump"
               {...(fromBand !== undefined ? { value: fromBand } : {})}
               autoFocus
               onInput={(typed: string) => {
+                // `/words` filters the list (#28); clearing the slash clears the filter.
+                const query = typed.startsWith('/') ? typed.slice(1) : ''
+                if (query !== paneFilter) {
+                  log($, `[bm] prompts filter: "${cut(query, 40)}"`, { text: true })
+                  paneFilter = query
+                  void update($, viewRev, v => v + 1)
+                  return
+                }
                 if (promptNumberComplete(typed, all.length)) void go(typed)
               }}
               onSubmit={(typed: string) => void go(typed)}
@@ -3174,10 +3310,11 @@ export const register: Register = (on, options) => {
               <Text {...style('here')}>#N</Text> = nearest to your view
             </Text>
           )}
+          {matchLine && <Text {...style('legend')}>{`/${paneFilter}: ${matchLine}`}</Text>}
           {pinnedRows.length > 0 && <Text {...style('legend')}>★ pinned</Text>}
           {pinnedRows.map(r => promptRow(r, 'pin'))}
           {pinnedRows.length > 0 && <Text {...style('legend')}>all prompts</Text>}
-          {numbered.flatMap(r => [promptRow(r, 'p'), ...footnoteRows(r.n)])}
+          {numbered.filter(r => listed.has(r.uuid)).flatMap(r => [promptRow(r, 'p'), ...footnoteRows(r.n)])}
           {footnoteRows(0)}
         </Box>
       )

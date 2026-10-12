@@ -25,7 +25,6 @@ export type Operation =
   | { op: 'pin' }
   | { op: 'claim' }
   | { op: 'group'; dir: -1 | 1 }
-  | { op: 'filter' }
   | { op: 'close' }
   | { op: 'wait' }
   | { op: 'hint'; reason: string }
@@ -102,8 +101,10 @@ export const LIST_KEYS: readonly ListKey[] = [
   { key: 'h', label: 'previous group', panes: ['bookmarks'], route: () => waiting({ op: 'group', dir: -1 }) },
   { key: 'l', label: 'next group', panes: ['bookmarks'], route: () => waiting({ op: 'group', dir: 1 }) },
   { key: 'c', label: 'claim', panes: ['bookmarks'], route: () => waiting({ op: 'claim' }) },
-  { key: '/', label: 'filter', panes: ['list'], route: () => waiting({ op: 'filter' }) },
 ]
+// The prompts filter (#28) is typed as `/words` in the prompts pane's own number field
+// (djdarcy, 2026-10-12: "Pane field only"): `/` is not a letter or digit, so it can never
+// be a band key, and it is not listed here.
 
 // Route what was typed in a context. `typed` is the whole command line for the band with
 // no pane (a command and maybe its argument), or a single key in a list pane.

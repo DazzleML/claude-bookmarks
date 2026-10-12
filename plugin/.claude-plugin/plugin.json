@@ -1,7 +1,7 @@
 {
   "name": "bookmarks",
   "displayName": "Bookmarks",
-  "version": "0.4.22",
+  "version": "0.4.23",
   "description": "Bookmarks and vim-style marks inside Claude Code conversations: mark a line, jump back, keep a reading position, browse your prompts, and let Claude cite earlier places as clickable links.",
   "author": {
     "name": "DazzleML",
@@ -134,6 +134,14 @@
         "shown",
         "hidden"
       ]
+    },
+    "promptTextBudget": {
+      "type": "number",
+      "title": "Prompt text kept for the filter (bytes)",
+      "description": "How much of your prompts the filter searches, across the conversation; 0 = unlimited (for machines with room to spare). The default keeps whole prompts in most conversations",
+      "default": 2000000,
+      "min": 0,
+      "max": 1000000000
     }
   },
   "types": "./types/index.d.ts"

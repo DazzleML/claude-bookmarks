@@ -10,7 +10,7 @@ const PROMPTS = [
   { uuid: 'aaaaaaaa-0000-4000-8000-000000000002', head: 'second prompt: add a band' },
   { uuid: 'aaaaaaaa-0000-4000-8000-000000000003', head: 'third prompt: list the prompts' },
 ]
-const STORE = { [`prompts:${SID}`]: PROMPTS, [`backfilled5:${SID}`]: true }
+const STORE = { [`prompts:${SID}`]: PROMPTS, [`backfilled6:${SID}`]: true }
 
 const BAND = { plugin: 'bookmarks', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS, requestId: 'band-1' }
 const PANE = {
@@ -75,7 +75,7 @@ test('/bm-config prints every setting with its source', async ($, on) => {
   const w = world(on, { store: STORE, session: SID })
   await $.command.run({ command: 'bm-config', args: '' } as never)
   expect(w.logs()).toEqual([
-    '[bm] settings: listOpensAt="nearest" (default); followHere="when-idle" (default); closeShare=0.6 (default); paneAfterJump="close" (default); paneWhileTyping="stay" (default); afterActionFocus="input" (default); debugDefault="off" (default); debugText="auto" (default); debugTextLength="reference" (default); palette="" (default); footnotes="folded" (default)',
+    '[bm] settings: listOpensAt="nearest" (default); followHere="when-idle" (default); closeShare=0.6 (default); paneAfterJump="close" (default); paneWhileTyping="stay" (default); afterActionFocus="input" (default); debugDefault="off" (default); debugText="auto" (default); debugTextLength="reference" (default); palette="" (default); footnotes="folded" (default); promptTextBudget=2000000 (default)',
     '[bm] this build is loaded from a folder, so debugText="auto" means always; change any of these in /config',
   ])
 })

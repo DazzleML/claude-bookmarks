@@ -72,7 +72,7 @@ test('a list pane takes digits, j/k, Enter, and its own keys', () => {
   assert.deepEqual(route('j', list).operation, { op: 'step', dir: 1 })
   assert.deepEqual(route('Enter', list), { operation: { op: 'go' }, needsMore: false })
   assert.deepEqual(route('s', list).operation, { op: 'pin' })
-  assert.deepEqual(route('/', list).operation, { op: 'filter' })
+  assert.equal(route('/', list).operation.op, 'hint', '`/words` belongs to the pane field, not a band key')
   assert.equal(route('h', list).operation.op, 'hint', 'groups are the bookmarks pane only')
 })
 
@@ -88,6 +88,6 @@ test('Esc closes, in any context', () => {
 })
 
 test("each list pane's hint is generated from its own keys", () => {
-  assert.equal(listHint('list'), 'number + Enter jump · j next · k previous · s pin · / filter · Esc close')
+  assert.equal(listHint('list'), 'number + Enter jump · j next · k previous · s pin · Esc close')
   assert.equal(listHint('bookmarks'), 'number + Enter jump · j next · k previous · h previous group · l next group · c claim · Esc close')
 })

@@ -111,6 +111,17 @@ export const FIELDS = {
     title: 'Footnotes in the prompts list',
     description: "folded: a prompt with footnotes (your slash commands, ! shell commands, interruptions) shows an ellipsis, and . unfolds them; shown: always listed under their prompt; hidden: never listed",
   },
+  // #28, djdarcy 2026-10-12: "The whole prompt up to a budget is fine, but for private
+  // builds and with the dcc-patcher we should be able to go further. So we want to make
+  // sure we can allow unlimited for machines that have less limitations."
+  promptTextBudget: {
+    kind: 'number',
+    min: 0,
+    max: 1_000_000_000,
+    default: 2_000_000,
+    title: 'Prompt text kept for the filter (bytes)',
+    description: 'How much of your prompts the filter searches, across the conversation; 0 = unlimited (for machines with room to spare). The default keeps whole prompts in most conversations',
+  },
 } as const satisfies Record<string, Field>
 
 export type FieldName = keyof typeof FIELDS

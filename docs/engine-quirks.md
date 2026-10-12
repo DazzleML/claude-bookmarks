@@ -244,6 +244,10 @@ A plugin runs programs through `$.process.run` with an argument list. From Windo
 
 On Windows, `Select-String -SimpleMatch` ignores case by default, which picks up extra lines; adding `-CaseSensitive` avoids them.
 
+### The plugin store's 4 MiB is for the whole store — Workaround
+
+`$.store.set` refuses a write that would leave the store over 4 MiB of JSON text *in all* (the typings, `store.set`), not per value. The store is one file under Claude Code's `plugins/store/`, holding every conversation's keys, so splitting a large value across keys does not help, and a store that reaches the cap refuses every later write: marks, pins, everything. Anything that grows with the conversation (the filter's prompt text) is kept in files under the data root instead, in pieces under `$.fs.read`'s 4 MiB. Measured 2026-10-12: 620 KB live, of which the prompt lists were 305 KB across conversations (#15). `$.fs` has no delete, so a file no longer needed is overwritten small; `$.store.delete` exists.
+
 ### Read the selection after opening the pane — Workaround
 
 Awaiting anything before `$.ui.open({ focus: true })` appears to cost the pane the keyboard. The mark pane, which read your selection first, was refused in 8 of 12 runs; the jump pane, which didn't, almost never was (2026-10-06/07). So the plugin opens the pane first and reads the selection after. The original reason for reading it first was an inline pane shifting the layout, which made the selection resolve one row too high. The pane is docked now, and a mark resolves by the selection's message id, not its screen position.
@@ -268,6 +272,8 @@ What a test has to supply, learned the same day:
 
 - Every engine call the plugin makes needs an answer beneath it, or the call fails with "no implementation for <event>". `plugin/tests/harness.ts` answers them from memory (store, env, clock through the kit's `mock`; files, processes, the prompt box, panes and the log by hand) and records each call, so a test can never reach the real disk or a process.
 - The engine's own drawing beneath a render hook (`next(e)`) is the test's to supply: an empty `Box` from `$.ui.resolve(e)` serves.
+- `session.start` does not run in a kit test, and the test's `$` has no call that raises it (measured 2026-10-12, 2.1.296: a store seeded with a stale key saw no delete). Start-up work (the back-fill, the store pruning) is tested through its pure core and a live look.
+- The test's `$` has no `store`; to see what the plugin wrote or deleted, a test registers its own `store.delete` / `store.set` hook ahead of `world()` and calls `next`.
 - Most answers are `{ value }`; `ui.focus` and `ui.scroll` answer the result itself (`{}` or `{ deny }`).
 - A plugin's own `$.ui.focus` (moving the band's focus ring onto a button) is not routed to the test's hooks: it fails with "no implementation for ui.focus" whatever the test registers. The plugin's state has changed by then, so a test checks what was drawn and lets that call throw. The same holds for the plugin's own `$.ui.scroll` (a jump): a test checks what happened before it, with a control that shows the path ran (measured 2026-10-12 on a footnote jump).
 - The kit has no snapshot matcher and a test cannot read files, so the goldens are written inline.

@@ -183,6 +183,31 @@ Pin the prompts you want to come back to, and they stay at the top of the pane:
 
 A pinned prompt shows a gold star inside its number, `245★) `, both in a **★ pinned** group at the top of the pane (in the order you pinned them) and in its place in the full list. Pins are kept per conversation, like marks.
 
+### Footnotes
+
+Some of what you type is not a prompt: a slash command (`/compact`, `/bm-pin 21`), a `!` shell command, an interruption (`Esc` while Claude is working). These are listed as **footnotes** under the prompt they followed, numbered `N.k`, so prompt numbers stay as they were:
+
+```
+  13) Then a recap and a what-next
+      … 2 footnotes
+  12) Our readme feels a bit weak
+```
+
+Unfolded, the ellipsis becomes the footnotes themselves, `12.1 /compact`, `12.2 !git status`. Footnotes before your first prompt are `0.k`, at the bottom of the list. Things Claude or Claude Code did on their own (compactions, task notifications) are not footnotes: the list is for what you typed.
+
+| To | Do |
+|----|----|
+| Unfold a prompt's footnotes | Click the `… N footnotes` row, or type `12.` in the pane's `#` field |
+| Jump to footnote 12.1 | Type `12.1` and `Enter` in the pane's `#` field, or on the band type `1` `2`, click the band's `.` button, `1`, `Enter` (a band key is one letter or digit, so `.` is a button there) |
+
+The "Footnotes in the prompts list" setting chooses `folded` (the default), `shown` (always unfolded) or `hidden`. Footnotes are read from the transcript once, with the prompts, and added live after that.
+
+### Filtering the list
+
+Type `/` and some words in the pane's `#` field to list only the prompts containing all of them, in any order and any case: `/band redraw` finds "the redraw of the band". Prompts keep their numbers, and a line above the list says how many match, `/band redraw: 2 of 153 match`. Pinned prompts are filtered too. Clear the field to see the whole list again, or press `Esc`: with a filter active, the first `Esc` clears the filter and the second closes the pane. Typing in the field needs the keyboard in the pane (`/bm-prompts` from an empty input box).
+
+The filter searches the whole text of your prompts, not only the excerpt the list shows. That text is kept per conversation up to a budget, "Prompt text kept for the filter (bytes)", 2 MB by default, newest first; past it, older prompts are matched on their excerpt alone. `0` keeps everything, for a machine with room to spare. It is kept in your own folder, `~/claude/bookmarks/prompttext/` (beside the bookmarks), not in Claude Code's plugin storage, which has a small limit shared by everything the plugin keeps.
+
 ## Bookmarks
 
 A mark is a letter you can reassign in a second. A **bookmark** is permanent: a durable address of one message in this conversation, kept in a readable file under your own folder, that still resolves in a later session and that a link can point at. Claude places bookmarks while it answers, and you can promote any mark into one.
@@ -305,7 +330,7 @@ The plugin's settings are in Claude Code's `/config`, under the plugin's name; t
 
 Two of them decide what the debug log may quote from the conversation. "Conversation text in the debug log" is `auto` by default: off in a plugin installed from a marketplace, always in one loaded from a folder (a developer's build). `with-debug` quotes only while the conversation's debugging is on (`/bm-debug on`), `always` and `off` mean what they say, and the `text` debug channel turns quoting on for one conversation whatever the setting. "How much text a debug line quotes" is `reference` (a short excerpt, enough to find the place) or `full`.
 
-Every colour the plugin draws has a role, and its default is one of Claude Code's theme keys wherever one fits, so it follows your theme: `here` (the prompt nearest your view), `pinned` (the pin star, the bookmark anchor), `mark` and `markBand` (a mark's words and the band behind its line; the band is pale on a light theme and navy on a dark one), `legend` (hints and titles), `used` and `unused` (mark letters taken and free), `unreached` (a prompt not drawn since the plugin loaded), `emphasis` (what you are typing), `footnote` and `search` (for features to come). "Colour overrides" takes JSON naming roles: `{"here": {"color": "cyan"}, "markBand": {"backgroundColor": "#203040"}}`. A colour is a theme key (`warning`, `subtle`, `suggestion`, ...), a terminal colour name (`cyan`, `yellowBright`) or `#rrggbb`; `dimColor` and `bold` take `true` or `false`. Anything else is ignored and the default stands.
+Every colour the plugin draws has a role, and its default is one of Claude Code's theme keys wherever one fits, so it follows your theme: `here` (the prompt nearest your view), `pinned` (the pin star, the bookmark anchor), `mark` and `markBand` (a mark's words and the band behind its line; the band is pale on a light theme and navy on a dark one), `legend` (hints and titles), `used` and `unused` (mark letters taken and free), `unreached` (a prompt not drawn since the plugin loaded), `emphasis` (what you are typing), `footnote` (the prompts list's footnotes) and `search` (for a feature to come). "Colour overrides" takes JSON naming roles: `{"here": {"color": "cyan"}, "markBand": {"backgroundColor": "#203040"}}`. A colour is a theme key (`warning`, `subtle`, `suggestion`, ...), a terminal colour name (`cyan`, `yellowBright`) or `#rrggbb`; `dimColor` and `bold` take `true` or `false`. Anything else is ignored and the default stands.
 
 ## What is kept, and where
 
@@ -313,7 +338,8 @@ Every colour the plugin draws has a role, and its default is one of Claude Code'
 |------|----------|-------|
 | Marks `a`-`z` | This conversation | Survive restarting Claude Code and `claude --resume` |
 | Reading position | This conversation | The same |
-| The prompt list | This conversation | Up to 5000 prompts |
+| The prompt list | This conversation | Up to 5000 prompts, with their footnotes; set aside after 30 days unopened, and read again from the transcript when you reopen the conversation |
+| Prompt text for the filter | This conversation | Up to the budget setting, 2 MB by default, newest first; in `~/claude/bookmarks/prompttext/` |
 | Pinned prompts | This conversation | Survive restarting Claude Code and `claude --resume` |
 | Bookmarks (yours and Claude's) | Forever | In `~/claude/bookmarks/sessions/`, readable JSON and markdown; never under `~/.claude` |
 | The jumplist (back/forward) | This conversation | Up to 100 jumps |
