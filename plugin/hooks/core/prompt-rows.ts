@@ -11,7 +11,11 @@
 
 // Text the engine wraps around rows that are not the person's words. A prompt that
 // happens to begin with one of these is lost; none has been seen.
-const NOT_A_PROMPT = /^\s*(<bash-(input|stdout|stderr)>|<command-name>|<command-message>|<local-command-(stdout|stderr)>|\[Request interrupted by user|This session is being continued from a previous conversation)/
+// `<teammate-message …>`: a row another agent sent into the conversation (claude-devtools
+// excludes these from prompts, src/main/types/messages.ts:366-378; none seen here yet).
+// `<task-notification>`: the engine's notice that a background task finished, filed as a
+// user row (44 in the author's transcript, 2026-10-11; one reached the list as #318).
+const NOT_A_PROMPT = /^\s*(<bash-(input|stdout|stderr)>|<command-name>|<command-message>|<local-command-(stdout|stderr)>|<teammate-message[\s>]|<task-notification>|\[Request interrupted by user|This session is being continued from a previous conversation)/
 
 export function looksLikePrompt(text: string): boolean {
   return text.trim() !== '' && !NOT_A_PROMPT.test(text)
@@ -38,7 +42,10 @@ export function promptTextOf(o: any): string | undefined {
     }
     return undefined
   }
-  if (o?.type !== 'user' || o.isMeta || o.isSidechain) return undefined
+  // A compaction summary is a user row flagged `isCompactSummary` (4 in this session's
+  // transcript, 2026-10-11); the flag is checked before the opening sentence, which is
+  // the engine's wording and may change.
+  if (o?.type !== 'user' || o.isMeta || o.isSidechain || o.isCompactSummary) return undefined
   const content = o.message?.content
   let text: string | undefined
   if (typeof content === 'string') text = content

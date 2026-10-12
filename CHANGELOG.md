@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-11
+
+### Fixed
+
+- The prompts pane's yellow row no longer jumps to the newest prompts after you move with a click or a key. When the view jumps, the messages it leaves behind are never reported as gone, and the pane listened only to messages, not to tool calls and their output. So while a stretch of tool output filled the screen, the last messages the pane had heard of were the ones you had jumped away from, and the yellow row went to them. The pane now also hears tool rows, command output and notices, and when no message is on screen it keeps the yellow row where it was.
+- The prompts pane's yellow row no longer jumps to a message that was only redrawn, not viewed. A message redrawn off screen (a bookmark link minted into it, a highlight cleared) reports itself as fully on screen, and that single report displaced the real view, so the highlight could leap from the prompt above you to one five exchanges back. Such reports are now recognised by their shape and ignored, and the previous answer stands. The debug log's "nearest prompt moved" line shows each message's visible range against its row count.
+- The prompts list recognises a compaction summary by the flag Claude Code stores on it, not only by its opening sentence, so a change in that wording cannot put the summary back in the list. Messages another agent sends into the conversation are not counted as prompts either.
+- Messages typed while Claude was working are now added to the prompts list as they arrive. 0.4.0 found them when it read the transcript, but stored the ones arriving live under the wrong kind, so every later one went missing until the next full read. Background-task notifications, which Claude Code files as user rows, no longer appear as prompts. The list is rebuilt once more to pick up what was missed.
+
 ## [0.4.0] - 2026-10-11
 
 ### Added
@@ -275,7 +284,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.5...v0.4.0
 [0.3.5]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.3...v0.3.4

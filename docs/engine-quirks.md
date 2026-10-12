@@ -179,7 +179,13 @@ A plugin can reveal a message (its top, middle or bottom at an edge of the windo
 
 Claude Code reports a message as on screen when it's drawn, and on a scroll only at the window's edges, so a message left behind by one big jump may still look visible. The reading position uses only the latest burst of reports (within 1.5 s) together with its own record of where the last press went.
 
+The latest burst must count every kind of transcript row, not only messages. Tool calls, tool results, tool groups, command output, the turn-duration line and notices all report `onScreen` (a tool group under its first message's id prefixed `collapsed-`, a tool call and its result under the tool call's `toolu_` id). A screen showing only tool rows sends no message report at all, so a plugin that hears only `UserMessage` and `AssistantMessage` takes the leftovers from before the jump as the latest burst (measured 2026-10-12 03:19:29: after a jump from the bottom to #324 and a scroll, a 65-line tool result was on screen and the only "on screen" messages were #358's replies, last reported 27 s earlier; the prompts pane's yellow row went to #358). The prompts pane now hears all eight row kinds, and when no message is in the latest burst it keeps its answer.
+
 A redraw also repeats a message's last report, even when the message is off screen. Clearing the reading position's highlight after "back" redrew it with its old lines, which made it look freshly on screen, and the next press "stayed put" (2026-10-07). Only a report whose lines changed now counts as fresh.
+
+A message redrawn off screen for the first time since load (a bookmark link minted into it, say) reports its **whole** range, `0` to `of - 1`, as if every row showed, and as the newest report it would evict the real screen set (2026-10-11 20:50: a 39-line reply from an hour earlier was the only fresh report while the person read five exchanges later, and the prompts pane's yellow row jumped to it). The typings say `onScreen` is null off screen; the observed report says otherwise. The engine gives a plugin no view event to check against (a person's scroll of the conversation is not a `ui.scroll` a plugin receives; Claude Code's own "prompt above" header is computed in `StickyTracker` and not exposed), so the shape decides: a burst in which every message reports its whole range, none was in the trusted set, and all are more than one exchange from where the person was is treated as a redraw and ignored (`core/view-position.ts`, `looksLikeRedraw`).
+
+**Proper fix:** a view event, or a call answering "what is at the top of the view", which the engine already computes for its header.
 
 ### Opening a pane shifts the conversation — Workaround
 

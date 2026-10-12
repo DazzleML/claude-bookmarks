@@ -18,6 +18,49 @@ export const CLOSE_SHARE = 0.6
 
 export type VisibleMessage = { id: string; lines: number }
 
+// The exchange a conversation order belongs to: the index of the last prompt at or
+// before it. `promptOrders` are the prompts' orders in list order; a prompt without a
+// known order is skipped.
+export function exchangeIndex(promptOrders: readonly (number | undefined)[], o: number): number | undefined {
+  let found: number | undefined
+  for (const [i, po] of promptOrders.entries()) {
+    if (po === undefined) continue
+    if (po <= o) found = i
+    else break
+  }
+  return found
+}
+
+// One on-screen report as the engine gives it: the message's visible rows `first`..`last`
+// of its `of` rows in all.
+export type ScreenReport = { id: string; first: number; last: number; of: number }
+
+// Whether a burst of fresh reports is a redraw rather than a view. The engine reports a
+// message when it is drawn, and a message is redrawn off screen when something in it
+// changes (a bookmark link minted into it, a highlight cleared); that report arrives
+// with the message's whole range, as if every row were visible (2026-10-11 20:50: a
+// 39-line reply from an hour earlier, `0-38/39`, was the only fresh report while the
+// person read five exchanges later, and the yellow row jumped to it). A real view
+// never looks like that: a scroll reports the messages at the viewport's edges, cut
+// off, and a jump draws a burst of neighbours. So: every fresh message reports its
+// whole range, none of them was in the trusted set a moment ago, and every one is
+// more than one exchange from where the person was -> a redraw; keep the previous
+// answer. `hereIndex` is the exchange the person was last placed in.
+export function looksLikeRedraw(
+  fresh: readonly ScreenReport[],
+  trusted: ReadonlySet<string>,
+  hereIndex: number | undefined,
+  exchangeOf: (id: string) => number | undefined,
+): boolean {
+  if (hereIndex === undefined || fresh.length === 0) return false
+  return fresh.every(r => {
+    if (!(r.first === 0 && r.last === r.of - 1)) return false
+    if (trusted.has(r.id)) return false
+    const i = exchangeOf(r.id)
+    return i !== undefined && Math.abs(i - hereIndex) > 1
+  })
+}
+
 export function promptNearView(
   prompts: readonly string[],
   visible: readonly VisibleMessage[],
@@ -26,15 +69,7 @@ export function promptNearView(
 ): number | undefined {
   const promptOrders = prompts.map(orderOf)
   // The exchange a message belongs to: the last prompt at or before it in order.
-  const exchangeOf = (o: number): number | undefined => {
-    let found: number | undefined
-    for (const [i, po] of promptOrders.entries()) {
-      if (po === undefined) continue
-      if (po <= o) found = i
-      else break
-    }
-    return found
-  }
+  const exchangeOf = (o: number): number | undefined => exchangeIndex(promptOrders, o)
   const weight = new Map<number, number>()
   for (const m of visible) {
     const o = orderOf(m.id)

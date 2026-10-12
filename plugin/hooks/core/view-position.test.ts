@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { promptNearView, type VisibleMessage } from './view-position.ts'
+import { exchangeIndex, looksLikeRedraw, promptNearView, type ScreenReport, type VisibleMessage } from './view-position.ts'
 
 // Five prompts p0..p4, each followed by one reply r0..r4. Order: p_i = i*1000, r_i = i*1000+1.
 const prompts = ['p0', 'p1', 'p2', 'p3', 'p4']
@@ -55,4 +55,47 @@ test('an empty prompt list chooses nothing', () => {
 
 test('a message with no line count still counts as one line', () => {
   assert.equal(promptNearView(prompts, v(['p1', 0]), 'p1', orderOf), 1)
+})
+
+// The 2026-10-11 20:50 case. Prompts #315..#323 as p-indices 0..8 (orders i*1000); the
+// person reads under prompt 8 (#323); a 39-line reply under prompt 1 (#316) is redrawn
+// off screen and reports its whole range.
+const promptsLong = ['q0', 'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8']
+const longOrders = promptsLong.map((_, i) => i * 1000)
+const exchangeOfLong = (id: string) => {
+  const m = /^m(\d)(\d+)$/.exec(id) // m<prompt><offset>: a message `offset` rows after prompt <prompt>
+  return m ? exchangeIndex(longOrders, Number(m[1]) * 1000 + Number(m[2])) : undefined
+}
+const rep = (id: string, first: number, last: number, of: number): ScreenReport => ({ id, first, last, of })
+const trusted = new Set(['q8', 'm81', 'm82'])
+
+test('exchangeIndex places an order under the last prompt at or before it', () => {
+  assert.equal(exchangeIndex(longOrders, 1016), 1)
+  assert.equal(exchangeIndex(longOrders, 8000), 8)
+  assert.equal(exchangeIndex(longOrders, -5), undefined)
+  assert.equal(exchangeIndex([undefined, 1000], 1500), 1)
+})
+
+test('a lone whole-range report far from the person, unseen before, is a redraw', () => {
+  assert.equal(looksLikeRedraw([rep('m116', 0, 38, 39)], trusted, 8, exchangeOfLong), true)
+})
+
+test('a cut-off report is a view, however far away (a jump landed there)', () => {
+  assert.equal(looksLikeRedraw([rep('m116', 5, 38, 39)], trusted, 8, exchangeOfLong), false)
+})
+
+test('a whole-range report of a neighbouring exchange is a view (a new prompt at the bottom)', () => {
+  assert.equal(looksLikeRedraw([rep('q8', 0, 1, 2)], new Set(['m71', 'm72']), 7, exchangeOfLong), false)
+})
+
+test('a report of a message already trusted is a view', () => {
+  assert.equal(looksLikeRedraw([rep('m81', 0, 2, 3)], trusted, 8, exchangeOfLong), false)
+})
+
+test('a burst with one cut-off message is a view even if the rest are whole', () => {
+  assert.equal(looksLikeRedraw([rep('m116', 0, 38, 39), rep('m117', 3, 10, 11)], trusted, 8, exchangeOfLong), false)
+})
+
+test('with no previous position nothing is a redraw', () => {
+  assert.equal(looksLikeRedraw([rep('m116', 0, 38, 39)], trusted, undefined, exchangeOfLong), false)
 })

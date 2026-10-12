@@ -28,7 +28,8 @@ import {
 // setting with the archive-retention picker (#7, #10); a constant until then.
 const TEMPORARY_RETENTION: Retention = '30d'
 import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution, type TranscriptRow } from './core/transcript-lines'
-import { promptNearView } from './core/view-position'
+import { exchangeIndex, looksLikeRedraw, promptNearView } from './core/view-position'
+import { latestBurst, reportTime, type Report } from './core/latest-burst'
 import { looksLikePrompt, promptTextOf, unwrapQueued } from './core/prompt-rows'
 
 const PANE = 'bm-poc'
@@ -89,7 +90,23 @@ const GROUP_CYCLE = { prev: 'h', next: 'l' } as const
 const HIGHLIGHT_MS = 120_000
 let clearTimer: Timer | undefined
 
+// When the plugin itself last changed something that makes Claude Code redraw a message
+// (a highlight shown or cleared, a bookmark saved, a pane opened or closed), and what.
+// A whole-message report far from the view counts as a redraw only shortly after one of
+// these (promptHere): a real scroll over short messages reports them whole too, and
+// shape alone mistook one for a redraw and held the yellow row on #339 while the person
+// read #325 (djdarcy, 2026-10-11 22:55). The 20:50 redraw that started this followed a
+// bookmark mint and a pane opening.
+let selfRedrawAt = 0
+let selfRedrawWhy = ''
+const SELF_REDRAW_MS = 2000
+function expectRedraw(why: string) {
+  selfRedrawAt = Date.now()
+  selfRedrawWhy = why
+}
+
 async function showMark($: EngineInterface, letter: string, text: string) {
+  expectRedraw('a highlight shown')
   await update($, shown, () => ({ letter, text }))
   clearTimer?.cancel()
   clearTimer = $.clock.after(HIGHLIGHT_MS, () => {
@@ -102,6 +119,7 @@ async function clearShown($: EngineInterface) {
   clearTimer?.cancel()
   clearTimer = undefined
   if (await read($, shown)) {
+    expectRedraw('a highlight cleared')
     await update($, shown, () => null)
     note('highlight cleared')
   }
@@ -207,10 +225,27 @@ function noteOnScreen(requestId: string, onScreen: { first: number; last: number
   const grew = !!before && onScreen.of > before.of
   onScreenNow.set(requestId, { ...onScreen, at: same ? before.at : Date.now(), grew })
 }
+// The other transcript rows (tool calls and results, tool groups, command output, the
+// turn-duration line, notices) are not placed on a prompt, but their reports date the
+// latest burst (core/latest-burst.ts: a screen of tool rows after a jump otherwise left
+// the messages jumped away from as "on screen now").
+const otherOnScreen = new Map<string, Report>()
+let otherNewsAt = 0
+function noteOtherOnScreen(requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
+  if (!onScreen) return void otherOnScreen.delete(requestId)
+  const at = reportTime(otherOnScreen.get(requestId), onScreen, Date.now())
+  otherOnScreen.set(requestId, { ...onScreen, at })
+  if (at > otherNewsAt) otherNewsAt = at
+}
+// One render report from a non-message row: the news time, and the pane's view check.
+function noteOtherRow($: EngineInterface, requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
+  noteOtherOnScreen(requestId, onScreen)
+  noteViewMoved($)
+}
+
 const FRESH_MS = 1500
 function freshOnScreen(): string[] {
-  const newest = Math.max(0, ...[...onScreenNow.values()].map(v => v.at))
-  return [...onScreenNow.entries()].filter(([, v]) => v.at >= newest - FRESH_MS).map(([id]) => id)
+  return latestBurst(onScreenNow, otherNewsAt, FRESH_MS)
 }
 
 // A timeline of what the mod saw and did, so a drawn-id mismatch can be lined up
@@ -501,7 +536,9 @@ async function backfillPrompts($: EngineInterface) {
   // the yellow row sat on the wrong prompt (djdarcy, 2026-10-11: "the screen is
   // currently at prompt #307 but the list is showing #297"). A conversation marked done
   // under an older key is read once more.
-  const doneKey = `backfilled3:${await $.session.id()}`
+  // `4`: queued messages the live capture had dropped, and `<task-notification>` rows it
+  // had kept (2026-10-11, djdarcy: two of his mid-turn messages missing above #316).
+  const doneKey = `backfilled4:${await $.session.id()}`
   if (await $.store.get(doneKey)) return
   const path = await transcriptPath($)
   if (!path) {
@@ -543,7 +580,12 @@ async function backfillPrompts($: EngineInterface) {
 async function prompts($: EngineInterface): Promise<PromptRef[]> {
   const kept = await keptPrompts($)
   const seen = new Set(kept.map(k => k.uuid))
-  const fresh = (await allRows($)).filter(r => r.door === 'prompt' && !seen.has(r.uuid))
+  // Rows captured live this session that the stored list lacks, newest last. They pass the
+  // same filter: a row kept before the filter knew its kind (a `<task-notification>`)
+  // was dropped by the rebuild and came back here as the newest prompt, so the yellow
+  // row jumped to the bottom of the list (djdarcy, 2026-10-11: scrolling up from #325
+  // moved it to #342).
+  const fresh = (await allRows($)).filter(r => r.door === 'prompt' && !seen.has(r.uuid) && looksLikePrompt(r.text ?? r.head))
   return [...kept, ...fresh.map(r => ({ uuid: r.uuid, head: r.head }))]
 }
 
@@ -622,6 +664,7 @@ async function loadRegister($: EngineInterface): Promise<BookmarkRegister> {
 }
 
 async function saveRegister($: EngineInterface, reg: BookmarkRegister) {
+  expectRedraw('a bookmark saved')
   const path = await registerPath($)
   if (!path) return
   if (await $.fs.exists(path)) await $.fs.write(`${path}.bak`, await $.fs.read(path))
@@ -1037,8 +1080,12 @@ async function conversationOrder($: EngineInterface): Promise<Map<string, number
   promptList.forEach((p, i) => order.set(p.uuid, i * 1000))
   let base = 0
   let k = 0
+  // A row is a boundary when it is a prompt by kind or by the list: a message queued
+  // before 0.4.1 was kept under the `attachment` door, and its reply-like order overwrote
+  // its place as a prompt (2026-10-11, #341 inside #340's exchange).
+  const promptSet = new Set(promptList.map(p => p.uuid))
   for (const r of await allRows($)) {
-    if (r.door === 'prompt') {
+    if (r.door === 'prompt' || promptSet.has(r.uuid)) {
       base = order.get(r.uuid) ?? base
       k = 0
     } else order.set(r.uuid, base + ++k)
@@ -1056,6 +1103,9 @@ async function topOnScreen($: EngineInterface): Promise<string | undefined> {
 }
 // The messages on screen, top to bottom, as topOnScreen last ordered them.
 let lastScreenOrder: string[] = []
+// The messages the last accepted view held: the set a lone off-screen redraw is judged
+// against, and restored when one is ignored (promptHere).
+let trustedScreen = new Set<string>()
 
 // The prompt the person is nearest to, for the prompts pane: the earliest prompt on
 // screen, else the last prompt at or above the top of the screen (djdarcy, 2026-10-11:
@@ -1080,6 +1130,29 @@ async function promptHere($: EngineInterface): Promise<string | undefined> {
   // else is fresh the answer is the one before.
   const stable = lastScreenOrder.filter(id => !onScreenNow.get(id)?.grew)
   if (stable.length === 0 && lastScreenOrder.length > 0) return lastHere
+  // A message redrawn off screen (a bookmark link minted into it, a highlight cleared)
+  // reports its whole range as if every row showed, and as the newest report it evicts
+  // the real screen set (2026-10-11 20:50: a 39-line reply from an hour earlier was the
+  // only fresh report while the person read five exchanges later; the yellow jumped from
+  // #323 to #316). The engine gives a mod no view event to check against, so the shape
+  // decides (core/view-position.ts looksLikeRedraw): whole-range reports, none in the
+  // trusted set, all far from where the person was -> keep the trusted set and answer.
+  const promptOrders = ids.map(u => order.get(u))
+  const exchangeOfId = (id: string) => {
+    const o = byFour.get(firstFour(id))
+    return o === undefined ? undefined : exchangeIndex(promptOrders, o)
+  }
+  const fresh = stable.flatMap(id => {
+    const s = onScreenNow.get(id)
+    return s ? [{ id, first: s.first, last: s.last, of: s.of }] : []
+  })
+  const sinceSelf = Date.now() - selfRedrawAt
+  if (sinceSelf < SELF_REDRAW_MS && looksLikeRedraw(fresh, trustedScreen, lastHere ? exchangeOfId(lastHere) : undefined, exchangeOfId)) {
+    log($, `[bm-poc] redraw ignored, not a view: ${fresh.map(r => `${r.id.slice(0, 13)} ${r.first}-${r.last}/${r.of}`).join(' ')}; kept ${lastHere ? short(lastHere) : '(none)'} (${sinceSelf} ms after ${selfRedrawWhy})`)
+    lastScreenOrder = [...trustedScreen]
+    return lastHere
+  }
+  trustedScreen = new Set(stable)
   const visible = stable.map(id => {
     const seen = onScreenNow.get(id)
     return { id: firstFour(id), lines: seen ? seen.last - seen.first + 1 : 1 }
@@ -1120,10 +1193,14 @@ function noteViewMoved($: EngineInterface) {
       const seen = lastScreenOrder
         .map(id => {
           const s = onScreenNow.get(id)
-          return `${id.slice(0, 13)}:${byFour.get(firstFour(id)) ?? '?'}:${s ? s.last - s.first + 1 : '?'}L`
+          // lines/of: a report whose visible lines equal the message's whole row count is
+          // suspect when it arrives alone; a message redrawn off screen (a bookmark link
+          // minted into it) reported all 39 of its rows while the person read elsewhere
+          // (2026-10-11 20:50, the yellow jumped from #323 to #316).
+          return `${id.slice(0, 13)}:${byFour.get(firstFour(id)) ?? '?'}:${s ? `${s.first}-${s.last}/${s.of}` : '?'}`
         })
         .join(' ')
-      log($, `[bm-poc] nearest prompt moved: ${lastHere ? short(lastHere) : '(none)'} -> ${here ? short(here) : '(none)'} | on screen (id:order:lines) ${seen}`)
+      log($, `[bm-poc] nearest prompt moved: ${lastHere ? short(lastHere) : '(none)'} -> ${here ? short(here) : '(none)'} | on screen (id:order:first-last/of) ${seen}`)
       await update($, viewRev, v => v + 1)
       // Keep the yellow row in the pane's view, moving the list the least that does it
       // ('nearest': no move while the row is already showing), and not while the person
@@ -1456,6 +1533,7 @@ async function diagState($: EngineInterface, when: string) {
 }
 
 async function openFor($: EngineInterface, mode: PaneMode, action: string) {
+  expectRedraw('the pane opening')
   log($, `[bm-poc] B4: ${action.startsWith('command:') ? `leader ran ${action}` : `chord for ${action} pressed the band Button`}`)
   await diagState($, `${mode} (before open)`)
   await update($, paneMode, () => mode)
@@ -1782,6 +1860,7 @@ async function paneFocused($: EngineInterface): Promise<boolean> {
 let paneGeometry: string | undefined
 
 async function closePane($: EngineInterface) {
+  expectRedraw('the pane closing')
   note('pane close')
   if (paneGeometry) log($, `[bm-poc] pane was ${paneGeometry}`)
   await endBandMode($)
@@ -1977,6 +2056,10 @@ export const register: Register = on => {
   // Every row stored in the main conversation passes here with its transcript uuid.
   on('session.append', async ($, e, next) => {
     const stored = await next(e)
+    // A new message is drawn at the bottom and reported whole, wherever the person is
+    // reading; an append is one of the causes the redraw rule waits for (22:57Z: each of
+    // Claude's replies flipped the yellow from #324 to the newest prompt).
+    if (!e.agentId) expectRedraw('a message appended')
     const isWanted = e.door === 'prompt' || e.door === 'response'
     // A message typed while Claude was working arrives as an attachment named
     // `queued_command`, its text wrapped in the engine's reminder prose (the transcript
@@ -1988,7 +2071,9 @@ export const register: Register = on => {
       const text = queued ? unwrapQueued(raw) : raw
       if (looksLikePrompt(text)) {
         // `text` (first 4000 chars) lets a selection mark check it landed in the right row.
-        const row: Row = { uuid: e.uuid, door: e.door as Row['door'], head: head(text), text: text.slice(0, 4000) }
+        // A queued message arrives by the `attachment` door; it is a prompt (0.4.0 stored it
+        // under the engine's door, so the list, which counts `prompt` rows, dropped every one).
+        const row: Row = { uuid: e.uuid, door: (queued ? 'prompt' : e.door) as Row['door'], head: head(text), text: text.slice(0, 4000) }
         note(`append ${e.door} ${e.uuid} ${row.head.slice(0, 30)}`)
         await update($, rows, list => [...(list as Row[]), row].slice(-500))
         if (row.door === 'prompt') await keepPrompt($, { uuid: row.uuid, head: row.head })
@@ -1996,6 +2081,15 @@ export const register: Register = on => {
     }
     return stored
   })
+
+  // The other transcript rows that report onScreen (see otherOnScreen): observe only, so
+  // a screen full of tool rows still tells the pane the view moved.
+  on('ui.render', { component: 'ToolUse' }, async ($, e, next) => { noteOtherRow($, e.requestId, e.props.onScreen); return next(e) })
+  on('ui.render', { component: 'ToolResult' }, async ($, e, next) => { noteOtherRow($, e.requestId, e.props.onScreen); return next(e) })
+  on('ui.render', { component: 'ToolGroup' }, async ($, e, next) => { noteOtherRow($, e.requestId, e.props.onScreen); return next(e) })
+  on('ui.render', { component: 'CommandOutput' }, async ($, e, next) => { noteOtherRow($, e.requestId, e.props.onScreen); return next(e) })
+  on('ui.render', { component: 'TurnDuration' }, async ($, e, next) => { noteOtherRow($, e.requestId, e.props.onScreen); return next(e) })
+  on('ui.render', { component: 'InfoNotice' }, async ($, e, next) => { noteOtherRow($, e.requestId, e.props.onScreen); return next(e) })
 
   // Observe only: note the id, draw nothing different.
   on('ui.render', { component: 'UserMessage' }, async ($, e, next) => {

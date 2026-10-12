@@ -44,6 +44,18 @@ test("the ! shell's rows, command echoes, interrupts and compaction summaries ar
   }
 })
 
+test('a compaction summary is not a prompt, by its flag before its wording', () => {
+  assert.equal(promptTextOf(user('Any wording the engine chooses', { isCompactSummary: true })), undefined)
+})
+
+test("a background task's notification is not a prompt", () => {
+  assert.equal(looksLikePrompt('<task-notification> <task-id>b046k200w</task-id> <status>completed</status>'), false)
+})
+
+test("another agent's teammate message is not a prompt", () => {
+  assert.equal(looksLikePrompt('<teammate-message teammate_id="x">hello</teammate-message>'), false)
+})
+
 test('a prompt that mentions those tags in passing is still a prompt', () => {
   assert.equal(looksLikePrompt('Why does <bash-input> show up in the list?'), true)
 })
