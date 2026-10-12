@@ -23,6 +23,9 @@ export function idsReport(list: readonly { uuid: string; head: string }[], rende
   const appended = new Set(list.map(r => r.uuid))
   const matched = list.filter(r => rendered.has(r.uuid)).length
   const strays = [...rendered.keys()].filter(id => !appended.has(id))
+  // How each appended prompt was drawn: under its real uuid, under an id sharing
+  // the uuid's first four groups (zero-tailed), under some id with the same text,
+  // or not seen at all.
   const ids = [...rendered.keys()]
   const drawnAs = (r: { uuid: string; head: string }) => {
     if (rendered.has(r.uuid)) return 'exact'
@@ -53,6 +56,8 @@ export function jumpTarget(arg: string, rows: readonly { uuid: string; door: 'pr
   else if (/^r\d+$/.test(arg)) target = found(rows.filter(r => r.door === 'response')[Number(arg.slice(1)) - 1], `reply #${arg.slice(1)}`)
   else target = found(rows.find(r => r.uuid.startsWith(arg)), arg)
   if (target) return target
+  // Not a captured row: try the raw id anyway, for an id known only from the
+  // transcript file (paste a uuid from jq); Claude Code may refuse one never drawn.
   if (/^[0-9a-f-]{36}$/.test(arg)) return { kind: 'raw', uuid: arg }
   return { kind: 'none', prompts: prompts.length }
 }

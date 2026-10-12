@@ -37,6 +37,7 @@ import { footnoteOf, looksLikePrompt, numberFootnotes, promptTextOf, unwrapQueue
 import { byFirstFour, findByMessage, firstFour, sameMessage, short } from './core/message-id'
 import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFile, stamped, type EchoPolicy } from './core/log-ring'
 import { DEBUG_USAGE, configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, parseDebugArgs, selectionKind, settingsRows } from './core/diagnostics'
+import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptList, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, transcriptGuess, type PromptRef } from './core/prompt-store'
 
 // How long a `temporary` bookmark is kept before it is pruned (to a tombstone). A
 // setting with the archive-retention picker (#7, #10); a constant until then.
@@ -482,10 +483,9 @@ async function allRows($: EngineInterface): Promise<Row[]> {
 // empty when the session restarts, so every prompt is also kept in $.store under the
 // session id (djdarcy, 2026-10-04: number prompts from the first message). Prompts sent
 // before the mod was loaded are not known: reading them needs the transcript (#6).
-type PromptRef = { uuid: string; head: string }
-const PROMPTS_KEPT = 5000
+// The keys, the merge and the list's filter: core/prompt-store.ts.
 async function promptsKey($: EngineInterface): Promise<string> {
-  return `prompts:${await $.session.id()}`
+  return promptsKeyOf(await $.session.id())
 }
 async function keptPrompts($: EngineInterface): Promise<PromptRef[]> {
   return ((await $.store.get(await promptsKey($))) as PromptRef[] | undefined) ?? []
@@ -494,7 +494,7 @@ async function keptPrompts($: EngineInterface): Promise<PromptRef[]> {
 // each kept with the prompt it follows (core/prompt-rows.ts footnoteOf); numbered N.k at
 // draw time from the prompts' order.
 async function footnotesKey($: EngineInterface): Promise<string> {
-  return `footnotes:${await $.session.id()}`
+  return footnotesKeyOf(await $.session.id())
 }
 async function keptFootnotes($: EngineInterface): Promise<FootnoteRef[]> {
   return ((await $.store.get(await footnotesKey($))) as FootnoteRef[] | undefined) ?? []
@@ -516,7 +516,7 @@ let promptTextCache: { sid: string; texts: Map<string, string> } | undefined
 let promptTextSave: Timer | undefined
 async function promptTextBase($: EngineInterface, sid: string): Promise<string | undefined> {
   const root = await dataRoot($)
-  return root ? `${root}/bookmarks/prompttext/${sid}` : undefined
+  return root ? promptTextBaseOf(root, sid) : undefined
 }
 async function readJson($: EngineInterface, path: string): Promise<unknown> {
   try {
@@ -571,14 +571,12 @@ async function keepPromptText($: EngineInterface, uuid: string, text: string) {
   promptTextSave = $.clock.after(2000, () => void savePromptTexts($))
 }
 async function keepFootnote($: EngineInterface, f: FootnoteRef) {
-  const kept = await keptFootnotes($)
-  if (kept.some(k => k.uuid === f.uuid)) return
-  await $.store.set(await footnotesKey($), [...kept, f].slice(-PROMPTS_KEPT))
+  const next = appendOnce(await keptFootnotes($), f)
+  if (next) await $.store.set(await footnotesKey($), next)
 }
 async function keepPrompt($: EngineInterface, p: PromptRef) {
-  const kept = await keptPrompts($)
-  if (kept.some(k => k.uuid === p.uuid)) return
-  await $.store.set(await promptsKey($), [...kept, p].slice(-PROMPTS_KEPT))
+  const next = appendOnce(await keptPrompts($), p)
+  if (next) await $.store.set(await promptsKey($), next)
 }
 
 // --- Back-fill: the prompts sent before the mod was loaded ------------------------
@@ -607,8 +605,9 @@ async function transcriptPath($: EngineInterface): Promise<string | undefined> {
   const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME'))
   const config = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? (home ? `${home}/.claude` : undefined)
   if (!config) return undefined
-  const file = `${await $.session.id()}.jsonl`
-  const guess = `${config}/projects/${(await $.session.cwd()).replace(/[^A-Za-z0-9]/g, '-')}/${file}`
+  const sid = await $.session.id()
+  const file = `${sid}.jsonl`
+  const guess = transcriptGuess(config, await $.session.cwd(), sid)
   if (await $.fs.exists(guess)) return guess
   for (const entry of await $.fs.list(`${config}/projects`)) {
     const candidate = `${config}/projects/${entry.name}/${file}`
@@ -750,7 +749,7 @@ async function backfillPrompts($: EngineInterface) {
   // kept with the prompt each follows (#33).
   // `6`: the prompts' whole text for the filter (#28), which a conversation read under
   // `5` never collected.
-  const doneKey = `backfilled${BACKFILL_VERSION}:${await $.session.id()}`
+  const doneKey = backfilledKey(BACKFILL_VERSION, await $.session.id())
   if (await $.store.get(doneKey)) return
   const path = await transcriptPath($)
   if (!path) {
@@ -762,58 +761,28 @@ async function backfillPrompts($: EngineInterface) {
     log($, '[bm] backfill: neither PowerShell nor sh + grep ran; prompts list starts when the mod loaded')
     return
   }
-  const found: PromptRef[] = []
-  const footnotes: FootnoteRef[] = []
-  for (const line of rows.stdout.split('\n')) {
-    if (!line.trim()) continue
-    let o: any
-    try {
-      o = JSON.parse(line)
-    } catch {
-      continue // a line cut off at the 4 MiB output limit
-    }
-    if (typeof o.uuid !== 'string') continue
-    const text = promptTextOf(o)
-    if (text !== undefined) {
-      found.push({ uuid: o.uuid, head: headOf(text) })
-      ;(await promptTexts($)).set(o.uuid, text)
-      continue
-    }
-    const fn = footnoteOf(o)
-    if (fn) footnotes.push({ ...fn, uuid: o.uuid, after: found.at(-1)?.uuid ?? null })
-  }
+  const { found, texts, footnotes } = parseBackfill(rows.stdout)
+  const cache = await promptTexts($)
+  for (const [uuid, text] of texts) cache.set(uuid, text)
   await $.store.set(await footnotesKey($), footnotes.slice(-PROMPTS_KEPT))
-  // Transcript order first, then anything the live capture holds that the file did not
-  // (prompts sent while the file was being read), minus rows that are not prompts.
-  const have = new Set(found.map(p => p.uuid))
-  const merged = [...found, ...(await keptPrompts($)).filter(p => !have.has(p.uuid) && looksLikePrompt(p.head))]
-  await $.store.set(await promptsKey($), merged.slice(-PROMPTS_KEPT))
+  const merged = mergeBackfill(found, await keptPrompts($))
+  await $.store.set(await promptsKey($), merged)
   await savePromptTexts($)
   // A cut-off read is left unmarked, so a later session start tries again.
   if (!rows.isStdoutTruncated) await $.store.set(doneKey, true)
-  log(
-    $,
-    `[bm] backfill: ${found.length} prompts from the transcript via ${rows.via} in ${rows.ms} ms ` +
-      `(${rows.stdout.length} chars${rows.isStdoutTruncated ? ', CUT OFF at 4 MiB: newest may be missing' : ''}); ` +
-      `list now ${Math.min(merged.length, PROMPTS_KEPT)}`,
-  )
+  log($, backfillLine(found.length, rows.via, rows.ms, rows.stdout.length, !!rows.isStdoutTruncated, merged.length))
 }
 
 // Who-caused-the-row stamps (session.append's `origin.kind`) that are never the person.
 const AUTOMATED_ORIGINS = new Set(['task-notification', 'scheduled-trigger', 'peer-send-message', 'coordinator', 'observer', 'observer-activity', 'auto-continuation', 'projects-relay', 'channel'])
 
+// The stored prompts that are prompts, then the rows captured live this session that the
+// store lacks (core/prompt-store.ts promptList). Rows kept before the list knew them for
+// notices drop out, so the numbers match the transcript's; a `<task-notification>` row
+// the rebuild dropped once came back as the newest prompt and sent the yellow row to the
+// bottom (djdarcy, 2026-10-11: scrolling up from #325 moved it to #342).
 async function prompts($: EngineInterface): Promise<PromptRef[]> {
-  // Rows kept before the list knew them for notices (a `[SYSTEM NOTIFICATION`, another
-  // session's message) drop out here, so the numbers match the transcript's prompts.
-  const kept = (await keptPrompts($)).filter(p => looksLikePrompt(p.head))
-  const seen = new Set(kept.map(k => k.uuid))
-  // Rows captured live this session that the stored list lacks, newest last. They pass the
-  // same filter: a row kept before the filter knew its kind (a `<task-notification>`)
-  // was dropped by the rebuild and came back here as the newest prompt, so the yellow
-  // row jumped to the bottom of the list (djdarcy, 2026-10-11: scrolling up from #325
-  // moved it to #342).
-  const fresh = (await allRows($)).filter(r => r.door === 'prompt' && !seen.has(r.uuid) && looksLikePrompt(r.text ?? r.head))
-  return [...kept, ...fresh.map(r => ({ uuid: r.uuid, head: r.head }))]
+  return promptList(await keptPrompts($), await allRows($))
 }
 
 async function marksKey($: EngineInterface): Promise<string> {
