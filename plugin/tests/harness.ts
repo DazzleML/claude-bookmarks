@@ -100,7 +100,7 @@ export function world(on: unknown, options: WorldOptions = {}): World {
   // The start path (a test's $.session.start, measured 2026-10-12): the base event passes
   // through with its fields, and the calls the plugin's start hook makes are answered.
   answerRaw('session.start', e => e)
-  answer('session.version', () => '2.1.296')
+  answer('session.version', () => ({ version: '2.1.296', base: '2.1.296' }))
   answer('config.list', () => [])
   answer('command.register', () => undefined)
   answer('tool.register', e => ({ tool: `mcp__bookmarks__${String(e.name ?? 'bookmark')}` }))

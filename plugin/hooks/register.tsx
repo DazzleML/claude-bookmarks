@@ -41,6 +41,8 @@ import { ScreenModel } from './core/screen-model'
 import { deleteMarks, marksShowing, searchPhrase, type Mark, type Marks } from './core/marks'
 import { footnoteAt, listPosition, nextGroup, promptEntry, promptNumberComplete, stepNumber } from './core/band-entry'
 import { debugCommand } from './handlers/debug-command'
+import { configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
+import type { DiagnosticsPorts } from './engine/ports'
 import { age, bookmarkWho, drawnFourOf, foldedLabel, footnoteDisplay, footnotesByPrompt, groupHeader, numberLabel as numberLabelAt, numberNewestFirst, numberWidth, pinnedRowsOf, pointerFor, unreached } from './core/list-model'
 import { BOOKMARK_TOOL, answer as toolAnswer, brief as briefRow, describe as describeRecord, listActedOn, listName, parseToolInput, tierFor } from './core/bookmark-tool'
 import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptList, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, transcriptGuess, type PromptRef } from './core/prompt-store'
@@ -2094,6 +2096,33 @@ async function closePane($: EngineInterface) {
   if (paneAnchor) await restoreView($)
 }
 
+// The engine, as the diagnostic commands may hold it (hooks/engine/ports.ts): one closure
+// per primitive, each spelled `$.noun.event(...)` here, where the validator follows `$`.
+function diagnosticsPorts($: EngineInterface): DiagnosticsPorts {
+  return {
+    log: (line, always, text) => log($, line, always || text ? { ...(always ? { always: true } : {}), ...(text ? { text: true } : {}) } : undefined),
+    prompts: () => prompts($),
+    rows: () => allRows($),
+    marks: () => loadMarks($),
+    rendered: () => rendered,
+    timeline: () => timeline.items,
+    note,
+    selection: () => $.ui.selection(),
+    cut,
+    settings: () => resolveSettings(machineOptions),
+    folderBuild: !installedFromCache($.plugin.root),
+    pluginName: $.plugin.name,
+    configKeys: async () => (await $.config.list().catch(() => [])).map(row => row.key),
+    claudeVersion: async () => (await $.session.version()).version,
+    pluginVersion: () => pluginVersion($),
+    sessionId: () => $.session.id(),
+    dccPatcher: () => $.env.get('DCC_PATCHER'),
+    dccPatchH: () => $.env.get('DCC_PATCH_H'),
+    dccPatches: () => $.env.get('DCC_PATCHES'),
+    echoState: () => echoStateLine($),
+  }
+}
+
 export const register: Register = (on, options) => {
   machineOptions = { ...options }
 
@@ -2516,10 +2545,10 @@ export const register: Register = (on, options) => {
     return next({ ...e, props: { ...e.props, text: tagMarksMarkdown(e.props.text, marks) } })
   })
 
+  // The diagnostic commands live in hooks/handlers/diagnostics-commands.ts over
+  // diagnosticsPorts($), a top-level function (the validator follows $ only into those).
   on('command.run', { command: 'bm-ids' }, async $ => {
-    const report = idsReport(await prompts($), rendered)
-    log($, report.summary)
-    for (const line of [...report.rows, ...report.strays]) log($, line, { text: true })
+    await idsCommand(diagnosticsPorts($))
     return {}
   })
 
@@ -2599,35 +2628,15 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'bm-marks' }, async $ => {
-    const marks = await loadMarks($)
-    const entries = Object.entries(marks).sort(([a], [b]) => a.localeCompare(b))
-    if (entries.length === 0) log($, '[bm] no marks in this session')
-    for (const [l, m] of entries) log($, `[bm]  ${l}  ${short(m.uuid)}  ${m.head}`, { text: true })
+    await marksCommand(diagnosticsPorts($))
     return {}
   })
-
-  // /bm-sel: exactly what $.ui.selection() answers, and whether its row
-  // id is one the mod already knows (a saved uuid, or an id seen at draw time).
   on('command.run', { command: 'bm-sel' }, async $ => {
-    const sel = await $.ui.selection()
-    if (!sel) {
-      log($, '[bm] SEL: no selection (nothing selected, fullscreen off, or cleared by a prompt)')
-      return {}
-    }
-    const id = sel.requestId
-    const saved = id ? (await allRows($)).find(r => r.uuid === id) : undefined
-    const known = selectionKind(id, saved?.door, !!id && rendered.has(id))
-    log($, `[bm] SEL: row ${id ?? '(none)'} -> ${known}; ${sel.text.length} chars`)
-    log($, `[bm] SEL text: ${JSON.stringify(cut(sel.text, 300))}`, { text: true })
-    note(`bm-sel row ${id ?? '(none)'} ${known}`)
+    await selCommand(diagnosticsPorts($))
     return {}
   })
-
   on('command.run', { command: 'bm-timeline' }, async ($, e) => {
-    const n = Number(e.args.trim()) || 40
-    const recent = timeline.items.slice(-n)
-    log($, `[bm] timeline: last ${recent.length} of ${timeline.length} events since load`)
-    for (const { t, what } of recent) log($, `[bm]  ${clock(t)} ${what}`, { text: true })
+    timelineCommand(e.args, diagnosticsPorts($))
     return {}
   })
 
@@ -2776,36 +2785,12 @@ export const register: Register = (on, options) => {
     return {}
   })
 
-  // Every setting, its value and where it came from (default, the machine's /config, this
-  // conversation), plus any value that was given but did not fit (core/settings.ts).
   on('command.run', { command: 'bm-config' }, async $ => {
-    const r = resolveSettings(machineOptions)
-    log($, `[bm] settings: ${settingsRows(r.values, r.sources).join('; ')}`, { always: true })
-    const folder = !installedFromCache($.plugin.root)
-    log($, `[bm] this build is ${folder ? 'loaded from a folder' : 'installed'}, so debugText=${JSON.stringify(r.values.debugText)} means ${debugTextMode(r.values.debugText, folder)}; change any of these in /config`, { always: true })
-    // Whether Claude Code's /config actually lists the fields (djdarcy, 2026-10-12: "I tried
-    // /config and I'm not seeing the mod/plugin"): its own rows, as $.config.list sees them.
-    const listed = (await $.config.list().catch(() => [])).filter(row => row.key.startsWith(`${$.plugin.name}.`))
-    log($, configListedLine(listed.map(row => row.key), Object.keys(r.values).length), { always: true })
-    const notApplied = notAppliedLine(r.rejected, r.unknown)
-    if (notApplied) log($, notApplied, { always: true })
+    await configCommand(diagnosticsPorts($))
     return {}
   })
-
   on('command.run', { command: 'bm-env' }, async $ => {
-    const v = await $.session.version()
-    const list = await allRows($)
-    const promptCount = list.filter(r => r.door === 'prompt').length
-    // A command's answer is always drawn, whatever the echo setting.
-    log($,
-      `[bm] ${$.plugin.name} ${await pluginVersion($)} on Claude Code ${v.version} ` +
-        `(chords verified on ${VERIFIED_CLIENTS.join(', ')}); session ${await $.session.id()}; ` +
-        `captured ${promptCount} prompts, ${list.length - promptCount} replies; ${rendered.size} drawn ids; ` +
-        describePathOrder(),
-      { always: true },
-    )
-    // dcc-patcher's build signal (core/diagnostics.ts, dccLine).
-    log($, dccLine(await $.env.get('DCC_PATCHER'), await $.env.get('DCC_PATCH_H'), await $.env.get('DCC_PATCHES'), await echoStateLine($)), { always: true })
+    await envCommand(diagnosticsPorts($))
     return {}
   })
 
