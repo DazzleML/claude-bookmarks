@@ -39,4 +39,6 @@ test('with the keyboard set to stay in the band, no reminder', { options: { afte
   await type(band, 'o')
   await type(band, 'h')
   expect(reminders(w.toasts())).toHaveLength(0)
+  // Control: `h` did run, and gave the usual hint in place of the reminder.
+  expect(w.toasts().some(t => t.startsWith('bm:'))).toBe(true)
 })

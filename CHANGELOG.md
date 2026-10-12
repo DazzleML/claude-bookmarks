@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.30] - 2026-10-12
+
+### Changed
+
+- Tests only, before the `register.tsx` split: the test harness can now say a pane is open and answers the calls the plugin makes when a session starts, so start-up can be tested; the `q` test now checks that the pane really closes; a check that could not fail is gone; a control added where a test only checked that something did not happen. `docs/engine-quirks.md` corrected: a test can raise a session start.
+
 ## [0.4.29] - 2026-10-12
 
 ### Added
@@ -495,7 +501,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...HEAD
+[0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
 [0.4.28]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.27...v0.4.28
 [0.4.27]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.26...v0.4.27

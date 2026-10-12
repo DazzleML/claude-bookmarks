@@ -20,6 +20,8 @@ export type WorldOptions = {
   prompt?: string
   // The session id $.session.id answers.
   session?: string
+  // The plugin's open panes $.ui.panes answers (none by default), e.g. [{ id: 'bm-pane' }].
+  panes?: { id: string; isFocused?: boolean }[]
 }
 
 export type World = {
@@ -73,7 +75,7 @@ export function world(on: unknown, options: WorldOptions = {}): World {
   // here. Tests let that throw after checking what happened before it.
   answerRaw('ui.focus', () => ({}))
   answerRaw('ui.scroll', () => ({}))
-  answer('ui.panes', () => [])
+  answer('ui.panes', () => (options.panes ?? []).map(p => ({ id: p.id, title: p.id, isShown: true, isFocused: !!p.isFocused, isPlaced: true })))
   answer('ui.selection', () => undefined)
   answer('prompt.read', () => ({ text: options.prompt ?? '', cursor: (options.prompt ?? '').length }))
   answer('session.id', () => options.session ?? '00000000-0000-4000-8000-000000000000')
@@ -85,6 +87,14 @@ export function world(on: unknown, options: WorldOptions = {}): World {
     return undefined
   })
   answer('process.run', () => ({ exitCode: 1, stdout: '', stderr: 'no process in tests', isStdoutTruncated: false }))
+  answer('fs.list', () => [])
+  // The start path (a test's $.session.start, measured 2026-10-12): the base event passes
+  // through with its fields, and the calls the plugin's start hook makes are answered.
+  answerRaw('session.start', e => e)
+  answer('session.version', () => '2.1.296')
+  answer('config.list', () => [])
+  answer('command.register', () => undefined)
+  answer('tool.register', e => ({ tool: `mcp__bookmarks__${String(e.name ?? 'bookmark')}` }))
 
   const of = (event: string) => calls.filter(c => c.event === event).map(c => c.input as Record<string, unknown>)
   return {

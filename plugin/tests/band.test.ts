@@ -45,16 +45,18 @@ test('? in a short band: the four-line help, fitting it', async ($, on) => {
   await band.input({ key: 'band-cmd-0', text: '?' }).catch(() => undefined)
   const help = await helpText(band)
   expect(help.length).toBe(4)
-  expect(help.length + 1 <= 10).toBe(true)
   expect(help[0]!.includes("' or j + letter (jump)")).toBe(true)
 })
 
-test('q in a list ends the band mode and brings the bar back (Q261012-09)', async ($, on) => {
-  world(on, { store: STORE, session: SID })
+test('q in a list closes the pane and brings the bar back (Q261012-09)', async ($, on) => {
+  // The pane is open (the harness's `panes`), so closing it is observable as a ui.close.
+  const w = world(on, { store: STORE, session: SID, panes: [{ id: 'bm-pane' }] })
   const band = await mount($)
   await band.input({ key: 'band-cmd-0', text: 'p' }).catch(() => undefined)
   expect((await band.findAll({ type: 'Button' })).some(b => b.key === 'band-num-q')).toBe(true)
-  await band.press({ key: 'band-num-q' }).catch(() => undefined)
+  const closesBefore = w.calls.filter(c => c.event === 'ui.close').length
+  await band.press({ key: 'band-num-q' })
+  expect(w.calls.filter(c => c.event === 'ui.close').length).toBe(closesBefore + 1)
   expect((await band.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['chord-mark', 'chord-jump', 'chord-prompts', 'chord-read', 'chord-help'])
 })
 
