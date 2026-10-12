@@ -49,6 +49,15 @@ test('? in a short band: the four-line help, fitting it', async ($, on) => {
   expect(help[0]!.includes("' or j + letter (jump)")).toBe(true)
 })
 
+test('q in a list ends the band mode and brings the bar back (Q261012-09)', async ($, on) => {
+  world(on, { store: STORE, session: SID })
+  const band = await mount($)
+  await band.input({ key: 'band-cmd-0', text: 'p' }).catch(() => undefined)
+  expect((await band.findAll({ type: 'Button' })).some(b => b.key === 'band-num-q')).toBe(true)
+  await band.press({ key: 'band-num-q' }).catch(() => undefined)
+  expect((await band.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['chord-mark', 'chord-jump', 'chord-prompts', 'chord-read', 'chord-help'])
+})
+
 test('a press on the bar does what its key does: prompts opens the list', async ($, on) => {
   const w = world(on, { store: STORE, session: SID })
   const band = await mount($)

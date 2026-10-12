@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.28] - 2026-10-12
+
+### Added
+
+- **`q` closes the pane from the keyboard**: after the leader (`Ctrl+] q`), in the band's list row, or typed alone in a pane's `#` field. It closes the plugin's pane and ends whatever the band was doing, which matters once "Prompts or bookmarks list after you pick a row" is `stay` and the list stays open. `q` quits a view as it does in Neovim's and Emacs's non-editing buffers; the `?` help and the lists' hints name it.
+
 ## [0.4.27] - 2026-10-12
 
 ### Fixed
@@ -482,7 +488,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.27...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...HEAD
+[0.4.28]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.27...v0.4.28
 [0.4.27]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.26...v0.4.27
 [0.4.26]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.25...v0.4.26
 [0.4.25]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.24...v0.4.25

@@ -1676,6 +1676,10 @@ async function perform($: EngineInterface, operation: Operation, via: 'field' | 
       await clearCommandLine($)
       await showHelp($)
       return
+    case 'close':
+      await clearCommandLine($)
+      await closeAll($, via)
+      return
     case 'open':
       await clearCommandLine($)
       if (operation.pane === 'list' || operation.pane === 'bookmarks') await update($, bandNum, () => '')
@@ -1751,8 +1755,17 @@ async function showHelp($: EngineInterface) {
   })
 }
 
+// `q` (Q261012-09): the plugin's pane closed and the band back to its bar, from the band at
+// rest, the band's list row, or a pane's own field.
+async function closeAll($: EngineInterface, via: string) {
+  log($, `[bm] close (${via}): the pane and the band's mode`)
+  if ((await $.ui.panes()).some(p => p.id === PANE)) await closePane($)
+  await endBandMode($)
+}
+
 // A list key pressed on the band's number row (its buttons come from LIST_KEYS).
 async function bandListKey($: EngineInterface, operation: Operation) {
+  if (operation.op === 'close') return void (await closeAll($, 'band list'))
   if (operation.op === 'step') await bandStep($, operation.dir === 1 ? 'j' : 'k')
   else if (operation.op === 'pin') await bandPin($)
   else if (operation.op === 'group') await bandGroupStep($, operation.dir)
@@ -3403,6 +3416,8 @@ export const register: Register = (on, options) => {
               {...(fromBand !== undefined ? { value: fromBand } : {})}
               autoFocus
               onInput={(typed: string) => {
+                // `q` closes the pane, as in the band (Q261012-09).
+                if (typed === 'q') return void closeAll($, 'prompts pane')
                 // `/words` filters the list (#28); clearing the slash clears the filter.
                 const query = typed.startsWith('/') ? typed.slice(1) : ''
                 if (query !== paneFilter) {
@@ -3505,6 +3520,7 @@ export const register: Register = (on, options) => {
               {...(fromBand !== undefined ? { value: fromBand } : {})}
               autoFocus
               onInput={(typed: string) => {
+                if (typed === 'q') return void closeAll($, 'bookmarks pane')
                 if (promptNumberComplete(typed, all.length)) void go(typed)
               }}
               onSubmit={(typed: string) => void go(typed)}

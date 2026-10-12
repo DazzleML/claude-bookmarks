@@ -30,6 +30,7 @@ The band's field takes exactly one key (two for the ones that need a letter). An
 | `o` | | Back to where you were before the last jump |
 | `i` | | Forward again |
 | `?` | | Shows every command and list key, and how the band's switches are set, in the band; `Enter` or `Esc` closes it |
+| `q` | | Closes the plugin's pane and ends whatever the band is doing (for a list left open after a jump) |
 | `Esc` | | Leaves the band; the keyboard returns to the input box |
 
 ### Why some commands have two keys
@@ -53,6 +54,7 @@ After `p` or `b` the pane shows the list and the band takes the keys:
 | `j` / `k` | Moves the `▶` down (older) / up (newer); the first press starts at the newest |
 | `s` | Prompts only: pins or unpins the prompt under the `▶`; the band stays open to pin more |
 | `h` / `l` | Bookmarks only: previous / next group (yours, Claude's, all) |
+| `q` | Closes the pane (also typed alone in the pane's own `#` field) |
 | `Esc` | Closes the pane without jumping |
 
 ## 4. In a pane that holds the keyboard itself

@@ -117,6 +117,12 @@ test('Esc closes, in any context', () => {
 })
 
 test("each list pane's hint is generated from its own keys", () => {
-  assert.equal(listHint('list'), 'number + Enter jump · j next · k previous · s pin · Esc close')
-  assert.equal(listHint('bookmarks'), 'number + Enter jump · j next · k previous · h previous group · l next group · c claim · Esc close')
+  assert.equal(listHint('list'), 'number + Enter jump · j next · k previous · s pin · q close · Esc close')
+  assert.equal(listHint('bookmarks'), 'number + Enter jump · j next · k previous · h previous group · l next group · c claim · q close · Esc close')
+})
+
+test('q closes, at rest and in a list (Q261012-09)', () => {
+  assert.deepEqual(route('q', none), { operation: { op: 'close' }, needsMore: false })
+  assert.deepEqual(route('q', { pane: 'list' }).operation, { op: 'close' })
+  assert.deepEqual(route('q', { pane: 'bookmarks' }).operation, { op: 'close' })
 })

@@ -142,6 +142,10 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
   },
   { id: 'back', keys: ['o'], label: 'back', button: 'back', shown: false, help: 'back to where the last jump left from', route: () => done({ op: 'jumplist', dir: -1 }) },
   { id: 'forward', keys: ['i'], label: 'forward', button: 'forward', shown: false, help: 'forward again', route: () => done({ op: 'jumplist', dir: 1 }) },
+  // `q` quits a view, as in Neovim's and Emacs's non-editing buffers: needed once a list
+  // can stay open after a jump (djdarcy, 2026-10-12, Q261012-09: "<leader> q, and q in a
+  // list").
+  { id: 'close', keys: ['q'], label: 'close', button: 'close', shown: false, help: "close the plugin's pane and end what the band is doing", route: () => done({ op: 'close' }) },
   { id: 'help', keys: ['?'], label: 'help', button: '?', shown: true, help: 'this help', route: () => done({ op: 'help' }) },
 ]
 
@@ -169,6 +173,7 @@ export const LIST_KEYS: readonly ListKey[] = [
   { key: 'h', label: 'previous group', button: 'h◂', panes: ['bookmarks'], route: () => waiting({ op: 'group', dir: -1 }) },
   { key: 'l', label: 'next group', button: '▸l', panes: ['bookmarks'], route: () => waiting({ op: 'group', dir: 1 }) },
   { key: 'c', label: 'claim', button: 'c claim', panes: ['bookmarks'], route: () => waiting({ op: 'claim' }) },
+  { key: 'q', label: 'close', button: 'q close', panes: ['list', 'bookmarks'], route: () => done({ op: 'close' }) },
 ]
 // A pane's list keys, as the band draws them.
 export function listKeysFor(pane: Pane): readonly ListKey[] {

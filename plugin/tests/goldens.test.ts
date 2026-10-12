@@ -67,6 +67,7 @@ test('p in the band opens the prompts pane and the band takes a number', async (
     'Button:band-num-go:go (Enter)',
     'Button:band-num-j:j↓',
     'Button:band-num-s:s★ pin',
+    'Button:band-num-q:q close',
     'Text::(Esc)',
   ])
   const pane = await $.ui.mount(PANE as never)
