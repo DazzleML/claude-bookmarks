@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.29] - 2026-10-12
+
+### Added
+
+- **Footnotes fold again** ([#33](https://github.com/DazzleML/claude-bookmarks/issues/33)): once a prompt's footnotes are open, a dim `▴ fold` row under them closes them, and typing `12.` a second time does the same.
+- With "Footnotes in the prompts list" set to `hidden`, `12.1` still jumps to that footnote, and `12.` says the footnotes are hidden and where the setting is, instead of doing nothing.
+
 ## [0.4.28] - 2026-10-12
 
 ### Added
@@ -488,7 +495,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...HEAD
+[0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
 [0.4.28]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.27...v0.4.28
 [0.4.27]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.26...v0.4.27
 [0.4.26]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.25...v0.4.26

@@ -2071,10 +2071,14 @@ async function jumpToPromptNumber($: EngineInterface, typed: string, via: string
     return
   }
   const all = await prompts($)
-  // `3.` unfolds #3's footnotes; `3.1` jumps to its first (#33).
+  // `3.` unfolds #3's footnotes, and again folds them; `3.1` jumps to its first (#33).
   const parsed = parseListNumber(typed)
   if (parsed?.unfold) {
-    unfoldedFootnotes.add(parsed.n)
+    // Hidden footnotes: `N.k` still jumps (djdarcy, 2026-10-12: "Rows hidden, keys work"),
+    // but `N.` has nothing to show, so it says why.
+    if (currentSettings().footnotes === 'hidden') return void $.ui.toast('Footnotes are hidden: "Footnotes in the prompts list" in /config shows them')
+    if (unfoldedFootnotes.has(parsed.n)) unfoldedFootnotes.delete(parsed.n)
+    else unfoldedFootnotes.add(parsed.n)
     await update($, viewRev, v => v + 1)
     return
   }
@@ -3316,13 +3320,21 @@ export const register: Register = (on, options) => {
               onPress={async () => { unfoldedFootnotes.add(n); await update($, viewRev, v => v + 1) }} />,
           ]
         }
-        return list.map(({ f, k }) => (
+        const rows = list.map(({ f, k }) => (
           <Button key={`fn-${f.uuid}`} label={`   ${n}.${k} ${f.label}`} plain {...buttonStyle('footnote')}
             onPress={async () => {
               await jumpTo($, f.uuid, 'prompts pane', `footnote ${n}.${k}`)
               await settle($, 'list', 'row-press')
             }} />
         ))
+        // Folded by default and opened by hand: a row to fold them again (djdarcy,
+        // 2026-10-12: "a way to "recollapse" our "footnotes" ... after we open them").
+        if (footnoteMode !== 'folded') return rows
+        return [
+          ...rows,
+          <Button key={`fn-refold-${n}`} label="      ▴ fold" plain {...buttonStyle('footnote')}
+            onPress={async () => { unfoldedFootnotes.delete(n); await update($, viewRev, v => v + 1) }} />,
+        ]
       }
       // `21) text`, numbers right-aligned so the text lines up (djdarcy, 2026-10-04,
       // over `#21`; also offered `(21) ` and `21| `). One place to change it.

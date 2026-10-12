@@ -80,6 +80,34 @@ test('in the band, 1 . then go unfolds #1', async ($, on) => {
   expect(rows).toContain('   1.1 /compact')
 })
 
+// Opened by hand, the footnotes can be folded again (djdarcy, 2026-10-12). The unfolded set
+// lives in the module, so the test opens #1 itself if an earlier test has not.
+test('unfolded footnotes fold again from their ▴ fold row', async ($, on) => {
+  world(on, { session: SID, store: STORE })
+  type Pane = { press: (t: object) => Promise<unknown>; findAll: (q: object) => Promise<Found[]> }
+  const band = (await $.ui.mount(BAND as never)) as { input: (t: object) => Promise<unknown> }
+  await band.input({ key: 'band-cmd-0', text: 'p' }).catch(() => undefined)
+  const pane = (await $.ui.mount(PANE as never)) as Pane
+  const texts = async () => (await pane.findAll({ type: 'Button' })).map(b => b.text ?? '')
+  if ((await texts()).includes('      … 2 footnotes')) await pane.press({ key: 'fn-fold-1' })
+  expect(await texts()).toEqual([' 2) second prompt', ' 1) first prompt', '   1.1 /compact', '   1.2 !git status', '      ▴ fold'])
+  await pane.press({ key: 'fn-refold-1' })
+  expect(await texts()).toEqual([' 2) second prompt', ' 1) first prompt', '      … 2 footnotes'])
+})
+
+// Hidden rows, working keys (djdarcy, 2026-10-12: "Rows hidden, keys work"): `N.k` still
+// finds the footnote; `N.` cannot show anything, so it says where the setting is.
+test('hidden: 1 . 1 go still finds the footnote; 1 . go says footnotes are hidden', { options: { footnotes: 'hidden' } }, async ($, on) => {
+  const w = world(on, { session: SID, store: STORE })
+  type Ui = { input: (t: object) => Promise<unknown>; press: (t: object) => Promise<unknown> }
+  const band = (await $.ui.mount(BAND as never)) as unknown as Ui
+  await band.input({ key: 'band-cmd-0', text: 'p' }).catch(() => undefined)
+  for (const key of ['band-num-1', 'band-num-dot', 'band-num-1', 'band-num-go']) await band.press({ key }).catch(() => undefined)
+  expect(w.toasts().some(t => t.includes('no footnote'))).toBe(false)
+  for (const key of ['band-num-1', 'band-num-dot', 'band-num-go']) await band.press({ key }).catch(() => undefined)
+  expect(w.toasts().some(t => t.startsWith('Footnotes are hidden'))).toBe(true)
+})
+
 test('hidden: no footnote rows', { options: { footnotes: 'hidden' } }, async ($, on) => {
   world(on, { session: SID, store: STORE })
   const rows = await paneButtons($ as never)

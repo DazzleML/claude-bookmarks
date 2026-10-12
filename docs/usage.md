@@ -210,9 +210,10 @@ Unfolded, the ellipsis becomes the footnotes themselves, `12.1 /compact`, `12.2 
 | To | Do |
 |----|----|
 | Unfold a prompt's footnotes | Click the `… N footnotes` row, or type `12.` in the pane's `#` field |
+| Fold them again | Click the `▴ fold` row under them, or type `12.` again |
 | Jump to footnote 12.1 | Type `12.1` and `Enter` in the pane's `#` field, or on the band type `1` `2`, click the band's `.` button, `1`, `Enter` (a band key is one letter or digit, so `.` is a button there) |
 
-The "Footnotes in the prompts list" setting chooses `folded` (the default), `shown` (always unfolded) or `hidden`. Footnotes are read from the transcript once, with the prompts, and added live after that.
+The "Footnotes in the prompts list" setting chooses `folded` (the default), `shown` (always unfolded) or `hidden`. With `hidden` the rows are gone but the numbers still work: `12.1` jumps to that footnote, and `12.` says the footnotes are hidden. Footnotes are read from the transcript once, with the prompts, and added live after that.
 
 ### Filtering the list
 
