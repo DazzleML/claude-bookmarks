@@ -47,7 +47,8 @@ export type AfterActionSettings = {
   afterActionFocus: 'input' | 'band'
 }
 
-const isList = (pane: Pane) => pane === 'list' || pane === 'bookmarks'
+/** The two list-shaped panes (prompts and bookmarks), which share the band's number entry. */
+export const isList = (pane: Pane | 'idle') => pane === 'list' || pane === 'bookmarks'
 
 export function afterAction(input: { pane: Pane; cause: Cause; needsMore?: boolean; settings: AfterActionSettings }): Outcome {
   const { pane, cause, needsMore, settings } = input

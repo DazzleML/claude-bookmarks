@@ -27,7 +27,7 @@ import { exchangeIndex, looksLikeRedraw, pickViewAnchor, promptNearView } from '
 import { latestBurst, reportTime, type Report } from './core/latest-burst'
 import { CHANNELS, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, screenMirror, type Channel } from './core/debug'
 import { lineHint, linePlaceholder, listHint, route, type Pane } from './core/keys'
-import { afterAction, type Cause } from './core/after-action'
+import { afterAction, isList, type Cause } from './core/after-action'
 import { resolve as resolveSettings, type Settings } from './core/settings'
 import { looksLikePrompt, promptTextOf, unwrapQueued } from './core/prompt-rows'
 import { byFirstFour, findByMessage, firstFour, sameMessage } from './core/message-id'
@@ -1435,8 +1435,9 @@ async function jumpToMark($: EngineInterface, letter: string, probe = false): Pr
 const CMD_HINT = lineHint()
 const BAND_PLACEHOLDER = linePlaceholder()
 
-// The two list-shaped pane modes share the band's number entry (digits, j/k, Enter).
-const listLike = (m: PaneMode | 'idle') => m === 'list' || m === 'bookmarks'
+// The two list-shaped pane modes share the band's number entry (digits, j/k, Enter):
+// core/after-action.ts isList.
+const listLike = isList
 let cmdBusy = false
 
 // Draw the field anew, empty.
