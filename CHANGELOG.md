@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-12
+
+### Added
+
+- Debug channels: diagnostics too heavy or too narrow to run all the time, each off until you turn it on for one conversation. `/bm-debug channels` lists them, `/bm-debug enable screen,held` and `/bm-debug disable screen` switch them, and `/bm-debug status` shows which are on. `screen` writes every on-screen report Claude Code sends the plugin to `<session id>.screen.log` beside the debug log, for a prompts pane whose highlight lands on the wrong prompt; `held` logs which rule kept the prompts pane's highlight where it was. The choice ends with the session; from a shell, `CONVO_BOOKMARKS_DEBUG_CHANNELS=screen claude`. ([#35](https://github.com/DazzleML/claude-bookmarks/issues/35))
+
 ## [0.4.1] - 2026-10-11
 
 ### Fixed
@@ -284,7 +290,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.5...v0.4.0
 [0.3.5]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.4...v0.3.5

@@ -30,6 +30,7 @@ const TEMPORARY_RETENTION: Retention = '30d'
 import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution, type TranscriptRow } from './core/transcript-lines'
 import { exchangeIndex, looksLikeRedraw, promptNearView } from './core/view-position'
 import { latestBurst, reportTime, type Report } from './core/latest-burst'
+import { CHANNELS, formatChannels, parseChannels, type Channel } from './core/debug'
 import { looksLikePrompt, promptTextOf, unwrapQueued } from './core/prompt-rows'
 
 const PANE = 'bm-poc'
@@ -225,6 +226,40 @@ function noteOnScreen(requestId: string, onScreen: { first: number; last: number
   const grew = !!before && onScreen.of > before.of
   onScreenNow.set(requestId, { ...onScreen, at: same ? before.at : Date.now(), grew })
 }
+// The `screen` debug channel (#35): every raw onScreen report, unfiltered, nulls and
+// repeats included, to <debug>/<session>.screen.log, so the yellow row's moves can be
+// lined up against what Claude Code actually sent (it found the 0.4.1 tool-row bug;
+// tests/one-offs/thinking/screen-reports/analyse_screen_log.py reads it). Off unless
+// `/bm-debug enable screen`.
+const SCREEN_LINES = 6000
+const screenLines: string[] = []
+let screenFlushPending = false
+let screenLoaded = false
+function rawScreen($: EngineInterface, component: string, requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
+  readChannels($)
+  if (!channelsOn.has('screen')) return
+  const range = onScreen ? `${onScreen.first}-${onScreen.last}/${onScreen.of}` : onScreen === null ? 'null' : 'absent'
+  screenLines.push(`${clock(Date.now())} ${component} ${requestId} ${range}`)
+  if (screenLines.length > SCREEN_LINES) screenLines.splice(0, screenLines.length - SCREEN_LINES)
+  if (screenFlushPending) return
+  screenFlushPending = true
+  $.clock.after(500, () => {
+    screenFlushPending = false
+    flushing = flushing.then(() => flushScreen($)).catch(() => {})
+  })
+}
+async function flushScreen($: EngineInterface) {
+  if (logPath === undefined) await flushLog($)
+  if (!logPath) return
+  const path = logPath.replace(/\.log$/, '.screen.log')
+  if (!screenLoaded) {
+    screenLoaded = true
+    if (await $.fs.exists(path)) screenLines.unshift(...(await $.fs.read(path)).split('\n').filter(l => l.trim()), '--- reload ---')
+    if (screenLines.length > SCREEN_LINES) screenLines.splice(0, screenLines.length - SCREEN_LINES)
+  }
+  await $.fs.write(path, screenLines.join('\n') + '\n')
+}
+
 // The other transcript rows (tool calls and results, tool groups, command output, the
 // turn-duration line, notices) are not placed on a prompt, but their reports date the
 // latest burst (core/latest-burst.ts: a screen of tool rows after a jump otherwise left
@@ -237,8 +272,10 @@ function noteOtherOnScreen(requestId: string, onScreen: { first: number; last: n
   otherOnScreen.set(requestId, { ...onScreen, at })
   if (at > otherNewsAt) otherNewsAt = at
 }
-// One render report from a non-message row: the news time, and the pane's view check.
-function noteOtherRow($: EngineInterface, requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
+// One render report from a non-message row: the screen channel's log, the news time,
+// and the pane's view check.
+function noteOtherRow($: EngineInterface, tag: string, requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
+  rawScreen($, tag, requestId, onScreen)
   noteOtherOnScreen(requestId, onScreen)
   noteViewMoved($)
 }
@@ -318,10 +355,31 @@ async function echoStateLine($: EngineInterface): Promise<string> {
   return `${word(policy.default)}, the default (every conversation without a choice of its own)`
 }
 
+// Debug channels (#35, core/debug.ts): this conversation's choice, read from its
+// environment once and kept here so a check is synchronous (a render hook and note()
+// cannot await). Until it is read, every channel is off, the safe side.
+const channelsOn = new Set<Channel>()
+let channelsRead = false
+function readChannels($: EngineInterface) {
+  if (channelsRead) return
+  channelsRead = true
+  void $.env.get('CONVO_BOOKMARKS_DEBUG_CHANNELS').then(v => {
+    for (const c of parseChannels(v).known) channelsOn.add(c)
+  }).catch(() => {})
+}
+async function setChannels($: EngineInterface, on: Set<Channel>) {
+  channelsOn.clear()
+  for (const c of on) channelsOn.add(c)
+  const v = formatChannels(on)
+  await $.env.set('CONVO_BOOKMARKS_DEBUG_CHANNELS', v === '' ? undefined : v)
+}
+
 function log($: EngineInterface, line: string, opts?: { always?: boolean }) {
+  readChannels($)
   if (opts?.always) $.ui.log(line)
   else void uiEchoEnabled($).then(enabled => { if (enabled) $.ui.log(line) }).catch(() => {})
   logLines.push(`${new Date().toISOString()} ${line}`)
+  if (channelsOn.has('screen') && /^\[bm-poc\] (nearest prompt moved|redraw ignored|pane follow|held by)/.test(line)) screenLines.push(`${clock(Date.now())} >>> ${line.slice(9, 120)}`)
   if (logLines.length > LOG_LINES) logLines.splice(0, logLines.length - LOG_LINES)
   flushing = flushing.then(() => flushLog($)).catch(() => {})
 }
@@ -1129,7 +1187,7 @@ async function promptHere($: EngineInterface): Promise<string | undefined> {
   // message never decides the view: it is dropped from the weights, and when nothing
   // else is fresh the answer is the one before.
   const stable = lastScreenOrder.filter(id => !onScreenNow.get(id)?.grew)
-  if (stable.length === 0 && lastScreenOrder.length > 0) return lastHere
+  if (stable.length === 0 && lastScreenOrder.length > 0) return held('a reply streaming in')
   // A message redrawn off screen (a bookmark link minted into it, a highlight cleared)
   // reports its whole range as if every row showed, and as the newest report it evicts
   // the real screen set (2026-10-11 20:50: a 39-line reply from an hour earlier was the
@@ -1150,7 +1208,7 @@ async function promptHere($: EngineInterface): Promise<string | undefined> {
   if (sinceSelf < SELF_REDRAW_MS && looksLikeRedraw(fresh, trustedScreen, lastHere ? exchangeOfId(lastHere) : undefined, exchangeOfId)) {
     log($, `[bm-poc] redraw ignored, not a view: ${fresh.map(r => `${r.id.slice(0, 13)} ${r.first}-${r.last}/${r.of}`).join(' ')}; kept ${lastHere ? short(lastHere) : '(none)'} (${sinceSelf} ms after ${selfRedrawWhy})`)
     lastScreenOrder = [...trustedScreen]
-    return lastHere
+    return held('a redraw')
   }
   trustedScreen = new Set(stable)
   const visible = stable.map(id => {
@@ -1163,8 +1221,18 @@ async function promptHere($: EngineInterface): Promise<string | undefined> {
   // streaming reply is drawn below a view that stays scrolled up (djdarcy, 2026-10-11:
   // sending a prompt "wipes out the yellow"): the view did not move, so the answer is
   // the one before.
-  if (i === undefined && !visible.some(m => byFour.has(m.id))) return lastHere
+  if (i === undefined && !visible.some(m => byFour.has(m.id))) return held(visible.length ? 'nothing placeable' : 'no fresh message (tool rows or none)')
+  heldBy = undefined
   return i === undefined ? undefined : ids[i]
+}
+// Which rule kept the yellow row where it was, logged under the `held` debug channel
+// (#35), so a rule that never changes an outcome can be found and removed. Read by
+// noteViewMoved.
+let heldBy: string | undefined
+let lastHeldLogged: string | undefined
+function held(rule: string): string | undefined {
+  heldBy = rule
+  return lastHere
 }
 // The row the pane last drew yellow, and the debounce behind the dynamic update.
 let lastHere: string | undefined
@@ -1184,6 +1252,8 @@ function noteViewMoved($: EngineInterface) {
       if ((await read($, paneMode)) !== 'list') return
       if (!(await $.ui.panes()).some(p => p.id === PANE)) return
       const here = await promptHere($)
+      if (channelsOn.has('held') && heldBy && heldBy !== lastHeldLogged) log($, `[bm-poc] held by ${heldBy}: kept ${lastHere ? short(lastHere) : '(none)'}`)
+      lastHeldLogged = heldBy
       if (here === lastHere) return
       // Diagnostic (2026-10-11): the yellow row flipped between #295 and #34 within one
       // screen; list what was on screen and where each was placed.
@@ -1894,7 +1964,7 @@ export const register: Register = on => {
       ['bm-bookmarks', 'List the bookmarks of this conversation; type a number and Enter to jump'],
       ['bm-promote', 'Promote a mark into a bookmark: /bm-promote a'],
       ['bm-diag-keys', 'Diagnostics: log each keystroke in the input box (on | off | toggle)'],
-      ['bm-debug', 'Echo the plugin\'s log lines into this conversation as dim rows (on | off | status); off by default'],
+      ['bm-debug', 'Echo the plugin\'s log lines into this conversation as dim rows (on | off | status), or turn debug channels on (channels | enable | disable); off by default'],
     ]
     for (const [name, description] of commands) {
       await $.command.register({ name, description, immediate: true })
@@ -2084,15 +2154,16 @@ export const register: Register = on => {
 
   // The other transcript rows that report onScreen (see otherOnScreen): observe only, so
   // a screen full of tool rows still tells the pane the view moved.
-  on('ui.render', { component: 'ToolUse' }, async ($, e, next) => { noteOtherRow($, e.requestId, e.props.onScreen); return next(e) })
-  on('ui.render', { component: 'ToolResult' }, async ($, e, next) => { noteOtherRow($, e.requestId, e.props.onScreen); return next(e) })
-  on('ui.render', { component: 'ToolGroup' }, async ($, e, next) => { noteOtherRow($, e.requestId, e.props.onScreen); return next(e) })
-  on('ui.render', { component: 'CommandOutput' }, async ($, e, next) => { noteOtherRow($, e.requestId, e.props.onScreen); return next(e) })
-  on('ui.render', { component: 'TurnDuration' }, async ($, e, next) => { noteOtherRow($, e.requestId, e.props.onScreen); return next(e) })
-  on('ui.render', { component: 'InfoNotice' }, async ($, e, next) => { noteOtherRow($, e.requestId, e.props.onScreen); return next(e) })
+  on('ui.render', { component: 'ToolUse' }, async ($, e, next) => { noteOtherRow($, 'TU', e.requestId, e.props.onScreen); return next(e) })
+  on('ui.render', { component: 'ToolResult' }, async ($, e, next) => { noteOtherRow($, 'TR', e.requestId, e.props.onScreen); return next(e) })
+  on('ui.render', { component: 'ToolGroup' }, async ($, e, next) => { noteOtherRow($, 'TG', e.requestId, e.props.onScreen); return next(e) })
+  on('ui.render', { component: 'CommandOutput' }, async ($, e, next) => { noteOtherRow($, 'CO', e.requestId, e.props.onScreen); return next(e) })
+  on('ui.render', { component: 'TurnDuration' }, async ($, e, next) => { noteOtherRow($, 'TD', e.requestId, e.props.onScreen); return next(e) })
+  on('ui.render', { component: 'InfoNotice' }, async ($, e, next) => { noteOtherRow($, 'IN', e.requestId, e.props.onScreen); return next(e) })
 
   // Observe only: note the id, draw nothing different.
   on('ui.render', { component: 'UserMessage' }, async ($, e, next) => {
+    rawScreen($, 'U', e.requestId, e.props.onScreen)
     noteOnScreen(e.requestId, e.props.onScreen)
     noteViewMoved($)
     if (!rendered.has(e.requestId)) {
@@ -2144,6 +2215,7 @@ export const register: Register = on => {
   // literally, the tag goes on a line of its own at the top of the block instead, which
   // is where a jump lands. Only rows carrying a mark are touched.
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
+    rawScreen($, 'A', e.requestId, e.props.onScreen)
     noteOnScreen(e.requestId, e.props.onScreen)
     noteViewMoved($)
 
@@ -2573,7 +2645,28 @@ export const register: Register = on => {
 
   on('command.run', { command: 'bm-debug' }, async ($, e) => {
     const [a, b] = (e.args ?? '').trim().toLowerCase().split(/\s+/)
-    const usage = '/bm-debug on|off|reset (this conversation) | default on|off (every conversation without a choice) | force on|off (every conversation, no choice) | status'
+    const usage = '/bm-debug on|off|reset (this conversation) | default on|off (every conversation without a choice) | force on|off (every conversation, no choice) | channels | enable|disable <channel,...> | status'
+    // Debug channels (#35): heavier diagnostics, off by default, this conversation only.
+    if (a === 'channels' || a === 'enable' || a === 'disable') {
+      readChannels($)
+      const rest = (e.args ?? '').trim().slice(a.length)
+      if (a !== 'channels') {
+        const { known, unknown } = parseChannels(rest)
+        if (!known.length && !unknown.length) {
+          log($, `[bm] /bm-debug ${a} needs channel names: ${Object.keys(CHANNELS).join(', ')}`, { always: true })
+          return {}
+        }
+        const next = new Set(channelsOn)
+        for (const c of known) a === 'enable' ? next.add(c) : next.delete(c)
+        await setChannels($, next)
+        if (unknown.length) log($, `[bm] no such debug channel: ${unknown.join(', ')} (known: ${Object.keys(CHANNELS).join(', ')})`, { always: true })
+        $.ui.toast(`bookmarks: debug channels ${formatChannels(channelsOn) || 'none'} on`)
+      }
+      for (const [c, what] of Object.entries(CHANNELS)) {
+        log($, `[bm] debug channel ${c}: ${channelsOn.has(c as Channel) ? 'ON' : 'off'} -- ${what}`, { always: true })
+      }
+      return {}
+    }
     if (a === 'on' || a === 'off' || a === 'reset') {
       await setSessionEcho($, a === 'reset' ? undefined : a === 'on')
       const line = await echoStateLine($)
@@ -2588,7 +2681,7 @@ export const register: Register = on => {
       log($, `[bm] log echo ${line}`, { always: true })
       return {}
     }
-    log($, `[bm] log echo ${await echoStateLine($)}; file log: ${logPath ?? '(not yet written)'}; ${usage}`, { always: true })
+    log($, `[bm] log echo ${await echoStateLine($)}; channels on: ${formatChannels(channelsOn) || 'none'}; file log: ${logPath ?? '(not yet written)'}; ${usage}`, { always: true })
     return {}
   })
 

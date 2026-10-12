@@ -338,3 +338,14 @@ The plugin always writes its log to a file, one per conversation (see [the debug
 | `/bm-debug status` | Which of these is in effect, and the log file's path. |
 
 The same per-conversation signal can be given from the shell: `CONVO_BOOKMARKS_DEBUG=1 claude` starts a session with the echo on (`0`, `off` or `false` for an explicit off). The default and the force are the only settings written to disk; a conversation's choice never is.
+
+### Debug channels
+
+Some diagnostics are too heavy or too narrow to run all the time, so each is a channel, off until you turn it on for one conversation:
+
+| Channel | What it adds |
+|---------|--------------|
+| `screen` | Every on-screen report Claude Code sends the plugin, written to `<session id>.screen.log` beside the debug log. Heavy: the file is rewritten every half second while the screen redraws. For a prompts pane whose highlight lands on the wrong prompt. |
+| `held` | A log line naming the rule that kept the prompts pane's yellow row where it was. |
+
+`/bm-debug channels` lists them with their state; `/bm-debug enable screen,held` and `/bm-debug disable screen` switch them. The choice is kept the same way as the echo's: in this session's own environment (`CONVO_BOOKMARKS_DEBUG_CHANNELS`), so it ends with the session. From the shell: `CONVO_BOOKMARKS_DEBUG_CHANNELS=screen claude`.
