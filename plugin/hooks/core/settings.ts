@@ -22,7 +22,8 @@
 export type EnumField = { kind: 'enum'; values: readonly string[]; default: string; title: string; description: string }
 export type BooleanField = { kind: 'boolean'; default: boolean; title: string; description: string }
 export type NumberField = { kind: 'number'; min: number; max: number; default: number; title: string; description: string }
-export type Field = EnumField | BooleanField | NumberField
+export type TextField = { kind: 'text'; default: string; title: string; description: string }
+export type Field = EnumField | BooleanField | NumberField | TextField
 
 export const FIELDS = {
   listOpensAt: {
@@ -93,6 +94,13 @@ export const FIELDS = {
     title: 'How much text a debug line quotes',
     description: 'reference: a short excerpt, enough to find the place; full: the whole text',
   },
+  // #27: a role's colour, background, dim or bold, as JSON; core/palette.ts validates it.
+  palette: {
+    kind: 'text',
+    default: '',
+    title: 'Colour overrides',
+    description: 'JSON, e.g. {"here": {"color": "cyan"}, "markBand": {"backgroundColor": "#203040"}}. Roles: here, pinned, footnote, legend, mark, markBand, used, unused, unreached, emphasis, search. A colour is a theme key (warning, subtle, ...), a terminal colour name or #rrggbb; anything else is ignored',
+  },
 } as const satisfies Record<string, Field>
 
 export type FieldName = keyof typeof FIELDS
@@ -102,7 +110,9 @@ type ValueOf<F> = F extends { kind: 'enum'; values: readonly (infer V)[] }
     ? boolean
     : F extends { kind: 'number' }
       ? number
-      : never
+      : F extends { kind: 'text' }
+        ? string
+        : never
 export type Settings = { [K in FieldName]: ValueOf<(typeof FIELDS)[K]> }
 export type Source = 'default' | 'machine' | 'conversation'
 export type Layer = Readonly<Record<string, unknown>>
@@ -125,6 +135,8 @@ export function fit(field: Field, raw: unknown): { ok: true; value: string | boo
       const n = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN
       return Number.isFinite(n) && n >= field.min && n <= field.max ? { ok: true, value: n } : { ok: false }
     }
+    case 'text':
+      return typeof raw === 'string' ? { ok: true, value: raw } : { ok: false }
   }
 }
 
@@ -186,6 +198,7 @@ export function manifestUserConfig(): Record<string, Record<string, unknown>> {
       const base = { title: f.title, description: f.description, default: f.default }
       if (f.kind === 'enum') return [k, { type: 'string', ...base, options: [...f.values] }]
       if (f.kind === 'number') return [k, { type: 'number', ...base, min: f.min, max: f.max }]
+      if (f.kind === 'text') return [k, { type: 'string', ...base }]
       return [k, { type: 'boolean', ...base }]
     }),
   )

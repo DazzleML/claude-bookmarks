@@ -29,6 +29,7 @@ import { CHANNELS, excerpt, formatChannels, formatDebugEnv, parseChannels, parse
 import { lineHint, linePlaceholder, listHint, route, type Pane } from './core/keys'
 import { afterAction, isList, type Cause } from './core/after-action'
 import { debugTextMode, installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
+import { resolvePalette, type Palette, type Role, type Style } from './core/palette'
 import { looksLikePrompt, promptTextOf, unwrapQueued } from './core/prompt-rows'
 import { byFirstFour, findByMessage, firstFour, sameMessage } from './core/message-id'
 
@@ -151,15 +152,30 @@ let markCache: Record<string, Mark> = {}
 // across lines would have to rewrite markdown structure, which the plugin doesn't do.
 const snippetOf = (text: string) => (text.split('\n').find(l => l.trim()) ?? '').trim().slice(0, 120)
 
-// Colours for a dark terminal; a light background would need a lighter LINE_BG (#27).
-// LINE_BG: darker than the selection blue #264F78 so it reads as a soft band.
-const LINE_BG = '#1B3754'
-const WORDS_FG = 'yellow'
-// The prompts pane's "nearest to your view" row number (djdarcy, 2026-10-11: "a
-// yellowish coloring"). Same family as the pin star so the pane stays two-colour.
-const HERE_FG = 'yellow'
-// A letter already in use, in the mark pane's list: a muted grey-red, "this one is taken".
-const USED_FG = '#B07A7A'
+// Every colour, background, dim and bold the plugin draws comes from the palette by role
+// (#27, core/palette.ts): theme keys first, so a role reads on dark and light themes; the
+// mark band's light or dark value from the theme's name (/config's `theme` row, kept
+// current by a config.set hook); the person's overrides from the `palette` setting.
+let themeName: string | undefined
+let paletteCache: { key: string; palette: Palette } | undefined
+function palette(): Palette {
+  const overrides = currentSettings().palette
+  const key = `${themeName ?? ''}|${overrides}`
+  if (paletteCache?.key !== key) {
+    let parsed: Record<string, unknown> = {}
+    try {
+      const v: unknown = overrides.trim() ? JSON.parse(overrides) : {}
+      if (v && typeof v === 'object') parsed = v as Record<string, unknown>
+    } catch {
+      // Not JSON: the defaults stand, as for any override that does not fit.
+    }
+    paletteCache = { key, palette: resolvePalette({ theme: themeName, overrides: parsed }).palette }
+  }
+  return paletteCache.palette
+}
+const style = (role: Role): Style => palette()[role]
+// A Button's label can't be coloured at rest (docs/engine-quirks.md): only its dimness.
+const buttonStyle = (role: Role): { dimColor?: boolean } => (style(role).dimColor ? { dimColor: true } : {})
 
 // Split a reply's markdown around the line holding `snippet`, for drawing that line
 // ourselves. Undefined (caller falls back to bold) when the split is risky: no match,
@@ -204,9 +220,9 @@ function colorSplit(text: string, letter: string, snippet: string | undefined) {
 // and words bold in WORDS_FG.
 function markedLine(Text: ElementConstructor<TextProps>, c: NonNullable<ReturnType<typeof colorSplit>>) {
   return (
-    <Text backgroundColor={LINE_BG}>
+    <Text {...style('markBand')}>
       {c.pre}
-      <Text color={WORDS_FG} bold>
+      <Text {...style('mark')}>
         «{c.letter}» {c.snippet}
       </Text>
       {c.post}
@@ -2008,8 +2024,21 @@ export const register: Register = (on, options) => {
     }
     return result
   })
+  // The theme decides the mark band's light or dark value (#27).
+  on('config.set', { key: 'theme' }, async ($, e, next) => {
+    const result = await next(e)
+    if (!result.deny) {
+      themeName = String(result.value)
+      await update($, settingsRev, v => v + 1)
+    }
+    return result
+  })
 
   on('session.start', async ($, e, next) => {
+    void $.config.list().then(rows => {
+      const theme = rows.find(r => r.key === 'theme')?.value
+      if (typeof theme === 'string') themeName = theme
+    }).catch(() => {})
     const commands: [string, string][] = [
       ['bm-ids', 'Diagnostics: compare captured prompt ids with the ids drawn on screen'],
       ['bm-jump', 'Diagnostics: scroll to a prompt (first | last | N | r<N> | uuid)'],
@@ -2308,7 +2337,7 @@ export const register: Register = (on, options) => {
         <Markdown key={k} text={markLinks(t, LINK_MARKERS)} pressableLinks={pressable} onLinkPress={link => onAnchorPress($, link.href)} />
       )
       const legend = LINK_LEGEND ? (
-        <Text dimColor>
+        <Text {...style('legend')}>
           {LINK_MARKERS === 'glyph' ? '⚓' : '[bm]'} click: jump there · ctrl-click: open the bookmark's file
           {links.some(l => l.kind === 'file') ? `  ${LINK_MARKERS === 'glyph' ? '▤' : '[file]'} ctrl-click: open the file` : ''}
         </Text>
@@ -2801,7 +2830,7 @@ export const register: Register = (on, options) => {
       if (mode === 'jump') {
         const reading = marks[READING]
         keys = [
-          <Text key="band-jump-title" dimColor>jump:</Text>,
+          <Text key="band-jump-title" {...style('legend')}>jump:</Text>,
           ...(reading
             ? [<Button key="band-jump-reading" label="reading (Enter)" plain
                 // There, or back to where you were: the leader's Space (readingToggle).
@@ -2814,11 +2843,11 @@ export const register: Register = (on, options) => {
         ]
       } else if (mode === 'mark') {
         keys = [
-          <Text key="band-mark-title" dimColor>mark as:</Text>,
+          <Text key="band-mark-title" {...style('legend')}>mark as:</Text>,
           // The default focus, so a stray Enter cancels rather than overwriting a mark.
-          <Button key="band-mark-cancel" label="cancel (Enter)" plain dimColor onPress={() => done('esc')} />,
+          <Button key="band-mark-cancel" label="cancel (Enter)" plain {...buttonStyle('legend')} onPress={() => done('esc')} />,
           ...LETTERS.map(l => (
-            <Button key={`band-mark-${l}`} hotkey={l} label={marks[l] ? '●' : '·'} plain dimColor={!marks[l]}
+            <Button key={`band-mark-${l}`} hotkey={l} label={marks[l] ? '●' : '·'} plain {...(marks[l] ? {} : buttonStyle('unused'))}
               onPress={async () => { await setMark($, l); await done('mark-set'); await restoreView($) }} />
           )),
         ]
@@ -2830,33 +2859,33 @@ export const register: Register = (on, options) => {
         const count = bookmarks ? (await bookmarkList($)).length : (await prompts($)).length
         const typed = await read($, bandNum)
         keys = [
-          <Text key="band-num-title" dimColor>{bookmarks ? 'bookmark #' : 'prompt #'}</Text>,
-          <Text key="band-num-typed" bold>{typed || '_'}</Text>,
-          <Text key="band-num-range" dimColor>{`(1-${count})`}</Text>,
+          <Text key="band-num-title" {...style('legend')}>{bookmarks ? 'bookmark #' : 'prompt #'}</Text>,
+          <Text key="band-num-typed" {...style('emphasis')}>{typed || '_'}</Text>,
+          <Text key="band-num-range" {...style('legend')}>{`(1-${count})`}</Text>,
           ...'0123456789'.split('').map(d => (
-            <Button key={`band-num-${d}`} hotkey={d} label={d} plain dimColor onPress={() => bandDigit($, d)} />
+            <Button key={`band-num-${d}`} hotkey={d} label={d} plain {...buttonStyle('legend')} onPress={() => bandDigit($, d)} />
           )),
           // `go` sits between k and j, so an arrow always has a neighbour to move to:
           // the ui.focus hook turns that move into k (previous) or j (next).
-          <Button key="band-num-k" hotkey="k" label="k↑" plain dimColor onPress={() => bandStep($, 'k')} />,
+          <Button key="band-num-k" hotkey="k" label="k↑" plain {...buttonStyle('legend')} onPress={() => bandStep($, 'k')} />,
           <Button key="band-num-go" label="go (Enter)" plain onPress={() => bandNumberGo($)} />,
-          <Button key="band-num-j" hotkey="j" label="j↓" plain dimColor onPress={() => bandStep($, 'j')} />,
+          <Button key="band-num-j" hotkey="j" label="j↓" plain {...buttonStyle('legend')} onPress={() => bandStep($, 'j')} />,
           ...(bookmarks
             ? [
-                <Button key="band-num-h" hotkey={GROUP_CYCLE.prev} label={`${GROUP_CYCLE.prev}◂`} plain dimColor onPress={() => bandGroupStep($, -1)} />,
-                <Text key="band-num-group" dimColor>{BOOKMARK_GROUPS[await read($, bandGroup)]?.title ?? ''}</Text>,
-                <Button key="band-num-l" hotkey={GROUP_CYCLE.next} label={`▸${GROUP_CYCLE.next}`} plain dimColor onPress={() => bandGroupStep($, 1)} />,
+                <Button key="band-num-h" hotkey={GROUP_CYCLE.prev} label={`${GROUP_CYCLE.prev}◂`} plain {...buttonStyle('legend')} onPress={() => bandGroupStep($, -1)} />,
+                <Text key="band-num-group" {...style('legend')}>{BOOKMARK_GROUPS[await read($, bandGroup)]?.title ?? ''}</Text>,
+                <Button key="band-num-l" hotkey={GROUP_CYCLE.next} label={`▸${GROUP_CYCLE.next}`} plain {...buttonStyle('legend')} onPress={() => bandGroupStep($, 1)} />,
               ]
-            : [<Button key="band-num-pin" hotkey="s" label="s★ pin" plain dimColor onPress={() => bandPin($)} />]),
+            : [<Button key="band-num-pin" hotkey="s" label="s★ pin" plain {...buttonStyle('legend')} onPress={() => bandPin($)} />]),
         ]
       }
       return (
         <Box flexDirection="column">
           {theirs}
           <Box flexDirection="row" columnGap={1} flexWrap="wrap">
-            <Text dimColor>bm</Text>
+            <Text {...style('legend')}>bm</Text>
             {keys}
-            <Text dimColor>(Esc)</Text>
+            <Text {...style('legend')}>(Esc)</Text>
           </Box>
         </Box>
       )
@@ -2874,15 +2903,15 @@ export const register: Register = (on, options) => {
               onInput={(typed: string) => runCommandLine($, typed, 'input')}
               onSubmit={(typed: string) => runCommandLine($, typed, 'submit')} />
           ) : (
-            <Text dimColor>bm:</Text>
+            <Text {...style('legend')}>bm:</Text>
           )}
-          <Button key="chord-mark" label="mark" hotkey="m" plain dimColor action={MARK_ACTION} onPress={() => openFor($, 'mark', MARK_ACTION)} />
-          <Button key="chord-jump" label="jump" hotkey="j" plain dimColor action={JUMP_ACTION} onPress={() => openFor($, 'jump', JUMP_ACTION)} />
-          <Button key="chord-prompts" label="prompts" hotkey="p" plain dimColor action={PROMPTS_ACTION} onPress={() => openFor($, 'list', PROMPTS_ACTION)} />
-          <Button key="chord-read" label="read" hotkey="r" plain dimColor action={READING_ACTION} onPress={() => readingToggle($)} />
+          <Button key="chord-mark" label="mark" hotkey="m" plain {...buttonStyle('legend')} action={MARK_ACTION} onPress={() => openFor($, 'mark', MARK_ACTION)} />
+          <Button key="chord-jump" label="jump" hotkey="j" plain {...buttonStyle('legend')} action={JUMP_ACTION} onPress={() => openFor($, 'jump', JUMP_ACTION)} />
+          <Button key="chord-prompts" label="prompts" hotkey="p" plain {...buttonStyle('legend')} action={PROMPTS_ACTION} onPress={() => openFor($, 'list', PROMPTS_ACTION)} />
+          <Button key="chord-read" label="read" hotkey="r" plain {...buttonStyle('legend')} action={READING_ACTION} onPress={() => readingToggle($)} />
           {last && (
             <Text wrap="truncate-end">
-              | <Text bold>{last.letter}</Text> ▸ {last.text}
+              | <Text {...style('emphasis')}>{last.letter}</Text> ▸ {last.text}
             </Text>
           )}
         </Box>
@@ -2961,7 +2990,7 @@ export const register: Register = (on, options) => {
           await settle($, 'list', 'row-press')
         }
         if (!pinSet.has(r.uuid) && !isHere) {
-          return <Button key={`${group}-${r.uuid}`} label={`${pointer(r.n)}${numberLabel(r.n)}${r.head}`} plain dimColor={dim && r.n !== targetN} onPress={press} />
+          return <Button key={`${group}-${r.uuid}`} label={`${pointer(r.n)}${numberLabel(r.n)}${r.head}`} plain {...(dim && r.n !== targetN ? buttonStyle('unreached') : {})} onPress={press} />
         }
         // `245★) `: a gold star inside the number, so it reads as the row's marker, not
         // part of the prompt (djdarcy, 2026-10-05, over a background band and a star
@@ -2972,17 +3001,17 @@ export const register: Register = (on, options) => {
         return (
           <Box key={`${group}-row-${r.uuid}`} flexDirection="row">
             <Box flexShrink={0}>
-              <Text dimColor={dim} color={isHere ? HERE_FG : undefined} bold={isHere}>{`${pointer(r.n)}${String(r.n).padStart(width)}`}</Text>
-              {pinSet.has(r.uuid) && <Text color={WORDS_FG}>★</Text>}
-              <Text dimColor={dim} color={isHere ? HERE_FG : undefined} bold={isHere}>{') '}</Text>
+              <Text {...(dim ? style('unreached') : {})} {...(isHere ? style('here') : {})}>{`${pointer(r.n)}${String(r.n).padStart(width)}`}</Text>
+              {pinSet.has(r.uuid) && <Text {...style('pinned')}>★</Text>}
+              <Text {...(dim ? style('unreached') : {})} {...(isHere ? style('here') : {})}>{') '}</Text>
             </Box>
-            <Button key={`${group}-${r.uuid}`} label={r.head} plain dimColor={dim} onPress={press} />
+            <Button key={`${group}-${r.uuid}`} label={r.head} plain {...(dim ? buttonStyle('unreached') : {})} onPress={press} />
           </Box>
         )
       }
       return (
         <Box flexDirection="column">
-          {numbered.length === 0 && <Text dimColor>No prompts yet.</Text>}
+          {numbered.length === 0 && <Text {...style('legend')}>No prompts yet.</Text>}
           {numbered.length > 0 && Input && (
             <Input
               key="prompt-number"
@@ -3001,15 +3030,15 @@ export const register: Register = (on, options) => {
               for scrolling, but Tab walks the focus ring down the Buttons below from the
               newest, Shift+Tab back up, Enter jumps. A Select was tried: on the terminal
               its arrows open a pop-up list of its own instead (screenshot, 2026-10-04). */}
-          {numbered.length > 0 && <Text dimColor>or Tab / Shift+Tab, Enter; *N pins</Text>}
+          {numbered.length > 0 && <Text {...style('legend')}>or Tab / Shift+Tab, Enter; *N pins</Text>}
           {here && (
-            <Text dimColor>
-              <Text color={HERE_FG}>yellow</Text> = nearest to your view
+            <Text {...style('legend')}>
+              <Text {...style('here')}>#N</Text> = nearest to your view
             </Text>
           )}
-          {pinnedRows.length > 0 && <Text dimColor>★ pinned</Text>}
+          {pinnedRows.length > 0 && <Text {...style('legend')}>★ pinned</Text>}
           {pinnedRows.map(r => promptRow(r, 'pin'))}
-          {pinnedRows.length > 0 && <Text dimColor>all prompts</Text>}
+          {pinnedRows.length > 0 && <Text {...style('legend')}>all prompts</Text>}
           {numbered.map(r => promptRow(r, 'p'))}
         </Box>
       )
@@ -3052,21 +3081,21 @@ export const register: Register = (on, options) => {
           <Box key={`b-row-${r.uuid}-${ownerOf(r)}`} flexDirection="column">
             <Box flexDirection="row">
               <Box flexShrink={0}>
-                <Text dimColor={dim}>{`${pointer(r.n)}${String(r.n).padStart(width)}) `}</Text>
-                {LINK_MARKERS === 'glyph' && <Text color={WORDS_FG}>⚓ </Text>}
+                <Text {...(dim ? style('unreached') : {})}>{`${pointer(r.n)}${String(r.n).padStart(width)}) `}</Text>
+                {LINK_MARKERS === 'glyph' && <Text {...style('pinned')}>⚓ </Text>}
               </Box>
               <Button
                 key={`b-${r.uuid}-${ownerOf(r)}`}
                 label={r.label}
                 plain
-                dimColor={dim}
+                {...(dim ? buttonStyle('unreached') : {})}
                 onPress={async () => {
                   await arriveAtBookmark($, r, 'bookmarks pane')
                   await settle($, 'bookmarks', 'row-press')
                 }}
               />
             </Box>
-            <Text dimColor wrap="truncate-end">
+            <Text {...style('legend')} wrap="truncate-end">
               {`${' '.repeat(width + 4)}${who(r)}${r.why ? ` · ${r.why}` : ''}`}
             </Text>
           </Box>
@@ -3074,7 +3103,7 @@ export const register: Register = (on, options) => {
       }
       return (
         <Box flexDirection="column">
-          {numbered.length === 0 && <Text dimColor>No bookmarks yet. Claude mints them with its bookmark tool; P + a letter promotes one of your marks.</Text>}
+          {numbered.length === 0 && <Text {...style('legend')}>No bookmarks yet. Claude mints them with its bookmark tool; P + a letter promotes one of your marks.</Text>}
           {numbered.length > 0 && Input && (
             <Input
               key="bookmark-number"
@@ -3090,9 +3119,9 @@ export const register: Register = (on, options) => {
             />
           )}
           {numbered.length > 0 && <Text>{header}</Text>}
-          {numbered.length > 0 && shownRows.length === 0 && <Text dimColor>{`No bookmarks in "${group.title}" yet.`}</Text>}
+          {numbered.length > 0 && shownRows.length === 0 && <Text {...style('legend')}>{`No bookmarks in "${group.title}" yet.`}</Text>}
           {shownRows.map(row)}
-          {numbered.length > 0 && <Text dimColor>{listHint('bookmarks')}</Text>}
+          {numbered.length > 0 && <Text {...style('legend')}>{listHint('bookmarks')}</Text>}
         </Box>
       )
     }
@@ -3120,7 +3149,7 @@ export const register: Register = (on, options) => {
       const reading = marks[READING]
       return (
         <Box flexDirection="column">
-          {used.length === 0 && !reading && <Text dimColor>No marks yet. Esc</Text>}
+          {used.length === 0 && !reading && <Text {...style('legend')}>No marks yet. Esc</Text>}
           {reading && (
             <Button
               key="jump-reading"
@@ -3145,20 +3174,20 @@ export const register: Register = (on, options) => {
     // letters are dim.
     return (
       <Box flexDirection="column">
-        <Text dimColor>Mark as: (Esc)</Text>
+        <Text {...style('legend')}>Mark as: (Esc)</Text>
         <Box flexDirection="row" columnGap={1} flexWrap="wrap">
           {LETTERS.map(l => (
             // A Button takes no color (djdarcy asked for "slightly grayreddish"), and a
             // non-plain `primary` one draws as a wider `[ a ]` that breaks the grid
             // (screenshot, 2026-10-04). So a letter in use shows a dot, `a: ●`, at
             // full strength; a free one shows itself, dim. Same width either way.
-            <Button key={`mark-${l}`} hotkey={l} label={marks[l] ? '●' : l} plain dimColor={!marks[l]} onPress={() => press(l)} />
+            <Button key={`mark-${l}`} hotkey={l} label={marks[l] ? '●' : l} plain {...(marks[l] ? {} : buttonStyle('unused'))} onPress={() => press(l)} />
           ))}
         </Box>
-        {used.length === 0 && <Text dimColor>No marks in this session yet.</Text>}
+        {used.length === 0 && <Text {...style('legend')}>No marks in this session yet.</Text>}
         {used.map(l => (
           <Text wrap="truncate-end">
-            <Text bold color={USED_FG}>{l}</Text> ▸ {marks[l]?.head}
+            <Text {...style('emphasis')} {...style('used')}>{l}</Text> ▸ {marks[l]?.head}
           </Text>
         ))}
       </Box>

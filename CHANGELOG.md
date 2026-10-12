@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.19] - 2026-10-12
+
+### Changed
+
+- **One palette, by role, readable on light themes too** ([#27](https://github.com/DazzleML/claude-bookmarks/issues/27)). Every colour, background, dim and bold the plugin draws now comes from one palette by what it means (the prompt nearest your view, a pin, a mark's words and band, hints, taken and free mark letters), and the defaults are Claude Code's theme keys wherever one fits, so they follow your theme. The band behind a marked line is pale on a light theme and navy on a dark one. The prompts list's legend shows a sample in the nearest-row colour instead of naming it, and taken mark letters use the theme's inactive colour.
+
+### Added
+
+- "Colour overrides" in `/config`: JSON naming roles, e.g. `{"here": {"color": "cyan"}}`. A colour that is not a theme key, a terminal colour name or `#rrggbb`, an unknown role, or text that is not JSON is ignored, and the defaults stand.
+
 ## [0.4.18] - 2026-10-12
 
 ### Changed
@@ -399,7 +409,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.18...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.19...HEAD
+[0.4.19]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.18...v0.4.19
 [0.4.18]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.17...v0.4.18
 [0.4.17]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.16...v0.4.17
 [0.4.16]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.15...v0.4.16
