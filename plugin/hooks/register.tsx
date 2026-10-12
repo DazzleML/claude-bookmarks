@@ -26,7 +26,7 @@ import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resol
 import { exchangeIndex, looksLikeRedraw, pickViewAnchor, promptNearView } from './core/view-position'
 import { latestBurst, reportTime, type Report } from './core/latest-burst'
 import { CHANNELS, excerpt, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, quotesText, screenMirror, type Channel } from './core/debug'
-import { lineHint, linePlaceholder, listHint, route, type Pane } from './core/keys'
+import { lineHint, linePlaceholder, listHint, parseListNumber, route, type Pane } from './core/keys'
 import { afterAction, isList, type Cause } from './core/after-action'
 import { debugTextMode, installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
 import { resolvePalette, type Palette, type Role, type Style } from './core/palette'
@@ -1613,6 +1613,14 @@ async function jumpToListNumber($: EngineInterface, typed: string, via: string) 
   else await jumpToPromptNumber($, typed, via)
 }
 
+// `.` after a prompt number: the footnote part follows (#33). Enter on `3.` unfolds #3.
+async function bandDot($: EngineInterface) {
+  const typed = await read($, bandNum)
+  if (!typed || typed.includes('.')) return
+  await update($, bandNum, () => `${typed}.`)
+  keepBandWaiting($)
+}
+
 async function bandDigit($: EngineInterface, digit: string) {
   const typed = (await read($, bandNum)) + digit
   const count = await listCount($)
@@ -1622,7 +1630,7 @@ async function bandDigit($: EngineInterface, digit: string) {
     return
   }
   await update($, bandNum, () => typed)
-  await showInPane($, Number(typed))
+  await showInPane($, parseListNumber(typed)?.n ?? Number(typed))
   keepBandWaiting($)
 }
 
@@ -1875,6 +1883,26 @@ async function jumpToPromptNumber($: EngineInterface, typed: string, via: string
     return
   }
   const all = await prompts($)
+  // `3.` unfolds #3's footnotes; `3.1` jumps to its first (#33).
+  const parsed = parseListNumber(typed)
+  if (parsed?.unfold) {
+    unfoldedFootnotes.add(parsed.n)
+    await update($, viewRev, v => v + 1)
+    return
+  }
+  if (parsed?.k !== undefined) {
+    const kept = await keptFootnotes($)
+    const nums = numberFootnotes(all.map(p => p.uuid), kept)
+    const i = nums.findIndex(x => x?.n === parsed.n && x.k === parsed.k)
+    const f = i >= 0 ? kept[i] : undefined
+    if (!f) {
+      $.ui.toast(`no footnote ${parsed.n}.${parsed.k}`)
+      return
+    }
+    await jumpTo($, f.uuid, via, `footnote ${parsed.n}.${parsed.k}`)
+    await settle($, 'list', 'jump')
+    return
+  }
   const n = Number(typed.trim())
   const target = Number.isInteger(n) ? all[n - 1] : undefined
   if (!target) {
@@ -2943,6 +2971,9 @@ export const register: Register = (on, options) => {
           ...'0123456789'.split('').map(d => (
             <Button key={`band-num-${d}`} hotkey={d} label={d} plain {...buttonStyle('legend')} onPress={() => bandDigit($, d)} />
           )),
+          // `.` starts a footnote number (`3.` unfolds #3, `3.1` its first footnote, #33). A
+          // hotkey is one letter or digit, so this one is clicked (djdarcy, 2026-10-12).
+          ...(bookmarks ? [] : [<Button key="band-num-dot" label="." plain {...buttonStyle('legend')} onPress={() => bandDot($)} />]),
           // `go` sits between k and j, so an arrow always has a neighbour to move to:
           // the ui.focus hook turns that move into k (previous) or j (next).
           <Button key="band-num-k" hotkey="k" label="k↑" plain {...buttonStyle('legend')} onPress={() => bandStep($, 'k')} />,

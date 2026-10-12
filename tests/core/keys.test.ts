@@ -1,6 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LINE_COMMANDS, lineHint, lineKeys, linePlaceholder, listHint, route } from '../../plugin/hooks/core/keys.ts'
+import { LINE_COMMANDS, lineHint, lineKeys, linePlaceholder, listHint, parseListNumber, route } from '../../plugin/hooks/core/keys.ts'
+
+test('a typed list number: a prompt, an unfold, or a footnote', () => {
+  assert.deepEqual(parseListNumber('3'), { n: 3 })
+  assert.deepEqual(parseListNumber('3.'), { n: 3, unfold: true })
+  assert.deepEqual(parseListNumber('3.12'), { n: 3, k: 12 })
+  assert.deepEqual(parseListNumber(' 0.1 '), { n: 0, k: 1 })
+  for (const bad of ['', '.', 'a', '3.1.2', '-1', '3..']) assert.equal(parseListNumber(bad), undefined, bad)
+})
 
 test('the band placeholder names one key of every command, Space as ␣', () => {
   assert.equal(linePlaceholder(), "' m ␣ p b P o i")

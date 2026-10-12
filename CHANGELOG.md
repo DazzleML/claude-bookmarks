@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.22] - 2026-10-12
+
+### Added
+
+- **Footnote numbers** ([#33](https://github.com/DazzleML/claude-bookmarks/issues/33)): `3.1` + Enter jumps to prompt #3's first footnote, and `3.` + Enter unfolds #3's footnotes; whole numbers work as before. In the prompts pane's number field you type the dot; in the band, click the `.` button between the digits and `k`/`j` (a band key can only be a letter or a digit).
+
 ## [0.4.21] - 2026-10-12
 
 ### Added
@@ -422,7 +428,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.21...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.22...HEAD
+[0.4.22]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.21...v0.4.22
 [0.4.21]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.20...v0.4.21
 [0.4.20]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.19...v0.4.20
 [0.4.19]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.18...v0.4.19

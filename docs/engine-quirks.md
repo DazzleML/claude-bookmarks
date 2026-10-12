@@ -269,7 +269,7 @@ What a test has to supply, learned the same day:
 - Every engine call the plugin makes needs an answer beneath it, or the call fails with "no implementation for <event>". `plugin/tests/harness.ts` answers them from memory (store, env, clock through the kit's `mock`; files, processes, the prompt box, panes and the log by hand) and records each call, so a test can never reach the real disk or a process.
 - The engine's own drawing beneath a render hook (`next(e)`) is the test's to supply: an empty `Box` from `$.ui.resolve(e)` serves.
 - Most answers are `{ value }`; `ui.focus` and `ui.scroll` answer the result itself (`{}` or `{ deny }`).
-- A plugin's own `$.ui.focus` (moving the band's focus ring onto a button) is not routed to the test's hooks: it fails with "no implementation for ui.focus" whatever the test registers. The plugin's state has changed by then, so a test checks what was drawn and lets that call throw.
+- A plugin's own `$.ui.focus` (moving the band's focus ring onto a button) is not routed to the test's hooks: it fails with "no implementation for ui.focus" whatever the test registers. The plugin's state has changed by then, so a test checks what was drawn and lets that call throw. The same holds for the plugin's own `$.ui.scroll` (a jump): a test checks what happened before it, with a control that shows the path ran (measured 2026-10-12 on a footnote jump).
 - The kit has no snapshot matcher and a test cannot read files, so the goldens are written inline.
 
 ## Patched builds: trying the proper fix early

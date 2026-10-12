@@ -47,6 +47,39 @@ test('shown: the footnotes are listed N.k under their prompt', { options: { foot
   expect(rows).toEqual([' 2) second prompt', ' 1) first prompt', '   1.1 /compact', '   1.2 !git status'])
 })
 
+// The jump itself is a plugin's own $.ui.scroll, which the kit does not route to test
+// hooks (like $.ui.focus; docs/engine-quirks.md), so these check that the footnote is
+// found -- and, as the control, that a missing one is reported.
+async function typeInBand($: { ui: { mount: (t: never) => Promise<unknown> } }, keys: string[]) {
+  type Ui = { input: (t: object) => Promise<unknown>; press: (t: object) => Promise<unknown> }
+  const band = (await $.ui.mount(BAND as never)) as unknown as Ui
+  await band.input({ key: 'band-cmd-0', text: 'p' }).catch(() => undefined)
+  for (const key of keys) await band.press({ key }).catch(() => undefined)
+}
+
+test('in the band, 1 . 1 then go finds footnote 1.1', async ($, on) => {
+  const w = world(on, { session: SID, store: STORE })
+  await typeInBand($ as never, ['band-num-1', 'band-num-dot', 'band-num-1', 'band-num-go'])
+  expect(w.toasts().some(t => t.startsWith('no footnote'))).toBe(false)
+})
+
+test('a footnote number that does not exist says so', async ($, on) => {
+  const w = world(on, { session: SID, store: STORE })
+  await typeInBand($ as never, ['band-num-1', 'band-num-dot', 'band-num-9', 'band-num-go'])
+  expect(w.toasts()).toContain('no footnote 1.9')
+})
+
+test('in the band, 1 . then go unfolds #1', async ($, on) => {
+  world(on, { session: SID, store: STORE })
+  type Ui = { input: (t: object) => Promise<unknown>; press: (t: object) => Promise<unknown> }
+  const band = (await $.ui.mount(BAND as never)) as unknown as Ui
+  await band.input({ key: 'band-cmd-0', text: 'p' }).catch(() => undefined)
+  for (const key of ['band-num-1', 'band-num-dot', 'band-num-go']) await band.press({ key }).catch(() => undefined)
+  const pane = (await $.ui.mount(PANE as never)) as { findAll: (q: object) => Promise<Found[]> }
+  const rows = (await pane.findAll({ type: 'Button' })).map(b => b.text ?? '')
+  expect(rows).toContain('   1.1 /compact')
+})
+
 test('hidden: no footnote rows', { options: { footnotes: 'hidden' } }, async ($, on) => {
   world(on, { session: SID, store: STORE })
   const rows = await paneButtons($ as never)

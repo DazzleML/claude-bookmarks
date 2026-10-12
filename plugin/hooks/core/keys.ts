@@ -124,6 +124,18 @@ export function route(typed: string, ctx: { pane: Pane }): Routed {
 }
 
 // A list pane's hint, generated from LIST_KEYS for that pane.
+// What a number typed into a list means (#33): `3` the prompt, `3.` unfold #3's
+// footnotes, `3.1` its first footnote; `0.1` a footnote before the first prompt.
+export type ListNumber = { n: number; k?: number; unfold?: true }
+export function parseListNumber(typed: string): ListNumber | undefined {
+  const m = /^(\d+)(?:\.(\d*))?$/.exec(typed.trim())
+  if (!m) return undefined
+  const n = Number(m[1])
+  if (m[2] === undefined) return { n }
+  if (m[2] === '') return { n, unfold: true }
+  return { n, k: Number(m[2]) }
+}
+
 export function listHint(pane: Pane): string {
   const keys = LIST_KEYS.filter(l => l.panes.includes(pane)).map(l => `${l.key} ${l.label}`)
   return ['number + Enter jump', ...keys, 'Esc close'].join(' · ')

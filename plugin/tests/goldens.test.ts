@@ -54,6 +54,7 @@ test('p in the band opens the prompts pane and the band takes a number', async (
     'Text::_',
     'Text::(1-3)',
     ...[...'0123456789'].map(d => `Button:band-num-${d}:${d}`),
+    'Button:band-num-dot:.',
     'Button:band-num-k:k↑',
     'Button:band-num-go:go (Enter)',
     'Button:band-num-j:j↓',
