@@ -37,6 +37,7 @@ import { footnoteOf, looksLikePrompt, numberFootnotes, promptTextOf, unwrapQueue
 import { byFirstFour, findByMessage, firstFour, sameMessage, short } from './core/message-id'
 import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFile, stamped, type EchoPolicy } from './core/log-ring'
 import { DEBUG_USAGE, configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, parseDebugArgs, selectionKind, settingsRows } from './core/diagnostics'
+import { colorSplit, plainMarkdown, snippetOf, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/highlight'
 import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptList, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, transcriptGuess, type PromptRef } from './core/prompt-store'
 
 // How long a `temporary` bookmark is kept before it is pruned (to a tombstone). A
@@ -153,10 +154,6 @@ async function clearShown($: EngineInterface) {
 // call per row. Loaded at session.start and refreshed on every mark write.
 let markCache: Record<string, Mark> = {}
 
-// The first line of a selection, which is what a row redraw searches for: a match
-// across lines would have to rewrite markdown structure, which the plugin doesn't do.
-const snippetOf = (text: string) => (text.split('\n').find(l => l.trim()) ?? '').trim().slice(0, 120)
-
 // Every colour, background, dim and bold the plugin draws comes from the palette by role
 // (#27, core/palette.ts): theme keys first, so a role reads on dark and light themes; the
 // mark band's light or dark value from the theme's name (/config's `theme` row, kept
@@ -182,48 +179,10 @@ const style = (role: Role): Style => palette()[role]
 // A Button's label can't be coloured at rest (docs/engine-quirks.md): only its dimness.
 const buttonStyle = (role: Role): { dimColor?: boolean } => (style(role).dimColor ? { dimColor: true } : {})
 
-// Split a reply's markdown around the line holding `snippet`, for drawing that line
-// ourselves. Undefined (caller falls back to bold) when the split is risky: no match,
-// the line is inside a fenced code block, or the remainder is too long for Markdown.
-// A selection is copied from the RENDERED reply, so `**bold**`, `code` and [links](url)
-// have lost their markup; compare against each source line with the same markup removed.
-// (Matching the raw markdown missed any line with inline formatting, 2026-10-04.)
-const plainMarkdown = (s: string) =>
-  s.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\*\*|__|`/g, '')
-
-function colorSplit(text: string, letter: string, snippet: string | undefined) {
-  if (!snippet) return undefined
-  const lines = text.split('\n')
-  const idx = lines.findIndex(l => plainMarkdown(l).includes(snippet))
-  if (idx < 0) return undefined
-  const fences = lines.slice(0, idx).filter(l => l.trimStart().startsWith('```')).length
-  if (fences % 2 === 1) return undefined
-  const before = lines.slice(0, idx).join('\n').trimEnd()
-  const after = lines.slice(idx + 1).join('\n').trim()
-  if (after.length > 9000) return undefined
-  // The blank line between paragraphs, which the trims above drop: kept so the marked
-  // line keeps its spacing (2026-10-04: marking a line joined it to the paragraph
-  // above). Each side's own markdown draws its inner spacing; only the seam is ours.
-  const gapAbove = idx > 0 && !lines[idx - 1]?.trim() && before.length > 0
-  const gapBelow = idx + 1 < lines.length && !lines[idx + 1]?.trim() && after.length > 0
-  // The line is drawn as plain Text, from its markup-free form.
-  const line = plainMarkdown(lines[idx] ?? '')
-  const at = line.indexOf(snippet)
-  return {
-    before,
-    pre: line.slice(0, at),
-    snippet,
-    post: line.slice(at + snippet.length),
-    after,
-    letter,
-    gapAbove,
-    gapBelow,
-  }
-}
-
+// Where the marked line sits in a message, and the bold «a» form: core/highlight.ts.
 // The marked line as drawn on a prompt or a reply: the soft band, then the mark's letter
 // and words bold in WORDS_FG.
-function markedLine(Text: ElementConstructor<TextProps>, c: NonNullable<ReturnType<typeof colorSplit>>) {
+function markedLine(Text: ElementConstructor<TextProps>, c: ColorSplit) {
   return (
     <Text {...style('markBand')}>
       {c.pre}
@@ -2540,10 +2499,7 @@ export const register: Register = (on, options) => {
         </Box>
       )
     }
-    let marked = text
-    for (const [letter, m] of onRow) {
-      if (m.snippet && marked.includes(m.snippet)) marked = marked.replace(m.snippet, `«${letter}» ${m.snippet}`)
-    }
+    const marked = tagMarksPlain(text, onRow)
     return marked === text ? next(e) : next({ ...e, props: { ...e.props, text: marked } })
   })
 
@@ -2666,15 +2622,7 @@ export const register: Register = (on, options) => {
       )
     }
 
-    let text = e.props.text
-    const unmatched: string[] = []
-    for (const [letter, m] of marks) {
-      const s = m.snippet
-      if (s && !/[*`_]/.test(s) && text.includes(s)) text = text.replace(s, `**«${letter}» ${s}**`)
-      else unmatched.push(`«${letter}» ${s ?? m.head}`)
-    }
-    if (unmatched.length > 0) text = `> **${unmatched.join('  ')}**\n\n${text}`
-    return next({ ...e, props: { ...e.props, text } })
+    return next({ ...e, props: { ...e.props, text: tagMarksMarkdown(e.props.text, marks) } })
   })
 
   on('command.run', { command: 'bm-ids' }, async $ => {
