@@ -1,7 +1,20 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { CHANNELS, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, screenMirror } from '../../plugin/hooks/core/debug.ts'
+import { CHANNELS, excerpt, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, quotesText, screenMirror } from '../../plugin/hooks/core/debug.ts'
+
+test('log lines quote the conversation by channel, by setting, or with debugging on', () => {
+  assert.equal(quotesText('off', false, true), false)
+  assert.equal(quotesText('off', true, false), true)
+  assert.equal(quotesText('always', false, false), true)
+  assert.equal(quotesText('with-debug', false, false), false)
+  assert.equal(quotesText('with-debug', false, true), true)
+})
+
+test('an excerpt is short for reference and whole for full', () => {
+  assert.equal(excerpt('abcdefgh', 3, 'reference'), 'abc')
+  assert.equal(excerpt('abcdefgh', 3, 'full'), 'abcdefgh')
+})
 
 // 0.4.7 renamed [bm-poc] to [bm] and dropped the space after it in 55 log lines, so
 // "[bm]nearest prompt moved" no longer matched the screen mirror. Read the real file.

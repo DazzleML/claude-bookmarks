@@ -11,7 +11,18 @@
 export const CHANNELS = {
   screen: 'every on-screen report Claude Code sends, to <session>.screen.log (heavy: rewritten every half second while the screen redraws)',
   held: 'a log line naming the rule that kept the prompts pane\'s yellow row where it was',
+  text: 'log lines quote the conversation (the selected words, a message\'s first line, a bookmark\'s label) in this conversation, whatever the debugText setting says',
 } as const
+
+/** Whether log lines quote the conversation now: the `text` channel, or the setting (already read for this build by `debugTextMode`) and whether debugging is on. */
+export function quotesText(mode: 'off' | 'with-debug' | 'always', textChannel: boolean, debugging: boolean): boolean {
+  return textChannel || mode === 'always' || (mode === 'with-debug' && debugging)
+}
+
+/** A quoted excerpt: `reference` keeps the first `n` characters, `full` the whole text. */
+export function excerpt(text: string, n: number, length: 'reference' | 'full'): string {
+  return length === 'full' ? text : text.slice(0, n)
+}
 
 export type Channel = keyof typeof CHANNELS
 

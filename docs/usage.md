@@ -297,6 +297,12 @@ These are for power users, and not part of the recommended setup:
 
 From an empty input box, a pane opened by a command takes the keyboard, so its own keys work: the arrows, `Tab`, `Enter`. A command typed into the input box can't open a pane over other text, so for that the leader is the route.
 
+## Settings
+
+The plugin's settings are in Claude Code's `/config`, under the plugin's name; the README lists them all ([Configuration](../README.md#configuration)). A change takes effect at once. `/bm-config` prints each setting, its value, and where the value came from: `default`, or `/config` when you chose it.
+
+Two of them decide what the debug log may quote from the conversation. "Conversation text in the debug log" is `auto` by default: off in a plugin installed from a marketplace, always in one loaded from a folder (a developer's build). `with-debug` quotes only while the conversation's debugging is on (`/bm-debug on`), `always` and `off` mean what they say, and the `text` debug channel turns quoting on for one conversation whatever the setting. "How much text a debug line quotes" is `reference` (a short excerpt, enough to find the place) or `full`.
+
 ## What is kept, and where
 
 | What | Kept for | Notes |
@@ -347,5 +353,6 @@ Some diagnostics are too heavy or too narrow to run all the time, so each is a c
 |---------|--------------|
 | `screen` | Every on-screen report Claude Code sends the plugin, written to `<session id>.screen.log` beside the debug log. Heavy: the file is rewritten every half second while the screen redraws. For a prompts pane whose highlight lands on the wrong prompt. |
 | `held` | A log line naming the rule that kept the prompts pane's yellow row where it was. |
+| `text` | Log lines quote the conversation (the selected words, a message's first line, a bookmark's label) in this conversation, whatever the "Conversation text in the debug log" setting says. |
 
 `/bm-debug channels` lists them with their state; `/bm-debug enable screen,held` and `/bm-debug disable screen` switch them. The choice is kept with the echo's, in the same variable of this session's own environment, so it ends with the session. From the shell, channel names join the echo's value: `CONVO_BOOKMARKS_DEBUG=screen claude` for the screen channel alone, `CONVO_BOOKMARKS_DEBUG=1,screen claude` for the echo as well.

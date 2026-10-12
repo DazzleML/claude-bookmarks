@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.17] - 2026-10-12
+
+### Added
+
+- **Settings in `/config`** ([#7](https://github.com/DazzleML/claude-bookmarks/issues/7)). The plugin's settings now appear in Claude Code's `/config` under its name, and a change takes effect at once: where the prompts list opens (`nearest` or `newest`), whether it follows the view (`when-idle`, `always`, `never`), how close an earlier exchange must be to count as nearest, whether a list stays open after a jump or while you type, where the keyboard should go after an action, and the debug echo's default. `/bm-config` prints each setting, its value, and whether it came from `/config` or the default. The README has the full table.
+- **Conversation text in the debug log is a setting** ([#35](https://github.com/DazzleML/claude-bookmarks/issues/35)). Log lines that quote the conversation (the selected words, a message's first line, a bookmark's label) follow "Conversation text in the debug log": `auto` (the default) is off in a plugin installed from a marketplace and on in one loaded from a folder, `with-debug` quotes while `/bm-debug on`, and `off` and `always` mean what they say. "How much text a debug line quotes" chooses a short excerpt or the whole text. A new `text` debug channel turns quoting on for one conversation.
+
 ## [0.4.16] - 2026-10-12
 
 ### Added
@@ -384,7 +391,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.16...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.17...HEAD
+[0.4.17]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.16...v0.4.17
 [0.4.16]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.15...v0.4.16
 [0.4.15]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.14...v0.4.15
 [0.4.14]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.13...v0.4.14

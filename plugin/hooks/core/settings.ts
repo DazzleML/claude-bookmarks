@@ -4,7 +4,9 @@
 // read Claude Code's /config (userConfig) and the plugin store stay thin. Three layers,
 // later wins: the defaults here, the machine's values (the person's /config choices,
 // stored by Claude Code in settings.json), then a conversation's own values (only the
-// debug echo uses this slot today; the others leave it empty). A value that does not fit
+// debug echo uses this slot today). Claude Code fills every field's declared default into
+// the machine layer (a picker field must declare one), so a machine value equal to the
+// default reports its source as `default`. A value that does not fit
 // its field is rejected and the layer below stands, so a bad setting can never break a
 // draw (#7: "an invalid value falls back to the default").
 //
@@ -73,6 +75,24 @@ export const FIELDS = {
     title: 'Debug echo by default',
     description: "Whether the plugin's log lines are echoed into a conversation that has not chosen; /bm-debug decides per conversation",
   },
+  // djdarcy, 2026-10-12: "In the dev build it should always be on, and in the main build
+  // it should always be off by default unless the person turns the feature on" and
+  // "some instances we might want the full output and other times just enough to identify
+  // the location". `auto` is that rule: debugTextMode() reads it per build.
+  debugText: {
+    kind: 'enum',
+    values: ['auto', 'off', 'with-debug', 'always'],
+    default: 'auto',
+    title: 'Conversation text in the debug log',
+    description: "auto: off in an installed plugin, always in one loaded from a folder; off: log lines name places by id only; with-debug: they also quote the conversation while this conversation's debugging is on; always: they always quote it",
+  },
+  debugTextLength: {
+    kind: 'enum',
+    values: ['reference', 'full'],
+    default: 'reference',
+    title: 'How much text a debug line quotes',
+    description: 'reference: a short excerpt, enough to find the place; full: the whole text',
+  },
 } as const satisfies Record<string, Field>
 
 export type FieldName = keyof typeof FIELDS
@@ -136,15 +156,30 @@ export function resolve(machine: Layer = {}, conversation: Layer = {}): Resolved
         continue
       }
       values[name] = fitted.value
-      sources[name] = layerName
+      // The machine layer carries every default Claude Code filled in: a value equal to
+      // the default is not a choice anyone made.
+      if (!(layerName === 'machine' && fitted.value === FIELDS[name].default)) sources[name] = layerName
     }
   }
   return { values: values as Settings, sources, rejected, unknown }
 }
 
+// What `debugText` means in this build: `auto` is off in an installed plugin and
+// always in one loaded from a folder (a developer's build).
+export function debugTextMode(value: Settings['debugText'], loadedFromFolder: boolean): 'off' | 'with-debug' | 'always' {
+  return value === 'auto' ? (loadedFromFolder ? 'always' : 'off') : value
+}
+
+// Whether the plugin was loaded from Claude Code's plugin cache (a marketplace install)
+// rather than a folder (`--plugin-dir`, a working tree). Slashes either way.
+export function installedFromCache(pluginRoot: string): boolean {
+  return /[\\/]plugins[\\/]cache[\\/]/.test(pluginRoot)
+}
+
 // The `userConfig` block for plugin.json, generated from FIELDS so the manifest and the
 // code cannot drift (a test compares the two). Enum fields become strings with an
-// `options` list, which /config draws as a picker.
+// `options` list, which /config draws as a picker; every field declares its default (the
+// validator requires it of a picker).
 export function manifestUserConfig(): Record<string, Record<string, unknown>> {
   return Object.fromEntries(
     Object.entries(FIELDS).map(([k, f]) => {

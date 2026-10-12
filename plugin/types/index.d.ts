@@ -19,6 +19,9 @@ declare module 'claude-code' {
       // Bumped when the prompt nearest the view changes while the prompts pane is
       // open, so its yellow row follows a scroll.
       viewRev: number
+      // Bumped when one of the plugin's /config fields changes, so what reads a setting
+      // redraws.
+      settingsRev: number
       // Bumped after the band's command line runs a command: the field is drawn
       // under a new key, so it starts empty (POC 2026-10-07).
       cmdRev: number

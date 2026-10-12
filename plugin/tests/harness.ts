@@ -75,7 +75,7 @@ export function world(on: unknown, options: WorldOptions = {}): World {
   answer('fs.exists', e => typeof e.path === 'string' && e.path in files)
   answer('fs.read', e => files[String(e.path)] ?? '')
   answer('fs.write', e => {
-    files[String(e.path)] = String(e.content ?? e.data ?? '')
+    files[String(e.path)] = String(e.text ?? '')
     return undefined
   })
   answer('process.run', () => ({ exitCode: 1, stdout: '', stderr: 'no process in tests', isStdoutTruncated: false }))

@@ -92,6 +92,7 @@ export function promptNearView(
   visible: readonly VisibleMessage[],
   top: string | undefined,
   orderOf: (uuid: string) => number | undefined,
+  closeShare: number = CLOSE_SHARE,
 ): number | undefined {
   const promptOrders = prompts.map(orderOf)
   // The exchange a message belongs to: the last prompt at or before it in order.
@@ -106,7 +107,7 @@ export function promptNearView(
   }
   if (weight.size > 0) {
     const most = Math.max(...weight.values())
-    const candidates = [...weight.entries()].filter(([, w]) => w >= most * CLOSE_SHARE).map(([i]) => i)
+    const candidates = [...weight.entries()].filter(([, w]) => w >= most * closeShare).map(([i]) => i)
     return Math.min(...candidates)
   }
   if (!top) return undefined

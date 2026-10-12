@@ -25,10 +25,10 @@ import {
 import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution, type TranscriptRow } from './core/transcript-lines'
 import { exchangeIndex, looksLikeRedraw, pickViewAnchor, promptNearView } from './core/view-position'
 import { latestBurst, reportTime, type Report } from './core/latest-burst'
-import { CHANNELS, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, screenMirror, type Channel } from './core/debug'
+import { CHANNELS, excerpt, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, quotesText, screenMirror, type Channel } from './core/debug'
 import { lineHint, linePlaceholder, listHint, route, type Pane } from './core/keys'
 import { afterAction, isList, type Cause } from './core/after-action'
-import { resolve as resolveSettings, type Settings } from './core/settings'
+import { debugTextMode, installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
 import { looksLikePrompt, promptTextOf, unwrapQueued } from './core/prompt-rows'
 import { byFirstFour, findByMessage, firstFour, sameMessage } from './core/message-id'
 
@@ -36,11 +36,13 @@ import { byFirstFour, findByMessage, firstFour, sameMessage } from './core/messa
 // setting with the archive-retention picker (#7, #10); a constant until then.
 const TEMPORARY_RETENTION: Retention = '30d'
 
-// The plugin's settings as they stand. Defaults only until the settings spike
-// (tests/one-offs/thinking/settings-spike/) settles how the person's /config values
-// reach the plugin; the machine layer is then passed to resolveSettings here.
+// The plugin's settings as they stand: the person's /config values (the `userConfig` in
+// plugin.json), which Claude Code hands to `register` with every default filled in and
+// a change to which arrives as `config.set` (kept current there), over the defaults in
+// core/settings.ts.
+let machineOptions: Record<string, unknown> = {}
 function currentSettings(): Settings {
-  return resolveSettings().values
+  return resolveSettings(machineOptions).values
 }
 
 // The plugin's one pane id (prompts, bookmarks, mark and jump panes all open under it).
@@ -89,6 +91,9 @@ const bandGroup = atom({ plugin: 'bookmarks', key: 'bandGroup' } as const, 0)
 // Bumped when the prompt nearest the view changes while the prompts pane is open, so
 // the pane redraws its yellow row as the person scrolls (djdarcy, 2026-10-11).
 const viewRev = atom({ plugin: 'bookmarks', key: 'viewRev' } as const, 0)
+// Bumped when one of the plugin's /config fields changes, so the panes and the band,
+// which read settings while drawing, draw again.
+const settingsRev = atom({ plugin: 'bookmarks', key: 'settingsRev' } as const, 0)
 const BOOKMARK_GROUPS: { owner: AnchorOwner | 'all'; title: string }[] = [
   { owner: 'user', title: 'yours' },
   { owner: 'claude', title: "Claude's" },
@@ -347,7 +352,9 @@ const ECHO_POLICY_ENTRY = 'debug:echo'
 type EchoPolicy = { default: boolean; forced: boolean }
 async function echoPolicy($: EngineInterface): Promise<EchoPolicy> {
   const v = (await $.store.get(ECHO_POLICY_ENTRY)) as Partial<EchoPolicy> | undefined
-  return { default: v?.default === true, forced: v?.forced === true }
+  // A default typed with `/bm-debug default` wins; without one, the `debugDefault` setting.
+  const fallback = currentSettings().debugDefault === 'on'
+  return { default: typeof v?.default === 'boolean' ? v.default : fallback, forced: v?.forced === true }
 }
 async function setEchoPolicy($: EngineInterface, policy: EchoPolicy) {
   await $.store.set(ECHO_POLICY_ENTRY, policy)
@@ -400,19 +407,29 @@ async function setChannels($: EngineInterface, on: Set<Channel>) {
   await $.env.set('CONVO_BOOKMARKS_DEBUG', formatDebugEnv(echo, on))
 }
 
-// `text`: the line carries the conversation's text (a selection, a message's head, a
-// label, highlighted words, a tool's input). PRIVACY.md says the debug log never holds
-// it, so such a line is kept only while this conversation's debugging is on.
+// `text`: the line quotes the conversation (a selection, a message's head, a label,
+// highlighted words, a tool's input). It is kept when the `text` channel is on, or the
+// `debugText` setting allows it: `auto` is always in a build loaded from a folder (a
+// developer's) and off in an installed one; `with-debug` follows this conversation's
+// debugging (djdarcy, 2026-10-12: the person decides, and nothing is lost while we debug).
 function log($: EngineInterface, line: string, opts?: { always?: boolean; text?: boolean }) {
   readChannels($)
   if (opts?.text) {
-    void uiEchoEnabled($).then(enabled => { if (enabled) { $.ui.log(line); keepLine($, line) } }).catch(() => {})
+    const mode = debugTextMode(currentSettings().debugText, !installedFromCache($.plugin.root))
+    void uiEchoEnabled($).then(debugging => {
+      if (!quotesText(mode, channelsOn.has('text'), debugging)) return
+      if (opts.always || debugging) $.ui.log(line)
+      keepLine($, line)
+    }).catch(() => {})
     return
   }
   if (opts?.always) $.ui.log(line)
   else void uiEchoEnabled($).then(enabled => { if (enabled) $.ui.log(line) }).catch(() => {})
   keepLine($, line)
 }
+
+// A quoted excerpt in a log line: short, or whole when `debugTextLength` is `full`.
+const cut = (text: string, n: number) => excerpt(text, n, currentSettings().debugTextLength)
 
 function keepLine($: EngineInterface, line: string) {
   logLines.push(`${new Date().toISOString()} ${line}`)
@@ -859,7 +876,7 @@ function queueProseAnchors($: EngineInterface, anchors: ReturnType<typeof markdo
 // then the same jump as a mark (with its refused-jump fallbacks).
 async function onAnchorPress($: EngineInterface, href: string) {
   const a = parseAnchor(href)
-  log($, `[bm] anchor link pressed: ${href.slice(0, 120)} -> ${a ? `uuid ${a.uuid}` : 'NOT an anchor'}`, { text: true })
+  log($, `[bm] anchor link pressed: ${cut(href, 120)} -> ${a ? `uuid ${a.uuid}` : 'NOT an anchor'}`, { text: true })
   if (!a) return
   let uuid = a.uuid
   if (uuid.length < 36) {
@@ -875,7 +892,7 @@ async function onAnchorPress($: EngineInterface, href: string) {
   const deny = await jumpTo($, uuid, 'anchor press', `anchor ${short(uuid)}${a.line ? ` (line ${a.line})` : ''}`, words)
   if (deny || !words) return
   await highlightWords($, uuid, words)
-  log($, `[bm] anchor words highlighted on ${short(uuid)}: "${words.slice(0, 60)}"`, { text: true })
+  log($, `[bm] anchor words highlighted on ${short(uuid)}: "${cut(words, 60)}"`, { text: true })
 }
 
 // --- Jumplist: back and forward over every jump (vim's Ctrl+O / Ctrl+I) ------------------
@@ -1076,7 +1093,7 @@ async function freshSelection($: EngineInterface, sel: Selection): Promise<Selec
   const at = selectionSeen?.key === key ? selectionSeen.at : 0
   const age = at ? Math.round((Date.now() - at) / 1000) : undefined
   const fresh = age !== undefined && age <= SELECTION_FRESH_SECONDS
-  log($, `[bm] selection "${sel!.text.trim().slice(0, 24)}" is ${age === undefined ? 'of unknown age' : `${age}s old`}: ${fresh ? 'used' : 'ignored (stale)'}`, { text: true })
+  log($, `[bm] selection "${cut(sel!.text.trim(), 24)}" is ${age === undefined ? 'of unknown age' : `${age}s old`}: ${fresh ? 'used' : 'ignored (stale)'}`, { text: true })
   return fresh ? sel : undefined
 }
 
@@ -1249,7 +1266,7 @@ async function promptHere($: EngineInterface): Promise<string | undefined> {
     return { id: firstFour(id), lines: seen ? seen.last - seen.first + 1 : 1 }
   })
   const stableTop = stable.includes(top ?? '') ? top : stable[0]
-  const i = promptNearView(ids.map(firstFour), visible, stableTop && firstFour(stableTop), k => byFour.get(k))
+  const i = promptNearView(ids.map(firstFour), visible, stableTop && firstFour(stableTop), k => byFour.get(k), currentSettings().closeShare)
   // Nothing placeable in the latest burst of reports happens when a new prompt or a
   // streaming reply is drawn below a view that stays scrolled up (djdarcy, 2026-10-11:
   // sending a prompt "wipes out the yellow"): the view did not move, so the answer is
@@ -1306,19 +1323,15 @@ function noteViewMoved($: EngineInterface) {
       // Keep the yellow row in the pane's view, moving the list the least that does it
       // ('nearest': no move while the row is already showing), and not while the person
       // is browsing the list from the band (a number or j/k typed), so the list never
-      // jumps under them (djdarcy, 2026-10-11). A setting later (#7): FOLLOW_HERE.
-      if (here && FOLLOW_HERE !== 'never' && (FOLLOW_HERE === 'always' || (await read($, bandNum)) === '')) {
+      // jumps under them (djdarcy, 2026-10-11). The `followHere` setting (#7).
+      const follow = currentSettings().followHere
+      if (here && follow !== 'never' && (follow === 'always' || (await read($, bandNum)) === '')) {
         const r = await $.ui.scroll({ in: PANE, to: { key: `p-${here}` }, block: 'nearest' })
         log($, `[bm] pane follow to ${short(here)} -> ${r.deny ? `DENY: ${r.deny}` : 'ok'}`)
       }
     })()
   })
 }
-// Whether the prompts pane scrolls its list to keep the yellow row showing as the
-// conversation is scrolled: 'when-idle' (the default: not while a number or j/k is being
-// typed in the band), 'always', or 'never' (the list stays where the person left it).
-const FOLLOW_HERE: 'always' | 'when-idle' | 'never' = 'when-idle'
-
 // Where "back" goes when you left from the bottom of the conversation (a setting, #7):
 //   'where-it-was': the same text you were reading, even if new replies arrived since
 //                   (djdarcy's choice: "I'd rather have it always go to the exact same
@@ -1635,8 +1648,9 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   paneView = await viewAnchor($)
   // For the prompts pane: the prompt nearest the view, read before the pane shifts it,
   // so the list can open centred on it instead of on the newest (djdarcy, 2026-10-11:
-  // scrolled up 30 or 40 pages, "the user doesn't have to scroll in the panel").
-  const hereAtOpen = mode === 'list' ? await promptHere($) : undefined
+  // scrolled up 30 or 40 pages, "the user doesn't have to scroll in the panel"). The
+  // `listOpensAt` setting: 'newest' skips it, and the list opens at its top, the newest.
+  const hereAtOpen = mode === 'list' && currentSettings().listOpensAt === 'nearest' ? await promptHere($) : undefined
   const opened = (await $.ui.open({ id: PANE, title, focus: true, closeOnEscape: true, columns: 16, rows: 4 })) as
     { isPlaced?: boolean; reason?: string } | undefined
   // Probe (2026-10-09): below the engine's width floor the pane waits undrawn and the
@@ -1960,7 +1974,20 @@ async function closePane($: EngineInterface) {
   if (paneAnchor) await restoreView($)
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  machineOptions = { ...options }
+
+  // A change in /config to one of this plugin's fields: keep the values current and
+  // redraw what reads them (settingsRev), whether or not Claude Code also reloads us.
+  on('config.set', { key: /^bookmarks\./ }, async ($, e, next) => {
+    const result = await next(e)
+    if (!result.deny) {
+      machineOptions = { ...machineOptions, [e.key.slice('bookmarks.'.length)]: result.value }
+      await update($, settingsRev, v => v + 1)
+    }
+    return result
+  })
+
   on('session.start', async ($, e, next) => {
     const commands: [string, string][] = [
       ['bm-ids', 'Diagnostics: compare captured prompt ids with the ids drawn on screen'],
@@ -2505,7 +2532,7 @@ export const register: Register = on => {
       : rendered.has(id) ? 'drawn id only (not a saved uuid)'
       : 'unknown id (maybe a tool_use_id or a reply)'
     log($, `[bm] SEL: row ${id ?? '(none)'} -> ${known}; ${sel.text.length} chars`)
-    log($, `[bm] SEL text: ${JSON.stringify(sel.text.slice(0, 300))}`, { text: true })
+    log($, `[bm] SEL text: ${JSON.stringify(cut(sel.text, 300))}`, { text: true })
     note(`bm-sel row ${id ?? '(none)'} ${known}`)
     return {}
   })
@@ -2526,7 +2553,7 @@ export const register: Register = on => {
     const { tool, tool_use_id, agentId, requestMeta, ...input } = e as unknown as Record<string, unknown>
     void agentId
     void requestMeta
-    log($, `[bm] ${String(tool)} called (${String(tool_use_id).slice(0, 12)}) with ${JSON.stringify(input).slice(0, 160)}`, { text: true })
+    log($, `[bm] ${String(tool)} called (${String(tool_use_id).slice(0, 12)}) with ${cut(JSON.stringify(input), 160)}`, { text: true })
     // The result the model reads is a string (or MCP content blocks), not an object:
     // an object is refused as "does not match its output shape" (2.1.295, 2026-10-09).
     const answer = (o: unknown) => ({ result: JSON.stringify(o, null, 2) })
@@ -2688,9 +2715,11 @@ export const register: Register = on => {
   // Every setting, its value and where it came from (default, the machine's /config, this
   // conversation), plus any value that was given but did not fit (core/settings.ts).
   on('command.run', { command: 'bm-config' }, async $ => {
-    const r = resolveSettings()
-    const rows = (Object.keys(r.values) as (keyof Settings)[]).map(k => `${k}=${JSON.stringify(r.values[k])} (${r.sources[k]})`)
+    const r = resolveSettings(machineOptions)
+    const rows = (Object.keys(r.values) as (keyof Settings)[]).map(k => `${k}=${JSON.stringify(r.values[k])} (${r.sources[k] === 'machine' ? '/config' : r.sources[k]})`)
     log($, `[bm] settings: ${rows.join('; ')}`, { always: true })
+    const folder = !installedFromCache($.plugin.root)
+    log($, `[bm] this build is ${folder ? 'loaded from a folder' : 'installed'}, so debugText=${JSON.stringify(r.values.debugText)} means ${debugTextMode(r.values.debugText, folder)}; change any of these in /config`, { always: true })
     if (r.rejected.length || r.unknown.length) {
       log($, `[bm] settings not applied: ${[...r.rejected.map(x => `${x} (does not fit)`), ...r.unknown.map(x => `${x} (no such setting)`)].join('; ')}`, { always: true })
     }

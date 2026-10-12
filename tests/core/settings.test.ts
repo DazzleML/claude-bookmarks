@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { DEFAULTS, FIELDS, fit, manifestUserConfig, resolve } from '../../plugin/hooks/core/settings.ts'
+import { readFileSync } from 'node:fs'
+import { DEFAULTS, FIELDS, debugTextMode, fit, installedFromCache, manifestUserConfig, resolve } from '../../plugin/hooks/core/settings.ts'
 
 test('with no layers every field is its default, from the default', () => {
   const r = resolve()
@@ -69,4 +70,30 @@ test('the generated userConfig block carries every field, enums as pickers', () 
   })
   assert.equal(m.closeShare?.type, 'number')
   assert.equal(m.closeShare?.min, 0)
+})
+
+test('plugin.json carries exactly the generated userConfig block', () => {
+  const manifest = JSON.parse(readFileSync(new URL('../../plugin/.claude-plugin/plugin.json', import.meta.url), 'utf8'))
+  assert.deepEqual(manifest.userConfig, manifestUserConfig())
+})
+
+test('a machine value equal to the default reads as the default', () => {
+  // Claude Code fills every declared default into the options it hands the plugin.
+  const r = resolve({ followHere: 'when-idle', closeShare: 0.6, paneAfterJump: 'stay' })
+  assert.equal(r.sources.followHere, 'default')
+  assert.equal(r.sources.closeShare, 'default')
+  assert.equal(r.sources.paneAfterJump, 'machine')
+})
+
+test('debugText auto is off in an installed plugin and always in a folder build', () => {
+  assert.equal(debugTextMode('auto', false), 'off')
+  assert.equal(debugTextMode('auto', true), 'always')
+  assert.equal(debugTextMode('with-debug', true), 'with-debug')
+  assert.equal(debugTextMode('off', true), 'off')
+})
+
+test('a plugin under Claude Code\'s plugin cache is an installed one', () => {
+  assert.equal(installedFromCache('C:\\Users\\me\\.claude\\plugins\\cache\\dazzle-claude-plugins\\bookmarks\\0.4.16'), true)
+  assert.equal(installedFromCache('/home/me/.claude/plugins/cache/m/bookmarks'), true)
+  assert.equal(installedFromCache('C:/code/claude-projects/claude-bookmarks/plugin'), false)
 })

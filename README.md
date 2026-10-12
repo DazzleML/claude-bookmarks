@@ -180,11 +180,21 @@ The known limits, briefly; **[docs/troubleshooting.md](docs/troubleshooting.md)*
 
 ## Configuration
 
-Nothing to configure yet beyond the leader key. Settings are planned ([#7](https://github.com/DazzleML/claude-bookmarks/issues/7)), among them:
-- how old a selection may be before a mark uses the top of the screen instead (75 seconds now);
-- whether "back" from the bottom returns to the same text or to the newest reply;
-- whether a typed prompt number waits for `Enter` (now) or jumps as soon as it's complete;
-- how long the highlight stays, and the pane sizes.
+Open `/config` and find the plugin's settings under its name. A change takes effect at once; `/bm-config` prints every setting, its value and where the value came from.
+
+| Setting | Values (default first) | What it does |
+|---|---|---|
+| Prompts list opens at | `nearest`, `newest` | Where the prompts list opens: centred on the prompt nearest your view, or at the newest |
+| Prompts list follows the view | `when-idle`, `always`, `never` | Whether the list scrolls to keep the yellow row showing as you scroll the conversation (`when-idle`: not while you type a number) |
+| Closeness for the earlier prompt | `0.6` (0 to 1) | How much of the screen an earlier exchange must hold to count as nearest |
+| A list after a jump | `close`, `stay` | Whether the prompts or bookmarks list closes after you jump from it |
+| A list while you type | `stay`, `close` | Whether an open list stays while you type in the input box |
+| Keyboard after an action | `input`, `band` | Where the keyboard should go after an action (`input` waits on Claude Code allowing it) |
+| Debug echo by default | `off`, `on` | Whether the debug log is echoed into conversations that have not chosen (`/bm-debug` decides per conversation) |
+| Conversation text in the debug log | `auto`, `off`, `with-debug`, `always` | Whether debug lines quote the conversation; `auto` is off in an installed plugin, always in one loaded from a folder |
+| How much text a debug line quotes | `reference`, `full` | A short excerpt to find the place, or the whole text |
+
+Still constants, planned as settings ([#7](https://github.com/DazzleML/claude-bookmarks/issues/7)): how old a selection may be before a mark uses the top of the screen (75 seconds), where "back" from the bottom returns, whether a typed prompt number waits for `Enter`, the highlight's duration, and the pane sizes.
 
 ### Debug Logging
 

@@ -1,9 +1,12 @@
 {
   "name": "bookmarks",
   "displayName": "Bookmarks",
-  "version": "0.4.16",
+  "version": "0.4.17",
   "description": "Bookmarks and vim-style marks inside Claude Code conversations: mark a line, jump back, keep a reading position, browse your prompts, and let Claude cite earlier places as clickable links.",
-  "author": { "name": "DazzleML", "github": "https://github.com/DazzleML" },
+  "author": {
+    "name": "DazzleML",
+    "github": "https://github.com/DazzleML"
+  },
   "repository": "https://github.com/DazzleML/claude-bookmarks",
   "homepage": "https://github.com/DazzleML/claude-bookmarks",
   "privacyPolicyUrl": "https://github.com/DazzleML/claude-bookmarks/blob/main/PRIVACY.md",
@@ -11,6 +14,110 @@
   "documentationUrl": "https://github.com/DazzleML/claude-bookmarks/tree/main/docs",
   "termsOfServiceUrl": "https://github.com/DazzleML/claude-bookmarks/blob/main/LICENSE",
   "license": "GPL-3.0",
-  "keywords": ["bookmarks", "pins", "marks", "vim-marks", "vim", "navigation", "conversation", "jump-to-message", "tui", "claude-code"],
+  "keywords": [
+    "bookmarks",
+    "pins",
+    "marks",
+    "vim-marks",
+    "vim",
+    "navigation",
+    "conversation",
+    "jump-to-message",
+    "tui",
+    "claude-code"
+  ],
+  "userConfig": {
+    "listOpensAt": {
+      "type": "string",
+      "title": "Prompts list opens at",
+      "description": "nearest: centred on the prompt nearest your view; newest: at the newest prompt",
+      "default": "nearest",
+      "options": [
+        "nearest",
+        "newest"
+      ]
+    },
+    "followHere": {
+      "type": "string",
+      "title": "Prompts list follows the view",
+      "description": "when-idle: slides to keep the yellow row showing unless you are typing a number; always; never",
+      "default": "when-idle",
+      "options": [
+        "when-idle",
+        "always",
+        "never"
+      ]
+    },
+    "closeShare": {
+      "type": "number",
+      "title": "Closeness for the earlier prompt",
+      "description": "An earlier exchange is \"nearest\" while it holds at least this share of the screen lines the biggest one holds (0 to 1)",
+      "default": 0.6,
+      "min": 0,
+      "max": 1
+    },
+    "paneAfterJump": {
+      "type": "string",
+      "title": "A list after a jump",
+      "description": "close: a jump from a list closes it; stay: the list stays open",
+      "default": "close",
+      "options": [
+        "close",
+        "stay"
+      ]
+    },
+    "paneWhileTyping": {
+      "type": "string",
+      "title": "A list while you type",
+      "description": "stay: typing in the input box leaves an open list where it is; close: typing closes it",
+      "default": "stay",
+      "options": [
+        "close",
+        "stay"
+      ]
+    },
+    "afterActionFocus": {
+      "type": "string",
+      "title": "Keyboard after an action",
+      "description": "input: back to the input box once Claude Code allows a plugin to do it; band: stay in the band",
+      "default": "input",
+      "options": [
+        "input",
+        "band"
+      ]
+    },
+    "debugDefault": {
+      "type": "string",
+      "title": "Debug echo by default",
+      "description": "Whether the plugin's log lines are echoed into a conversation that has not chosen; /bm-debug decides per conversation",
+      "default": "off",
+      "options": [
+        "off",
+        "on"
+      ]
+    },
+    "debugText": {
+      "type": "string",
+      "title": "Conversation text in the debug log",
+      "description": "auto: off in an installed plugin, always in one loaded from a folder; off: log lines name places by id only; with-debug: they also quote the conversation while this conversation's debugging is on; always: they always quote it",
+      "default": "auto",
+      "options": [
+        "auto",
+        "off",
+        "with-debug",
+        "always"
+      ]
+    },
+    "debugTextLength": {
+      "type": "string",
+      "title": "How much text a debug line quotes",
+      "description": "reference: a short excerpt, enough to find the place; full: the whole text",
+      "default": "reference",
+      "options": [
+        "reference",
+        "full"
+      ]
+    }
+  },
   "types": "./types/index.d.ts"
 }
