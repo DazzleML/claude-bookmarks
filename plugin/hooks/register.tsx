@@ -3198,8 +3198,12 @@ export const register: Register = (on, options) => {
       const shownRows = inGroup(group)
       const header = groupHeader(BOOKMARK_GROUPS, group, g => inGroup(g).length)
       const who = (r: (typeof numbered)[number]) => bookmarkWho(r, now)
+      // Dim as the prompts pane dims: by the uuid's first four groups, since a drawn id
+      // differs in its last (refactor-advisor 2026-10-12 row 17: by exact id, every
+      // bookmark row was dim).
+      const drawnFour = drawnFourOf(rendered.keys())
       const row = (r: (typeof numbered)[number]) => {
-        const dim = !rendered.has(r.uuid) && r.n !== targetN
+        const dim = unreached(drawnFour, r.uuid) && r.n !== targetN
         return (
           <Box key={`b-row-${r.uuid}-${ownerOf(r)}`} flexDirection="column">
             <Box flexDirection="row">
