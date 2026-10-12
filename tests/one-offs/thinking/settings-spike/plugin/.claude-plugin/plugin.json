@@ -1,0 +1,23 @@
+{
+  "name": "bookmarks-spike",
+  "displayName": "Bookmarks settings spike",
+  "version": "0.0.1",
+  "description": "Throwaway probe: does userConfig give a plugin /config rows, a picker, values at register(), and what does a change cost?",
+  "author": { "name": "DazzleML" },
+  "license": "GPL-3.0",
+  "userConfig": {
+    "followHere": {
+      "type": "string",
+      "title": "Prompts pane follows the view",
+      "description": "when-idle: slide the list to the yellow row unless a number is being typed; always; never",
+      "default": "when-idle",
+      "options": ["when-idle", "always", "never"]
+    },
+    "paneAfterJump": {
+      "type": "boolean",
+      "title": "Keep the pane open after a jump",
+      "description": "On: a jump from a list leaves the list open",
+      "default": false
+    }
+  }
+}

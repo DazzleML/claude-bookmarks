@@ -25,7 +25,7 @@ PHASE = ""  # Per-MINOR feature set: "" (stable), "alpha", "beta", "rc1", etc.
 PROJECT_PHASE = "prealpha"  # "prealpha", "alpha", "beta", "stable", or ""
 
 # Auto-updated by git hooks - do not edit manually
-__version__ = "0.4.4_dev_31-20261012-a1e2830b"
+__version__ = "0.4.4_dev_32-20261012-5a6fd707"
 __app_name__ = "claude-bookmarks"
 
 
