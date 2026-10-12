@@ -1,7 +1,7 @@
 {
   "name": "bookmarks",
   "displayName": "Bookmarks",
-  "version": "0.4.26",
+  "version": "0.4.27",
   "description": "Bookmarks and vim-style marks inside Claude Code conversations: mark a line, jump back, keep a reading position, browse your prompts, and let Claude cite earlier places as clickable links.",
   "author": {
     "name": "DazzleML",
@@ -58,8 +58,8 @@
     },
     "paneAfterJump": {
       "type": "string",
-      "title": "A list after a jump",
-      "description": "close: a jump from a list closes it; stay: the list stays open",
+      "title": "Prompts or bookmarks list after you pick a row",
+      "description": "close: clicking a row (or Enter on a number) jumps there and closes the list; stay: the list stays open for the next pick",
       "default": "close",
       "options": [
         "close",

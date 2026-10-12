@@ -15,7 +15,12 @@
 // excludes these from prompts, src/main/types/messages.ts:366-378; none seen here yet).
 // `<task-notification>`: the engine's notice that a background task finished, filed as a
 // user row (44 in the author's transcript, 2026-10-11; one reached the list as #318).
-const NOT_A_PROMPT = /^\s*(<bash-(input|stdout|stderr)>|<command-name>|<command-message>|<local-command-(stdout|stderr)>|<teammate-message[\s>]|<task-notification>|\[Request interrupted by user|This session is being continued from a previous conversation)/
+// `[SYSTEM NOTIFICATION`, `Another Claude session sent a message`, `Stop hook feedback`:
+// a background task's notice, another session's message, a /goal check -- each queued
+// into a running turn the way the person's own mid-turn message is, and listed as a
+// prompt by the live capture (djdarcy, 2026-10-12: "The whole point of the "prompts"
+// panel is it is showing genuine user inputs, full stop").
+const NOT_A_PROMPT = /^\s*(<bash-(input|stdout|stderr)>|<command-name>|<command-message>|<local-command-(stdout|stderr)>|<teammate-message[\s>]|<task-notification>|\[Request interrupted by user|This session is being continued from a previous conversation|\[SYSTEM NOTIFICATION|Another Claude session sent a message|Stop hook feedback)/
 
 export function looksLikePrompt(text: string): boolean {
   return text.trim() !== '' && !NOT_A_PROMPT.test(text)

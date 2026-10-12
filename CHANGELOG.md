@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.27] - 2026-10-12
+
+### Fixed
+
+- **The prompts list showed notices that were not yours** ([#15](https://github.com/DazzleML/claude-bookmarks/issues/15)): a background task's `[SYSTEM NOTIFICATION ...]`, another Claude session's message, a goal check. Claude Code queues them into a running turn the same way as a message you type while Claude is working, and the list took them for yours. The list is your own inputs only; notices are left out, ones already kept drop out, and the numbers close up. Your interruptions and slash commands stay as footnotes.
+
+### Changed
+
+- The setting "A list after a jump" is now "Prompts or bookmarks list after you pick a row" in `/config`: `stay` keeps the list open after you click a row. A value you already chose is kept.
+
 ## [0.4.26] - 2026-10-12
 
 ### Fixed
@@ -472,7 +482,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.26...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.27...HEAD
+[0.4.27]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.26...v0.4.27
 [0.4.26]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.25...v0.4.26
 [0.4.25]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.24...v0.4.25
 [0.4.24]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.23...v0.4.24

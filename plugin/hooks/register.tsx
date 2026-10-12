@@ -824,8 +824,13 @@ async function backfillPrompts($: EngineInterface) {
   )
 }
 
+// Who-caused-the-row stamps (session.append's `origin.kind`) that are never the person.
+const AUTOMATED_ORIGINS = new Set(['task-notification', 'scheduled-trigger', 'peer-send-message', 'coordinator', 'observer', 'observer-activity', 'auto-continuation', 'projects-relay', 'channel'])
+
 async function prompts($: EngineInterface): Promise<PromptRef[]> {
-  const kept = await keptPrompts($)
+  // Rows kept before the list knew them for notices (a `[SYSTEM NOTIFICATION`, another
+  // session's message) drop out here, so the numbers match the transcript's prompts.
+  const kept = (await keptPrompts($)).filter(p => looksLikePrompt(p.head))
   const seen = new Set(kept.map(k => k.uuid))
   // Rows captured live this session that the stored list lacks, newest last. They pass the
   // same filter: a row kept before the filter knew its kind (a `<task-notification>`)
@@ -2499,7 +2504,13 @@ export const register: Register = (on, options) => {
     // keeps the raw text in `attachment.prompt`, which this event does not carry). It is
     // the person's prompt: unwrap it and keep it as one (djdarcy, 2026-10-11).
     const queued = !e.agentId && e.message.type === 'attachment' && e.message.name === 'queued_command'
-    if (queued || (!e.agentId && isWanted && !e.message.isMeta)) {
+    // Not the person's: the engine stamps who caused the row. A background task's notice,
+    // a scheduled firing, another session's message, a coordinator or observer: none is a
+    // prompt (djdarcy, 2026-10-12: the list shows "genuine user inputs, full stop"). A
+    // notice queued into a running turn is stamped `engine`, as the person's own queued
+    // message is; its text tells them apart (NOT_A_PROMPT, core/prompt-rows.ts).
+    const automated = AUTOMATED_ORIGINS.has(e.origin.kind)
+    if (!automated && (queued || (!e.agentId && isWanted && !e.message.isMeta))) {
       const raw = e.message.content.map(block => (block.type === 'text' ? block.text : '')).join(' ')
       const text = queued ? unwrapQueued(raw) : raw
       if (looksLikePrompt(text)) {

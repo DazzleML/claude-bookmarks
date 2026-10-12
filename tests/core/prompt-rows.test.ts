@@ -104,6 +104,15 @@ test("a background task's notification is not a prompt", () => {
   assert.equal(looksLikePrompt('<task-notification> <task-id>b046k200w</task-id> <status>completed</status>'), false)
 })
 
+test('notices queued into a running turn are not prompts (they arrive as the person\'s queued messages do)', () => {
+  for (const text of [
+    '[SYSTEM NOTIFICATION - NOT USER INPUT]\nThis is an automated background-task event',
+    'Another Claude session sent a message while you were working:\n<agent-message from="x">',
+    'Stop hook feedback:\n[Finish the foundations ...]',
+  ]) assert.equal(looksLikePrompt(text), false, text)
+  assert.equal(looksLikePrompt('Was the [SYSTEM NOTIFICATION] row a bug?'), true, 'mentioned in passing, still a prompt')
+})
+
 test("another agent's teammate message is not a prompt", () => {
   assert.equal(looksLikePrompt('<teammate-message teammate_id="x">hello</teammate-message>'), false)
 })

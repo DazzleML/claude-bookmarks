@@ -189,7 +189,7 @@ Open `/config` and find the plugin's settings under its name. A change takes eff
 | Closeness for the earlier prompt | `0.6` (0 to 1) | How much of the screen an earlier exchange must hold to count as nearest |
 | Footnotes in the prompts list | `folded`, `shown`, `hidden` | Your slash commands, `!` shell commands and interruptions, listed as `N.k` under the prompt they followed: folded behind `… N footnotes`, always listed, or never |
 | Prompt text kept for the filter (bytes) | `2000000` (0 = unlimited) | How much of your prompts the `/words` filter searches, newest first; past the budget the oldest prompts are matched only on the short excerpt the list shows |
-| A list after a jump | `close`, `stay` | Whether the prompts or bookmarks list closes after you jump from it |
+| Prompts or bookmarks list after you pick a row | `close`, `stay` | Whether the list closes after you click a row (or type its number and `Enter`), or stays open for the next pick |
 | A list while you type | `stay`, `close` | Whether an open list stays while you type in the input box |
 | The band | `full`, `field` | The command field with the labelled commands and `?`, or the field alone |
 | Chords on their own keybindings | `on`, `off` | Whether mark, jump, prompts and read also answer the optional chords bound to their borrowed actions |

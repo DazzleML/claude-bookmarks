@@ -79,6 +79,22 @@ test('p in the band opens the prompts pane and the band takes a number', async (
   ])
 })
 
+// A notice queued into a running turn was kept as a prompt by the live capture before
+// 0.4.27 (djdarcy, 2026-10-12: "The whole point of the "prompts" panel is it is showing
+// genuine user inputs, full stop"). Such a kept row drops out, and the numbers close up.
+test('a kept notice is not listed, and the prompts keep their numbers', async ($, on) => {
+  const notice = { uuid: 'bbbbbbbb-0000-4000-8000-000000000009', head: '[SYSTEM NOTIFICATION - NOT USER INPUT] This is an automated' }
+  world(on, { store: { ...STORE, [`prompts:${SID}`]: [PROMPTS[0], notice, PROMPTS[1], PROMPTS[2]] }, session: SID })
+  const band = await $.ui.mount(BAND as never)
+  await band.input({ key: 'band-cmd-0', text: 'p' }).catch(() => undefined)
+  const pane = await $.ui.mount(PANE as never)
+  expect(leaves(await pane.findAll({ type: 'Button' }))).toEqual([
+    `Button:p-${PROMPTS[2]!.uuid}: 3) third prompt: list the prompts`,
+    `Button:p-${PROMPTS[1]!.uuid}: 2) second prompt: add a band`,
+    `Button:p-${PROMPTS[0]!.uuid}: 1) first prompt: set up the plugin`,
+  ])
+})
+
 test('/bm-config prints every setting with its source', async ($, on) => {
   const w = world(on, { store: STORE, session: SID })
   await $.command.run({ command: 'bm-config', args: '' } as never)

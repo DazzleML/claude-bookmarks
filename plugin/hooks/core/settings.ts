@@ -52,8 +52,10 @@ export const FIELDS = {
     kind: 'enum',
     values: ['close', 'stay'],
     default: 'close',
-    title: 'A list after a jump',
-    description: 'close: a jump from a list closes it; stay: the list stays open',
+    // Retitled 2026-10-12: djdarcy looked for this as "keep the Panel open for prompts
+    // after I click an item" and did not find it under "A list after a jump".
+    title: 'Prompts or bookmarks list after you pick a row',
+    description: 'close: clicking a row (or Enter on a number) jumps there and closes the list; stay: the list stays open for the next pick',
   },
   paneWhileTyping: {
     kind: 'enum',
