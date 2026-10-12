@@ -34,8 +34,9 @@ import { shard, withinBudget, type PromptText } from './core/text-store'
 import { filterPrompts, matchLegend } from './core/filter'
 import { pruneStore, type Seen } from './core/store-prune'
 import { footnoteOf, looksLikePrompt, numberFootnotes, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompt-rows'
-import { byFirstFour, findByMessage, firstFour, sameMessage } from './core/message-id'
+import { byFirstFour, findByMessage, firstFour, sameMessage, short } from './core/message-id'
 import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFile, stamped, type EchoPolicy } from './core/log-ring'
+import { DEBUG_USAGE, configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, parseDebugArgs, selectionKind, settingsRows } from './core/diagnostics'
 
 // How long a `temporary` bookmark is kept before it is pruned (to a tombstone). A
 // setting with the archive-retention picker (#7, #10); a constant until then.
@@ -462,8 +463,6 @@ async function flushLog($: EngineInterface) {
 // `snippet`: the selection's first line exactly as selected, for highlighting.
 type Mark = { uuid: string; head: string; markedAt: number; source?: 'selection' | 'latest' | 'screen'; snippet?: string }
 type Marks = Record<string, Mark>
-
-const short = (uuid: string) => uuid.slice(0, 8)
 
 // This plugin's own version, from its manifest (the one Claude Code installs by).
 async function pluginVersion($: EngineInterface): Promise<string> {
@@ -1870,10 +1869,7 @@ async function bandNumberGo($: EngineInterface) {
 // while /bm-diag-keys is on.
 const diag = { lastEditAt: 0, busy: false, logKeys: false }
 async function diagState($: EngineInterface, when: string) {
-  const draft = (await $.prompt.read()).text
-  const panes = (await $.ui.panes()).map(p => `${p.id}${p.isFocused ? '*' : ''}`).join(',') || 'none'
-  const since = diag.lastEditAt ? `${Date.now() - diag.lastEditAt} ms` : 'never'
-  log($, `[diag] ${when}: draft ${draft.length} chars, last edit ${since} ago, claude ${diag.busy ? 'BUSY' : 'idle'}, panes ${panes}`)
+  log($, diagLine(when, (await $.prompt.read()).text.length, diag.lastEditAt, Date.now(), diag.busy, await $.ui.panes()))
 }
 
 async function openFor($: EngineInterface, mode: PaneMode, action: string) {
@@ -2404,10 +2400,7 @@ export const register: Register = (on, options) => {
     // Typing in the input box: the person has the keyboard back, no reminder owed.
     escReminderOwed = false
     if (diag.logKeys) {
-      const k = e.key
-        ? `${e.key.ctrl ? 'ctrl+' : ''}${e.key.meta ? 'meta+' : ''}${e.key.shift ? 'shift+' : ''}${e.key.key.length === 1 ? 'char' : e.key.key}`
-        : 'paste/burst'
-      log($, `[diag] edit ${k}: draft ${e.text.length} -> +${e.inputText.length}, ${diag.lastEditAt ? now - diag.lastEditAt : '-'} ms since last`)
+      log($, `[diag] edit ${keyLabel(e.key)}: draft ${e.text.length} -> +${e.inputText.length}, ${diag.lastEditAt ? now - diag.lastEditAt : '-'} ms since last`)
     }
     diag.lastEditAt = now
     const mode = await read($, bandMode)
@@ -2716,31 +2709,9 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'bm-ids' }, async $ => {
-    const list = await prompts($)
-    const appended = new Set(list.map(r => r.uuid))
-    const matched = list.filter(r => rendered.has(r.uuid)).length
-    const strays = [...rendered.keys()].filter(id => !appended.has(id))
-    log($, 
-      `[bm] ids: ${matched} of ${list.length} appended prompt uuids were seen as ` +
-        `UserMessage requestIds; ${rendered.size} UserMessage ids drawn since load; ` +
-        `${strays.length} drawn ids not among appended prompts`,
-    )
-    // How each appended prompt was drawn: under its real uuid, under an id sharing
-    // the uuid's first four groups (zero-tailed), under some id with the same text,
-    // or not seen at all.
-    const drawnAs = (r: PromptRef) => {
-      if (rendered.has(r.uuid)) return 'exact'
-      const ids = [...rendered.keys()]
-      if (ids.some(id => id !== r.uuid && firstFour(id) === firstFour(r.uuid))) return 'pfx  '
-      if (ids.some(id => rendered.get(id) === r.head)) return 'text '
-      return '-----'
-    }
-    const recent = list.slice(-12)
-    recent.forEach((r, i) => {
-      const n = list.length - recent.length + i + 1
-      log($, `[bm]  #${n} ${short(r.uuid)} ${drawnAs(r)} ${r.head}`, { text: true })
-    })
-    strays.slice(0, 20).forEach(id => log($, `[bm]  drawn, not appended: ${id} ${rendered.get(id)}`, { text: true }))
+    const report = idsReport(await prompts($), rendered)
+    log($, report.summary)
+    for (const line of [...report.rows, ...report.strays]) log($, line, { text: true })
     return {}
   })
 
@@ -2751,35 +2722,10 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'bm-jump' }, async ($, e) => {
     const arg = e.args.trim()
-    const list = await allRows($)
-    const onlyPrompts = list.filter(r => r.door === 'prompt')
-    let target: Row | undefined
-    let label = arg
-    if (arg === '' || arg === 'last') {
-      target = onlyPrompts.at(-1)
-      label = 'last prompt'
-    } else if (arg === 'first') {
-      target = onlyPrompts[0]
-      label = 'first prompt'
-    } else if (/^\d+$/.test(arg)) {
-      target = onlyPrompts[Number(arg) - 1]
-      label = `prompt #${arg}`
-    } else if (/^r\d+$/.test(arg)) {
-      target = list.filter(r => r.door === 'response')[Number(arg.slice(1)) - 1]
-      label = `reply #${arg.slice(1)}`
-    } else {
-      target = list.find(r => r.uuid.startsWith(arg))
-    }
-
-    if (target) {
-      await jumpTo($, target.uuid, '/bm-jump', label)
-    } else if (/^[0-9a-f-]{36}$/.test(arg)) {
-      // Not a captured row: try the raw id anyway, for an id known only from the
-      // transcript file (paste a uuid from jq); Claude Code may refuse one never drawn.
-      await jumpTo($, arg, '/bm-jump (raw uuid)', 'raw')
-    } else {
-      log($, `[bm] nothing captured for "${arg}" (${onlyPrompts.length} prompts captured since load)`)
-    }
+    const target = jumpTarget(arg, await allRows($))
+    if (target.kind === 'row') await jumpTo($, target.uuid, '/bm-jump', target.label)
+    else if (target.kind === 'raw') await jumpTo($, target.uuid, '/bm-jump (raw uuid)', 'raw')
+    else log($, `[bm] nothing captured for "${arg}" (${target.prompts} prompts captured since load)`)
     return {}
   })
 
@@ -2868,10 +2814,7 @@ export const register: Register = (on, options) => {
     }
     const id = sel.requestId
     const saved = id ? (await allRows($)).find(r => r.uuid === id) : undefined
-    const known = !id ? 'no row (spans rows / outside transcript)'
-      : saved ? `saved ${saved.door} row`
-      : rendered.has(id) ? 'drawn id only (not a saved uuid)'
-      : 'unknown id (maybe a tool_use_id or a reply)'
+    const known = selectionKind(id, saved?.door, !!id && rendered.has(id))
     log($, `[bm] SEL: row ${id ?? '(none)'} -> ${known}; ${sel.text.length} chars`)
     log($, `[bm] SEL text: ${JSON.stringify(cut(sel.text, 300))}`, { text: true })
     note(`bm-sel row ${id ?? '(none)'} ${known}`)
@@ -3027,20 +2970,18 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'bm-debug' }, async ($, e) => {
-    const [a, b] = (e.args ?? '').trim().toLowerCase().split(/\s+/)
-    const usage = '/bm-debug on|off|reset (this conversation) | default on|off (every conversation without a choice) | force on|off (every conversation, no choice) | channels | enable|disable <channel,...> | status'
+    const op = parseDebugArgs(e.args ?? '')
     // Debug channels (#35): heavier diagnostics, off by default, this conversation only.
-    if (a === 'channels' || a === 'enable' || a === 'disable') {
+    if (op.kind === 'channels') {
       readChannels($)
-      const rest = (e.args ?? '').trim().slice(a.length)
-      if (a !== 'channels') {
-        const { known, unknown } = parseChannels(rest)
+      if (op.action !== 'channels') {
+        const { known, unknown } = parseChannels(op.rest)
         if (!known.length && !unknown.length) {
-          log($, `[bm] /bm-debug ${a} needs channel names: ${Object.keys(CHANNELS).join(', ')}`, { always: true })
+          log($, `[bm] /bm-debug ${op.action} needs channel names: ${Object.keys(CHANNELS).join(', ')}`, { always: true })
           return {}
         }
         const next = new Set(channelsOn)
-        for (const c of known) a === 'enable' ? next.add(c) : next.delete(c)
+        for (const c of known) op.action === 'enable' ? next.add(c) : next.delete(c)
         await setChannels($, next)
         if (unknown.length) log($, `[bm] no such debug channel: ${unknown.join(', ')} (known: ${Object.keys(CHANNELS).join(', ')})`, { always: true })
         $.ui.toast(`bookmarks: debug channels ${formatChannels(channelsOn) || 'none'} on`)
@@ -3050,21 +2991,21 @@ export const register: Register = (on, options) => {
       }
       return {}
     }
-    if (a === 'on' || a === 'off' || a === 'reset') {
-      await setSessionEcho($, a === 'reset' ? undefined : a === 'on')
+    if (op.kind === 'echo') {
+      await setSessionEcho($, op.choice)
       const line = await echoStateLine($)
       $.ui.toast(`bookmarks: log echo ${line}`)
       log($, `[bm] log echo ${line} (the file log is always written)`, { always: true })
       return {}
     }
-    if ((a === 'default' || a === 'force') && (b === 'on' || b === 'off')) {
-      await setEchoPolicy($, { default: b === 'on', forced: a === 'force' })
+    if (op.kind === 'policy') {
+      await setEchoPolicy($, op.policy)
       const line = await echoStateLine($)
       $.ui.toast(`bookmarks: log echo ${line}`)
       log($, `[bm] log echo ${line}`, { always: true })
       return {}
     }
-    log($, `[bm] log echo ${await echoStateLine($)}; channels on: ${formatChannels(channelsOn) || 'none'}; file log: ${logPath ?? '(not yet written)'}; ${usage}`, { always: true })
+    log($, `[bm] log echo ${await echoStateLine($)}; channels on: ${formatChannels(channelsOn) || 'none'}; file log: ${logPath ?? '(not yet written)'}; ${DEBUG_USAGE}`, { always: true })
     return {}
   })
 
@@ -3072,17 +3013,15 @@ export const register: Register = (on, options) => {
   // conversation), plus any value that was given but did not fit (core/settings.ts).
   on('command.run', { command: 'bm-config' }, async $ => {
     const r = resolveSettings(machineOptions)
-    const rows = (Object.keys(r.values) as (keyof Settings)[]).map(k => `${k}=${JSON.stringify(r.values[k])} (${r.sources[k] === 'machine' ? '/config' : r.sources[k]})`)
-    log($, `[bm] settings: ${rows.join('; ')}`, { always: true })
+    log($, `[bm] settings: ${settingsRows(r.values, r.sources).join('; ')}`, { always: true })
     const folder = !installedFromCache($.plugin.root)
     log($, `[bm] this build is ${folder ? 'loaded from a folder' : 'installed'}, so debugText=${JSON.stringify(r.values.debugText)} means ${debugTextMode(r.values.debugText, folder)}; change any of these in /config`, { always: true })
     // Whether Claude Code's /config actually lists the fields (djdarcy, 2026-10-12: "I tried
     // /config and I'm not seeing the mod/plugin"): its own rows, as $.config.list sees them.
     const listed = (await $.config.list().catch(() => [])).filter(row => row.key.startsWith(`${$.plugin.name}.`))
-    log($, `[bm] /config lists ${listed.length} of this plugin's ${Object.keys(r.values).length} fields${listed.length ? ` (${listed.map(row => row.key).join(', ')})` : ''}`, { always: true })
-    if (r.rejected.length || r.unknown.length) {
-      log($, `[bm] settings not applied: ${[...r.rejected.map(x => `${x} (does not fit)`), ...r.unknown.map(x => `${x} (no such setting)`)].join('; ')}`, { always: true })
-    }
+    log($, configListedLine(listed.map(row => row.key), Object.keys(r.values).length), { always: true })
+    const notApplied = notAppliedLine(r.rejected, r.unknown)
+    if (notApplied) log($, notApplied, { always: true })
     return {}
   })
 
@@ -3090,12 +3029,6 @@ export const register: Register = (on, options) => {
     const v = await $.session.version()
     const list = await allRows($)
     const promptCount = list.filter(r => r.door === 'prompt').length
-    // dcc-patcher's build signal (its H patch README, "For plugin authors"): DCC_PATCH_H is
-    // set by the history patch itself; DCC_PATCHES and DCC_PATCHER by its launcher.
-    // Stock started by that launcher has none of them.
-    const dccH = await $.env.get('DCC_PATCH_H')
-    const dccPatches = await $.env.get('DCC_PATCHES')
-    const dccVersion = await $.env.get('DCC_PATCHER')
     // A command's answer is always drawn, whatever the echo setting.
     log($,
       `[bm] ${$.plugin.name} ${await pluginVersion($)} on Claude Code ${v.version} ` +
@@ -3104,12 +3037,8 @@ export const register: Register = (on, options) => {
         describePathOrder(),
       { always: true },
     )
-    log($,
-      `[bm] dcc-patcher: ${dccVersion ? `v${dccVersion}` : 'none seen'}; ` +
-        `DCC_PATCH_H=${dccH ?? '(unset)'}; DCC_PATCHES=${dccPatches ?? '(unset)'}; ` +
-        `log echo ${await echoStateLine($)}`,
-      { always: true },
-    )
+    // dcc-patcher's build signal (core/diagnostics.ts, dccLine).
+    log($, dccLine(await $.env.get('DCC_PATCHER'), await $.env.get('DCC_PATCH_H'), await $.env.get('DCC_PATCHES'), await echoStateLine($)), { always: true })
     return {}
   })
 

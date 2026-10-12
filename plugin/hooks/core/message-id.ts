@@ -12,6 +12,9 @@ export const firstFour = (id: string): string => id.split('-').slice(0, 4).join(
 /** Whether two ids name the same message (a stored uuid, a drawn id, or one of each). */
 export const sameMessage = (a: string, b: string): boolean => firstFour(a) === firstFour(b)
 
+/** A uuid as the log says it: its first eight characters. */
+export const short = (uuid: string): string => uuid.slice(0, 8)
+
 /** A position map keyed by first four groups, so a drawn id finds its stored message's place. */
 export function byFirstFour(order: ReadonlyMap<string, number>): Map<string, number> {
   const out = new Map<string, number>()
