@@ -30,6 +30,7 @@ import { lineHint, route, type Pane } from './core/keys'
 import { afterAction, type Cause } from './core/after-action'
 import { resolve as resolveSettings, type Settings } from './core/settings'
 import { looksLikePrompt, promptTextOf, unwrapQueued } from './core/prompt-rows'
+import { findByMessage, firstFour, sameMessage } from './core/message-id'
 
 // How long a `temporary` bookmark is kept before it is pruned (to a tombstone). A
 // setting with the archive-retention picker (#7, #10); a constant until then.
@@ -201,7 +202,7 @@ function marksOnRow(requestId: string, showing: string | undefined): [string, Ma
     ([letter, m]) =>
       letter === showing &&
       m.source === 'selection' &&
-      (m.uuid === requestId || firstFour(m.uuid) === firstFour(requestId)),
+      sameMessage(m.uuid, requestId),
   )
 }
 
@@ -419,7 +420,6 @@ async function flushLog($: EngineInterface) {
 }
 
 const clock = (t: number) => new Date(t).toISOString().slice(11, 23)
-const firstFour = (uuid: string) => uuid.split('-').slice(0, 4).join('-')
 
 // `snippet`: the selection's first line exactly as selected, for highlighting.
 type Mark = { uuid: string; head: string; markedAt: number; source?: 'selection' | 'latest' | 'screen'; snippet?: string }
@@ -874,7 +874,7 @@ async function saveJumplist($: EngineInterface, jl: Jumplist) {
   jumplistCache = jl
   await $.store.set(await jumplistKey($), jl)
 }
-const sameEntry = (a: JumpEntry | undefined, b: JumpEntry) => !!a && (a.uuid === b.uuid || firstFour(a.uuid) === firstFour(b.uuid))
+const sameEntry = (a: JumpEntry | undefined, b: JumpEntry) => !!a && sameMessage(a.uuid, b.uuid)
 
 async function recordJump($: EngineInterface, from: JumpEntry | undefined, to: JumpEntry) {
   if (jumplistMoving) return // a back or forward move is a walk, not a new jump
@@ -973,7 +973,7 @@ let selectionAtChord: Awaited<ReturnType<EngineInterface['ui']['selection']>> | 
 // stands for, and say whether the selected text is really in that row.
 async function resolveSelectionRow($: EngineInterface, id: string, text: string) {
   const list = await allRows($)
-  const saved = list.find(r => r.uuid === id) ?? list.find(r => firstFour(r.uuid) === firstFour(id))
+  const saved = findByMessage(list, id)
   const needle = text.trim().slice(0, 40)
   const check = !saved ? 'no saved row'
     : saved.text === undefined ? 'row saved before text capture'
@@ -1012,7 +1012,7 @@ async function restoreView($: EngineInterface) {
   if (!here) return
   // Otherwise only when the view actually moved: scrolling back regardless lined up the
   // top message's first line and moved a view that had not dropped (djdarcy, 2026-10-07).
-  if (!fromPane && freshOnScreen().some(id => id === here || firstFour(id) === firstFour(here))) {
+  if (!fromPane && freshOnScreen().some(id => sameMessage(id, here))) {
     log($, `[bm-poc] view kept after highlight (${short(here)} still on screen)`)
     return
   }
@@ -1060,7 +1060,7 @@ async function screenTopMark($: EngineInterface, before?: string): Promise<Mark 
   const id = before ?? (await topOnScreen($))
   if (!id) return undefined
   const list = await allRows($)
-  const row = list.find(r => r.uuid === id) ?? list.find(r => firstFour(r.uuid) === firstFour(id))
+  const row = findByMessage(list, id)
   const text = row?.text ?? rendered.get(id) ?? row?.head ?? ''
   const first = snippetOf(plainMarkdown(text))
   return {
@@ -1330,7 +1330,7 @@ async function goToReading($: EngineInterface, reading: Mark, via: string) {
   // Already at the reading position (the jump pane's entry used while there, log
   // 2026-10-05 00:06:17): keep the earlier spot to return to, or "back" would go to
   // the reading position itself.
-  const atItAlready = !!here && (here === reading.uuid || firstFour(here) === firstFour(reading.uuid))
+  const atItAlready = !!here && sameMessage(here, reading.uuid)
   const previous = await readingState($)
   await setReadingState(
     $,
@@ -1355,9 +1355,9 @@ async function readingToggle($: EngineInterface) {
   // selections appear and linger easily (a click, a drag), and twice a press meant as a
   // jump re-set it instead, to a stray mid-word selection in the same message (log,
   // 2026-10-04 23:53:58 and 23:55:09).
-  const sameMessage =
-    !!reading && !!sel?.requestId && (sel.requestId === reading.uuid || firstFour(sel.requestId) === firstFour(reading.uuid))
-  if (sel?.requestId && picked && !sameMessage) {
+  const inReadingMessage =
+    !!reading && !!sel?.requestId && sameMessage(sel.requestId, reading.uuid)
+  if (sel?.requestId && picked && !inReadingMessage) {
     const { uuid, check } = await resolveSelectionRow($, sel.requestId, sel.text)
     const mark: Mark = { uuid, head: headOf(sel.text), markedAt: await $.clock.now(), source: 'selection', snippet: picked }
     await $.store.set(await marksKey($), { ...marks, [READING]: mark })
@@ -1384,7 +1384,7 @@ async function readingToggle($: EngineInterface) {
   // Ctrl+End (the message left behind still looked visible); the freshness filter
   // handles that.
   const onScreenNowFresh = freshOnScreen().some(
-    id => id === reading.uuid || firstFour(id) === firstFour(reading.uuid),
+    id => sameMessage(id, reading.uuid),
   )
   if (state.at && state.back && onScreenNowFresh) {
     await setReadingState($, { at: false, back: null })
@@ -1403,7 +1403,7 @@ async function readingToggle($: EngineInterface) {
   if (onScreenNowFresh) {
     await showMark($, READING, reading.snippet ?? reading.head)
     $.ui.toast("You're at the reading position. Scroll away and press again to come back here.")
-    const seen = [...onScreenNow.entries()].find(([id]) => id === reading.uuid || firstFour(id) === firstFour(reading.uuid))?.[1]
+    const seen = [...onScreenNow.entries()].find(([id]) => sameMessage(id, reading.uuid))?.[1]
     log($, `[bm-poc] reading position: already on screen, stayed put` +
       (seen ? ` (reported lines ${seen.first}-${seen.last} of ${seen.of}, ${Date.now() - seen.at} ms ago)` : ''))
     return
