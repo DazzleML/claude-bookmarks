@@ -1,6 +1,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { CHANNELS, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, screenMirror } from './debug.ts'
+
+// 0.4.7 renamed [bm-poc] to [bm] and dropped the space after it in 55 log lines, so
+// "[bm]nearest prompt moved" no longer matched the screen mirror. Read the real file.
+test('every [bm] log prefix in register.tsx is followed by a space', () => {
+  const source = readFileSync(new URL('../register.tsx', import.meta.url), 'utf8')
+  const glued = source.split('\n').filter(l => /\[bm\][^ '`"]/.test(l))
+  assert.deepEqual(glued, [])
+})
 
 test('the screen log mirrors the yellow row lines whole, without the prefix', () => {
   assert.equal(screenMirror('[bm] nearest prompt moved: 70f2a222 -> 59ec5ce8'), 'nearest prompt moved: 70f2a222 -> 59ec5ce8')
