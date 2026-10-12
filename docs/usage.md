@@ -340,7 +340,7 @@ From an empty input box, a pane opened by a command takes the keyboard, so its o
 
 ## Settings
 
-The plugin's settings are in Claude Code's `/config`, under the plugin's name; the README lists them all ([Configuration](../README.md#configuration)). A change takes effect at once. `/bm-config` prints each setting, its value, and where the value came from: `default`, or `/config` when you chose it.
+The plugin's settings are in Claude Code's `/config`, at the bottom of its list, each row ending `· bookmarks`; type `bookmarks` in its search box to see only them. The README lists them all ([Configuration](../README.md#configuration)). A change takes effect at once. `/bm-config` prints each setting, its value, and where the value came from: `default`, or `/config` when you chose it.
 
 Two of them decide what the debug log may quote from the conversation. "Conversation text in the debug log" is `auto` by default: off in a plugin installed from a marketplace, always in one loaded from a folder (a developer's build). `with-debug` quotes only while the conversation's debugging is on (`/bm-debug on`), `always` and `off` mean what they say, and the `text` debug channel turns quoting on for one conversation whatever the setting. "How much text a debug line quotes" is `reference` (a short excerpt, enough to find the place) or `full`.
 

@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.25] - 2026-10-12
+
+### Fixed
+
+- **A long conversation's prompt list missed its newest prompts, and was read again at every start** ([#15](https://github.com/DazzleML/claude-bookmarks/issues/15)). The read of your prompts from the transcript is capped at 4 MiB, and in a long conversation most of what it read was Claude Code's own notes stored beside your messages (skill text, system notes). It now leaves those out: measured on an 84 MB transcript, 4.2 MB cut off became 1.5 MB read whole in about a second.
+
+### Added
+
+- `/bm-config` says how many of the plugin's settings Claude Code's `/config` lists. They are at the bottom of `/config`, each ending `· bookmarks`; typing `bookmarks` in its search box shows only them.
+
 ## [0.4.24] - 2026-10-12
 
 ### Changed
@@ -451,7 +461,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.24...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.25...HEAD
+[0.4.25]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.24...v0.4.25
 [0.4.24]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.23...v0.4.24
 [0.4.23]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.22...v0.4.23
 [0.4.22]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.21...v0.4.22

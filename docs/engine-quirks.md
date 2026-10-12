@@ -244,6 +244,8 @@ A plugin runs programs through `$.process.run` with an argument list. From Windo
 
 On Windows, `Select-String -SimpleMatch` ignores case by default, which picks up extra lines; adding `-CaseSensitive` avoids them.
 
+Even the matching lines outgrow the cap in a long session: measured 2026-10-12 on an 84 MB transcript, its user rows were 4.8 MB, and 2.9 MB of that was `"isMeta":true` rows (skill bodies and system notes Claude Code stores as user rows), so the back-fill's read was cut off, missed the newest prompts, and, never marked done, ran again at every start. The read now drops meta rows as it drops tool results: 1.5 MB, 1.0 s.
+
 ### The plugin store's 4 MiB is for the whole store — Workaround
 
 `$.store.set` refuses a write that would leave the store over 4 MiB of JSON text *in all* (the typings, `store.set`), not per value. The store is one file under Claude Code's `plugins/store/`, holding every conversation's keys, so splitting a large value across keys does not help, and a store that reaches the cap refuses every later write: marks, pins, everything. Anything that grows with the conversation (the filter's prompt text) is kept in files under the data root instead, in pieces under `$.fs.read`'s 4 MiB. Measured 2026-10-12: 620 KB live, of which the prompt lists were 305 KB across conversations (#15). `$.fs` has no delete, so a file no longer needed is overwritten small; `$.store.delete` exists.

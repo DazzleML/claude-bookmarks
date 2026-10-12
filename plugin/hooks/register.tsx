@@ -667,7 +667,7 @@ async function userRows($: EngineInterface, path: string) {
       const started = Date.now()
       const r = await $.process.run(
         ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', `${$.plugin.root}/hooks/scripts/user-rows.ps1`,
-          '-Path', path, '-UserRow', '"type":"user"', '-QueuedRow', '"type":"queued_command"', '-ToolResultRow', '"type":"tool_result"'],
+          '-Path', path, '-UserRow', '"type":"user"', '-QueuedRow', '"type":"queued_command"', '-ToolResultRow', '"type":"tool_result"', '-MetaRow', '"isMeta":true'],
         { timeoutMs: 60_000 },
       )
       if (r.exitCode === 0 || r.stdout) return { via: 'powershell' as const, ms: Date.now() - started, ...r }
@@ -678,7 +678,7 @@ async function userRows($: EngineInterface, path: string) {
   try {
     const started = Date.now()
     const r = await $.process.run(
-      ['sh', '-c', 'grep -F -e \'"type":"user"\' -e \'"type":"queued_command"\' "$1" | grep -vF \'"type":"tool_result"\'', 'sh', path],
+      ['sh', '-c', 'grep -F -e \'"type":"user"\' -e \'"type":"queued_command"\' "$1" | grep -vF -e \'"type":"tool_result"\' -e \'"isMeta":true\'', 'sh', path],
       { timeoutMs: 60_000 },
     )
     if (r.exitCode === 0 || r.stdout) return { via: 'sh' as const, ms: Date.now() - started, ...r }
@@ -3057,6 +3057,10 @@ export const register: Register = (on, options) => {
     log($, `[bm] settings: ${rows.join('; ')}`, { always: true })
     const folder = !installedFromCache($.plugin.root)
     log($, `[bm] this build is ${folder ? 'loaded from a folder' : 'installed'}, so debugText=${JSON.stringify(r.values.debugText)} means ${debugTextMode(r.values.debugText, folder)}; change any of these in /config`, { always: true })
+    // Whether Claude Code's /config actually lists the fields (djdarcy, 2026-10-12: "I tried
+    // /config and I'm not seeing the mod/plugin"): its own rows, as $.config.list sees them.
+    const listed = (await $.config.list().catch(() => [])).filter(row => row.key.startsWith(`${$.plugin.name}.`))
+    log($, `[bm] /config lists ${listed.length} of this plugin's ${Object.keys(r.values).length} fields${listed.length ? ` (${listed.map(row => row.key).join(', ')})` : ''}`, { always: true })
     if (r.rejected.length || r.unknown.length) {
       log($, `[bm] settings not applied: ${[...r.rejected.map(x => `${x} (does not fit)`), ...r.unknown.map(x => `${x} (no such setting)`)].join('; ')}`, { always: true })
     }
