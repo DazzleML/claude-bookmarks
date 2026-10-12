@@ -16,19 +16,37 @@ const BAND = { plugin: 'bookmarks', surface: 'terminal', component: 'AbovePrompt
 
 type Found = { type: string; key?: string; text?: string; props: Record<string, unknown> }
 type Band = { input: (t: object) => Promise<unknown>; press: (t: object) => Promise<unknown>; findAll: (q: object) => Promise<Found[]> }
-const mount = async ($: unknown) => (await ($ as { ui: { mount: (t: never) => Promise<unknown> } }).ui.mount(BAND as never)) as Band
+const mount = async ($: unknown, maxRows = BAND_PROPS.maxRows) =>
+  (await ($ as { ui: { mount: (t: never) => Promise<unknown> } }).ui.mount({ ...BAND, props: { ...BAND_PROPS, maxRows } } as never)) as Band
 const texts = async (band: Band) => (await band.findAll({ type: 'Text' })).map(t => t.text ?? '')
+// The help's lines: every Text after its `bm help` title (the kit reports no key for a Text).
+const helpText = async (band: Band) => {
+  const all = await texts(band)
+  return all.slice(all.indexOf('bm help') + 1)
+}
 
-test('? shows every command in the band, and close returns to the bar', async ($, on) => {
+test('? in a tall band: one line per command, and close returns to the bar', async ($, on) => {
   world(on, { store: STORE, session: SID })
-  const band = await mount($)
+  const band = await mount($, 40)
   // The plugin moves the ring onto `close`; its own $.ui.focus is not routed to tests.
   await band.input({ key: 'band-cmd-0', text: '?' }).catch(() => undefined)
-  const help = (await texts(band)).join('\n')
+  const help = (await helpText(band)).join('\n')
   for (const line of ['jump to a mark', 'turn mark a-z into a bookmark', 'back to where the last jump left from', 'j next · k previous · s pin', 'Chords (mark, jump, prompts, read on their own keybindings): on'])
     expect(help.includes(line)).toBe(true)
   await band.press({ key: 'band-help-close' })
   expect((await band.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['chord-mark', 'chord-jump', 'chord-prompts', 'chord-read', 'chord-help'])
+})
+
+// Taller than the band, the help scrolled, and the keyboard probe scrolled it back to the
+// top (djdarcy, 2026-10-12): a band too short gets the four-line form instead.
+test('? in a short band: the four-line help, fitting it', async ($, on) => {
+  world(on, { store: STORE, session: SID })
+  const band = await mount($, 10)
+  await band.input({ key: 'band-cmd-0', text: '?' }).catch(() => undefined)
+  const help = await helpText(band)
+  expect(help.length).toBe(4)
+  expect(help.length + 1 <= 10).toBe(true)
+  expect(help[0]!.includes("' or j + letter (jump)")).toBe(true)
 })
 
 test('a press on the bar does what its key does: prompts opens the list', async ($, on) => {

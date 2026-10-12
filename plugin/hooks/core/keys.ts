@@ -258,3 +258,15 @@ export function helpLines(now: { leader: string; chords: boolean; panes: boolean
     `Chords (mark, jump, prompts, read on their own keybindings): ${now.chords ? 'on' : 'off'}. Lists in a pane: ${now.panes ? 'on' : 'off'}. Both in /config.`,
   ]
 }
+
+// The same help in four lines, for a band too short for one line per command: each line
+// wraps to the band's width instead of adding rows the band would have to scroll.
+export function helpShort(now: { leader: string; chords: boolean; panes: boolean }): string[] {
+  const full = helpLines(now)
+  return [
+    `${now.leader}, then: ${lineHint().replace(/^bm: /, '').split('  ').join(' · ')}`,
+    `Prompts list: ${listHint('list')}; /words in its # field filters, N.k is a footnote`,
+    `Bookmarks list: ${listHint('bookmarks')}`,
+    full.at(-1)!,
+  ]
+}

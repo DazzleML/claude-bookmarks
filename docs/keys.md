@@ -32,6 +32,14 @@ The band's field takes exactly one key (two for the ones that need a letter). An
 | `?` | | Shows every command and list key, and how the band's switches are set, in the band; `Enter` or `Esc` closes it |
 | `Esc` | | Leaves the band; the keyboard returns to the input box |
 
+### Why some commands have two keys
+
+`'` and `Space` are the keys the commands were designed around: `'` is vim's jump-to-mark, and `Space` is one easy press for the reading position. But the band's buttons can only be pressed from the keyboard by a single letter or digit (a limit of Claude Code's buttons), so the clickable `jump` and `read` buttons carry `j` and `r` instead. Typed after the leader, either spelling works, because the band's field takes any key; the bar shows the letter, because that is what its button answers to.
+
+The same letter can mean something else once a list is open: after `p` or `b`, `j` and `k` move through the list (vim's down and up), so `j` is "jump" at the start of a command and "next" inside a list.
+
+These keys are fixed for now. Choosing your own -- a different key for a command, or hiding a button you never use -- is planned as a keymap ([#36](https://github.com/DazzleML/claude-bookmarks/issues/36)); until then, the [Optional fast keys](usage.md#optional-fast-keys) are the only keys you bind yourself.
+
 After any of these the keyboard stays on the band for the next command; `Esc` returns it to the input box. Arrow keys never reach the band ([#23](https://github.com/DazzleML/claude-bookmarks/issues/23)); a terminal mapping can type the leader and a key for you, see [Back and forward](usage.md#back-and-forward).
 
 ## 3. On the band with the prompts or bookmarks pane open

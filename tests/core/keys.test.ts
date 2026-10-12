@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LINE_COMMANDS, bandButtons, helpLines, lineHint, lineKeys, listHint, parseListNumber, route } from '../../plugin/hooks/core/keys.ts'
+import { LINE_COMMANDS, bandButtons, helpLines, helpShort, lineHint, lineKeys, listHint, parseListNumber, route } from '../../plugin/hooks/core/keys.ts'
 
 test('a typed list number: a prompt, an unfold, or a footnote', () => {
   assert.deepEqual(parseListNumber('3'), { n: 3 })
@@ -36,6 +36,14 @@ test('? opens the help, and the help explains every routed key', () => {
   for (const k of lineKeys()) assert.ok(help.includes(k === ' ' ? 'Space' : k), k)
   assert.match(help, /Chords .*: on/)
   assert.match(helpLines({ leader: 'Ctrl+]', chords: false, panes: false }).join('\n'), /: off\. Lists in a pane: off/)
+})
+
+test('the short help still names every routed key and the switches, in four lines', () => {
+  const short = helpShort({ leader: 'Ctrl+]', chords: true, panes: true })
+  assert.equal(short.length, 4)
+  for (const k of lineKeys()) assert.ok(short[0]!.includes(k === ' ' ? 'Space' : k), k)
+  assert.ok(short[1]!.includes('s pin') && short[2]!.includes('c claim'))
+  assert.match(short[3]!, /Chords .*: on\. Lists in a pane: on/)
 })
 
 test("the command line routes today's commands to the same operations", () => {

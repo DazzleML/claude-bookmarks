@@ -14,7 +14,7 @@ Most of what goes wrong comes from a small set of Claude Code rules about when a
 
 ## The band doesn't appear
 
-The band (`bm: _   mark  jump  prompts  read  ?`, or the field alone with "The band" set to `field`) above the prompt means the plugin is loaded. If it's missing:
+The band (`bm: _  m: mark  j: jump  p: prompts  r: read  ?`, or the field alone with "The band" set to `field`) above the prompt means the plugin is loaded. If it's missing:
 
 1. **Check the renderer.** Run `/tui fullscreen`. The classic renderer is not supported.
 2. **Check the version.** Run `claude --version`; plugins of this kind need Claude Code 2.1.287 or later.

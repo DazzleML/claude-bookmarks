@@ -26,7 +26,7 @@ import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resol
 import { exchangeIndex, looksLikeRedraw, pickViewAnchor, promptNearView } from './core/view-position'
 import { latestBurst, reportTime, type Report } from './core/latest-burst'
 import { CHANNELS, excerpt, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, quotesText, screenMirror, type Channel } from './core/debug'
-import { bandButtons, helpLines, lineHint, listHint, listKeysFor, parseListNumber, route, type Chord, type Operation, type Pane } from './core/keys'
+import { bandButtons, helpLines, helpShort, lineHint, listHint, listKeysFor, parseListNumber, route, type Chord, type Operation, type Pane } from './core/keys'
 import { afterAction, isList, type Cause } from './core/after-action'
 import { debugTextMode, installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
 import { resolvePalette, type Palette, type Role, type Style } from './core/palette'
@@ -1727,10 +1727,18 @@ async function showHelp($: EngineInterface) {
   await update($, bandMode, () => 'help')
   bandTimer?.cancel()
   bandTimer = $.clock.after(HELP_MS, () => void endBandMode($))
-  await focusBand($, 'band-help-close')
-  // Esc hands the keyboard back with no event (see openFor): ask, as the list modes do,
-  // and end the help once the band no longer holds it.
   bandWatch?.cancel()
+  bandWatch = undefined
+  const deny = await focusBand($, 'band-help-close')
+  // A click on `?` leaves the keyboard where it was, so the band never held it: the help
+  // stays until `close`, a line pressed, the minute, or a prompt typed. Watching it here
+  // closed it at once (djdarcy, 2026-10-12: "when we click the "?" on the band ... the
+  // info-box instantly closes"), as it once did the list panes (see openFor).
+  if (deny && /does not hold the keyboard/i.test(deny)) return void log($, '[bm] help opened by a click: it stays until closed')
+  // Esc hands the keyboard back with no event (see openFor): ask, as the list modes do,
+  // and end the help once the band no longer holds it. Asking focuses `close`, which
+  // scrolls a help taller than the band back to the top (djdarcy: "the UI element seems
+  // to refresh and scrolls back to the top"), so the help is drawn to fit (the render).
   bandWatch = $.clock.every(BAND_WATCH_MS, async () => {
     if (!bandId || (await read($, bandMode)) !== 'help') return
     const r = await $.ui.focus({ requestId: bandId, key: 'band-help-close' })
@@ -3115,7 +3123,14 @@ export const register: Register = (on, options) => {
       const done = (cause: Cause) => settle($, paneOf(mode), cause)
       if (mode === 'help') {
         const s = currentSettings()
-        const lines = helpLines({ leader: 'The leader (Ctrl+] by default)', chords: s.chords === 'on', panes: s.panes === 'on' })
+        const now = { leader: 'The leader (Ctrl+] by default)', chords: s.chords === 'on', panes: s.panes === 'on' }
+        // The help must fit the band's window. Taller, it scrolls, and the keyboard probe
+        // (showHelp) -- the only way to learn that Esc took the keyboard back -- focuses
+        // `close`, which scrolls it back to the top; the arrows in the band scroll its
+        // window without moving the ring (log 2026-10-12 18:02-18:09: no focus move onto a
+        // help line). So a band too short for one line per command gets the short form.
+        const full = helpLines(now)
+        const lines = full.length + 1 <= e.props.maxRows ? full : helpShort(now)
         return (
           <Box flexDirection="column">
             {theirs}

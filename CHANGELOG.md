@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.26] - 2026-10-12
+
+### Fixed
+
+- **`?` clicked on the band closed at once.** A click leaves the keyboard where it was, and the help was closing as soon as it saw the band did not hold it. It now stays until `close`, `Enter`, a minute, or a prompt typed.
+- **The help jumped back to the top while you scrolled it with the keyboard.** The check that notices `Esc` moved the band back to its `close` button every moment. The help is now drawn to fit the band: one line per command where there is room, and a four-line form (each key with a one-word label) where there is not.
+
+### Added
+
+- `docs/keys.md` explains why jump and read have two keys each (`'` or `j`, `Space` or `r`: a band button can only answer a letter or digit), why `j` means "next" inside a list, and that choosing your own keys is planned ([#36](https://github.com/DazzleML/claude-bookmarks/issues/36)).
+
 ## [0.4.25] - 2026-10-12
 
 ### Fixed
@@ -461,7 +472,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.25...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.26...HEAD
+[0.4.26]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.25...v0.4.26
 [0.4.25]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.24...v0.4.25
 [0.4.24]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.23...v0.4.24
 [0.4.23]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.22...v0.4.23

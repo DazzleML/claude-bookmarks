@@ -62,10 +62,10 @@ To use a key your terminal doesn't report by default, map it in the terminal to 
 When the plugin is loaded, a one-line band sits just above the prompt:
 
 ```
-bm: _   mark  jump  prompts  read  ?
+bm: _  m: mark  j: jump  p: prompts  r: read  ?
 ```
 
-The first part is a small field. When the leader puts the keyboard on the band, the field takes the next key, any key, including `'`, `Space` and `?`. The words after it are buttons you can click, and each does exactly what its key does: `mark` (`m`), `jump` (`j`), `prompts` (`p`), `read` (`r`). A pane opened by a click stays open as a list to click in; close it with its `×`.
+The first part is a small field. When the leader puts the keyboard on the band, the field takes the next key, any key, including `'`, `Space` and `?`. The words after it are buttons you can click, and each does exactly what its key does: `mark` (`m`), `jump` (`j`), `prompts` (`p`), `read` (`r`). Jump and read also answer `'` and `Space`; why two keys, and why `j` means "next" inside a list, is in [Why some commands have two keys](keys.md#why-some-commands-have-two-keys). A pane opened by a click stays open as a list to click in; close it with its `×`.
 
 **`?` shows every command,** including the ones the bar has no room for (`b` bookmarks, `P` promote, `o` back, `i` forward), the keys of the prompts and bookmarks lists, and how the switches below are set. Type `?` after the leader, or click it. `Enter` or `Esc` closes the help.
 
