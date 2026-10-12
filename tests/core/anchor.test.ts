@@ -132,6 +132,13 @@ test('markers go on the drawn label only; hrefs are untouched; web links unmarke
   assert.equal(markLinks(marked, 'glyph'), marked, 'idempotent')
 })
 
+test('a perma anchor keeps its plain label; the anchor glyph marks bookmarks only', () => {
+  const href = anchorHref(record, ROOT)
+  const text = `[the trigger](${href}) [a note](file:///C:/n/x.md)`
+  assert.equal(markLinks(text, 'glyph', h => h === href), `[the trigger](${href}) [▤ a note](file:///C:/n/x.md)`)
+  assert.equal(markLinks(text, 'glyph', () => false), `[⚓ the trigger](${href}) [▤ a note](file:///C:/n/x.md)`)
+})
+
 test('anchorMarkdown writes a link the parser reads back', () => {
   const md = anchorMarkdown(record, ROOT)
   const [link] = anchorLinks(md)

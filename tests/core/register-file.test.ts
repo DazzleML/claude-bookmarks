@@ -17,8 +17,49 @@ import {
   remove,
   serializeRegister,
   share,
+  claim,
   type Mint,
 } from '../../plugin/hooks/core/register-file.ts'
+import { anchorHref, tierOf } from '../../plugin/hooks/core/anchor.ts'
+
+test('a perma mint stays perma until asked to be a bookmark, never the other way', () => {
+  const r0 = emptyRegister('8f0f9b27-33fc-4054-806a-22a6d569dfb5', 'test', 1)
+  const a = addOrRelabel(r0, { ...mintFor('12d637fb-6d1d-4c3f-bbb6-11c107d8af4e'), tier: 'perma' }, 2)
+  assert.equal(tierOf(a.record), 'perma')
+  const relabelled = addOrRelabel(a.register, { ...mintFor('12d637fb-6d1d-4c3f-bbb6-11c107d8af4e'), label: 'new' }, 3)
+  assert.equal(tierOf(relabelled.record), 'perma')
+  const promoted = addOrRelabel(relabelled.register, { ...mintFor('12d637fb-6d1d-4c3f-bbb6-11c107d8af4e'), tier: 'bookmark' }, 4)
+  assert.equal(tierOf(promoted.record), 'bookmark')
+  const again = addOrRelabel(promoted.register, { ...mintFor('12d637fb-6d1d-4c3f-bbb6-11c107d8af4e'), tier: 'perma' }, 5)
+  assert.equal(tierOf(again.record), 'bookmark')
+  assert.equal(tierOf({}), 'bookmark', 'a record from before tiers is a bookmark')
+})
+
+test('claim moves Claude\'s record to the person\'s list with the same id and link', () => {
+  const r0 = emptyRegister('8f0f9b27-33fc-4054-806a-22a6d569dfb5', 'test', 1)
+  const a = addOrRelabel(r0, { ...mintFor('12d637fb-6d1d-4c3f-bbb6-11c107d8af4e'), tier: 'perma' }, 2)
+  const c = claim(a.register, '12d637fb', 3)
+  assert.ok(!('error' in c))
+  if ('error' in c) return
+  assert.equal(c.record.owner, 'user')
+  assert.equal(c.record.uuid, a.record.uuid)
+  assert.equal(c.record.tier, 'perma')
+  assert.equal(anchorHref(c.record, 'C:/d'), anchorHref(a.record, 'C:/d'))
+  assert.equal(listOf(c.register, 'claude').length, 0)
+  assert.equal(listOf(c.register, 'user').length, 1)
+  assert.ok('error' in claim(c.register, '12d637fb', 4), 'nothing left on Claude\'s list to claim')
+})
+
+test('a perma record keeps its tier through the register file', () => {
+  const r0 = emptyRegister('8f0f9b27-33fc-4054-806a-22a6d569dfb5', 'test', 1)
+  const a = addOrRelabel(r0, { ...mintFor('12d637fb-6d1d-4c3f-bbb6-11c107d8af4e'), tier: 'perma' }, 2)
+  const back = parseRegister(serializeRegister(a.register))
+  assert.equal(back && tierOf(back.perma[0]!), 'perma')
+})
+
+function mintFor(uuid: string): Mint {
+  return { uuid, owner: 'claude', label: 'a place', head: 'the message', by: 'claude', source: 'tool' }
+}
 
 const SESSION = '8f0f9b27-33fc-4054-806a-22a6d569dfb5'
 const UUID = '12d637fb-6d1d-4c3f-bbb6-11c107d8af4e'

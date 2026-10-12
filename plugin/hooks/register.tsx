@@ -15,11 +15,11 @@ import type { ElementConstructor, EngineInterface, Register, TextProps, Timer } 
 import type { PaneMode, Row } from '../types'
 import { describePathOrder } from './engine/select'
 import {
-  anchorHref, anchorMarkdown, anchorPath, markLinks, markdownLinks, ownerOf, parseAnchor,
-  type AnchorOwner, type AnchorRecord, type MarkerStyle,
+  anchorHref, anchorMarkdown, anchorPath, markLinks, markdownLinks, ownerOf, parseAnchor, tierOf,
+  type AnchorOwner, type AnchorRecord, type AnchorTier, type MarkerStyle,
 } from './core/anchor'
 import {
-  addOrRelabel, emptyRegister, exportMarkdown, exportNotesOf, findRecord, listOf, parseRegister, prune, remove, serializeRegister, share,
+  addOrRelabel, claim, emptyRegister, exportMarkdown, exportNotesOf, findRecord, listOf, parseRegister, prune, remove, serializeRegister, share,
   type Mint, type Register as BookmarkRegister, type Retention,
 } from './core/register-file'
 import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution, type TranscriptRow } from './core/transcript-lines'
@@ -1638,6 +1638,27 @@ async function bandPin($: EngineInterface) {
   keepBandWaiting($)
 }
 
+// `c` in the bookmarks list: the person takes the chosen one of Claude's records as
+// their own (#21): same message, id and link (core/register-file.ts, claim).
+async function bandClaim($: EngineInterface) {
+  const typed = await read($, bandNum)
+  const target = typed ? (await bookmarkList($))[Number(typed) - 1] : undefined
+  if (!target) {
+    $.ui.toast('Pick a bookmark first: j/k or the arrows (or its number), then c to claim it')
+    return
+  }
+  if (ownerOf(target) !== 'claude') {
+    $.ui.toast('That one is already on your list')
+    return
+  }
+  const r = claim(await loadRegister($), target.uuid, await $.clock.now())
+  if ('error' in r) return void $.ui.toast(r.error)
+  await saveRegister($, r.register)
+  log($, `[bm] bookmark claimed from the pane: ${short(target.uuid)}`)
+  $.ui.toast(`#${typed} is yours now`)
+  keepBandWaiting($)
+}
+
 // Browsing takes as long as it takes: each key restarts the band's wait (BAND_MODE_MS).
 function keepBandWaiting($: EngineInterface) {
   bandTimer?.cancel()
@@ -2075,7 +2096,8 @@ export const register: Register = (on, options) => {
         name: 'bookmark',
         description:
           'Bookmark a message: give a verbatim fragment (or uuid) and a label, get a markdown link to cite; a click jumps ' +
-          'there. owner: your list or the person\'s. Actions: add, relabel, remove, share, list.',
+          'there. owner: your list or the person\'s. tier: perma (your default: a stable link, no bookmark glyph) or bookmark. ' +
+          'Actions: add, relabel, remove, share, claim, list.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -2085,8 +2107,9 @@ export const register: Register = (on, options) => {
             why: { type: 'string', description: 'One or two sentences on why this place matters' },
             words: { type: 'string', description: 'The exact words to highlight on arrival; defaults to query' },
             temporary: { type: 'boolean', description: 'Prune after the retention period instead of keeping forever' },
+            tier: { type: 'string', enum: ['perma', 'bookmark'], description: "perma (the default on your own list): a stable link to cite, drawn without the bookmark glyph; bookmark: a named place the person will want again (the default on the person's list)" },
             owner: { type: 'string', enum: ['claude', 'user'], description: "Whose list: your own (default) or the person's, when they asked you to bookmark it for them" },
-            action: { type: 'string', enum: ['add', 'relabel', 'remove', 'share', 'list'], description: 'add (default); relabel/remove act on `owner`\'s list; share copies from `owner`\'s list to the other; list shows both' },
+            action: { type: 'string', enum: ['add', 'relabel', 'remove', 'share', 'claim', 'list'], description: 'add (default); relabel/remove act on `owner`\'s list; share copies from `owner`\'s list to the other; claim moves one of yours to the person\'s list (they asked for it); list shows both' },
           },
         },
         isDeferred: false,
@@ -2333,8 +2356,15 @@ export const register: Register = (on, options) => {
       // two clicks (a setting later, #7). A mark on this reply keeps its highlight: the
       // bold «a» form, since this branch draws markdown and can't colour a line.
       const pressable = anchors.map(a => a.href)
+      // A perma record's link is drawn without the bookmark glyph (#21).
+      const reg = await loadRegister($)
+      const isPerma = (href: string) => {
+        const a = parseAnchor(href)
+        const r = a && findRecord(reg, a.uuid)
+        return r ? tierOf(r) === 'perma' : false
+      }
       const md = (t: string, k: string) => (
-        <Markdown key={k} text={markLinks(t, LINK_MARKERS)} pressableLinks={pressable} onLinkPress={link => onAnchorPress($, link.href)} />
+        <Markdown key={k} text={markLinks(t, LINK_MARKERS, isPerma)} pressableLinks={pressable} onLinkPress={link => onAnchorPress($, link.href)} />
       )
       const legend = LINK_LEGEND ? (
         <Text {...style('legend')}>
@@ -2614,13 +2644,17 @@ export const register: Register = (on, options) => {
     const query = typeof input.query === 'string' ? input.query.trim() : ''
     const uuid = typeof input.uuid === 'string' ? input.uuid.trim() : ''
     const label = typeof input.label === 'string' && input.label.trim() ? input.label.trim() : undefined
-    const action = input.action === 'relabel' || input.action === 'remove' || input.action === 'share' || input.action === 'list' ? input.action : 'add'
+    const action =
+      input.action === 'relabel' || input.action === 'remove' || input.action === 'share' || input.action === 'claim' || input.action === 'list' ? input.action : 'add'
+    // Claude's own references are perma by default: a stable link without the bookmark
+    // glyph (#21, djdarcy 2026-10-11: "That sounds reasonable"); the person's are bookmarks.
+    const tierAsked = input.tier === 'perma' || input.tier === 'bookmark' ? (input.tier as AnchorTier) : undefined
     if (action !== 'list' && !query && !uuid) return answer({ error: 'give `query` (a short verbatim fragment of the message) or `uuid`' })
     // Whose list: Claude's own by default; the person's when they asked for the bookmark.
     const owner: AnchorOwner = input.owner === 'user' ? 'user' : 'claude'
     const root = await dataRoot($)
     const describe = (r: AnchorRecord) => ({
-      uuid: r.uuid, owner: ownerOf(r), label: r.label, why: r.why, words: r.words, line: r.line, sharedFrom: r.sharedFrom,
+      uuid: r.uuid, owner: ownerOf(r), tier: tierOf(r), label: r.label, why: r.why, words: r.words, line: r.line, sharedFrom: r.sharedFrom,
       ...(root ? { anchor: anchorHref(r, root), markdown: anchorMarkdown(r, root) } : {}),
     })
 
@@ -2629,17 +2663,26 @@ export const register: Register = (on, options) => {
       return answer({ yours: listOf(reg, 'user').map(describe), claudes: listOf(reg, 'claude').map(describe), tombstones: reg.tombstones.length })
     }
 
-    if (action === 'relabel' || action === 'remove' || action === 'share') {
-      // These act on a record that exists: by uuid (full or 8+ prefix) on `owner`'s list.
+    if (action === 'relabel' || action === 'remove' || action === 'share' || action === 'claim') {
+      // These act on a record that exists: by uuid (full or 8+ prefix) on `owner`'s list
+      // (Claude's, for a claim).
+      const from: AnchorOwner = action === 'claim' ? 'claude' : owner
       const reg = await loadRegister($)
-      let target = uuid ? findRecord(reg, uuid, owner) : undefined
+      let target = uuid ? findRecord(reg, uuid, from) : undefined
       if (!target && query) {
         const found = await resolveTarget($, { fragment: query })
-        if (found.kind === 'one') target = findRecord(reg, found.row.uuid, owner)
-        else if (found.kind === 'many') target = found.rows.map(r => findRecord(reg, r.uuid, owner)).find(Boolean)
+        if (found.kind === 'one') target = findRecord(reg, found.row.uuid, from)
+        else if (found.kind === 'many') target = found.rows.map(r => findRecord(reg, r.uuid, from)).find(Boolean)
       }
-      if (!target) return answer({ error: `no bookmark for that on ${owner === 'user' ? "the person's" : "Claude's"} list`, hint: 'action: "list" shows both lists with their uuids' })
+      if (!target) return answer({ error: `no bookmark for that on ${from === 'user' ? "the person's" : "Claude's"} list`, hint: 'action: "list" shows both lists with their uuids' })
       const now = await $.clock.now()
+      if (action === 'claim') {
+        const r = claim(reg, target.uuid, now)
+        if ('error' in r) return answer(r)
+        await saveRegister($, r.register)
+        log($, `[bm] bookmark claimed by the person: ${short(target.uuid)} "${r.record.label}"`, { text: true })
+        return answer({ ok: true, claimed: describe(r.record), note: "now on the person's list; same message, id and link" })
+      }
       if (action === 'remove') {
         const r = remove(reg, target.uuid, owner, `claude${owner === 'user' ? ' (on the person\'s behalf)' : ''}`, now)
         if ('error' in r) return answer(r)
@@ -2667,6 +2710,7 @@ export const register: Register = (on, options) => {
           ...(typeof input.why === 'string' ? { why: input.why.trim() } : {}),
           ...(typeof input.words === 'string' && input.words.trim() ? { words: input.words.trim() } : {}),
           ...(input.temporary === true ? { temporary: true } : {}),
+          ...(tierAsked ? { tier: tierAsked } : {}),
           head: target.head,
           by: 'claude',
           source: target.source,
@@ -2700,6 +2744,7 @@ export const register: Register = (on, options) => {
         ...(typeof input.why === 'string' && input.why.trim() ? { why: input.why.trim() } : {}),
         ...(words && row.text.includes(words) ? { words } : {}),
         ...(input.temporary === true ? { temporary: true } : {}),
+        tier: tierAsked ?? (owner === 'claude' ? 'perma' : 'bookmark'),
         line: row.line,
         bytes: [row.byteStart, row.byteEnd],
         head: headOf(row.text),
@@ -2875,6 +2920,7 @@ export const register: Register = (on, options) => {
                 <Button key="band-num-h" hotkey={GROUP_CYCLE.prev} label={`${GROUP_CYCLE.prev}◂`} plain {...buttonStyle('legend')} onPress={() => bandGroupStep($, -1)} />,
                 <Text key="band-num-group" {...style('legend')}>{BOOKMARK_GROUPS[await read($, bandGroup)]?.title ?? ''}</Text>,
                 <Button key="band-num-l" hotkey={GROUP_CYCLE.next} label={`▸${GROUP_CYCLE.next}`} plain {...buttonStyle('legend')} onPress={() => bandGroupStep($, 1)} />,
+                <Button key="band-num-claim" hotkey="c" label="c claim" plain {...buttonStyle('legend')} onPress={() => bandClaim($)} />,
               ]
             : [<Button key="band-num-pin" hotkey="s" label="s★ pin" plain {...buttonStyle('legend')} onPress={() => bandPin($)} />]),
         ]

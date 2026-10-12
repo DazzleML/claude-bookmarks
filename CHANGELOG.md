@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.20] - 2026-10-12
+
+### Added
+
+- **Claude's references are perma by default** ([#21](https://github.com/DazzleML/claude-bookmarks/issues/21), [#19](https://github.com/DazzleML/claude-bookmarks/issues/19)). Each record now has a tier. When Claude bookmarks a place for its own use, the record is `perma`: a stable link it cites, drawn without the `⚓`, so its references no longer look like bookmarks you made. A bookmark Claude makes for you, or one it marks `tier: "bookmark"`, keeps the `⚓`. Records from before this version are bookmarks.
+- **`claim`**: Claude's `bookmark` tool can move one of its records onto your list, with the same message, id and link. Ask Claude to claim it for you, or press `c` in the bookmarks list (`Ctrl+] b`, choose one of Claude's with its number or `j`/`k`, then `c`).
+
 ## [0.4.19] - 2026-10-12
 
 ### Changed
@@ -409,7 +416,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.19...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.20...HEAD
+[0.4.20]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.19...v0.4.20
 [0.4.19]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.18...v0.4.19
 [0.4.18]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.17...v0.4.18
 [0.4.17]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.16...v0.4.17

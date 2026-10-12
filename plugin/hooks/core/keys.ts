@@ -23,6 +23,7 @@ export type Operation =
   | { op: 'step'; dir: -1 | 1 }
   | { op: 'go' }
   | { op: 'pin' }
+  | { op: 'claim' }
   | { op: 'group'; dir: -1 | 1 }
   | { op: 'filter' }
   | { op: 'close' }
@@ -100,6 +101,7 @@ export const LIST_KEYS: readonly ListKey[] = [
   { key: 's', label: 'pin', panes: ['list'], route: () => waiting({ op: 'pin' }) },
   { key: 'h', label: 'previous group', panes: ['bookmarks'], route: () => waiting({ op: 'group', dir: -1 }) },
   { key: 'l', label: 'next group', panes: ['bookmarks'], route: () => waiting({ op: 'group', dir: 1 }) },
+  { key: 'c', label: 'claim', panes: ['bookmarks'], route: () => waiting({ op: 'claim' }) },
   { key: '/', label: 'filter', panes: ['list'], route: () => waiting({ op: 'filter' }) },
 ]
 

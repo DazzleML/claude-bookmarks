@@ -81,5 +81,5 @@ test('Esc closes, in any context', () => {
 
 test("each list pane's hint is generated from its own keys", () => {
   assert.equal(listHint('list'), 'number + Enter jump · j next · k previous · s pin · / filter · Esc close')
-  assert.equal(listHint('bookmarks'), 'number + Enter jump · j next · k previous · h previous group · l next group · Esc close')
+  assert.equal(listHint('bookmarks'), 'number + Enter jump · j next · k previous · h previous group · l next group · c claim · Esc close')
 })

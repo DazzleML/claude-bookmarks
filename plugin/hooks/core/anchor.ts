@@ -18,6 +18,13 @@ export type AnchorBy = 'claude' | 'user' | 'prose'
 export type AnchorSource = 'tool' | 'promote' | 'prose'
 /** Whose list a bookmark is on: the person's, or Claude's own (two separate sets). */
 export type AnchorOwner = 'user' | 'claude'
+/**
+ * How stable and visible a record is (the continuum's upper rungs; #19, #21): `perma`, a
+ * stable link Claude cites without a bookmark's `⚓`; `bookmark`, a named place in the
+ * bookmarks pane. Absent on records from before 0.4.20: they are bookmarks.
+ */
+export type AnchorTier = 'perma' | 'bookmark'
+export const tierOf = (r: { tier?: AnchorTier }): AnchorTier => r.tier ?? 'bookmark'
 
 export type AnchorRecord = {
   sessionId: string
@@ -36,6 +43,7 @@ export type AnchorRecord = {
   label: string
   why?: string
   temporary?: boolean
+  tier?: AnchorTier
   createdAt: number
   updatedAt?: number
   by: AnchorBy
@@ -235,13 +243,15 @@ export function markLabel(label: string, kind: LinkKind, style: MarkerStyle): st
 
 /**
  * Rewrites a text's links so each label carries its kind marker. Only the drawn text
- * changes; hrefs are untouched (so `pressableLinks` still matches them).
+ * changes; hrefs are untouched (so `pressableLinks` still matches them). An anchor that
+ * `isPerma` says is a perma record keeps its plain label: the `⚓` marks bookmarks only.
  */
-export function markLinks(text: string, style: MarkerStyle): string {
+export function markLinks(text: string, style: MarkerStyle, isPerma: (href: string) => boolean = () => false): string {
   if (style === 'off') return text
   let out = ''
   let last = 0
   for (const l of markdownLinks(text)) {
+    if (l.kind === 'anchor' && isPerma(l.href)) continue
     const marked = markLabel(l.label, l.kind, style)
     if (marked === l.label) continue
     out += text.slice(last, l.start) + `[${marked}](${l.href})`

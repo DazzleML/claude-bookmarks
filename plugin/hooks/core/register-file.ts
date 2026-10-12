@@ -44,6 +44,8 @@ export type Mint = {
   why?: string
   words?: string
   temporary?: boolean
+  /** `perma` or `bookmark`; absent means a bookmark. */
+  tier?: AnchorRecord['tier']
   line?: number
   bytes?: [number, number]
   head: string
@@ -77,10 +79,13 @@ export function addOrRelabel(reg: Register, mint: Mint, now: number): AddResult 
       why: mint.why ?? existing.why,
       // A permanent mark stays permanent; a temporary one can be made permanent.
       temporary: existing.temporary && mint.temporary ? true : undefined,
+      // A perma record becomes a bookmark when asked; a bookmark never drops to perma.
+      tier: existing.tier === 'perma' && mint.tier !== 'bookmark' ? 'perma' : undefined,
       updatedAt: now,
       transcript: mint.transcript ?? existing.transcript,
     }
     if (record.temporary === undefined) delete record.temporary
+    if (record.tier === undefined) delete record.tier
     return { register: bump({ ...reg, perma: reg.perma.map(r => (r === existing ? record : r)) }, now), record, added: false }
   }
   const record: AnchorRecord = {
@@ -95,6 +100,7 @@ export function addOrRelabel(reg: Register, mint: Mint, now: number): AddResult 
     label: mint.label,
     ...(mint.why ? { why: mint.why } : {}),
     ...(mint.temporary ? { temporary: true } : {}),
+    ...(mint.tier === 'perma' ? { tier: 'perma' as const } : {}),
     createdAt: now,
     by: mint.by,
     source: mint.source,
@@ -154,6 +160,21 @@ export function share(reg: Register, uuid: string, from: AnchorOwner, to: Anchor
 }
 
 /**
+ * The person takes one of Claude's records as their own (#21, the continuum's `claim`):
+ * the record moves to the person's list in place -- same message, id, label, words,
+ * tier and link -- and `sharedFrom` says it came from Claude. If the person already has
+ * that message, their record stands and Claude's is left as it was.
+ */
+export function claim(reg: Register, uuid: string, now: number): AddResult | { error: string } {
+  const src = findRecord(reg, uuid, 'claude')
+  if (!src) return { error: `no bookmark ${uuid8(uuid)} on Claude's list` }
+  const mine = findRecord(reg, uuid, 'user')
+  if (mine) return { register: reg, record: mine, added: false }
+  const record: AnchorRecord = { ...src, owner: 'user', sharedFrom: 'claude', updatedAt: now }
+  return { register: bump({ ...reg, perma: reg.perma.map(r => (r === src ? record : r)) }, now), record, added: true }
+}
+
+/**
  * Removes a bookmark from one list, on request: the record leaves `perma` and a tombstone
  * says who removed it and when. Nothing is deleted from the file's history of events.
  */
@@ -188,7 +209,7 @@ function bump(reg: Register, now: number): Register {
 const REGISTER_KEYS = ['version', 'sessionId', 'configDir', 'cwd', 'rev', 'updatedAt', 'writer', 'perma', 'tombstones'] as const
 const RECORD_KEYS = [
   'sessionId', 'uuid', 'owner', 'label', 'why', 'words', 'head', 'line', 'bytes', 'role', 'timestamp',
-  'temporary', 'createdAt', 'updatedAt', 'by', 'source', 'sharedFrom', 'transcript',
+  'temporary', 'tier', 'createdAt', 'updatedAt', 'by', 'source', 'sharedFrom', 'transcript',
 ] as const
 
 export function serializeRegister(reg: Register): string {

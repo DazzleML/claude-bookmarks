@@ -25,6 +25,8 @@ export type WorldOptions = {
 export type World = {
   calls: Call[]
   files: Record<string, string>
+  // A file's text by path, whichever slash the test writes.
+  file: (path: string) => string | undefined
   logs: () => string[]
   toasts: () => string[]
   opened: () => unknown[]
@@ -38,7 +40,10 @@ export const BAND_PROPS = { hasSurvey: false, isWorking: false, maxRows: 10, bod
 export function world(on: unknown, options: WorldOptions = {}): World {
   const hook = on as On
   const calls: Call[] = []
-  const files: Record<string, string> = { ...(options.files ?? {}) }
+  // The engine hands hooks the platform's own separators (backslashes on Windows), so
+  // files are keyed with them whichever slash a test wrote.
+  const norm = (p: unknown) => String(p).replace(/\//g, '\\')
+  const files: Record<string, string> = Object.fromEntries(Object.entries(options.files ?? {}).map(([p, t]) => [norm(p), t]))
   const answer = (event: string, value: (input: Record<string, unknown>) => unknown) =>
     hook(event as never, {} as never, (async (_$: unknown, e: Record<string, unknown>) => {
       calls.push({ event, input: e })
@@ -72,10 +77,11 @@ export function world(on: unknown, options: WorldOptions = {}): World {
   answer('ui.selection', () => undefined)
   answer('prompt.read', () => ({ text: options.prompt ?? '', cursor: (options.prompt ?? '').length }))
   answer('session.id', () => options.session ?? '00000000-0000-4000-8000-000000000000')
-  answer('fs.exists', e => typeof e.path === 'string' && e.path in files)
-  answer('fs.read', e => files[String(e.path)] ?? '')
+  answer('session.cwd', () => 'C:/test-project')
+  answer('fs.exists', e => norm(e.path) in files)
+  answer('fs.read', e => files[norm(e.path)] ?? '')
   answer('fs.write', e => {
-    files[String(e.path)] = String(e.text ?? '')
+    files[norm(e.path)] = String(e.text ?? '')
     return undefined
   })
   answer('process.run', () => ({ exitCode: 1, stdout: '', stderr: 'no process in tests', isStdoutTruncated: false }))
@@ -84,6 +90,7 @@ export function world(on: unknown, options: WorldOptions = {}): World {
   return {
     calls,
     files,
+    file: (path: string) => files[norm(path)],
     logs: () => of('ui.log').map(e => String(e.text)),
     toasts: () => of('ui.toast').map(e => String(e.text ?? e.message ?? JSON.stringify(e))),
     opened: () => of('ui.open'),
