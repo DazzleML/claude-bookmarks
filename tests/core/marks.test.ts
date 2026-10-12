@@ -26,5 +26,8 @@ test('the search phrase: openings stripped, whitespace folded, cut at a word nea
   assert.equal(searchPhrase('<pasted_content id="1">pasted  text\nhere</pasted_content>'), 'pasted text here')
   assert.equal(searchPhrase('one two three four five six seven eight nine'), 'one two three four five six')
   assert.equal(searchPhrase('x'.repeat(40)), 'x'.repeat(32))
+  // A space too early (at or before 16) is not a cut point: the raw 32 characters stand
+  // (mutation sweep 2026-10-12: the earlier case's last space was past 16 either way).
+  assert.equal(searchPhrase('abcdefghijklmnop qrstuvwxyzabcdefghij'), 'abcdefghijklmnop qrstuvwxyzabcde')
   assert.equal(searchPhrase('short'), 'short')
 })

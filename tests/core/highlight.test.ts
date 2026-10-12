@@ -52,4 +52,7 @@ test('a reply: bold «a» words, else a quoted line on top collecting the unmatc
   const marks = [['a', { snippet: 'two', head: 'h' }], ['b', { snippet: 'bold *x*', head: 'head b' }], ['c', { head: 'head c' }]] as const
   assert.equal(tagMarksMarkdown('one two three', marks), '> **«b» bold *x*  «c» head c**\n\none **«a» two** three')
   assert.equal(tagMarksMarkdown('one two', [['a', { snippet: 'two', head: 'h' }]]), 'one **«a» two**')
+  // Words that carry markup characters are never bolded in place, even when present: the
+  // quoted line instead (mutation sweep 2026-10-12: the earlier case never had them present).
+  assert.equal(tagMarksMarkdown('see `code` here', [['a', { snippet: '`code`', head: 'h' }]]), '> **«a» `code`**\n\nsee `code` here')
 })
