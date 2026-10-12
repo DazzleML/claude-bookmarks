@@ -31,7 +31,7 @@ The leader is `Ctrl+]`, Claude Code's own `abovePrompt:focus` action bound to on
 
 Install from one place only. Installed from the Anthropic plugin directory and from a marketplace at the same time, the plugin would load twice and draw two bands.
 
-From the directory, use its install flow. From this repository, which is also a marketplace, on Claude Code 2.1.275 or later:
+From the directory, use its install flow. From this repository, which is also a marketplace, on Claude Code 2.1.287 or later:
 
 ```
 /plugin install bookmarks --marketplace DazzleML/claude-bookmarks

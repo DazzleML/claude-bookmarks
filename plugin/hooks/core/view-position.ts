@@ -61,6 +61,32 @@ export function looksLikeRedraw(
   })
 }
 
+// Where a scroll can put the view back, with the least drift. A scroll lands a whole
+// message at the top (`start`) or at the bottom (`end`) of the view, never a row inside
+// it (#32), so returning to "where the view was" is exact only when a message edge sat
+// at a view edge. Three candidates, each with the rows the view would end up off by:
+//   the top message's start      -> off by the rows of it hidden above the view;
+//   the next message's start     -> off by the rows of the top message that showed;
+//   the bottom message's end     -> off by the rows of it hidden below the view.
+// The least drift wins; on a tie the top message's start, then the bottom's end (the
+// bottom of the conversation, where `end` is exactly Ctrl+End). `reports` are the
+// messages on screen, top to bottom. (djdarcy, 2026-10-11: opening and closing a pane
+// should not move the screen; #29.)
+export function pickViewAnchor(
+  reports: readonly ScreenReport[],
+): { id: string; block: 'start' | 'end'; drift: number } | undefined {
+  const top = reports[0]
+  if (!top) return undefined
+  const bottom = reports[reports.length - 1]!
+  const candidates: { id: string; block: 'start' | 'end'; drift: number }[] = [
+    { id: top.id, block: 'start', drift: top.first },
+    { id: bottom.id, block: 'end', drift: Math.max(0, bottom.of - 1 - bottom.last) },
+  ]
+  const next = reports[1]
+  if (next && top.first > 0) candidates.push({ id: next.id, block: 'start', drift: top.last - top.first + 1 })
+  return candidates.reduce((best, c) => (c.drift < best.drift ? c : best))
+}
+
 export function promptNearView(
   prompts: readonly string[],
   visible: readonly VisibleMessage[],

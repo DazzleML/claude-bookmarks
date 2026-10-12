@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { exchangeIndex, looksLikeRedraw, promptNearView, type ScreenReport, type VisibleMessage } from './view-position.ts'
+import { exchangeIndex, looksLikeRedraw, pickViewAnchor, promptNearView, type ScreenReport, type VisibleMessage } from './view-position.ts'
 
 // Five prompts p0..p4, each followed by one reply r0..r4. Order: p_i = i*1000, r_i = i*1000+1.
 const prompts = ['p0', 'p1', 'p2', 'p3', 'p4']
@@ -98,4 +98,25 @@ test('a burst with one cut-off message is a view even if the rest are whole', ()
 
 test('with no previous position nothing is a redraw', () => {
   assert.equal(looksLikeRedraw([rep('m116', 0, 38, 39)], trusted, undefined, exchangeOfLong), false)
+})
+
+test('a view whose top message starts at the top returns to it exactly', () => {
+  assert.deepEqual(pickViewAnchor([rep('m1', 0, 9, 30), rep('m2', 0, 5, 20)]), { id: 'm1', block: 'start', drift: 0 })
+})
+
+test('when little of the top message shows, the next message start drifts least', () => {
+  // 25 rows of m1 are hidden above, 2 show; m2 starts right after.
+  assert.deepEqual(pickViewAnchor([rep('m1', 25, 26, 27), rep('m2', 0, 20, 40)]), { id: 'm2', block: 'start', drift: 2 })
+})
+
+test("when most of the top message shows, its own start drifts least", () => {
+  assert.deepEqual(pickViewAnchor([rep('m1', 2, 26, 27), rep('m2', 0, 3, 40)]), { id: 'm1', block: 'start', drift: 2 })
+})
+
+test('at the bottom of the conversation the last message end is exact', () => {
+  assert.deepEqual(pickViewAnchor([rep('m1', 12, 19, 20), rep('m2', 0, 9, 10)]), { id: 'm2', block: 'end', drift: 0 })
+})
+
+test('no reports, no anchor', () => {
+  assert.equal(pickViewAnchor([]), undefined)
 })

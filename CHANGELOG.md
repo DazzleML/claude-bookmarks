@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-10-12
+
+### Added
+
+- `/bm-config` lists every setting, its value and where it came from. Every value is the default for now; the settings you choose in Claude Code's `/config` come next ([#7](https://github.com/DazzleML/claude-bookmarks/issues/7)).
+
+### Changed
+
+- The prompts list stays open while you type in the input box; only the band's key mode ends. Before, typing closed the list ([#29](https://github.com/DazzleML/claude-bookmarks/issues/29)).
+- The hint the band shows for an unknown key lists every band key, from the same table that decides what each key does, so the two cannot disagree.
+- The `/bm-*` commands meant for diagnosing problems now say so in the command menu, and the prompts pane's title says to type a number.
+- The install instructions name Claude Code 2.1.287 or later, the version the plugin needs, in every place they appear.
+
 ## [0.4.3] - 2026-10-12
 
 ### Changed
@@ -296,7 +309,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.0...v0.4.1

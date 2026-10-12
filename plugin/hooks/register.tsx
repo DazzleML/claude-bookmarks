@@ -1,14 +1,13 @@
-// claude-bookmarks POC -- a throwaway probe, not the product.
+// claude-bookmarks: the plugin's engine adapter.
 //
-// It answers five questions before anything real is built (the DWP's B1-B5):
-//   B1  is a UserMessage row's requestId the transcript uuid session.append reports?
-//   B2  can $.ui.scroll reveal a row that has not been drawn since the mod loaded?
-//   B3  does a typed command count as "the person's own input" for scroll?
-//   B4  does a chord bound to a borrowed engine action press a mod Button?
-//   B5  does a press in a mod pane count as the person's input for scroll?
+// Everything that talks to Claude Code lives here: the render hooks, the panes, the
+// band (the one-line command strip after the leader key), the `/bm-*` commands, the
+// `bookmark` tool, the store and the debug log. The rules themselves are pure modules
+// in core/, each with its tests (`node --test plugin/hooks/core/*.test.ts`), and
+// docs/engine-quirks.md records what the engine does and does not let a plugin do.
 //
-// Every probe reports with $.ui.log (a dim transcript row Claude never reads) or a
-// toast. No command answers with `text`, because that text becomes a row Claude reads.
+// Diagnostics report with $.ui.log (a dim transcript row Claude never reads) or a
+// toast, never as command `text`, because that text becomes a row Claude reads.
 
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
@@ -23,15 +22,25 @@ import {
   addOrRelabel, emptyRegister, exportMarkdown, exportNotesOf, findRecord, listOf, parseRegister, prune, remove, serializeRegister, share,
   type Mint, type Register as BookmarkRegister, type Retention,
 } from './core/register-file'
+import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution, type TranscriptRow } from './core/transcript-lines'
+import { exchangeIndex, looksLikeRedraw, pickViewAnchor, promptNearView } from './core/view-position'
+import { latestBurst, reportTime, type Report } from './core/latest-burst'
+import { CHANNELS, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, type Channel } from './core/debug'
+import { lineHint, route, type Pane } from './core/keys'
+import { afterAction, type Cause } from './core/after-action'
+import { resolve as resolveSettings, type Settings } from './core/settings'
+import { looksLikePrompt, promptTextOf, unwrapQueued } from './core/prompt-rows'
 
 // How long a `temporary` bookmark is kept before it is pruned (to a tombstone). A
 // setting with the archive-retention picker (#7, #10); a constant until then.
 const TEMPORARY_RETENTION: Retention = '30d'
-import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution, type TranscriptRow } from './core/transcript-lines'
-import { exchangeIndex, looksLikeRedraw, promptNearView } from './core/view-position'
-import { latestBurst, reportTime, type Report } from './core/latest-burst'
-import { CHANNELS, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, type Channel } from './core/debug'
-import { looksLikePrompt, promptTextOf, unwrapQueued } from './core/prompt-rows'
+
+// The plugin's settings as they stand. Defaults only until the settings spike
+// (tests/one-offs/thinking/settings-spike/) settles how the person's /config values
+// reach the plugin; the machine layer is then passed to resolveSettings here.
+function currentSettings(): Settings {
+  return resolveSettings().values
+}
 
 const PANE = 'bm-poc'
 
@@ -40,9 +49,10 @@ const PANE = 'bm-poc'
 // borrowed action a handler of its own. Add a build here after re-verifying.
 const VERIFIED_CLIENTS = ['2.1.288', '2.1.289', '2.1.290']
 
-// Engine keybinding actions borrowed for the chord test (B4). Neither should have a
-// handler mounted while the built-in diff mod is enabled; the version check in
-// session.start is how we notice when a new build might have changed that.
+// Engine keybinding actions the chords borrow (docs/engine-quirks.md, "A plugin can't
+// define its own keyboard shortcut"). None should have a handler mounted while the built-in diff mod
+// is enabled; the version check in session.start is how we notice when a new build
+// might have changed that.
 const MARK_ACTION = 'app:toggleDiffNoiseFilter'
 const JUMP_ACTION = 'app:toggleDiffPreSession'
 // A third borrowed action (2026-10-04, user: "ctrl-x p" for the recent-prompts pane,
@@ -416,7 +426,8 @@ type Mark = { uuid: string; head: string; markedAt: number; source?: 'selection'
 type Marks = Record<string, Mark>
 
 const short = (uuid: string) => uuid.slice(0, 8)
-const head = (text: string) => text.replace(/\s+/g, ' ').trim().slice(0, 60)
+// The 60-character head of a message, the same as the tested core helper (it was a copy).
+const head = headOf
 
 // This plugin's own version, from its manifest (the one Claude Code installs by).
 async function pluginVersion($: EngineInterface): Promise<string> {
@@ -1300,13 +1311,19 @@ const READING_BACK_FROM_BOTTOM: 'where-it-was' | 'newest' = 'where-it-was'
 // line shows (at the bottom of the conversation, that is exactly Ctrl+End), else the top
 // message's start. "Back" from the reading position went to the top message's start
 // even from the very bottom, a little above where the person was (djdarcy, 2026-10-07).
+// The candidate with the least drift wins (core/view-position.ts pickViewAnchor): the top
+// message's start, the next message's start, or the bottom message's end (#29).
 async function viewAnchor($: EngineInterface): Promise<{ uuid: string; block: 'start' | 'end' } | undefined> {
   const top = await topOnScreen($)
   if (!top) return undefined
-  const bottom = lastScreenOrder.at(-1)
-  const b = bottom ? onScreenNow.get(bottom) : undefined
-  if (bottom && b && b.last >= b.of - 1) return { uuid: bottom, block: 'end' }
-  return { uuid: top, block: 'start' }
+  const reports = lastScreenOrder.flatMap(id => {
+    const s = onScreenNow.get(id)
+    return s ? [{ id, first: s.first, last: s.last, of: s.of }] : []
+  })
+  const pick = pickViewAnchor(reports)
+  if (!pick) return { uuid: top, block: 'start' }
+  if (pick.drift > 0) log($, `[bm-poc] view anchor ${short(pick.id)} at the ${pick.block}, ${pick.drift} rows off at best`)
+  return { uuid: pick.id, block: pick.block }
 }
 
 // Go to the reading position, noting where we were so the next Ctrl+X Space swaps back.
@@ -1420,7 +1437,8 @@ async function jumpToMark($: EngineInterface, letter: string, probe = false): Pr
 // only until the handler returns; a fire-and-forget `void` lost it, 2026-10-09). So the
 // keys below act directly; the once-per-version probe that used to decide this is gone.
 
-const CMD_HINT = "bm: ' or j + letter (jump)  m + letter (mark)  Space or r (reading)  p + number (prompt)  b (bookmarks)  P + letter (promote)  o / i (back / forward)"
+// Generated from the router's table (core/keys.ts), so every key is named once.
+const CMD_HINT = lineHint()
 
 // The two list-shaped pane modes share the band's number entry (digits, j/k, Enter).
 const listLike = (m: PaneMode | 'idle') => m === 'list' || m === 'bookmarks'
@@ -1443,74 +1461,46 @@ async function runCommandLine($: EngineInterface, typed: string, via: 'input' | 
   if (cmdBusy || typed === '') return
   cmdBusy = true
   try {
-    const first = typed[0]!
     log($, `[bm-poc] band command line ${via}: "${typed}"`)
-
-    if (first === "'" || first === 'j') {
-      if (typed.length === 1) {
-        // The jump pane as the readable list of marks, the band's letter buttons taking
-        // the letter, Enter the reading position: v0.1.7's shape. v0.2.0 waited for the
-        // letter in silence and opened nothing (djdarcy, 2026-10-09: "the panel isn't
-        // opening"). A letter typed fast enough to arrive with the quote still jumps
-        // directly below.
+    // What the keys mean lives in the router's table (core/keys.ts); this performs it.
+    const { operation } = route(typed, { pane: 'none' })
+    switch (operation.op) {
+      case 'wait':
+        return // `P` waits for its letter
+      case 'open':
         await clearCommandLine($)
-        await handOff($, 'jump')
+        if (operation.pane === 'list' || operation.pane === 'bookmarks') await update($, bandNum, () => '')
+        if (operation.pane === 'bookmarks') await update($, bandGroup, () => 0) // start on the person's own bookmarks
+        // The jump pane is the readable list of marks, the band's letter buttons taking the
+        // letter (v0.1.7's shape; djdarcy, 2026-10-09: "the panel isn't opening"). A mark
+        // scrolls back after its highlight (restoreView), so its cancel button is pressed.
+        await handOff($, operation.pane, operation.pane === 'mark' ? 'band-mark-cancel' : undefined)
         return
-      }
-      const letter = typed[1]!
-      await clearCommandLine($)
-      if (!/^[a-z]$/.test(letter)) return void $.ui.toast(CMD_HINT)
-      await jumpToMark($, letter)
-      return
+      case 'jump-mark':
+        await clearCommandLine($)
+        await jumpToMark($, operation.letter)
+        return
+      case 'reading':
+        await clearCommandLine($)
+        await readingToggle($)
+        return
+      case 'promote':
+        await clearCommandLine($)
+        await promoteLetter($, operation.letter)
+        return
+      case 'jumplist':
+        // `<leader> ←` / `→` are wanted too; whether an arrow reaches this field is #23.
+        await clearCommandLine($)
+        await jumplistMove($, operation.dir)
+        return
+      case 'hint':
+        await clearCommandLine($)
+        $.ui.toast(operation.reason)
+        return
+      default:
+        await clearCommandLine($)
+        $.ui.toast(CMD_HINT)
     }
-
-    if (first === ' ' || first === 'r') {
-      await clearCommandLine($)
-      await readingToggle($)
-      return
-    }
-
-    if (first === 'm') {
-      // A mark scrolls back after its highlight (restoreView), so it is pressed too.
-      await clearCommandLine($)
-      await handOff($, 'mark', 'band-mark-cancel')
-      return
-    }
-
-    if (first === 'p') {
-      await clearCommandLine($)
-      await update($, bandNum, () => '')
-      await handOff($, 'list')
-      return
-    }
-
-    // Bookmarks: `b` lists them (number + Enter jumps); `P` + a letter promotes that mark
-    // into a bookmark (the letter stays).
-    if (first === 'b') {
-      await clearCommandLine($)
-      await update($, bandNum, () => '')
-      await update($, bandGroup, () => 0) // start on the person's own bookmarks
-      await handOff($, 'bookmarks')
-      return
-    }
-    if (first === 'P') {
-      if (typed.length === 1) return // wait for the letter
-      const letter = typed[1]!
-      await clearCommandLine($)
-      if (!/^[a-z`]$/.test(letter)) return void $.ui.toast('P then a mark letter (a-z) promotes that mark into a bookmark')
-      await promoteLetter($, letter)
-      return
-    }
-
-    // The jumplist: `o` back, `i` forward (vim). `<leader> ←` / `→` are wanted too; whether
-    // an arrow reaches this field at all is the open probe (the log above shows what typed).
-    if (first === 'o' || first === 'i') {
-      await clearCommandLine($)
-      await jumplistMove($, first === 'o' ? -1 : 1)
-      return
-    }
-    await clearCommandLine($)
-    $.ui.toast(CMD_HINT)
   } finally {
     cmdBusy = false
   }
@@ -1607,7 +1597,7 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   log($, `[bm-poc] B4: ${action.startsWith('command:') ? `leader ran ${action}` : `chord for ${action} pressed the band Button`}`)
   await diagState($, `${mode} (before open)`)
   await update($, paneMode, () => mode)
-  const title = mode === 'mark' ? 'mark: press a-z' : mode === 'jump' ? 'jump: press a-z' : mode === 'bookmarks' ? 'bookmarks: type #' : 'prompts: press 1-9'
+  const title = mode === 'mark' ? 'mark: press a-z' : mode === 'jump' ? 'jump: press a-z' : mode === 'bookmarks' ? 'bookmarks: type #' : 'prompts: type #'
   note(`pane open (${mode}, focus)`)
   // Narrow on purpose (djdarcy, 2026-10-04: "collapse the panel so it has almost no
   // width"): it only has to take one letter. Both sizes are requests; a size the
@@ -1772,7 +1762,7 @@ async function jumpToPromptNumber($: EngineInterface, typed: string, via: string
     return
   }
   await jumpTo($, target.uuid, via, `prompt #${n}`, target.head)
-  await closePane($)
+  await settle($, 'list', 'jump')
 }
 
 // When a typed prompt number jumps (a setting, #7): 'enter' waits for Enter, so the
@@ -1820,7 +1810,7 @@ async function jumpToBookmarkNumber($: EngineInterface, typed: string, via: stri
     return
   }
   await arriveAtBookmark($, target, via)
-  await closePane($)
+  await settle($, 'bookmarks', 'jump')
 }
 
 // Promote one of the person's marks (a letter, or ` for the reading position) into a
@@ -1911,6 +1901,17 @@ async function watchBand($: EngineInterface, mode: PaneMode) {
   }
 }
 
+// After an action, close the pane or end only the band's key mode, as the after-action
+// policy says (core/after-action.ts): the operation's need, then the person's setting,
+// then the default. `focus: 'input'` is what is wanted after most actions; the engine
+// cannot hand the keyboard back yet (#24, docs/engine-quirks.md), so nothing more is done.
+async function settle($: EngineInterface, pane: Pane, cause: Cause, needsMore = false) {
+  const outcome = afterAction({ pane, cause, needsMore, settings: currentSettings() })
+  if (outcome.pane === 'close') await closePane($)
+  else if (outcome.band === 'end') await endBandMode($)
+  return outcome
+}
+
 async function endBandMode($: EngineInterface) {
   bandTimer?.cancel()
   bandTimer = undefined
@@ -1945,14 +1946,15 @@ async function closePane($: EngineInterface) {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const commands: [string, string][] = [
-      ['bm-ids', 'Probe B1: compare appended prompt uuids with rendered ids'],
-      ['bm-jump', 'Probe B2/B3: scroll to a prompt (first | last | N | r<N> | uuid)'],
-      ['bm-pane', 'Probe B5: open a pane of prompts; press 1-9 to jump'],
-      ['bm-marks', 'List the marks set with the chord test'],
+      ['bm-ids', 'Diagnostics: compare captured prompt ids with the ids drawn on screen'],
+      ['bm-jump', 'Diagnostics: scroll to a prompt (first | last | N | r<N> | uuid)'],
+      ['bm-pane', 'Diagnostics: open the prompts pane without the band; type a number and Enter to jump'],
+      ['bm-marks', 'List the marks set in this conversation'],
       ['bm-delmarks', 'Delete marks: /bm-delmarks a b (letters), or /bm-delmarks all'],
-      ['bm-env', 'Show version, session id and what the probe has captured'],
-      ['bm-timeline', 'Show the last N mod events (draws, appends, pane, store, toast, scroll)'],
-      ['bm-sel', 'Selection POC: show what $.ui.selection() returns for your mouse selection'],
+      ['bm-env', 'Show the version, the session id and what has been captured'],
+      ['bm-config', 'Show every setting, its value and where it came from'],
+      ['bm-timeline', 'Diagnostics: show the last N plugin events (draws, appends, pane, store, toast, scroll)'],
+      ['bm-sel', 'Diagnostics: show what Claude Code reports for your mouse selection'],
       ['bm-pin', 'Pin or unpin prompt #N in the prompts pane (no number: the newest)'],
       // Typed commands for the same actions as the band leader (they also work as
       // `command:<name>` keybindings, 2.1.290). A pane they open takes the keyboard from
@@ -2054,9 +2056,12 @@ export const register: Register = on => {
       log($, `[diag] edit ${k}: draft ${e.text.length} -> +${e.inputText.length}, ${diag.lastEditAt ? now - diag.lastEditAt : '-'} ms since last`)
     }
     diag.lastEditAt = now
-    if ((await read($, bandMode)) !== 'idle') {
-      log($, '[bm-poc] prompt edited while the band waited for a key: cancelled')
-      await closePane($)
+    const mode = await read($, bandMode)
+    if (mode !== 'idle') {
+      // A list may stay open beside the input box (paneWhileTyping); the mark and jump
+      // panes were waiting for a letter the person has stopped typing.
+      const outcome = await settle($, mode, 'prompt-edit')
+      log($, `[bm-poc] prompt edited while the band waited for a key: band ended, pane ${outcome.pane === 'close' ? 'closed' : 'kept'}`)
     }
     return next(e)
   })
@@ -2453,7 +2458,7 @@ export const register: Register = on => {
 
   on('command.run', { command: 'bm-pane' }, async $ => {
     await update($, paneMode, () => 'list')
-    await $.ui.open({ id: PANE, title: 'bm-poc', focus: true, closeOnEscape: true })
+    await $.ui.open({ id: PANE, title: 'prompts: type #', focus: true, closeOnEscape: true })
     // The slash-command route to a focused pane (typed, or a `command:bm-pane`
     // keybinding, 2.1.290): record whether the pane actually got the keyboard.
     log($, `[bm-poc] /bm-pane opened; pane has the keyboard: ${(await paneFocused($)) ? 'yes' : 'NO'}`)
@@ -2685,6 +2690,18 @@ export const register: Register = on => {
     return {}
   })
 
+  // Every setting, its value and where it came from (default, the machine's /config, this
+  // conversation), plus any value that was given but did not fit (core/settings.ts).
+  on('command.run', { command: 'bm-config' }, async $ => {
+    const r = resolveSettings()
+    const rows = (Object.keys(r.values) as (keyof Settings)[]).map(k => `${k}=${JSON.stringify(r.values[k])} (${r.sources[k]})`)
+    log($, `[bm-poc] settings: ${rows.join('; ')}`, { always: true })
+    if (r.rejected.length || r.unknown.length) {
+      log($, `[bm-poc] settings not applied: ${[...r.rejected.map(x => `${x} (does not fit)`), ...r.unknown.map(x => `${x} (no such setting)`)].join('; ')}`, { always: true })
+    }
+    return {}
+  })
+
   on('command.run', { command: 'bm-env' }, async $ => {
     const v = await $.session.version()
     const list = await allRows($)
@@ -2712,40 +2729,11 @@ export const register: Register = on => {
     return {}
   })
 
-  // Experiment (djdarcy, 2026-10-04): the bar on the hint line under the prompt instead
-  // of the band above it, to free the band's row. Its two Buttons are what the chords
-  // press; whether a chord reaches a Button on the hint line is what this tests.
-  // Tried 2026-10-04 and reverted: the line sat under djdarcy's status line, below
-  // the prompt; it reads better above it. Whether a chord reaches a Button on the
-  // hint line was not tested (no chord fired while it was there).
-  const BAR_SITE = 'band' as 'band' | 'hint'
-
-  on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
-    if (BAR_SITE !== 'hint') return next(e)
-    const { Box, Button, Text } = $.ui.resolve(e)
-    const theirs = await next(e)
-    const last = await read($, shown)
-    return (
-      <Box flexDirection="row" columnGap={1}>
-        {theirs}
-        <Text dimColor>·</Text>
-        <Button key="chord-mark" label="mark" plain dimColor action={MARK_ACTION} onPress={() => openFor($, 'mark', MARK_ACTION)} />
-        <Button key="chord-jump" label="jump" plain dimColor action={JUMP_ACTION} onPress={() => openFor($, 'jump', JUMP_ACTION)} />
-        <Button key="chord-prompts" label="prompts" plain dimColor action={PROMPTS_ACTION} onPress={() => openFor($, 'list', PROMPTS_ACTION)} />
-        <Button key="chord-read" label="read" plain dimColor action={READING_ACTION} onPress={() => readingToggle($)} />
-        {last && (
-          <Text wrap="truncate-end">
-            <Text bold>{last.letter}</Text> ▸ {last.text}
-          </Text>
-        )}
-      </Box>
-    )
-  })
-
-  // B4: the band carries two Buttons named after borrowed engine actions. Bound to
-  // chords in keybindings.json, the chords should press them from the prompt.
+  // The band, above the prompt: its Buttons carry the borrowed engine actions, so the
+  // chords bound to those actions in keybindings.json press them from the input box.
+  // (A copy on the hint line under the prompt was tried on 2026-10-04 and removed: it
+  // sat below the status line, and the band reads better above the prompt.)
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (BAR_SITE !== 'band') return next(e)
     const elements = $.ui.resolve(e)
     const { Box, Button, Text } = elements
     const Input = 'Input' in elements ? elements.Input : undefined
@@ -2920,7 +2908,7 @@ export const register: Register = on => {
         const dim = !drawnFour.has(firstFour(r.uuid)) && !isHere
         const press = async () => {
           await jumpTo($, r.uuid, 'prompts pane', `prompt #${r.n}`, r.head)
-          await closePane($)
+          await settle($, 'list', 'row-press')
         }
         if (!pinSet.has(r.uuid) && !isHere) {
           return <Button key={`${group}-${r.uuid}`} label={`${pointer(r.n)}${numberLabel(r.n)}${r.head}`} plain dimColor={dim && r.n !== targetN} onPress={press} />
@@ -3024,7 +3012,7 @@ export const register: Register = on => {
                 dimColor={dim}
                 onPress={async () => {
                   await arriveAtBookmark($, r, 'bookmarks pane')
-                  await closePane($)
+                  await settle($, 'bookmarks', 'row-press')
                 }}
               />
             </Box>

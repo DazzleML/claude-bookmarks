@@ -29,7 +29,7 @@ A long Claude Code conversation is hard to move around in. The answer you need i
 
 ## Quick Start
 
-One command installs it on Claude Code 2.1.275 or later, since this repository is also a marketplace:
+One command installs it on Claude Code 2.1.287 or later, since this repository is also a marketplace:
 
 ```
 /plugin install bookmarks --marketplace DazzleML/claude-bookmarks
