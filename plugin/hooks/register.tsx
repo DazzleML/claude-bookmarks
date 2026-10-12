@@ -39,6 +39,7 @@ import { DEBUG_USAGE, configListedLine, dccLine, diagLine, idsReport, jumpTarget
 import { colorSplit, plainMarkdown, snippetOf, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/highlight'
 import { ScreenModel } from './core/screen-model'
 import { marksShowing, searchPhrase, type Mark, type Marks } from './core/marks'
+import { age, bookmarkWho, drawnFourOf, foldedLabel, footnoteDisplay, footnotesByPrompt, groupHeader, numberLabel as numberLabelAt, numberNewestFirst, numberWidth, pinnedRowsOf, pointerFor, unreached } from './core/list-model'
 import { BOOKMARK_TOOL, answer as toolAnswer, brief as briefRow, describe as describeRecord, listActedOn, listName, parseToolInput, tierFor } from './core/bookmark-tool'
 import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptList, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, transcriptGuess, type PromptRef } from './core/prompt-store'
 
@@ -3026,24 +3027,19 @@ export const register: Register = (on, options) => {
       // typed can't become a larger prompt number (with 25 prompts, `3` jumps, `2`
       // waits for 2x or Enter). A hotkey is one character, so it can't do this.
       const all = await prompts($)
-      const numbered = all.map((r, i) => ({ ...r, n: i + 1 })).reverse()
-      // Footnotes (#33) under their prompt, N.k, in the footnote role: folded behind an
-      // ellipsis row (`.` or a press unfolds), shown, or hidden, by the `footnotes`
-      // setting; 0.k (before the first prompt) at the very bottom.
+      const numbered = numberNewestFirst(all)
+      // The list's model (numbering, footnotes under their prompt, the pinned group, the
+      // pointer, the dim rule): core/list-model.ts. The rows are drawn here.
       const kept = await keptFootnotes($)
-      const nums = numberFootnotes(all.map(p => p.uuid), kept)
-      const byPrompt = new Map<number, { f: FootnoteRef; k: number }[]>()
-      kept.forEach((f, i) => {
-        const at = nums[i]
-        if (at) byPrompt.set(at.n, [...(byPrompt.get(at.n) ?? []), { f, k: at.k }])
-      })
+      const byPrompt = footnotesByPrompt(all.map(p => p.uuid), kept)
       const footnoteMode = currentSettings().footnotes
       const footnoteRows = (n: number) => {
         const list = byPrompt.get(n)
-        if (!list || footnoteMode === 'hidden') return []
-        if (footnoteMode === 'folded' && !unfoldedFootnotes.has(n)) {
+        const display = footnoteDisplay(footnoteMode, !!list, unfoldedFootnotes.has(n))
+        if (!list || display === 'none') return []
+        if (display === 'folded') {
           return [
-            <Button key={`fn-fold-${n}`} label={`      … ${list.length} footnote${list.length > 1 ? 's' : ''}`} plain {...buttonStyle('footnote')}
+            <Button key={`fn-fold-${n}`} label={foldedLabel(list.length)} plain {...buttonStyle('footnote')}
               onPress={async () => { unfoldedFootnotes.add(n); await update($, viewRev, v => v + 1) }} />,
           ]
         }
@@ -3056,23 +3052,20 @@ export const register: Register = (on, options) => {
         ))
         // Folded by default and opened by hand: a row to fold them again (djdarcy,
         // 2026-10-12: "a way to "recollapse" our "footnotes" ... after we open them").
-        if (footnoteMode !== 'folded') return rows
+        if (display === 'open') return rows
         return [
           ...rows,
           <Button key={`fn-refold-${n}`} label="      ▴ fold" plain {...buttonStyle('footnote')}
             onPress={async () => { unfoldedFootnotes.delete(n); await update($, viewRev, v => v + 1) }} />,
         ]
       }
-      // `21) text`, numbers right-aligned so the text lines up (djdarcy, 2026-10-04,
-      // over `#21`; also offered `(21) ` and `21| `). One place to change it.
-      const width = String(all.length).length
-      const numberLabel = (n: number) => `${String(n).padStart(width)}) `
+      const width = numberWidth(all.length)
+      const numberLabel = (n: number) => numberLabelAt(n, width)
       const go = (typed: string) => jumpToPromptNumber($, typed, 'prompts pane')
       // Pinned prompts: listed first, in the order pinned, and starred in the full list.
       await read($, pinsRev) // read so a pin toggle redraws the pane
       await read($, viewRev) // and so a scroll that moves the nearest prompt redraws it
-      // Drawn ids share a uuid's first four groups (see promptHere); compare dimming by those.
-      const drawnFour = new Set([...rendered.keys()].map(firstFour))
+      const drawnFour = drawnFourOf(rendered.keys())
       const pinIds = await loadPins($)
       const byUuid = new Map(numbered.map(r => [r.uuid, r]))
       // The filter (#28): only the prompts matching `/words` in the field; numbers kept.
@@ -3080,15 +3073,12 @@ export const register: Register = (on, options) => {
       const filtered = filterPrompts(numbered, paneFilter, r => texts.get(r.uuid) ?? r.head)
       const listed = new Set(filtered.shown.map(r => r.uuid))
       const matchLine = matchLegend(filtered.shown.length, filtered.of, paneFilter)
-      const pinnedRows = pinIds.map(u => byUuid.get(u)).filter((r): r is (typeof numbered)[number] => !!r && listed.has(r.uuid))
+      const pinnedRows = pinnedRowsOf(pinIds, byUuid, listed)
       const pinSet = new Set(pinIds)
       type NumberedPrompt = (typeof numbered)[number]
-      // Digits typed in the band (it holds the keyboard; the pane can't take it) show
-      // here too: in the `#` field, and as a ▶ on the prompt they name (djdarcy,
-      // 2026-10-07: "it would be nice if the number was entered into the panel").
       const fromBand = (await read($, bandMode)) === 'list' ? await read($, bandNum) : undefined
       const targetN = fromBand ? Number(fromBand) : undefined
-      const pointer = (n: number) => (fromBand === undefined ? '' : n === targetN ? '▶' : ' ')
+      const pointer = pointerFor(fromBand, targetN)
       // The prompt nearest the view, drawn with its number in yellow (djdarcy, 2026-10-11:
       // "so the user knows roughly where they are" and can read what they were thinking
       // above and below). Redrawn on every render, so it follows the view while the pane
@@ -3115,10 +3105,8 @@ export const register: Register = (on, options) => {
         attempt(0)
       }
       const promptRow = (r: NumberedPrompt, group: string) => {
-        // Dim: not drawn since the mod loaded, so possibly not reachable by a jump
-        // (before a compaction). A hint only: one not yet scrolled to is dim too.
         const isHere = r.uuid === here
-        const dim = !drawnFour.has(firstFour(r.uuid)) && !isHere
+        const dim = unreached(drawnFour, r.uuid) && !isHere
         const press = async () => {
           await jumpTo($, r.uuid, 'prompts pane', `prompt #${r.n}`, r.head)
           await settle($, 'list', 'row-press')
@@ -3195,32 +3183,21 @@ export const register: Register = (on, options) => {
       // so a number stays good), listed newest first like the prompts. Digits typed in
       // the band show in the `#` field and as a ▶; Enter jumps and highlights the words.
       const all = await bookmarkList($)
-      const numbered = all.map((r, i) => ({ ...r, n: i + 1 })).reverse()
-      const width = String(all.length).length
+      const numbered = numberNewestFirst(all)
+      const width = numberWidth(all.length)
       const fromBand = (await read($, bandMode)) === 'bookmarks' ? await read($, bandNum) : undefined
       const targetN = fromBand ? Number(fromBand) : undefined
-      const pointer = (n: number) => (fromBand === undefined ? '' : n === targetN ? '▶' : ' ')
+      const pointer = pointerFor(fromBand, targetN)
       const go = (typed: string) => jumpToBookmarkNumber($, typed, 'bookmarks pane')
       const now = Date.now()
-      const age = (t: number) => {
-        const m = Math.round((now - t) / 60_000)
-        return m < 60 ? `${m}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`
-      }
       // One group at a time, one numbering across all of them. The band's h/l cycle the
       // group; the header shows where you are.
       const groupIndex = await read($, bandGroup)
       const group = BOOKMARK_GROUPS[groupIndex] ?? BOOKMARK_GROUPS[0]!
       const inGroup = (g: (typeof BOOKMARK_GROUPS)[number]) => (g.owner === 'all' ? numbered : numbered.filter(r => ownerOf(r) === g.owner))
       const shownRows = inGroup(group)
-      // The group tabs with their counts, the active one in brackets (styled like the
-      // prompts pane's pinned group: a coloured marker beside a plain Button, since a
-      // Button's label takes no colour at rest).
-      const header = BOOKMARK_GROUPS.map(g => (g === group ? `[${g.title} ${inGroup(g).length}]` : `${g.title} ${inGroup(g).length}`)).join('  ')
-      const who = (r: (typeof numbered)[number]) => {
-        const said = r.role ? (r.role === 'user' ? 'you said it' : 'Claude said it') : ''
-        const minted = ownerOf(r) === 'claude' ? "Claude's" : r.sharedFrom ? 'shared by Claude' : r.source === 'promote' ? 'promoted' : 'yours'
-        return [age(r.createdAt), said, minted, r.temporary ? 'temporary' : ''].filter(Boolean).join(' · ')
-      }
+      const header = groupHeader(BOOKMARK_GROUPS, group, g => inGroup(g).length)
+      const who = (r: (typeof numbered)[number]) => bookmarkWho(r, now)
       const row = (r: (typeof numbered)[number]) => {
         const dim = !rendered.has(r.uuid) && r.n !== targetN
         return (
