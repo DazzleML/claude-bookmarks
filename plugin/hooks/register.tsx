@@ -30,7 +30,7 @@ import { lineHint, linePlaceholder, listHint, route, type Pane } from './core/ke
 import { afterAction, type Cause } from './core/after-action'
 import { resolve as resolveSettings, type Settings } from './core/settings'
 import { looksLikePrompt, promptTextOf, unwrapQueued } from './core/prompt-rows'
-import { findByMessage, firstFour, sameMessage } from './core/message-id'
+import { byFirstFour, findByMessage, firstFour, sameMessage } from './core/message-id'
 
 // How long a `temporary` bookmark is kept before it is pruned (to a tombstone). A
 // setting with the archive-retention picker (#7, #10); a constant until then.
@@ -1185,8 +1185,7 @@ async function promptHere($: EngineInterface): Promise<string | undefined> {
   // groups and differs in the last (measured 2026-10-11: 5 on screen, 0 placed by exact
   // id), the same relation marksOnRow() and sameEntry() already allow for. Compare by
   // the first four groups throughout.
-  const byFour = new Map<string, number>()
-  for (const [u, o] of order) byFour.set(firstFour(u), o)
+  const byFour = byFirstFour(order)
   // Each on-screen message with how many of its lines show, so the exchange that fills
   // the screen wins, not the prompt that happens to peek in at the bottom.
   // A reply streaming in is reported as freshly drawn at every growth, so while the
@@ -1265,9 +1264,7 @@ function noteViewMoved($: EngineInterface) {
       if (here === lastHere) return
       // Diagnostic (2026-10-11): the yellow row flipped between #295 and #34 within one
       // screen; list what was on screen and where each was placed.
-      const order = await conversationOrder($)
-      const byFour = new Map<string, number>()
-      for (const [u, o] of order) byFour.set(firstFour(u), o)
+      const byFour = byFirstFour(await conversationOrder($))
       const seen = lastScreenOrder
         .map(id => {
           const s = onScreenNow.get(id)
@@ -2370,9 +2367,9 @@ export const register: Register = on => {
       if (ids.some(id => rendered.get(id) === r.head)) return 'text '
       return '-----'
     }
-    const shown = list.slice(-12)
-    shown.forEach((r, i) => {
-      const n = list.length - shown.length + i + 1
+    const recent = list.slice(-12)
+    recent.forEach((r, i) => {
+      const n = list.length - recent.length + i + 1
       log($, `[bm]  #${n} ${short(r.uuid)} ${drawnAs(r)} ${r.head}`)
     })
     strays.slice(0, 20).forEach(id => log($, `[bm]  drawn, not appended: ${id} ${rendered.get(id)}`))

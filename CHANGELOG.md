@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.10] - 2026-10-12
+
+### Changed
+
+- Internal tidy: one tested helper places a message drawn on screen in the conversation's order (it was written out twice). No visible change.
+
 ## [0.4.9] - 2026-10-12
 
 ### Fixed
@@ -340,7 +346,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.9...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.10...HEAD
+[0.4.10]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.9...v0.4.10
 [0.4.9]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.8...v0.4.9
 [0.4.8]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.7...v0.4.8
 [0.4.7]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.6...v0.4.7

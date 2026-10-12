@@ -12,6 +12,13 @@ export const firstFour = (id: string): string => id.split('-').slice(0, 4).join(
 /** Whether two ids name the same message (a stored uuid, a drawn id, or one of each). */
 export const sameMessage = (a: string, b: string): boolean => firstFour(a) === firstFour(b)
 
+/** A position map keyed by first four groups, so a drawn id finds its stored message's place. */
+export function byFirstFour(order: ReadonlyMap<string, number>): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const [u, o] of order) out.set(firstFour(u), o)
+  return out
+}
+
 /** The item for a message: an exact id match first, else the first with the same first four groups. */
 export function findByMessage<T extends { uuid: string }>(list: readonly T[], id: string): T | undefined {
   return list.find(r => r.uuid === id) ?? list.find(r => sameMessage(r.uuid, id))

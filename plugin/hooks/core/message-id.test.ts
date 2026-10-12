@@ -1,6 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { findByMessage, firstFour, sameMessage } from './message-id.ts'
+import { byFirstFour, findByMessage, firstFour, sameMessage } from './message-id.ts'
+
+test('a position map keyed by first four groups finds a drawn id', () => {
+  const m = byFirstFour(new Map([['70f2a222-23f8-4828-b57e-837f3571b5cf', 324000]]))
+  assert.equal(m.get(firstFour('70f2a222-23f8-4828-b57e-000000000000')), 324000)
+})
 
 const stored = '70f2a222-23f8-4828-b57e-837f3571b5cf'
 const drawn = '70f2a222-23f8-4828-b57e-000000000000'
