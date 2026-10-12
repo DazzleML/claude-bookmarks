@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.13] - 2026-10-12
+
+### Changed
+
+- Internal tidy: when the band loses the keyboard (a click in the input box), the same after-action rule as everywhere else decides whether the pane stays. With the default settings a list stays open and the mark and jump panes close, as before.
+
 ## [0.4.12] - 2026-10-12
 
 ### Changed
