@@ -249,6 +249,22 @@ Rows drawn soon after sending can carry ids that differ from the saved message i
 
 A command run from a key (a `command:` binding) is drawn for a moment under a `placeholder…` id. The plugin ignores those ids when it notes what is on screen; otherwise "where you were" pointed at a message that vanished a moment later.
 
+### Engine calls stay in the hooks module's own file — Limit
+
+`claude plugin validate` follows `$` only into functions declared in the same file as the hooks, never across an import, and wants every engine call spelled `$.noun.event(...)` at its call site. Moving the debug log into `engine/debug-log.ts` with `$` passed in failed validation (measured 2026-10-12, Claude Code 2.1.296): "$ is passed to "log", imported from "./engine/debug-log": $ is followed only into a function declared in this same file, never across an import". So `register.tsx` keeps every function that touches the engine; what can leave it is code that does not take `$`: pure rules (`core/`), and drawing helpers that take the resolved elements and plain data.
+
+### Testing the plugin with Claude Code's own test kit — Workaround
+
+`claude plugin test plugin` runs every `*.test.ts` under the plugin folder with `claude-code/testing`: the plugin is loaded by the engine's own host, a test mounts a component (`$.ui.mount` with `AbovePrompt`, `Pane`, ...), reads what it drew, types into an `Input`, presses a `Button`, runs a command (`$.command.run`), and passes `userConfig` values (`test(name, { options }, body)`). The plugin's kit tests live in `plugin/tests/`; the pure core's `node:test` suites live in `tests/core/`, because the kit refuses any import but the plugin's own files and `claude-code` (measured 2026-10-12, Claude Code 2.1.296: every `node:test` file failed to load).
+
+What a test has to supply, learned the same day:
+
+- Every engine call the plugin makes needs an answer beneath it, or the call fails with "no implementation for <event>". `plugin/tests/harness.ts` answers them from memory (store, env, clock through the kit's `mock`; files, processes, the prompt box, panes and the log by hand) and records each call, so a test can never reach the real disk or a process.
+- The engine's own drawing beneath a render hook (`next(e)`) is the test's to supply: an empty `Box` from `$.ui.resolve(e)` serves.
+- Most answers are `{ value }`; `ui.focus` and `ui.scroll` answer the result itself (`{}` or `{ deny }`).
+- A plugin's own `$.ui.focus` (moving the band's focus ring onto a button) is not routed to the test's hooks: it fails with "no implementation for ui.focus" whatever the test registers. The plugin's state has changed by then, so a test checks what was drawn and lets that call throw.
+- The kit has no snapshot matcher and a test cannot read files, so the goldens are written inline.
+
 ## Patched builds: trying the proper fix early
 
 Some of these limits reside in Claude Code code that no setting reaches. For those, we also write the proper fix as a patch to our own local copy of Claude Code, using a separate patch tool we're developing, `dcc-patcher` ([dazzle-claude-code-patcher](https://github.com/DazzleML/dazzle-claude-code-patcher); Windows-first, now on PyPi). It applies structural patches to the native `claude.exe` and writes a patched copy beside the original. It ships patch definitions only, never patched binaries or Anthropic's code. Its first patch lets a resumed session scroll back past its compactions, the fix described under [Scrolling and history](#scrolling-and-history).

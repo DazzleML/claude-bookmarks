@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.16] - 2026-10-12
+
+### Added
+
+- Tests that run the plugin inside Claude Code's own test kit (`claude plugin test plugin`): the band at rest, `p` opening the prompts pane with the band taking a number, the pane's rows, and `/bm-config`. They draw exactly what the plugin draws and type into the band as a person does, so a restructuring of the plugin cannot change what you see without a failing test. A small harness answers every call the plugin makes to Claude Code from memory, so the tests never touch your files or start a process.
+- `docs/engine-quirks.md`: what the test kit can drive, and that every call to Claude Code has to stay in the plugin's main file (the validator follows them nowhere else).
+
 ## [0.4.15] - 2026-10-12
 
 ### Changed
@@ -377,7 +384,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.15...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.16...HEAD
+[0.4.16]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.15...v0.4.16
 [0.4.15]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.14...v0.4.15
 [0.4.14]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.13...v0.4.14
 [0.4.13]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.12...v0.4.13

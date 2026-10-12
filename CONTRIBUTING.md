@@ -27,6 +27,7 @@ claude plugin validate ./plugin    # manifest + hooks module, as Claude Code rea
 claude plugin validate .           # the repository as a marketplace (.claude-plugin/marketplace.json)
 npx tsc -p plugin --noEmit         # type-check the mod against the engine's generated types
 node --test tests/core/*.test.ts   # the pure core; Node 22.18+ strips the types itself (older: add --experimental-strip-types)
+claude plugin test plugin          # the plugin in Claude Code's test kit: plugin/tests/ (the band, the panes, commands)
 python -m pytest tests/ -v         # version.py and plugin.json stay in step
 ```
 
