@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.33] - 2026-10-12
+
+### Changed
+
+- Internal, no visible change: the first move of the `register.tsx` split. The bounded line rings behind the debug log, the screen log and the event timeline, what a reload does with the lines a file already holds, and the log-echo policy (forced, chosen, default) now live in `core/log-ring.ts` with their own tests; `register.tsx` keeps only the file and store calls.
+
 ## [0.4.32] - 2026-10-12
 
 ### Fixed
@@ -517,7 +523,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.32...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.33...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

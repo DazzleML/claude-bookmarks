@@ -35,6 +35,7 @@ import { filterPrompts, matchLegend } from './core/filter'
 import { pruneStore, type Seen } from './core/store-prune'
 import { footnoteOf, looksLikePrompt, numberFootnotes, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompt-rows'
 import { byFirstFour, findByMessage, firstFour, sameMessage } from './core/message-id'
+import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFile, stamped, type EchoPolicy } from './core/log-ring'
 
 // How long a `temporary` bookmark is kept before it is pruned (to a tombstone). A
 // setting with the archive-retention picker (#7, #10); a constant until then.
@@ -280,8 +281,7 @@ function noteOnScreen(requestId: string, onScreen: { first: number; last: number
 // lined up against what Claude Code actually sent (it found the 0.4.1 tool-row bug;
 // tests/one-offs/thinking/screen-reports/analyse_screen_log.py reads it). Off unless
 // `/bm-debug enable screen`.
-const SCREEN_LINES = 6000
-const screenLines: string[] = []
+const screenLines = new Ring<string>(6000)
 let screenFlushPending = false
 let screenLoaded = false
 function rawScreen($: EngineInterface, component: string, requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
@@ -289,7 +289,6 @@ function rawScreen($: EngineInterface, component: string, requestId: string, onS
   if (!channelsOn.has('screen')) return
   const range = onScreen ? `${onScreen.first}-${onScreen.last}/${onScreen.of}` : onScreen === null ? 'null' : 'absent'
   screenLines.push(`${clock(Date.now())} ${component} ${requestId} ${range}`)
-  if (screenLines.length > SCREEN_LINES) screenLines.splice(0, screenLines.length - SCREEN_LINES)
   if (screenFlushPending) return
   screenFlushPending = true
   $.clock.after(500, () => {
@@ -300,13 +299,12 @@ function rawScreen($: EngineInterface, component: string, requestId: string, onS
 async function flushScreen($: EngineInterface) {
   if (logPath === undefined) await flushLog($)
   if (!logPath) return
-  const path = logPath.replace(/\.log$/, '.screen.log')
+  const path = screenFile(logPath)
   if (!screenLoaded) {
     screenLoaded = true
-    if (await $.fs.exists(path)) screenLines.unshift(...(await $.fs.read(path)).split('\n').filter(l => l.trim()), '--- reload ---')
-    if (screenLines.length > SCREEN_LINES) screenLines.splice(0, screenLines.length - SCREEN_LINES)
+    if (await $.fs.exists(path)) screenLines.prepend([...(await $.fs.read(path)).split('\n').filter(l => l.trim()), '--- reload ---'])
   }
-  await $.fs.write(path, screenLines.join('\n') + '\n')
+  await $.fs.write(path, screenLines.items.join('\n') + '\n')
 }
 
 // The other transcript rows (tool calls and results, tool groups, command output, the
@@ -337,18 +335,16 @@ function freshOnScreen(): string[] {
 // A timeline of what the mod saw and did, so a drawn-id mismatch can be lined up
 // against the pane, store and toast activity just before it. Module-level: a reload
 // starts it over, the same as `rendered`.
-const timeline: { t: number; what: string }[] = []
+const timeline = new Ring<{ t: number; what: string }>(400)
 function note(what: string) {
   timeline.push({ t: Date.now(), what })
-  if (timeline.length > 400) timeline.shift()
 }
 // The [bm] log lines, also written to <user dir>/bookmarks/debug/<session>.log:
 // $.ui.log rows are only drawn, so a session that reads files (Claude, while
 // developing this) cannot see them. Kept outside the plugin folder on purpose: a write
 // inside it trips the folder watch and reloads the mod on every line. $.fs has no
 // append, so the file is rewritten whole, last 400 lines, one write at a time.
-const LOG_LINES = 400
-const logLines: string[] = []
+const logLines = new Ring<string>(400)
 let logPath: string | null | undefined // undefined: not looked up yet; null: no usable place
 let flushing: Promise<void> = Promise.resolve()
 
@@ -367,12 +363,9 @@ let flushing: Promise<void> = Promise.resolve()
 //   default). Nothing is cached: a force typed in one session must reach the others on
 //   their very next log line.
 const ECHO_POLICY_ENTRY = 'debug:echo'
-type EchoPolicy = { default: boolean; forced: boolean }
 async function echoPolicy($: EngineInterface): Promise<EchoPolicy> {
-  const v = (await $.store.get(ECHO_POLICY_ENTRY)) as Partial<EchoPolicy> | undefined
   // A default typed with `/bm-debug default` wins; without one, the `debugDefault` setting.
-  const fallback = currentSettings().debugDefault === 'on'
-  return { default: typeof v?.default === 'boolean' ? v.default : fallback, forced: v?.forced === true }
+  return echoPolicyOf(await $.store.get(ECHO_POLICY_ENTRY), currentSettings().debugDefault === 'on')
 }
 async function setEchoPolicy($: EngineInterface, policy: EchoPolicy) {
   await $.store.set(ECHO_POLICY_ENTRY, policy)
@@ -388,21 +381,11 @@ async function setSessionEcho($: EngineInterface, enabled: boolean | undefined) 
   await $.env.set('CONVO_BOOKMARKS_DEBUG', formatDebugEnv(enabled, channels))
 }
 async function uiEchoEnabled($: EngineInterface): Promise<boolean> {
-  const policy = await echoPolicy($)
-  if (policy.forced) return policy.default
-  return (await sessionEchoChoice($)) ?? policy.default
+  return echoEnabled(await echoPolicy($), await sessionEchoChoice($))
 }
 /** The state in one line, for `/bm-debug status` and `/bm-env`. */
 async function echoStateLine($: EngineInterface): Promise<string> {
-  const policy = await echoPolicy($)
-  const mine = await sessionEchoChoice($)
-  const word = (b: boolean) => (b ? 'on' : 'off')
-  if (policy.forced) {
-    const asked = mine !== undefined && mine !== policy.default ? `; this conversation asked for ${word(mine)}, which applies once the force is lifted` : ''
-    return `${word(policy.default)} everywhere, forced (/bm-debug default ${word(policy.default)} lifts it${asked})`
-  }
-  if (mine !== undefined) return `${word(mine)} here only (this conversation's choice; the default is ${word(policy.default)})`
-  return `${word(policy.default)}, the default (every conversation without a choice of its own)`
+  return describeEcho(await echoPolicy($), await sessionEchoChoice($))
 }
 
 // Debug channels (#35, core/debug.ts): this conversation's choice, read from its
@@ -450,10 +433,9 @@ function log($: EngineInterface, line: string, opts?: { always?: boolean; text?:
 const cut = (text: string, n: number) => excerpt(text, n, currentSettings().debugTextLength)
 
 function keepLine($: EngineInterface, line: string) {
-  logLines.push(`${new Date().toISOString()} ${line}`)
+  logLines.push(stamped(line, Date.now()))
   const mirrored = channelsOn.has('screen') ? screenMirror(line) : undefined
   if (mirrored) screenLines.push(`${clock(Date.now())} >>> ${mirrored}`)
-  if (logLines.length > LOG_LINES) logLines.splice(0, logLines.length - LOG_LINES)
   flushing = flushing.then(() => flushLog($)).catch(() => {})
 }
 
@@ -470,18 +452,12 @@ async function dataRoot($: EngineInterface): Promise<string | undefined> {
 async function flushLog($: EngineInterface) {
   if (logPath === undefined) {
     const root = await dataRoot($)
-    logPath = root ? `${root}/bookmarks/debug/${await $.session.id()}.log` : null
+    logPath = root ? logFile(root, await $.session.id()) : null
     // A reload starts the module over: keep what the file already holds.
-    if (logPath && (await $.fs.exists(logPath))) {
-      const earlier = (await $.fs.read(logPath)).split('\n').filter(l => l.trim())
-      logLines.unshift(...earlier)
-      if (logLines.length > LOG_LINES) logLines.splice(0, logLines.length - LOG_LINES)
-    }
+    if (logPath && (await $.fs.exists(logPath))) logLines.prepend((await $.fs.read(logPath)).split('\n').filter(l => l.trim()))
   }
-  if (logPath) await $.fs.write(logPath, logLines.join('\n') + '\n')
+  if (logPath) await $.fs.write(logPath, logLines.items.join('\n') + '\n')
 }
-
-const clock = (t: number) => new Date(t).toISOString().slice(11, 23)
 
 // `snippet`: the selection's first line exactly as selected, for highlighting.
 type Mark = { uuid: string; head: string; markedAt: number; source?: 'selection' | 'latest' | 'screen'; snippet?: string }
@@ -2904,7 +2880,7 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'bm-timeline' }, async ($, e) => {
     const n = Number(e.args.trim()) || 40
-    const recent = timeline.slice(-n)
+    const recent = timeline.items.slice(-n)
     log($, `[bm] timeline: last ${recent.length} of ${timeline.length} events since load`)
     for (const { t, what } of recent) log($, `[bm]  ${clock(t)} ${what}`, { text: true })
     return {}
