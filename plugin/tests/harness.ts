@@ -62,7 +62,14 @@ export function world(on: unknown, options: WorldOptions = {}): World {
 
   const clock = mock.clock(on as never, { now: Date.parse('2026-10-12T00:00:00Z') })
   mock.store(on as never, options.store ?? {})
-  mock.env(on as never, { USERPROFILE: 'C:/test-home', ...(options.env ?? {}) })
+  // The environment, readable and writable: $.env.set (the debug echo's choice and the
+  // channels) lands here, so a later $.env.get sees it, as in a real session.
+  const env: Record<string, string | undefined> = { USERPROFILE: 'C:/test-home', ...(options.env ?? {}) }
+  answer('env.get', e => env[String(e.name)])
+  answer('env.set', e => {
+    env[String(e.name)] = typeof e.value === 'string' ? e.value : undefined
+    return undefined
+  })
 
   // The engine's own drawing beneath the plugin's render hooks: an empty box.
   hook('ui.render' as never, {} as never, (async (h: { ui: { resolve: (e: unknown) => { Box: (p: object) => unknown } } }, e: unknown) =>

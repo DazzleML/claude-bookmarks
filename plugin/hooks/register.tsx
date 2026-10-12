@@ -24,7 +24,7 @@ import {
 } from './core/register-file'
 import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution, type TranscriptRow } from './core/transcript-lines'
 import { exchangeIndex, looksLikeRedraw, pickViewAnchor, promptNearView } from './core/view-position'
-import { CHANNELS, excerpt, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, quotesText, screenMirror, type Channel } from './core/debug'
+import { excerpt, formatDebugEnv, parseDebugEnv, quotesText, screenMirror, type Channel } from './core/debug'
 import { bandButtons, helpLines, helpShort, lineHint, listHint, listKeysFor, parseListNumber, route, type Chord, type Operation, type Pane } from './core/keys'
 import { afterAction, isList, type Cause } from './core/after-action'
 import { debugTextMode, installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
@@ -35,11 +35,12 @@ import { pruneStore, type Seen } from './core/store-prune'
 import { footnoteOf, looksLikePrompt, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompt-rows'
 import { byFirstFour, findByMessage, firstFour, sameMessage, short } from './core/message-id'
 import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFile, stamped, type EchoPolicy } from './core/log-ring'
-import { DEBUG_USAGE, configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, parseDebugArgs, selectionKind, settingsRows } from './core/diagnostics'
+import { configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, selectionKind, settingsRows } from './core/diagnostics'
 import { colorSplit, plainMarkdown, snippetOf, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/highlight'
 import { ScreenModel } from './core/screen-model'
 import { deleteMarks, marksShowing, searchPhrase, type Mark, type Marks } from './core/marks'
 import { footnoteAt, listPosition, nextGroup, promptEntry, promptNumberComplete, stepNumber } from './core/band-entry'
+import { debugCommand } from './handlers/debug-command'
 import { age, bookmarkWho, drawnFourOf, foldedLabel, footnoteDisplay, footnotesByPrompt, groupHeader, numberLabel as numberLabelAt, numberNewestFirst, numberWidth, pinnedRowsOf, pointerFor, unreached } from './core/list-model'
 import { BOOKMARK_TOOL, answer as toolAnswer, brief as briefRow, describe as describeRecord, listActedOn, listName, parseToolInput, tierFor } from './core/bookmark-tool'
 import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptList, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, transcriptGuess, type PromptRef } from './core/prompt-store'
@@ -2756,43 +2757,22 @@ export const register: Register = (on, options) => {
     })
   })
 
+  // /bm-debug lives in hooks/handlers/debug-command.ts; this is its ports (hooks/engine/ports.ts):
+  // each engine call it needs, spelled here, where the validator follows `$`.
   on('command.run', { command: 'bm-debug' }, async ($, e) => {
-    const op = parseDebugArgs(e.args ?? '')
-    // Debug channels (#35): heavier diagnostics, off by default, this conversation only.
-    if (op.kind === 'channels') {
-      readChannels($)
-      if (op.action !== 'channels') {
-        const { known, unknown } = parseChannels(op.rest)
-        if (!known.length && !unknown.length) {
-          log($, `[bm] /bm-debug ${op.action} needs channel names: ${Object.keys(CHANNELS).join(', ')}`, { always: true })
-          return {}
-        }
-        const next = new Set(channelsOn)
-        for (const c of known) op.action === 'enable' ? next.add(c) : next.delete(c)
-        await setChannels($, next)
-        if (unknown.length) log($, `[bm] no such debug channel: ${unknown.join(', ')} (known: ${Object.keys(CHANNELS).join(', ')})`, { always: true })
-        $.ui.toast(`bookmarks: debug channels ${formatChannels(channelsOn) || 'none'} on`)
-      }
-      for (const [c, what] of Object.entries(CHANNELS)) {
-        log($, `[bm] debug channel ${c}: ${channelsOn.has(c as Channel) ? 'ON' : 'off'} -- ${what}`, { always: true })
-      }
-      return {}
-    }
-    if (op.kind === 'echo') {
-      await setSessionEcho($, op.choice)
-      const line = await echoStateLine($)
-      $.ui.toast(`bookmarks: log echo ${line}`)
-      log($, `[bm] log echo ${line} (the file log is always written)`, { always: true })
-      return {}
-    }
-    if (op.kind === 'policy') {
-      await setEchoPolicy($, op.policy)
-      const line = await echoStateLine($)
-      $.ui.toast(`bookmarks: log echo ${line}`)
-      log($, `[bm] log echo ${line}`, { always: true })
-      return {}
-    }
-    log($, `[bm] log echo ${await echoStateLine($)}; channels on: ${formatChannels(channelsOn) || 'none'}; file log: ${logPath ?? '(not yet written)'}; ${DEBUG_USAGE}`, { always: true })
+    await debugCommand(e.args ?? '', {
+      toast: text => $.ui.toast(text),
+      log: (line, always) => log($, line, always ? { always: true } : undefined),
+      channelsOn: () => {
+        readChannels($)
+        return channelsOn
+      },
+      setChannels: next => setChannels($, next as Set<Channel>),
+      setSessionEcho: choice => setSessionEcho($, choice),
+      setEchoPolicy: policy => setEchoPolicy($, policy),
+      echoState: () => echoStateLine($),
+      logPath: () => logPath,
+    })
     return {}
   })
 
