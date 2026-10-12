@@ -62,10 +62,22 @@ To use a key your terminal doesn't report by default, map it in the terminal to 
 When the plugin is loaded, a one-line band sits just above the prompt:
 
 ```
-bm: ' j m p ␣   m: mark  j: jump  p: prompts  r: read
+bm: _   mark  jump  prompts  read  ?
 ```
 
-The first part is a small field. When the leader puts the keyboard on the band, the field takes the next key, any key, including `'` and `Space`. The words after it are buttons you can click: `mark`, `jump` and `prompts` open their panes, and `read` goes to the reading position. A pane opened by a click stays open as a list to click in; close it with its `×`.
+The first part is a small field. When the leader puts the keyboard on the band, the field takes the next key, any key, including `'`, `Space` and `?`. The words after it are buttons you can click, and each does exactly what its key does: `mark` (`m`), `jump` (`j`), `prompts` (`p`), `read` (`r`). A pane opened by a click stays open as a list to click in; close it with its `×`.
+
+**`?` shows every command,** including the ones the bar has no room for (`b` bookmarks, `P` promote, `o` back, `i` forward), the keys of the prompts and bookmarks lists, and how the switches below are set. Type `?` after the leader, or click it. `Enter` or `Esc` closes the help.
+
+Three switches in `/config` change the band:
+
+| Setting | Values | Does |
+|---------|--------|------|
+| The band | `full`, `field` | `field` draws the command field alone, one short row; the leader still lands there, and `?` still lists the commands |
+| Chords on their own keybindings | `on`, `off` | `off`: `mark`, `jump`, `prompts` and `read` no longer answer the keybindings in [Optional fast keys](#optional-fast-keys), only the leader |
+| Lists in a pane | `on`, `off` | `off`: `p` and `b` take a number in the band and jump, and `m` and `'` take their letter there, with no pane beside the conversation |
+
+A band with nothing in it cannot take the leader, so there is no fully hidden band yet; `field` is the smallest.
 
 When a mark has just been set or jumped to, the band also shows it after a bar, as `| a ▸ the marked line`, until the highlight clears.
 
@@ -302,6 +314,8 @@ For one-step actions, a key can press a band button directly. It goes through on
 ```
 
 in the same `Chat` block gives one-step reading: `Ctrl+X Space` goes to the reading position and back, and works with text in the input box too.
+
+"Chords on their own keybindings" in `/config` turns them all off without editing `keybindings.json`, to try the plugin without them.
 
 These are for power users, and not part of the recommended setup:
 - **They borrow Claude Code's diff-panel actions.** While the diff panel is open, it takes them over, and a future Claude Code may remove them.

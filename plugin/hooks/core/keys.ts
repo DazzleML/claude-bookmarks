@@ -26,6 +26,7 @@ export type Operation =
   | { op: 'claim' }
   | { op: 'group'; dir: -1 | 1 }
   | { op: 'close' }
+  | { op: 'help' }
   | { op: 'wait' }
   | { op: 'hint'; reason: string }
 
@@ -35,11 +36,27 @@ export type Operation =
 export type Routed = { operation: Operation; needsMore: boolean }
 
 // One command of the band's command line (no pane open): its keys, what follows them,
-// and how the hint names it. Order is the order of the hint.
+// how the hint and the help name it, and how the band's bar shows it. Order is the order
+// of the hint, the help and the bar.
+//
+// The bar shows a few labelled commands and `?`; `?` shows the rest (djdarcy,
+// 2026-10-12: "We should probably just have a "?" and if the user types that we can then
+// show them a help message ... for the shortcuts that aren't already on the bar").
+// `chord`: the command has a borrowed engine action a keybinding can press (the four
+// "optional fast keys"), carried only while the chords setting is on (djdarcy, 01:30:
+// kept, optional, "an easy enable/disable so their removal can be tested").
+export type Chord = 'mark' | 'jump' | 'prompts' | 'read'
 type LineCommand = {
+  id: string
   keys: readonly string[]
   then?: 'letter' | 'mark-letter' | 'number'
   label: string
+  // The bar's button text: one word.
+  button: string
+  shown: boolean
+  chord?: Chord
+  // One line for the help: what the command does.
+  help: string
   route: (next: string | undefined) => Routed
 }
 
@@ -48,9 +65,27 @@ const waiting = (operation: Operation): Routed => ({ operation, needsMore: true 
 
 export const LINE_COMMANDS: readonly LineCommand[] = [
   {
+    id: 'mark',
+    keys: ['m'],
+    then: 'letter',
+    label: 'mark',
+    button: 'mark',
+    shown: true,
+    chord: 'mark',
+    help: 'set a mark a-z on the line at the top of your view (or your selection)',
+    route: () => waiting({ op: 'open', pane: 'mark' }),
+  },
+  {
+    // `j` stays beside vim's `'` (djdarcy, 2026-10-12: "it should be clear that mark is
+    // m, j is jump, etc since it's already literally saying it on the bar").
+    id: 'jump',
     keys: ["'", 'j'],
     then: 'letter',
     label: 'jump',
+    button: 'jump',
+    shown: true,
+    chord: 'jump',
+    help: 'jump to a mark; alone, the list of marks',
     // Alone it opens the jump pane, whose buttons take the letter (v0.1.7's shape); a
     // letter typed fast enough to arrive with it jumps directly.
     route: next =>
@@ -60,14 +95,44 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
           ? done({ op: 'jump-mark', letter: next })
           : done({ op: 'hint', reason: lineHint() }),
   },
-  { keys: ['m'], then: 'letter', label: 'mark', route: () => waiting({ op: 'open', pane: 'mark' }) },
-  { keys: [' ', 'r'], label: 'reading', route: () => done({ op: 'reading' }) },
-  { keys: ['p'], then: 'number', label: 'prompt', route: () => waiting({ op: 'open', pane: 'list' }) },
-  { keys: ['b'], label: 'bookmarks', route: () => waiting({ op: 'open', pane: 'bookmarks' }) },
   {
+    id: 'prompts',
+    keys: ['p'],
+    then: 'number',
+    label: 'prompt',
+    button: 'prompts',
+    shown: true,
+    chord: 'prompts',
+    help: 'your prompts, numbered; a number jumps to one',
+    route: () => waiting({ op: 'open', pane: 'list' }),
+  },
+  {
+    id: 'read',
+    keys: [' ', 'r'],
+    label: 'reading',
+    button: 'read',
+    shown: true,
+    chord: 'read',
+    help: 'go to your reading position, or back to where you were',
+    route: () => done({ op: 'reading' }),
+  },
+  {
+    id: 'bookmarks',
+    keys: ['b'],
+    label: 'bookmarks',
+    button: 'bookmarks',
+    shown: false,
+    help: "the bookmarks list, yours and Claude's",
+    route: () => waiting({ op: 'open', pane: 'bookmarks' }),
+  },
+  {
+    id: 'promote',
     keys: ['P'],
     then: 'mark-letter',
     label: 'promote',
+    button: 'promote',
+    shown: false,
+    help: 'turn mark a-z into a bookmark that lasts',
     route: next =>
       next === undefined
         ? waiting({ op: 'wait' })
@@ -75,8 +140,9 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
           ? done({ op: 'promote', letter: next })
           : done({ op: 'hint', reason: 'P then a mark letter (a-z) promotes that mark into a bookmark' }),
   },
-  { keys: ['o'], label: 'back', route: () => done({ op: 'jumplist', dir: -1 }) },
-  { keys: ['i'], label: 'forward', route: () => done({ op: 'jumplist', dir: 1 }) },
+  { id: 'back', keys: ['o'], label: 'back', button: 'back', shown: false, help: 'back to where the last jump left from', route: () => done({ op: 'jumplist', dir: -1 }) },
+  { id: 'forward', keys: ['i'], label: 'forward', button: 'forward', shown: false, help: 'forward again', route: () => done({ op: 'jumplist', dir: 1 }) },
+  { id: 'help', keys: ['?'], label: 'help', button: '?', shown: true, help: 'this help', route: () => done({ op: 'help' }) },
 ]
 
 // What a key shows as in a hint: Space has no glyph of its own.
@@ -93,15 +159,21 @@ export function lineHint(): string {
 }
 
 // A list pane's keys (the prompts and bookmarks lists), in the order of their hint.
-type ListKey = { key: string; label: string; panes: readonly Pane[]; route: () => Routed }
+// `button`: how the band's number row draws it (the band-mode row is generated from this
+// table too, so it cannot offer a key the hint does not name).
+type ListKey = { key: string; label: string; button: string; panes: readonly Pane[]; route: () => Routed }
 export const LIST_KEYS: readonly ListKey[] = [
-  { key: 'j', label: 'next', panes: ['list', 'bookmarks'], route: () => waiting({ op: 'step', dir: 1 }) },
-  { key: 'k', label: 'previous', panes: ['list', 'bookmarks'], route: () => waiting({ op: 'step', dir: -1 }) },
-  { key: 's', label: 'pin', panes: ['list'], route: () => waiting({ op: 'pin' }) },
-  { key: 'h', label: 'previous group', panes: ['bookmarks'], route: () => waiting({ op: 'group', dir: -1 }) },
-  { key: 'l', label: 'next group', panes: ['bookmarks'], route: () => waiting({ op: 'group', dir: 1 }) },
-  { key: 'c', label: 'claim', panes: ['bookmarks'], route: () => waiting({ op: 'claim' }) },
+  { key: 'j', label: 'next', button: 'j↓', panes: ['list', 'bookmarks'], route: () => waiting({ op: 'step', dir: 1 }) },
+  { key: 'k', label: 'previous', button: 'k↑', panes: ['list', 'bookmarks'], route: () => waiting({ op: 'step', dir: -1 }) },
+  { key: 's', label: 'pin', button: 's★ pin', panes: ['list'], route: () => waiting({ op: 'pin' }) },
+  { key: 'h', label: 'previous group', button: 'h◂', panes: ['bookmarks'], route: () => waiting({ op: 'group', dir: -1 }) },
+  { key: 'l', label: 'next group', button: '▸l', panes: ['bookmarks'], route: () => waiting({ op: 'group', dir: 1 }) },
+  { key: 'c', label: 'claim', button: 'c claim', panes: ['bookmarks'], route: () => waiting({ op: 'claim' }) },
 ]
+// A pane's list keys, as the band draws them.
+export function listKeysFor(pane: Pane): readonly ListKey[] {
+  return LIST_KEYS.filter(l => l.panes.includes(pane))
+}
 // The prompts filter (#28) is typed as `/words` in the prompts pane's own number field
 // (djdarcy, 2026-10-12: "Pane field only"): `/` is not a letter or digit, so it can never
 // be a band key, and it is not listed here.
@@ -148,8 +220,41 @@ export function lineKeys(): string[] {
   return LINE_COMMANDS.flatMap(c => [...c.keys])
 }
 
-// The band field's placeholder: the first key of every command, in table order, Space
-// drawn as ␣. It replaces the hand-typed `' j m p ␣`, which left out b, P, o and i.
-export function linePlaceholder(): string {
-  return LINE_COMMANDS.map(c => (c.keys[0] === ' ' ? '␣' : c.keys[0])).join(' ')
+// The band's bar: one button per shown command, in table order. Its key is the command's
+// key a press stands for (`route(key)`); `hotkey` only where the engine takes one (a
+// letter or digit: not `'`, Space or `?`, which are typed in the field); `chord` only
+// while chords are on. The field beside the buttons has no placeholder: the buttons say
+// what the keys are, and `?` says the rest (it replaced `' m ␣ p b P o i`, which named
+// keys without saying what they did).
+export type BandButton = { id: string; key: string; label: string; hotkey?: string; chord?: Chord }
+export function bandButtons(opts: { chords: boolean }): BandButton[] {
+  return LINE_COMMANDS.filter(c => c.shown).map(c => {
+    const letter = c.keys.find(k => /^[A-Za-z0-9]$/.test(k))
+    return {
+      id: c.id,
+      key: c.keys[0]!,
+      label: c.button,
+      ...(letter ? { hotkey: letter } : {}),
+      ...(opts.chords && c.chord ? { chord: c.chord } : {}),
+    }
+  })
+}
+
+// The help `?` shows: every command with its keys and what it does, the list keys, and
+// the switches as they are now. One string per line.
+export function helpLines(now: { leader: string; chords: boolean; panes: boolean }): string[] {
+  const keysOf = (c: LineCommand) => {
+    const then = c.then === 'letter' || c.then === 'mark-letter' ? ' + letter' : c.then === 'number' ? ' + number' : ''
+    return `${c.keys.map(keyName).join(' or ')}${then}`
+  }
+  const width = Math.max(...LINE_COMMANDS.map(c => keysOf(c).length))
+  return [
+    `${now.leader}, then:`,
+    ...LINE_COMMANDS.map(c => `  ${keysOf(c).padEnd(width)}  ${c.help}`),
+    'In the prompts list:',
+    `  ${listHint('list')}; type /words in its # field to filter, N.k for a footnote`,
+    'In the bookmarks list:',
+    `  ${listHint('bookmarks')}`,
+    `Chords (mark, jump, prompts, read on their own keybindings): ${now.chords ? 'on' : 'off'}. Lists in a pane: ${now.panes ? 'on' : 'off'}. Both in /config.`,
+  ]
 }

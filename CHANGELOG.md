@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.24] - 2026-10-12
+
+### Changed
+
+- **The band reads once** ([#29](https://github.com/DazzleML/claude-bookmarks/issues/29)). At rest it shows `mark  jump  prompts  read  ?`: the field's row of bare letters (`' m ␣ p b P o i`) is gone, and each word does exactly what its key does after the leader. The band's rows for the prompts and bookmarks lists are drawn from the same key table as their hints, so they cannot offer a key the hint does not name.
+
+### Added
+
+- **`?` shows every command**: type it after the leader or click it. The help lists the commands the bar has no room for (`b`, `P`, `o`, `i`), the keys of the prompts and bookmarks lists, and how the switches below are set; `Enter` or `Esc` closes it.
+- Three switches in `/config`: "The band" (`full`, or `field`: the command field alone), "Chords on their own keybindings" (`off` stops mark, jump, prompts and read answering the optional chords, to try the plugin without them), and "Lists in a pane" (`off`: `p` and `b` take a number in the band and jump, with no pane).
+
 ## [0.4.23] - 2026-10-12
 
 ### Added
@@ -440,7 +451,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.23...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.24...HEAD
+[0.4.24]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.23...v0.4.24
 [0.4.23]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.22...v0.4.23
 [0.4.22]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.21...v0.4.22
 [0.4.21]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.20...v0.4.21

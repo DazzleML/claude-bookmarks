@@ -1,7 +1,7 @@
 {
   "name": "bookmarks",
   "displayName": "Bookmarks",
-  "version": "0.4.23",
+  "version": "0.4.24",
   "description": "Bookmarks and vim-style marks inside Claude Code conversations: mark a line, jump back, keep a reading position, browse your prompts, and let Claude cite earlier places as clickable links.",
   "author": {
     "name": "DazzleML",
@@ -142,6 +142,36 @@
       "default": 2000000,
       "min": 0,
       "max": 1000000000
+    },
+    "band": {
+      "type": "string",
+      "title": "The band",
+      "description": "full: the command field, the labelled commands and ? for the rest; field: the command field alone, one short row (the leader still lands there; ? shows the commands)",
+      "default": "full",
+      "options": [
+        "full",
+        "field"
+      ]
+    },
+    "chords": {
+      "type": "string",
+      "title": "Chords on their own keybindings",
+      "description": "on: mark, jump, prompts and read also answer the keybindings bound to their borrowed actions (docs: Optional fast keys); off: only the leader and the band's field",
+      "default": "on",
+      "options": [
+        "on",
+        "off"
+      ]
+    },
+    "panes": {
+      "type": "string",
+      "title": "Lists in a pane",
+      "description": "on: the prompts and bookmarks lists open in a pane beside the conversation; off: p and b take a number in the band and jump, with no pane",
+      "default": "on",
+      "options": [
+        "on",
+        "off"
+      ]
     }
   },
   "types": "./types/index.d.ts"

@@ -33,7 +33,7 @@ test('c in the bookmarks list claims the chosen record', async ($, on) => {
   const band = (await $.ui.mount({ plugin: 'bookmarks', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS, requestId: 'band-1' } as never)) as unknown as Ui
   await band.input({ key: 'band-cmd-0', text: 'b' }).catch(() => undefined)
   await band.press({ key: 'band-num-1' }).catch(() => undefined)
-  await band.press({ key: 'band-num-claim' })
+  await band.press({ key: 'band-num-c' })
   expect(w.file(PATH)).toContain('"owner": "user"')
   expect(w.toasts()).toContain('#1 is yours now')
 })

@@ -191,6 +191,9 @@ Open `/config` and find the plugin's settings under its name. A change takes eff
 | Prompt text kept for the filter (bytes) | `2000000` (0 = unlimited) | How much of your prompts the `/words` filter searches, newest first; past the budget the oldest prompts are matched only on the short excerpt the list shows |
 | A list after a jump | `close`, `stay` | Whether the prompts or bookmarks list closes after you jump from it |
 | A list while you type | `stay`, `close` | Whether an open list stays while you type in the input box |
+| The band | `full`, `field` | The command field with the labelled commands and `?`, or the field alone |
+| Chords on their own keybindings | `on`, `off` | Whether mark, jump, prompts and read also answer the optional chords bound to their borrowed actions |
+| Lists in a pane | `on`, `off` | Whether the prompts and bookmarks lists open in a pane, or `p`/`b` take a number in the band with no pane |
 | Keyboard after an action | `input`, `band` | Where the keyboard should go after an action (`input` waits on Claude Code allowing it) |
 | Debug echo by default | `off`, `on` | Whether the debug log is echoed into conversations that have not chosen (`/bm-debug` decides per conversation) |
 | Conversation text in the debug log | `auto`, `off`, `with-debug`, `always` | Whether debug lines quote the conversation; `auto` is off in an installed plugin, always in one loaded from a folder |

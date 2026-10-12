@@ -12,8 +12,8 @@ declare module 'claude-code' {
       rows: Row[]
       paneMode: PaneMode
       // When a pane opened from the band can't take the keyboard, the band itself
-      // collects the next key; 'idle' shows the usual buttons.
-      bandMode: PaneMode | 'idle'
+      // collects the next key; 'idle' shows the usual buttons; 'help' shows what `?` lists.
+      bandMode: PaneMode | 'idle' | 'help'
       // Bumped when the pinned prompts change, so the prompts pane redraws.
       pinsRev: number
       // Bumped when the prompt nearest the view changes while the prompts pane is

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LINE_COMMANDS, lineHint, lineKeys, linePlaceholder, listHint, parseListNumber, route } from '../../plugin/hooks/core/keys.ts'
+import { LINE_COMMANDS, bandButtons, helpLines, lineHint, lineKeys, listHint, parseListNumber, route } from '../../plugin/hooks/core/keys.ts'
 
 test('a typed list number: a prompt, an unfold, or a footnote', () => {
   assert.deepEqual(parseListNumber('3'), { n: 3 })
@@ -10,12 +10,33 @@ test('a typed list number: a prompt, an unfold, or a footnote', () => {
   for (const bad of ['', '.', 'a', '3.1.2', '-1', '3..']) assert.equal(parseListNumber(bad), undefined, bad)
 })
 
-test('the band placeholder names one key of every command, Space as ␣', () => {
-  assert.equal(linePlaceholder(), "' m ␣ p b P o i")
-  assert.equal(linePlaceholder().split(' ').length, LINE_COMMANDS.length)
+const none = { pane: 'none' as const }
+
+test('the bar: one button per shown command, labelled once, ? last', () => {
+  const bar = bandButtons({ chords: true })
+  assert.deepEqual(bar.map(b => b.label), ['mark', 'jump', 'prompts', 'read', '?'])
+  assert.equal(new Set(bar.map(b => b.label)).size, bar.length, 'nothing listed twice')
+  for (const b of bar) assert.notEqual(route(b.key, none).operation.op, 'hint', `${b.label} presses a real command`)
 })
 
-const none = { pane: 'none' as const }
+test("a hotkey only where the engine takes one: not ', Space or ?", () => {
+  const bar = bandButtons({ chords: true })
+  assert.deepEqual(Object.fromEntries(bar.map(b => [b.label, b.hotkey])), { mark: 'm', jump: 'j', prompts: 'p', read: 'r', '?': undefined })
+})
+
+test('the four borrowed actions ride only while chords are on', () => {
+  assert.deepEqual(bandButtons({ chords: true }).filter(b => b.chord).map(b => b.chord), ['mark', 'jump', 'prompts', 'read'])
+  assert.deepEqual(bandButtons({ chords: false }).filter(b => b.chord), [])
+})
+
+test('? opens the help, and the help explains every routed key', () => {
+  assert.deepEqual(route('?', none), { operation: { op: 'help' }, needsMore: false })
+  const help = helpLines({ leader: 'Ctrl+]', chords: true, panes: true }).join('\n')
+  for (const c of LINE_COMMANDS) assert.ok(help.includes(c.help), c.id)
+  for (const k of lineKeys()) assert.ok(help.includes(k === ' ' ? 'Space' : k), k)
+  assert.match(help, /Chords .*: on/)
+  assert.match(helpLines({ leader: 'Ctrl+]', chords: false, panes: false }).join('\n'), /: off\. Lists in a pane: off/)
+})
 
 test("the command line routes today's commands to the same operations", () => {
   assert.deepEqual(route("'a", none), { operation: { op: 'jump-mark', letter: 'a' }, needsMore: false })

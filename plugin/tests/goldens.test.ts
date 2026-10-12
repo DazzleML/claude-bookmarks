@@ -26,7 +26,10 @@ type Found = { type: string; key: string | undefined; text?: string }
 const leaves = (els: unknown[]) =>
   (els as Found[]).filter(e => e.type !== 'Box').map(e => `${e.type}:${e.key ?? ''}:${e.text ?? ''}`)
 
-test('the idle band: the command field and the four chord buttons', async ($, on) => {
+// The bar is drawn from the router's table (core/keys.ts bandButtons): each shown command
+// once, `?` for the rest; the field has no placeholder (it listed keys without saying
+// what they did). Slice 5, 2026-10-12.
+test('the idle band: the command field, the labelled commands, and ?', async ($, on) => {
   world(on, { store: STORE, session: SID })
   const ui = await $.ui.mount(BAND as never)
   expect(leaves(await ui.findAll({}))).toEqual([
@@ -35,9 +38,14 @@ test('the idle band: the command field and the four chord buttons', async ($, on
     'Button:chord-jump:jump',
     'Button:chord-prompts:prompts',
     'Button:chord-read:read',
+    'Button:chord-help:?',
   ])
   const input = await ui.find({ type: 'Input' })
-  expect(input?.props).toEqual({ key: 'band-cmd-0', label: 'bm:', placeholder: "' m ␣ p b P o i", submitLabel: 'run', autoFocus: true })
+  expect(input?.props).toEqual({ key: 'band-cmd-0', label: 'bm', placeholder: '', submitLabel: 'run', autoFocus: true })
+  const mark = await ui.find({ type: 'Button', key: 'chord-mark' })
+  expect([mark?.props.hotkey, mark?.props.action]).toEqual(['m', 'app:toggleDiffNoiseFilter'])
+  const help = await ui.find({ type: 'Button', key: 'chord-help' })
+  expect([help?.props.hotkey, help?.props.action]).toEqual([undefined, undefined])
 })
 
 test('p in the band opens the prompts pane and the band takes a number', async ($, on) => {
@@ -58,7 +66,7 @@ test('p in the band opens the prompts pane and the band takes a number', async (
     'Button:band-num-k:k↑',
     'Button:band-num-go:go (Enter)',
     'Button:band-num-j:j↓',
-    'Button:band-num-pin:s★ pin',
+    'Button:band-num-s:s★ pin',
     'Text::(Esc)',
   ])
   const pane = await $.ui.mount(PANE as never)
@@ -75,7 +83,7 @@ test('/bm-config prints every setting with its source', async ($, on) => {
   const w = world(on, { store: STORE, session: SID })
   await $.command.run({ command: 'bm-config', args: '' } as never)
   expect(w.logs()).toEqual([
-    '[bm] settings: listOpensAt="nearest" (default); followHere="when-idle" (default); closeShare=0.6 (default); paneAfterJump="close" (default); paneWhileTyping="stay" (default); afterActionFocus="input" (default); debugDefault="off" (default); debugText="auto" (default); debugTextLength="reference" (default); palette="" (default); footnotes="folded" (default); promptTextBudget=2000000 (default)',
+    '[bm] settings: listOpensAt="nearest" (default); followHere="when-idle" (default); closeShare=0.6 (default); paneAfterJump="close" (default); paneWhileTyping="stay" (default); afterActionFocus="input" (default); debugDefault="off" (default); debugText="auto" (default); debugTextLength="reference" (default); palette="" (default); footnotes="folded" (default); promptTextBudget=2000000 (default); band="full" (default); chords="on" (default); panes="on" (default)',
     '[bm] this build is loaded from a folder, so debugText="auto" means always; change any of these in /config',
   ])
 })

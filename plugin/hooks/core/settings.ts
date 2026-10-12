@@ -122,6 +122,32 @@ export const FIELDS = {
     title: 'Prompt text kept for the filter (bytes)',
     description: 'How much of your prompts the filter searches, across the conversation; 0 = unlimited (for machines with room to spare). The default keeps whole prompts in most conversations',
   },
+  // The input layers (#29) as switches. `band`: full shows the field, the labelled
+  // commands and `?`; field shows the field alone. A band with nothing in it cannot take
+  // the leader (an Input or a Button is what focuses), so "hidden" waits on Q261012-08.
+  band: {
+    kind: 'enum',
+    values: ['full', 'field'],
+    default: 'full',
+    title: 'The band',
+    description: 'full: the command field, the labelled commands and ? for the rest; field: the command field alone, one short row (the leader still lands there; ? shows the commands)',
+  },
+  // djdarcy, 2026-10-12 01:30: chords kept, optional, "an easy enable/disable so their
+  // removal can be tested".
+  chords: {
+    kind: 'enum',
+    values: ['on', 'off'],
+    default: 'on',
+    title: 'Chords on their own keybindings',
+    description: "on: mark, jump, prompts and read also answer the keybindings bound to their borrowed actions (docs: Optional fast keys); off: only the leader and the band's field",
+  },
+  panes: {
+    kind: 'enum',
+    values: ['on', 'off'],
+    default: 'on',
+    title: 'Lists in a pane',
+    description: "on: the prompts and bookmarks lists open in a pane beside the conversation; off: p and b take a number in the band and jump, with no pane",
+  },
 } as const satisfies Record<string, Field>
 
 export type FieldName = keyof typeof FIELDS

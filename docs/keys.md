@@ -29,6 +29,7 @@ The band's field takes exactly one key (two for the ones that need a letter). An
 | `P` | a letter `a`-`z`, or `` ` `` | Promotes that mark (or the reading position) into a bookmark on your list; the link goes to your clipboard |
 | `o` | | Back to where you were before the last jump |
 | `i` | | Forward again |
+| `?` | | Shows every command and list key, and how the band's switches are set, in the band; `Enter` or `Esc` closes it |
 | `Esc` | | Leaves the band; the keyboard returns to the input box |
 
 After any of these the keyboard stays on the band for the next command; `Esc` returns it to the input box. Arrow keys never reach the band ([#23](https://github.com/DazzleML/claude-bookmarks/issues/23)); a terminal mapping can type the leader and a key for you, see [Back and forward](usage.md#back-and-forward).
