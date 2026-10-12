@@ -56,3 +56,72 @@ export function promptTextOf(o: any): string | undefined {
   }
   return text !== undefined && looksLikePrompt(text) ? text : undefined
 }
+
+// Footnotes (#33): the person's own actions that are not prompts, numbered `N.k` under
+// the prompt before them. djdarcy, 2026-10-12: the prompts pane gives "USER invoked
+// markers (compactions aren't users, tasks aren't users, interruptions are users ...)".
+// So a slash command, a `!` shell command and an interruption are footnotes; their
+// output (`<local-command-stdout>`, `<bash-stdout>`) folds into the footnote before it;
+// meta rows, compaction summaries and task notifications are not footnotes.
+export type FootnoteKind = 'command' | 'shell' | 'interrupted'
+export type Footnote = { kind: FootnoteKind; label: string }
+
+const tagged = (text: string, tag: string) => new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(text)?.[1]?.trim()
+
+// A transcript row's footnote, or undefined when the row is not one.
+export function footnoteOf(o: any): Footnote | undefined {
+  if (o?.type !== 'user' || o.isMeta || o.isSidechain || o.isCompactSummary) return undefined
+  const content = o.message?.content
+  let text: string | undefined
+  if (typeof content === 'string') text = content
+  else if (Array.isArray(content)) {
+    if (content.some((b: any) => b?.type === 'tool_result')) return undefined
+    text = content.filter((b: any) => b?.type === 'text').map((b: any) => String(b.text ?? '')).join(' ')
+  }
+  if (!text) return undefined
+  const t = text.trimStart()
+  if (t.startsWith('<command-name>') || t.startsWith('<command-message>')) {
+    const name = tagged(t, 'command-name') ?? tagged(t, 'command-message') ?? ''
+    const args = tagged(t, 'command-args') ?? ''
+    return { kind: 'command', label: `${name}${args ? ` ${args}` : ''}`.trim() }
+  }
+  if (t.startsWith('<bash-input>')) return { kind: 'shell', label: `!${tagged(t, 'bash-input') ?? ''}` }
+  if (t.startsWith('[Request interrupted by user')) return { kind: 'interrupted', label: t.replace(/^\[|\]$/g, '').trim() }
+  return undefined
+}
+
+// A footnote as kept: `after` is the uuid of the prompt before it (null before the first).
+export type FootnoteRef = Footnote & { uuid: string; after: string | null }
+
+// The `N.k` of kept footnotes, given the prompts in order (#1 first). A footnote whose
+// prompt is no longer in the list (aged out of the kept window) has no number.
+export function numberFootnotes(promptUuids: readonly string[], footnotes: readonly FootnoteRef[]): (Numbered | undefined)[] {
+  const index = new Map(promptUuids.map((u, i) => [u, i + 1]))
+  const seen = new Map<number, number>()
+  return footnotes.map(f => {
+    const n = f.after === null ? 0 : index.get(f.after)
+    if (n === undefined) return undefined
+    const k = (seen.get(n) ?? 0) + 1
+    seen.set(n, k)
+    return { n, k }
+  })
+}
+
+export type Numbered = { n: number; k: number }
+
+// The `N.k` of each row in a stream of prompts and footnotes, in transcript order: N is
+// the number of the prompt before it (0 before the first), k counts the footnotes under
+// that prompt from 1; a prompt is `N.0`. Footnotes never shift a prompt's number.
+export function numberRows(kinds: readonly ('prompt' | 'footnote')[]): Numbered[] {
+  let n = 0
+  let k = 0
+  return kinds.map(kind => {
+    if (kind === 'prompt') {
+      n += 1
+      k = 0
+      return { n, k: 0 }
+    }
+    k += 1
+    return { n, k }
+  })
+}

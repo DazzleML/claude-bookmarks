@@ -1,7 +1,7 @@
 {
   "name": "bookmarks",
   "displayName": "Bookmarks",
-  "version": "0.4.20",
+  "version": "0.4.21",
   "description": "Bookmarks and vim-style marks inside Claude Code conversations: mark a line, jump back, keep a reading position, browse your prompts, and let Claude cite earlier places as clickable links.",
   "author": {
     "name": "DazzleML",
@@ -123,6 +123,17 @@
       "title": "Colour overrides",
       "description": "JSON, e.g. {\"here\": {\"color\": \"cyan\"}, \"markBand\": {\"backgroundColor\": \"#203040\"}}. Roles: here, pinned, footnote, legend, mark, markBand, used, unused, unreached, emphasis, search. A colour is a theme key (warning, subtle, ...), a terminal colour name or #rrggbb; anything else is ignored",
       "default": ""
+    },
+    "footnotes": {
+      "type": "string",
+      "title": "Footnotes in the prompts list",
+      "description": "folded: a prompt with footnotes (your slash commands, ! shell commands, interruptions) shows an ellipsis, and . unfolds them; shown: always listed under their prompt; hidden: never listed",
+      "default": "folded",
+      "options": [
+        "folded",
+        "shown",
+        "hidden"
+      ]
     }
   },
   "types": "./types/index.d.ts"

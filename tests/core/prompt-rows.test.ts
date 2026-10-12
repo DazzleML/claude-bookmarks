@@ -1,6 +1,58 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { looksLikePrompt, promptTextOf, unwrapQueued } from '../../plugin/hooks/core/prompt-rows.ts'
+import { footnoteOf, looksLikePrompt, numberFootnotes, numberRows, promptTextOf, unwrapQueued } from '../../plugin/hooks/core/prompt-rows.ts'
+
+test('kept footnotes number by the prompt they follow', () => {
+  const f = (uuid: string, after: string | null) => ({ uuid, after, kind: 'command' as const, label: '/x' })
+  assert.deepEqual(numberFootnotes(['p1', 'p2'], [f('a', null), f('b', 'p1'), f('c', 'p1'), f('d', 'p2'), f('e', 'gone')]), [
+    { n: 0, k: 1 },
+    { n: 1, k: 1 },
+    { n: 1, k: 2 },
+    { n: 2, k: 1 },
+    undefined,
+  ])
+})
+
+const row = (content: unknown, extra: Record<string, unknown> = {}) => ({ type: 'user', uuid: 'f1', message: { role: 'user', content }, ...extra })
+
+test('a slash command, a ! shell command and an interruption are footnotes', () => {
+  assert.deepEqual(footnoteOf(row('<command-name>/compact</command-name>\n<command-message>compact</command-message>\n<command-args>keep it short</command-args>')), {
+    kind: 'command',
+    label: '/compact keep it short',
+  })
+  assert.deepEqual(footnoteOf(row('<bash-input>git status</bash-input>')), { kind: 'shell', label: '!git status' })
+  assert.deepEqual(footnoteOf(row([{ type: 'text', text: '[Request interrupted by user for tool use]' }])), {
+    kind: 'interrupted',
+    label: 'Request interrupted by user for tool use',
+  })
+})
+
+test('engine rows and outputs are not footnotes; a prompt is not a footnote', () => {
+  assert.equal(footnoteOf(row('<local-command-stdout>done</local-command-stdout>')), undefined, 'output folds into its command')
+  assert.equal(footnoteOf(row('<bash-stdout>ok</bash-stdout>')), undefined)
+  assert.equal(footnoteOf(row('<task-notification>x</task-notification>')), undefined, 'not the person')
+  assert.equal(footnoteOf(row('anything', { isMeta: true })), undefined)
+  assert.equal(footnoteOf(row('summary', { isCompactSummary: true })), undefined)
+  assert.equal(footnoteOf(row([{ type: 'tool_result', content: 'x' }])), undefined)
+  assert.equal(footnoteOf(row('please fix the band')), undefined)
+  assert.equal(footnoteOf({ type: 'assistant', message: { content: '<command-name>/x</command-name>' } }), undefined)
+})
+
+test('footnotes number N.k under the prompt before them and never shift prompt numbers', () => {
+  const kinds = ['footnote', 'prompt', 'footnote', 'footnote', 'prompt', 'prompt', 'footnote'] as const
+  assert.deepEqual(numberRows(kinds), [
+    { n: 0, k: 1 },
+    { n: 1, k: 0 },
+    { n: 1, k: 1 },
+    { n: 1, k: 2 },
+    { n: 2, k: 0 },
+    { n: 3, k: 0 },
+    { n: 3, k: 1 },
+  ])
+  const promptsOnly = numberRows(['prompt', 'prompt', 'prompt'])
+  const withFootnotes = numberRows(kinds).filter((_, i) => kinds[i] === 'prompt')
+  assert.deepEqual(withFootnotes.map(r => r.n), promptsOnly.map(r => r.n))
+})
 
 const user = (content: unknown, extra: Record<string, unknown> = {}) => ({ type: 'user', uuid: 'u1', message: { role: 'user', content }, ...extra })
 

@@ -101,6 +101,16 @@ export const FIELDS = {
     title: 'Colour overrides',
     description: 'JSON, e.g. {"here": {"color": "cyan"}, "markBand": {"backgroundColor": "#203040"}}. Roles: here, pinned, footnote, legend, mark, markBand, used, unused, unreached, emphasis, search. A colour is a theme key (warning, subtle, ...), a terminal colour name or #rrggbb; anything else is ignored',
   },
+  // #33: the person's slash commands, `!` shell commands and interruptions, as N.k rows
+  // under their prompt in the prompts list. The fold is the first ladder on the
+  // continuum (core/continuum.ts): hidden (-1) < folded (0) < shown (+1).
+  footnotes: {
+    kind: 'enum',
+    values: ['folded', 'shown', 'hidden'],
+    default: 'folded',
+    title: 'Footnotes in the prompts list',
+    description: "folded: a prompt with footnotes (your slash commands, ! shell commands, interruptions) shows an ellipsis, and . unfolds them; shown: always listed under their prompt; hidden: never listed",
+  },
 } as const satisfies Record<string, Field>
 
 export type FieldName = keyof typeof FIELDS

@@ -30,7 +30,7 @@ import { lineHint, linePlaceholder, listHint, route, type Pane } from './core/ke
 import { afterAction, isList, type Cause } from './core/after-action'
 import { debugTextMode, installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
 import { resolvePalette, type Palette, type Role, type Style } from './core/palette'
-import { looksLikePrompt, promptTextOf, unwrapQueued } from './core/prompt-rows'
+import { footnoteOf, looksLikePrompt, numberFootnotes, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompt-rows'
 import { byFirstFour, findByMessage, firstFour, sameMessage } from './core/message-id'
 
 // How long a `temporary` bookmark is kept before it is pruned (to a tombstone). A
@@ -513,6 +513,20 @@ async function promptsKey($: EngineInterface): Promise<string> {
 async function keptPrompts($: EngineInterface): Promise<PromptRef[]> {
   return ((await $.store.get(await promptsKey($))) as PromptRef[] | undefined) ?? []
 }
+// Footnotes (#33): the person's slash commands, `!` shell commands and interruptions,
+// each kept with the prompt it follows (core/prompt-rows.ts footnoteOf); numbered N.k at
+// draw time from the prompts' order.
+async function footnotesKey($: EngineInterface): Promise<string> {
+  return `footnotes:${await $.session.id()}`
+}
+async function keptFootnotes($: EngineInterface): Promise<FootnoteRef[]> {
+  return ((await $.store.get(await footnotesKey($))) as FootnoteRef[] | undefined) ?? []
+}
+async function keepFootnote($: EngineInterface, f: FootnoteRef) {
+  const kept = await keptFootnotes($)
+  if (kept.some(k => k.uuid === f.uuid)) return
+  await $.store.set(await footnotesKey($), [...kept, f].slice(-PROMPTS_KEPT))
+}
 async function keepPrompt($: EngineInterface, p: PromptRef) {
   const kept = await keptPrompts($)
   if (kept.some(k => k.uuid === p.uuid)) return
@@ -663,7 +677,9 @@ async function backfillPrompts($: EngineInterface) {
   // under an older key is read once more.
   // `4`: queued messages the live capture had dropped, and `<task-notification>` rows it
   // had kept (2026-10-11, djdarcy: two of his mid-turn messages missing above #316).
-  const doneKey = `backfilled4:${await $.session.id()}`
+  // `5`: footnotes -- the person's slash commands, `!` shell commands and interruptions,
+  // kept with the prompt each follows (#33).
+  const doneKey = `backfilled5:${await $.session.id()}`
   if (await $.store.get(doneKey)) return
   const path = await transcriptPath($)
   if (!path) {
@@ -676,6 +692,7 @@ async function backfillPrompts($: EngineInterface) {
     return
   }
   const found: PromptRef[] = []
+  const footnotes: FootnoteRef[] = []
   for (const line of rows.stdout.split('\n')) {
     if (!line.trim()) continue
     let o: any
@@ -684,9 +701,16 @@ async function backfillPrompts($: EngineInterface) {
     } catch {
       continue // a line cut off at the 4 MiB output limit
     }
+    if (typeof o.uuid !== 'string') continue
     const text = promptTextOf(o)
-    if (text !== undefined && typeof o.uuid === 'string') found.push({ uuid: o.uuid, head: headOf(text) })
+    if (text !== undefined) {
+      found.push({ uuid: o.uuid, head: headOf(text) })
+      continue
+    }
+    const fn = footnoteOf(o)
+    if (fn) footnotes.push({ ...fn, uuid: o.uuid, after: found.at(-1)?.uuid ?? null })
   }
+  await $.store.set(await footnotesKey($), footnotes.slice(-PROMPTS_KEPT))
   // Transcript order first, then anything the live capture holds that the file did not
   // (prompts sent while the file was being read), minus rows that are not prompts.
   const have = new Set(found.map(p => p.uuid))
@@ -1304,6 +1328,9 @@ function held(rule: string): string | undefined {
 let lastHere: string | undefined
 // The prompt the list should centre on at the pane's next draw (set when it opens).
 let pendingCentre: string | undefined
+// The prompts whose footnotes the person unfolded (`.` or a press on the ellipsis row),
+// by number; folded is the default (the `footnotes` setting).
+const unfoldedFootnotes = new Set<number>()
 let viewTimer: Timer | undefined
 const VIEW_MOVED_MS = 150
 // Called by the message render hooks on every screen report. A short debounce later,
@@ -2275,6 +2302,12 @@ export const register: Register = (on, options) => {
         if (row.door === 'prompt') await keepPrompt($, { uuid: row.uuid, head: row.head })
       }
     }
+    // A footnote (#33): the person's slash command, `!` shell command or interruption,
+    // kept with the prompt it follows, as the back-fill keeps it.
+    if (!e.agentId && !queued && e.door !== 'response') {
+      const fn = footnoteOf({ type: 'user', isMeta: e.message.isMeta, message: { content: e.message.content } })
+      if (fn) await keepFootnote($, { ...fn, uuid: e.uuid, after: (await keptPrompts($)).at(-1)?.uuid ?? null })
+    }
     return stored
   })
 
@@ -2980,6 +3013,34 @@ export const register: Register = (on, options) => {
       // waits for 2x or Enter). A hotkey is one character, so it can't do this.
       const all = await prompts($)
       const numbered = all.map((r, i) => ({ ...r, n: i + 1 })).reverse()
+      // Footnotes (#33) under their prompt, N.k, in the footnote role: folded behind an
+      // ellipsis row (`.` or a press unfolds), shown, or hidden, by the `footnotes`
+      // setting; 0.k (before the first prompt) at the very bottom.
+      const kept = await keptFootnotes($)
+      const nums = numberFootnotes(all.map(p => p.uuid), kept)
+      const byPrompt = new Map<number, { f: FootnoteRef; k: number }[]>()
+      kept.forEach((f, i) => {
+        const at = nums[i]
+        if (at) byPrompt.set(at.n, [...(byPrompt.get(at.n) ?? []), { f, k: at.k }])
+      })
+      const footnoteMode = currentSettings().footnotes
+      const footnoteRows = (n: number) => {
+        const list = byPrompt.get(n)
+        if (!list || footnoteMode === 'hidden') return []
+        if (footnoteMode === 'folded' && !unfoldedFootnotes.has(n)) {
+          return [
+            <Button key={`fn-fold-${n}`} label={`      … ${list.length} footnote${list.length > 1 ? 's' : ''}`} plain {...buttonStyle('footnote')}
+              onPress={async () => { unfoldedFootnotes.add(n); await update($, viewRev, v => v + 1) }} />,
+          ]
+        }
+        return list.map(({ f, k }) => (
+          <Button key={`fn-${f.uuid}`} label={`   ${n}.${k} ${f.label}`} plain {...buttonStyle('footnote')}
+            onPress={async () => {
+              await jumpTo($, f.uuid, 'prompts pane', `footnote ${n}.${k}`)
+              await settle($, 'list', 'row-press')
+            }} />
+        ))
+      }
       // `21) text`, numbers right-aligned so the text lines up (djdarcy, 2026-10-04,
       // over `#21`; also offered `(21) ` and `21| `). One place to change it.
       const width = String(all.length).length
@@ -3085,7 +3146,8 @@ export const register: Register = (on, options) => {
           {pinnedRows.length > 0 && <Text {...style('legend')}>★ pinned</Text>}
           {pinnedRows.map(r => promptRow(r, 'pin'))}
           {pinnedRows.length > 0 && <Text {...style('legend')}>all prompts</Text>}
-          {numbered.map(r => promptRow(r, 'p'))}
+          {numbered.flatMap(r => [promptRow(r, 'p'), ...footnoteRows(r.n)])}
+          {footnoteRows(0)}
         </Box>
       )
     }

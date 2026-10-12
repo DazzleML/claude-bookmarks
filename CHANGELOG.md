@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.21] - 2026-10-12
+
+### Added
+
+- **Footnotes in the prompts list** ([#33](https://github.com/DazzleML/claude-bookmarks/issues/33)). Your slash commands, `!` shell commands and interruptions now appear under the prompt they followed, numbered `N.k` (`3.1`, `3.2`, ...) so whole prompt numbers never change. They are folded by default: a prompt that has some shows a dim `… 2 footnotes` row, and pressing it unfolds them; a footnote row jumps to its place. "Footnotes in the prompts list" in `/config` chooses `folded`, `shown` or `hidden`. Compactions, task notifications and the engine's own messages are not footnotes: the list stays your own markers. Conversations are read once more to find their footnotes.
+
 ## [0.4.20] - 2026-10-12
 
 ### Added
@@ -416,7 +422,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.20...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.21...HEAD
+[0.4.21]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.20...v0.4.21
 [0.4.20]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.19...v0.4.20
 [0.4.19]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.18...v0.4.19
 [0.4.18]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.17...v0.4.18

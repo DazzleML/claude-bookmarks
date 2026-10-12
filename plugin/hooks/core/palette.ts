@@ -35,7 +35,7 @@ export const MARK_BAND = { dark: '#1B3754', light: '#D6E4F5' } as const
 export const DEFAULTS: Palette = {
   here: { color: 'warning', bold: true }, // the prompt nearest the view (yellow in the default themes)
   pinned: { color: 'warning' }, // the pin star
-  footnote: { color: 'subtle' }, // non-prompt rows (#33): below whole prompts in priority
+  footnote: { color: 'subtle', dimColor: true }, // non-prompt rows (#33): below whole prompts in priority; dim, since a Button row can't take the colour
   legend: { dimColor: true },
   mark: { color: 'warning', bold: true }, // a mark's highlighted words
   markBand: { backgroundColor: MARK_BAND.dark },
