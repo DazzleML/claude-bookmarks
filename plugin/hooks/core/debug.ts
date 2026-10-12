@@ -3,9 +3,10 @@
 // The debug log is always written. A channel adds a diagnostic that is too heavy or too
 // narrow to run for everyone: the person enables it for one conversation
 // (`/bm-debug enable screen,held`), and it is gone when the session ends. The choice
-// lives in the plugin's own process environment, `CONVO_BOOKMARKS_DEBUG_CHANNELS`, the
-// same way `/bm-debug on` keeps the echo's (2026-10-09__14-17-44 DWP), so
-// `CONVO_BOOKMARKS_DEBUG_CHANNELS=screen claude` works from a shell too.
+// lives in the one variable PRIVACY.md names, `CONVO_BOOKMARKS_DEBUG`, beside the echo's
+// on/off (2026-10-09__14-17-44 DWP): `1,screen` is the echo on and the screen channel,
+// `screen` the channel alone. djdarcy, 2026-10-12: PRIVACY.md is not edited; the code
+// fits inside it. `CONVO_BOOKMARKS_DEBUG=screen claude` works from a shell too.
 
 export const CHANNELS = {
   screen: 'every on-screen report Claude Code sends, to <session>.screen.log (heavy: rewritten every half second while the screen redraws)',
@@ -30,8 +31,35 @@ export function parseChannels(list: string | undefined): { known: Channel[]; unk
   return { known, unknown }
 }
 
-/** The value stored in the environment: known channels in table order, comma-separated; '' when none. */
+/** Known channels in table order, comma-separated; '' when none. */
 export function formatChannels(on: Iterable<Channel>): string {
   const set = new Set(on)
   return (Object.keys(CHANNELS) as Channel[]).filter(c => set.has(c)).join(',')
+}
+
+const ECHO_ON = new Set(['1', 'on', 'true'])
+const ECHO_OFF = new Set(['0', 'off', 'false'])
+
+/**
+ * `CONVO_BOOKMARKS_DEBUG` read whole: the echo choice (undefined when the value makes
+ * none) and the channels. A value from before channels (`1`, `0`, `off`) reads as it did.
+ */
+export function parseDebugEnv(value: string | undefined): { echo: boolean | undefined; channels: Channel[]; unknown: string[] } {
+  let echo: boolean | undefined
+  const rest: string[] = []
+  for (const raw of (value ?? '').split(/[\s,]+/)) {
+    const t = raw.trim().toLowerCase()
+    if (!t) continue
+    if (ECHO_ON.has(t)) echo = true
+    else if (ECHO_OFF.has(t)) echo = false
+    else rest.push(t)
+  }
+  const { known, unknown } = parseChannels(rest.join(','))
+  return { echo, channels: known, unknown }
+}
+
+/** The value to store: the echo choice first (when made), then the channels; undefined when nothing is left. */
+export function formatDebugEnv(echo: boolean | undefined, channels: Iterable<Channel>): string | undefined {
+  const parts = [...(echo === undefined ? [] : [echo ? '1' : '0']), formatChannels(channels)].filter(Boolean)
+  return parts.length ? parts.join(',') : undefined
 }

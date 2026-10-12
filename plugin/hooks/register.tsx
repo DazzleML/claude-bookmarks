@@ -30,7 +30,7 @@ const TEMPORARY_RETENTION: Retention = '30d'
 import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution, type TranscriptRow } from './core/transcript-lines'
 import { exchangeIndex, looksLikeRedraw, promptNearView } from './core/view-position'
 import { latestBurst, reportTime, type Report } from './core/latest-burst'
-import { CHANNELS, formatChannels, parseChannels, type Channel } from './core/debug'
+import { CHANNELS, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, type Channel } from './core/debug'
 import { looksLikePrompt, promptTextOf, unwrapQueued } from './core/prompt-rows'
 
 const PANE = 'bm-poc'
@@ -328,14 +328,13 @@ async function setEchoPolicy($: EngineInterface, policy: EchoPolicy) {
 }
 /** This conversation's own choice, from its environment; undefined when it made none. */
 async function sessionEchoChoice($: EngineInterface): Promise<boolean | undefined> {
-  const env = await $.env.get('CONVO_BOOKMARKS_DEBUG')
-  if (env === undefined || env === '') return undefined
-  return env !== '0' && env.toLowerCase() !== 'off' && env.toLowerCase() !== 'false'
+  return parseDebugEnv(await $.env.get('CONVO_BOOKMARKS_DEBUG')).echo
 }
-/** Sets this conversation's choice; `undefined` drops it, so the default applies again. */
+/** Sets this conversation's choice; `undefined` drops it, so the default applies again. The debug channels sharing the variable are kept. */
 async function setSessionEcho($: EngineInterface, enabled: boolean | undefined) {
   // Not named `on`: the directory's reader treats that name as the hook registrar everywhere in the file.
-  await $.env.set('CONVO_BOOKMARKS_DEBUG', enabled === undefined ? undefined : enabled ? '1' : '0')
+  const { channels } = parseDebugEnv(await $.env.get('CONVO_BOOKMARKS_DEBUG'))
+  await $.env.set('CONVO_BOOKMARKS_DEBUG', formatDebugEnv(enabled, channels))
 }
 async function uiEchoEnabled($: EngineInterface): Promise<boolean> {
   const policy = await echoPolicy($)
@@ -363,15 +362,16 @@ let channelsRead = false
 function readChannels($: EngineInterface) {
   if (channelsRead) return
   channelsRead = true
-  void $.env.get('CONVO_BOOKMARKS_DEBUG_CHANNELS').then(v => {
-    for (const c of parseChannels(v).known) channelsOn.add(c)
+  void $.env.get('CONVO_BOOKMARKS_DEBUG').then(v => {
+    for (const c of parseDebugEnv(v).channels) channelsOn.add(c)
   }).catch(() => {})
 }
+// The channels share CONVO_BOOKMARKS_DEBUG with the echo's choice, which is kept.
 async function setChannels($: EngineInterface, on: Set<Channel>) {
   channelsOn.clear()
   for (const c of on) channelsOn.add(c)
-  const v = formatChannels(on)
-  await $.env.set('CONVO_BOOKMARKS_DEBUG_CHANNELS', v === '' ? undefined : v)
+  const { echo } = parseDebugEnv(await $.env.get('CONVO_BOOKMARKS_DEBUG'))
+  await $.env.set('CONVO_BOOKMARKS_DEBUG', formatDebugEnv(echo, on))
 }
 
 function log($: EngineInterface, line: string, opts?: { always?: boolean }) {

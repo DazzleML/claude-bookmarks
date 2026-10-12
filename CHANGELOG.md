@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-10-12
+
+### Changed
+
+- The debug channels are kept in the same environment variable as the debug echo, `CONVO_BOOKMARKS_DEBUG`, rather than a second one. From a shell, channel names join the echo's value: `CONVO_BOOKMARKS_DEBUG=screen claude`, or `CONVO_BOOKMARKS_DEBUG=1,screen claude` with the echo on as well. Values from before (`1`, `0`, `off`) work as they did.
+
 ## [0.4.2] - 2026-10-12
 
 ### Added
@@ -290,7 +296,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/DazzleML/claude-bookmarks/compare/v0.3.5...v0.4.0

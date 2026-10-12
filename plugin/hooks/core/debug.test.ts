@@ -1,6 +1,27 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { CHANNELS, formatChannels, parseChannels } from './debug.ts'
+import { CHANNELS, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv } from './debug.ts'
+
+// PRIVACY.md names one variable, CONVO_BOOKMARKS_DEBUG; the channels share it with the echo.
+test('the echo values from before channels read as they did', () => {
+  assert.deepEqual(parseDebugEnv('1'), { echo: true, channels: [], unknown: [] })
+  assert.deepEqual(parseDebugEnv('OFF'), { echo: false, channels: [], unknown: [] })
+  assert.deepEqual(parseDebugEnv(undefined), { echo: undefined, channels: [], unknown: [] })
+})
+
+test('echo and channels share the one variable, in either order', () => {
+  assert.deepEqual(parseDebugEnv('screen,1,held'), { echo: true, channels: ['screen', 'held'], unknown: [] })
+  assert.deepEqual(parseDebugEnv('screen'), { echo: undefined, channels: ['screen'], unknown: [] })
+  assert.deepEqual(parseDebugEnv('screem'), { echo: undefined, channels: [], unknown: ['screem'] })
+})
+
+test('the stored value keeps the echo choice and the channels, and is dropped when both are empty', () => {
+  assert.equal(formatDebugEnv(true, ['held', 'screen']), '1,screen,held')
+  assert.equal(formatDebugEnv(undefined, ['screen']), 'screen')
+  assert.equal(formatDebugEnv(false, []), '0')
+  assert.equal(formatDebugEnv(undefined, []), undefined)
+  assert.deepEqual(parseDebugEnv(formatDebugEnv(true, ['screen'])), { echo: true, channels: ['screen'], unknown: [] })
+})
 
 test('channel names parse from commas or spaces, case-insensitively, once each', () => {
   assert.deepEqual(parseChannels('screen, HELD  screen'), { known: ['screen', 'held'], unknown: [] })
