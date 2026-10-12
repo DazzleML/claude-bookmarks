@@ -141,7 +141,7 @@ async function clearShown($: EngineInterface) {
 let markCache: Record<string, Mark> = {}
 
 // The first line of a selection, which is what a row redraw searches for: a match
-// across lines would have to rewrite markdown structure, which this POC won't do.
+// across lines would have to rewrite markdown structure, which the plugin doesn't do.
 const snippetOf = (text: string) => (text.split('\n').find(l => l.trim()) ?? '').trim().slice(0, 120)
 
 // Round 4 colors (dark terminal; a light background would need a lighter LINE_BG).
@@ -206,8 +206,8 @@ function marksOnRow(requestId: string, showing: string | undefined): [string, Ma
 }
 
 // Ids seen at UserMessage render time since this module loaded. A module variable on
-// purpose: a render hook may not write $.state, and a reload SHOULD forget these,
-// which is what makes the B2 test ("never drawn since load") possible.
+// purpose: a render hook may not write $.state, and a reload should forget these, so
+// "never drawn since load" (a jump target Claude Code may refuse) means what it says.
 const rendered = new Map<string, string>()
 
 // Which messages are on screen now, as the render hooks last reported them (a
@@ -426,8 +426,6 @@ type Mark = { uuid: string; head: string; markedAt: number; source?: 'selection'
 type Marks = Record<string, Mark>
 
 const short = (uuid: string) => uuid.slice(0, 8)
-// The 60-character head of a message, the same as the tested core helper (it was a copy).
-const head = headOf
 
 // This plugin's own version, from its manifest (the one Claude Code installs by).
 async function pluginVersion($: EngineInterface): Promise<string> {
@@ -465,11 +463,9 @@ async function keepPrompt($: EngineInterface, p: PromptRef) {
 // The transcript holds them but is too big for $.fs.read (4 MiB; 18 MB here). The
 // platform's own tool filters it to the user rows (no install: Windows PowerShell 5.1
 // on Windows, sh + grep elsewhere) and the mod parses the JSON lines. Settled by the
-// POC in tests/one-offs/thinking/prompt-history/ (2026-10-04: 152/152 prompts,
+// measurement in tests/one-offs/thinking/prompt-history/ (2026-10-04: 152/152 prompts,
 // identical text; ~1 MB of output; 328 ms PowerShell, 81 ms sh + grep). Runs once per
 // conversation; after that the live capture keeps the list current.
-// A typed user prompt's text, or undefined for tool results, meta and sidechain rows.
-// The same rule as the POC's reference parse.
 // Which rows are prompts, and the words of a queued one: core/prompt-rows.ts (tested),
 // shared by the transcript back-fill below and the live capture in session.append.
 
@@ -629,7 +625,7 @@ async function backfillPrompts($: EngineInterface) {
       continue // a line cut off at the 4 MiB output limit
     }
     const text = promptTextOf(o)
-    if (text !== undefined && typeof o.uuid === 'string') found.push({ uuid: o.uuid, head: head(text) })
+    if (text !== undefined && typeof o.uuid === 'string') found.push({ uuid: o.uuid, head: headOf(text) })
   }
   // Transcript order first, then anything the live capture holds that the file did not
   // (prompts sent while the file was being read), minus rows that are not prompts.
@@ -836,13 +832,13 @@ function queueProseAnchors($: EngineInterface, anchors: ReturnType<typeof markdo
 // then the same jump as a mark (with its refused-jump fallbacks).
 async function onAnchorPress($: EngineInterface, href: string) {
   const a = parseAnchor(href)
-  log($, `[bm-poc] M1: anchor link pressed: ${href.slice(0, 120)} -> ${a ? `uuid ${a.uuid}` : 'NOT an anchor'}`)
+  log($, `[bm-poc] anchor link pressed: ${href.slice(0, 120)} -> ${a ? `uuid ${a.uuid}` : 'NOT an anchor'}`)
   if (!a) return
   let uuid = a.uuid
   if (uuid.length < 36) {
     const row = (await allRows($)).find(r => r.uuid.startsWith(uuid))
     if (row) uuid = row.uuid
-    else log($, `[bm-poc] M1: no known row starts with ${uuid}; trying it as written`)
+    else log($, `[bm-poc] anchor link: no known row starts with ${uuid}; trying it as written`)
   }
   // The jump records itself in the jumplist (jumpTo), so <leader> o comes back here. The
   // reading position is left alone: it is the person's (djdarcy, 2026-10-09).
@@ -911,7 +907,7 @@ async function jumplistMove($: EngineInterface, step: -1 | 1) {
   }
 }
 
-// B2/B3/B5 share this: scroll, then report exactly what the engine answered. Returns the
+// Every jump goes through here: scroll, then report exactly what the engine answered. Returns the
 // refusal, if any. `probe`: a try whose "not person-initiated" refusal the caller
 // handles (the band command line's one-time check), so no toast for that one.
 async function jumpTo($: EngineInterface, uuid: string, via: string, label: string, words?: string, probe = false, block: 'start' | 'end' = 'start'): Promise<string | undefined> {
@@ -1069,7 +1065,7 @@ async function screenTopMark($: EngineInterface, before?: string): Promise<Mark 
   const first = snippetOf(plainMarkdown(text))
   return {
     uuid: row?.uuid ?? id,
-    head: head(text) || '(message at the top of the screen)',
+    head: headOf(text) || '(message at the top of the screen)',
     markedAt: await $.clock.now(),
     source: 'screen',
     ...(first ? { snippet: first } : {}),
@@ -1086,7 +1082,7 @@ async function setMark($: EngineInterface, letter: string) {
     const fresh = await loadMarks($)
     const mark: Mark = {
       uuid,
-      head: head(sel.text),
+      head: headOf(sel.text),
       markedAt: await $.clock.now(),
       source: 'selection',
       snippet: snippetOf(sel.text),
@@ -1096,8 +1092,8 @@ async function setMark($: EngineInterface, letter: string) {
     markCache = { ...fresh, [letter]: mark }
     // Writing `shown` redraws the rows and the band that read it.
     await highlightInPlace($, letter, snippetOf(sel.text))
-    log($, `[bm-poc] SEL: mark ${letter} -> ${uuid} (drawn as ${sel.requestId}; ${check}) | "${head(sel.text)}"`)
-    $.ui.toast(`mark ${letter} [selection] -> ${head(sel.text).slice(0, 40)}`)
+    log($, `[bm-poc] SEL: mark ${letter} -> ${uuid} (drawn as ${sel.requestId}; ${check}) | "${headOf(sel.text)}"`)
+    $.ui.toast(`mark ${letter} [selection] -> ${headOf(sel.text).slice(0, 40)}`)
     return
   }
 
@@ -1363,15 +1359,15 @@ async function readingToggle($: EngineInterface) {
     !!reading && !!sel?.requestId && (sel.requestId === reading.uuid || firstFour(sel.requestId) === firstFour(reading.uuid))
   if (sel?.requestId && picked && !sameMessage) {
     const { uuid, check } = await resolveSelectionRow($, sel.requestId, sel.text)
-    const mark: Mark = { uuid, head: head(sel.text), markedAt: await $.clock.now(), source: 'selection', snippet: picked }
+    const mark: Mark = { uuid, head: headOf(sel.text), markedAt: await $.clock.now(), source: 'selection', snippet: picked }
     await $.store.set(await marksKey($), { ...marks, [READING]: mark })
     markCache = { ...marks, [READING]: mark }
     // Next press goes there (from wherever the person has scrolled to by then).
     await setReadingState($, { at: false, back: null })
     await highlightInPlace($, READING, picked)
     await restoreView($)
-    log($, `[bm-poc] reading position set -> ${short(uuid)} (${check}) | "${head(sel.text)}"`)
-    $.ui.toast(`reading position set: ${head(sel.text).slice(0, 40)}`)
+    log($, `[bm-poc] reading position set -> ${short(uuid)} (${check}) | "${headOf(sel.text)}"`)
+    $.ui.toast(`reading position set: ${headOf(sel.text).slice(0, 40)}`)
     return
   }
 
@@ -1423,7 +1419,7 @@ async function jumpToMark($: EngineInterface, letter: string, probe = false): Pr
     $.ui.toast(`mark ${letter} is not set`)
     return 'unset'
   }
-  const deny = await jumpTo($, mark.uuid, 'B4+B5 chord jump', `mark ${letter}`, undefined, probe)
+  const deny = await jumpTo($, mark.uuid, 'chord jump', `mark ${letter}`, undefined, probe)
   if (!deny) await showMark($, letter, mark.snippet ?? mark.head)
   return deny
 }
@@ -1594,7 +1590,7 @@ async function diagState($: EngineInterface, when: string) {
 
 async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   expectRedraw('the pane opening')
-  log($, `[bm-poc] B4: ${action.startsWith('command:') ? `leader ran ${action}` : `chord for ${action} pressed the band Button`}`)
+  log($, `[bm-poc] ${action.startsWith('command:') ? `leader ran ${action}` : `chord for ${action} pressed the band Button`}`)
   await diagState($, `${mode} (before open)`)
   await update($, paneMode, () => mode)
   const title = mode === 'mark' ? 'mark: press a-z' : mode === 'jump' ? 'jump: press a-z' : mode === 'bookmarks' ? 'bookmarks: type #' : 'prompts: type #'
@@ -2148,7 +2144,7 @@ export const register: Register = on => {
         // `text` (first 4000 chars) lets a selection mark check it landed in the right row.
         // A queued message arrives by the `attachment` door; it is a prompt (0.4.0 stored it
         // under the engine's door, so the list, which counts `prompt` rows, dropped every one).
-        const row: Row = { uuid: e.uuid, door: (queued ? 'prompt' : e.door) as Row['door'], head: head(text), text: text.slice(0, 4000) }
+        const row: Row = { uuid: e.uuid, door: (queued ? 'prompt' : e.door) as Row['door'], head: headOf(text), text: text.slice(0, 4000) }
         note(`append ${e.door} ${e.uuid} ${row.head.slice(0, 30)}`)
         await update($, rows, list => [...(list as Row[]), row].slice(-500))
         if (row.door === 'prompt') await keepPrompt($, { uuid: row.uuid, head: row.head })
@@ -2172,11 +2168,11 @@ export const register: Register = on => {
     noteOnScreen(e.requestId, e.props.onScreen)
     noteViewMoved($)
     if (!rendered.has(e.requestId)) {
-      const text = head(e.props.text ?? '')
+      const text = headOf(e.props.text ?? '')
       rendered.set(e.requestId, text)
       note(`draw UserMessage ${e.requestId} ${text.slice(0, 30)}`)
     }
-    // Highlight POC: a prompt row is plain text, so the mark shows as a «a» tag
+    // The mark highlight: a prompt row is plain text, so the mark shows as a «a» tag
     // in front of the selected words. Display only -- the model never reads it.
     const text = e.props.text ?? ''
     const onRow = marksOnRow(e.requestId, (await read($, shown))?.letter)
@@ -2215,7 +2211,7 @@ export const register: Register = on => {
     return marked === text ? next(e) : next({ ...e, props: { ...e.props, text: marked } })
   })
 
-  // Highlight POC: a reply's text is markdown, so the marked words are drawn bold with
+  // The mark highlight: a reply's text is markdown, so the marked words are drawn bold with
   // a «a» tag. When the selection (rendered text) doesn't match the markdown source
   // literally, the tag goes on a line of its own at the top of the block instead, which
   // is where a jump lands. Only rows carrying a mark are touched.
@@ -2224,7 +2220,7 @@ export const register: Register = on => {
     noteOnScreen(e.requestId, e.props.onScreen)
     noteViewMoved($)
 
-    // Probe M1/M2 (anchors DWP, 2026-10-09): a reply carrying bookmark-anchor links is
+    // Bookmark links (anchors DWP, 2026-10-09): a reply carrying bookmark-anchor links is
     // drawn as the mod's own Markdown, so a plain click on such a link reaches the mod
     // (onLinkPress) and tries the jump; the log says what the engine answered. A ctrl-click
     // stays the terminal's own open. Replies without anchors take the usual path below.
@@ -2358,7 +2354,7 @@ export const register: Register = on => {
     const matched = list.filter(r => rendered.has(r.uuid)).length
     const strays = [...rendered.keys()].filter(id => !appended.has(id))
     log($, 
-      `[bm-poc] B1: ${matched} of ${list.length} appended prompt uuids were seen as ` +
+      `[bm-poc] ids: ${matched} of ${list.length} appended prompt uuids were seen as ` +
         `UserMessage requestIds; ${rendered.size} UserMessage ids drawn since load; ` +
         `${strays.length} drawn ids not among appended prompts`,
     )
@@ -2409,11 +2405,11 @@ export const register: Register = on => {
     }
 
     if (target) {
-      await jumpTo($, target.uuid, 'B3 command', label)
+      await jumpTo($, target.uuid, '/bm-jump', label)
     } else if (/^[0-9a-f-]{36}$/.test(arg)) {
-      // Not a captured row: try the raw id anyway, which tests B2 for ids known only
-      // from the transcript file (paste a uuid from jq).
-      await jumpTo($, arg, 'B3/B2 command (raw uuid)', 'raw')
+      // Not a captured row: try the raw id anyway, for an id known only from the
+      // transcript file (paste a uuid from jq); Claude Code may refuse one never drawn.
+      await jumpTo($, arg, '/bm-jump (raw uuid)', 'raw')
     } else {
       log($, `[bm-poc] nothing captured for "${arg}" (${onlyPrompts.length} prompts captured since load)`)
     }
@@ -2495,7 +2491,7 @@ export const register: Register = on => {
     return {}
   })
 
-  // Selection POC arm D: exactly what $.ui.selection() answers, and whether its row
+  // /bm-sel: exactly what $.ui.selection() answers, and whether its row
   // id is one the mod already knows (a saved uuid, or an id seen at draw time).
   on('command.run', { command: 'bm-sel' }, async $ => {
     const sel = await $.ui.selection()
@@ -2523,7 +2519,7 @@ export const register: Register = on => {
     return {}
   })
 
-  // Probe M3, second half: answer the model's call to the stub tool. The engine strips
+  // The `bookmark` tool: answer the model's call. The engine strips
   // nothing from `e` for a plugin's own tool, so the arguments sit beside the envelope.
   // Matched by pattern, not by the literal name: the engine generates the tool-name type
   // from the manifest on a session start, so a rename leaves the literal red until then.
