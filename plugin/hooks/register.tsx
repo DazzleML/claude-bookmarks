@@ -32,13 +32,14 @@ import { resolvePalette, type Palette, type Role, type Style } from './core/pale
 import { shard, withinBudget, type PromptText } from './core/text-store'
 import { filterPrompts, matchLegend } from './core/filter'
 import { pruneStore, type Seen } from './core/store-prune'
-import { footnoteOf, looksLikePrompt, numberFootnotes, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompt-rows'
+import { footnoteOf, looksLikePrompt, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompt-rows'
 import { byFirstFour, findByMessage, firstFour, sameMessage, short } from './core/message-id'
 import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFile, stamped, type EchoPolicy } from './core/log-ring'
 import { DEBUG_USAGE, configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, parseDebugArgs, selectionKind, settingsRows } from './core/diagnostics'
 import { colorSplit, plainMarkdown, snippetOf, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/highlight'
 import { ScreenModel } from './core/screen-model'
 import { marksShowing, searchPhrase, type Mark, type Marks } from './core/marks'
+import { footnoteAt, listPosition, nextGroup, promptEntry, promptNumberComplete, stepNumber } from './core/band-entry'
 import { age, bookmarkWho, drawnFourOf, foldedLabel, footnoteDisplay, footnotesByPrompt, groupHeader, numberLabel as numberLabelAt, numberNewestFirst, numberWidth, pinnedRowsOf, pointerFor, unreached } from './core/list-model'
 import { BOOKMARK_TOOL, answer as toolAnswer, brief as briefRow, describe as describeRecord, listActedOn, listName, parseToolInput, tierFor } from './core/bookmark-tool'
 import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptList, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, transcriptGuess, type PromptRef } from './core/prompt-store'
@@ -1673,9 +1674,7 @@ async function showInPane($: EngineInterface, n: number) {
 async function bandStep($: EngineInterface, key: 'j' | 'k') {
   const count = await listCount($)
   if (count === 0) return
-  const typed = await read($, bandNum)
-  const cur = Number(typed)
-  const n = !typed || !cur ? count : Math.min(count, Math.max(1, cur + (key === 'j' ? -1 : 1)))
+  const n = stepNumber(await read($, bandNum), count, key)
   await update($, bandNum, () => String(n))
   await showInPane($, n)
   keepBandWaiting($)
@@ -1880,8 +1879,8 @@ async function loadPins($: EngineInterface): Promise<string[]> {
 // there is no such prompt.
 async function togglePin($: EngineInterface, typed: string): Promise<boolean> {
   const all = await prompts($)
-  const n = typed.trim() === '' ? all.length : Number(typed.trim())
-  const target = Number.isInteger(n) ? all[n - 1] : undefined
+  const n = listPosition(typed, all.length, true)
+  const target = n === undefined ? undefined : all[n - 1]
   if (!target) {
     $.ui.toast(`no prompt #${typed.trim()} (1-${all.length})`)
     return false
@@ -1895,63 +1894,47 @@ async function togglePin($: EngineInterface, typed: string): Promise<boolean> {
   return true
 }
 
+// What the entry means (pin, filter, unfold, footnote, jump): core/band-entry.ts promptEntry.
 async function jumpToPromptNumber($: EngineInterface, typed: string, via: string) {
-  // `*21` toggles the pin on #21, `*` on the newest; the pane stays open to pin more.
-  if (typed.trim().startsWith('*')) {
-    await togglePin($, typed.trim().slice(1))
+  const all = await prompts($)
+  const entry = promptEntry(typed, all.length)
+  if (entry.kind === 'pin') {
+    await togglePin($, entry.typed)
     return
   }
-  // `/words` with Enter: the filter (#28), as typing it does.
-  if (typed.trim().startsWith('/')) {
-    paneFilter = typed.trim().slice(1)
+  if (entry.kind === 'filter') {
+    paneFilter = entry.words
     await update($, viewRev, v => v + 1)
     return
   }
-  const all = await prompts($)
-  // `3.` unfolds #3's footnotes, and again folds them; `3.1` jumps to its first (#33).
-  const parsed = parseListNumber(typed)
-  if (parsed?.unfold) {
+  if (entry.kind === 'unfold') {
     // Hidden footnotes: `N.k` still jumps (djdarcy, 2026-10-12: "Rows hidden, keys work"),
     // but `N.` has nothing to show, so it says why.
     if (currentSettings().footnotes === 'hidden') return void $.ui.toast('Footnotes are hidden: "Footnotes in the prompts list" in /config shows them')
-    if (unfoldedFootnotes.has(parsed.n)) unfoldedFootnotes.delete(parsed.n)
-    else unfoldedFootnotes.add(parsed.n)
+    if (unfoldedFootnotes.has(entry.n)) unfoldedFootnotes.delete(entry.n)
+    else unfoldedFootnotes.add(entry.n)
     await update($, viewRev, v => v + 1)
     return
   }
-  if (parsed?.k !== undefined) {
-    const kept = await keptFootnotes($)
-    const nums = numberFootnotes(all.map(p => p.uuid), kept)
-    const i = nums.findIndex(x => x?.n === parsed.n && x.k === parsed.k)
-    const f = i >= 0 ? kept[i] : undefined
+  if (entry.kind === 'footnote') {
+    const f = footnoteAt(all.map(p => p.uuid), await keptFootnotes($), entry.n, entry.k)
     if (!f) {
-      $.ui.toast(`no footnote ${parsed.n}.${parsed.k}`)
+      $.ui.toast(`no footnote ${entry.n}.${entry.k}`)
       return
     }
-    await jumpTo($, f.uuid, via, `footnote ${parsed.n}.${parsed.k}`)
+    await jumpTo($, f.uuid, via, `footnote ${entry.n}.${entry.k}`)
     await settle($, 'list', 'jump')
     return
   }
-  const n = Number(typed.trim())
-  const target = Number.isInteger(n) ? all[n - 1] : undefined
-  if (!target) {
-    $.ui.toast(`no prompt #${typed.trim()} (1-${all.length})`)
+  if (entry.kind === 'invalid') {
+    $.ui.toast(`no prompt #${entry.typed} (1-${all.length})`)
     return
   }
-  await jumpTo($, target.uuid, via, `prompt #${n}`, target.head)
+  const target = all[entry.n - 1]!
+  await jumpTo($, target.uuid, via, `prompt #${entry.n}`, target.head)
   await settle($, 'list', 'jump')
 }
 
-// When a typed prompt number jumps (a setting, #7): 'enter' waits for Enter, so the
-// person can check the number first; 'complete' jumps on the digit that makes it complete.
-// Default 'enter': `p 3XX` jumping before Enter was "potentially a problem" (djdarcy,
-// 2026-10-07: "Some users will like just typing the number and going there. Others will
-// want the chance to confirm.").
-const PROMPT_NUMBER_JUMPS_AT: 'enter' | 'complete' = 'enter'
-
-// True once the digits typed can't become a larger prompt number: with 25 prompts,
-// `3` is complete, `2` waits for a second digit or Enter. Only acted on when
-// PROMPT_NUMBER_JUMPS_AT is 'complete'.
 // --- Bookmarks in the pane and the band ---------------------------------------------------
 // Numbered in the order minted (#1 the first), so a number read off the pane stays good.
 async function bookmarkList($: EngineInterface) {
@@ -1974,14 +1957,14 @@ async function arriveAtBookmark($: EngineInterface, record: { uuid: string; word
 
 // Cycle the bookmarks pane's group from the band: yours -> Claude's -> all -> yours.
 async function bandGroupStep($: EngineInterface, step: -1 | 1) {
-  await update($, bandGroup, g => (g + step + BOOKMARK_GROUPS.length) % BOOKMARK_GROUPS.length)
+  await update($, bandGroup, g => nextGroup(g, step, BOOKMARK_GROUPS.length))
   keepBandWaiting($)
 }
 
 async function jumpToBookmarkNumber($: EngineInterface, typed: string, via: string) {
   const all = await bookmarkList($)
-  const n = Number(typed.trim())
-  const target = Number.isInteger(n) ? all[n - 1] : undefined
+  const n = listPosition(typed, all.length)
+  const target = n === undefined ? undefined : all[n - 1]
   if (!target) {
     $.ui.toast(`no bookmark #${typed.trim()} (1-${all.length})`)
     return
@@ -2023,12 +2006,6 @@ async function promoteLetter($: EngineInterface, letter: string) {
   )
   const copied = minted.markdown ? (await $.ui.copy({ text: minted.markdown })).isCopied : false
   $.ui.toast(`${minted.added ? 'bookmarked' : 'already a bookmark, relabelled'}: ${minted.record.label.slice(0, 40)}${copied ? ' (link copied)' : ''}`, { timeoutMs: 6000 })
-}
-
-function promptNumberComplete(typed: string, count: number): boolean {
-  if (PROMPT_NUMBER_JUMPS_AT !== 'complete') return false
-  const n = Number(typed)
-  return /^\d+$/.test(typed) && n >= 1 && n <= count && n * 10 > count
 }
 
 const BAND_WATCH_MS = 400
