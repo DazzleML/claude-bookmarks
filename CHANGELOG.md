@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-10-12
+
+### Changed
+
+- Every line in the plugin's debug log starts with `[bm]`; most used to start with `[bm-poc]`, a name left from the plugin's prototype.
+
 ## [0.4.6] - 2026-10-12
 
 ### Changed
@@ -322,7 +328,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.6...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.7...HEAD
+[0.4.7]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.6...v0.4.7
 [0.4.6]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.3...v0.4.4

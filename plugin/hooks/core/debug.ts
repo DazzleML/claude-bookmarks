@@ -31,6 +31,17 @@ export function parseChannels(list: string | undefined): { known: Channel[]; unk
   return { known, unknown }
 }
 
+// The log lines the screen channel copies into its own file, so the yellow row's moves
+// line up with the reports that caused them. Matched without the `[bm] ` prefix and cut
+// to 110 characters.
+const MIRRORED = /^\[bm\] ((nearest prompt moved|redraw ignored|pane follow|held by).*)$/
+
+/** The part of a log line the screen log mirrors, or undefined for a line it does not. */
+export function screenMirror(line: string): string | undefined {
+  const m = MIRRORED.exec(line)
+  return m ? m[1]!.slice(0, 110) : undefined
+}
+
 /** Known channels in table order, comma-separated; '' when none. */
 export function formatChannels(on: Iterable<Channel>): string {
   const set = new Set(on)

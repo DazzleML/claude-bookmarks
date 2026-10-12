@@ -25,7 +25,7 @@ import {
 import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution, type TranscriptRow } from './core/transcript-lines'
 import { exchangeIndex, looksLikeRedraw, pickViewAnchor, promptNearView } from './core/view-position'
 import { latestBurst, reportTime, type Report } from './core/latest-burst'
-import { CHANNELS, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, type Channel } from './core/debug'
+import { CHANNELS, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, screenMirror, type Channel } from './core/debug'
 import { lineHint, route, type Pane } from './core/keys'
 import { afterAction, type Cause } from './core/after-action'
 import { resolve as resolveSettings, type Settings } from './core/settings'
@@ -304,7 +304,7 @@ function note(what: string) {
   timeline.push({ t: Date.now(), what })
   if (timeline.length > 400) timeline.shift()
 }
-// The [bm-poc] log lines, also written to <user dir>/bookmarks/debug/<session>.log:
+// The [bm]log lines, also written to <user dir>/bookmarks/debug/<session>.log:
 // $.ui.log rows are only drawn, so a session that reads files (Claude, while
 // developing this) cannot see them. Kept outside the plugin folder on purpose: a write
 // inside it trips the folder watch and reloads the mod on every line. $.fs has no
@@ -390,7 +390,8 @@ function log($: EngineInterface, line: string, opts?: { always?: boolean }) {
   if (opts?.always) $.ui.log(line)
   else void uiEchoEnabled($).then(enabled => { if (enabled) $.ui.log(line) }).catch(() => {})
   logLines.push(`${new Date().toISOString()} ${line}`)
-  if (channelsOn.has('screen') && /^\[bm-poc\] (nearest prompt moved|redraw ignored|pane follow|held by)/.test(line)) screenLines.push(`${clock(Date.now())} >>> ${line.slice(9, 120)}`)
+  const mirrored = channelsOn.has('screen') ? screenMirror(line) : undefined
+  if (mirrored) screenLines.push(`${clock(Date.now())} >>> ${mirrored}`)
   if (logLines.length > LOG_LINES) logLines.splice(0, logLines.length - LOG_LINES)
   flushing = flushing.then(() => flushLog($)).catch(() => {})
 }
@@ -607,12 +608,12 @@ async function backfillPrompts($: EngineInterface) {
   if (await $.store.get(doneKey)) return
   const path = await transcriptPath($)
   if (!path) {
-    log($, '[bm-poc] backfill: transcript not found; prompts list starts when the mod loaded')
+    log($, '[bm]backfill: transcript not found; prompts list starts when the mod loaded')
     return
   }
   const rows = await userRows($, path)
   if (!rows) {
-    log($, '[bm-poc] backfill: neither PowerShell nor sh + grep ran; prompts list starts when the mod loaded')
+    log($, '[bm]backfill: neither PowerShell nor sh + grep ran; prompts list starts when the mod loaded')
     return
   }
   const found: PromptRef[] = []
@@ -636,7 +637,7 @@ async function backfillPrompts($: EngineInterface) {
   if (!rows.isStdoutTruncated) await $.store.set(doneKey, true)
   log(
     $,
-    `[bm-poc] backfill: ${found.length} prompts from the transcript via ${rows.via} in ${rows.ms} ms ` +
+    `[bm]backfill: ${found.length} prompts from the transcript via ${rows.via} in ${rows.ms} ms ` +
       `(${rows.stdout.length} chars${rows.isStdoutTruncated ? ', CUT OFF at 4 MiB: newest may be missing' : ''}); ` +
       `list now ${Math.min(merged.length, PROMPTS_KEPT)}`,
   )
@@ -832,13 +833,13 @@ function queueProseAnchors($: EngineInterface, anchors: ReturnType<typeof markdo
 // then the same jump as a mark (with its refused-jump fallbacks).
 async function onAnchorPress($: EngineInterface, href: string) {
   const a = parseAnchor(href)
-  log($, `[bm-poc] anchor link pressed: ${href.slice(0, 120)} -> ${a ? `uuid ${a.uuid}` : 'NOT an anchor'}`)
+  log($, `[bm]anchor link pressed: ${href.slice(0, 120)} -> ${a ? `uuid ${a.uuid}` : 'NOT an anchor'}`)
   if (!a) return
   let uuid = a.uuid
   if (uuid.length < 36) {
     const row = (await allRows($)).find(r => r.uuid.startsWith(uuid))
     if (row) uuid = row.uuid
-    else log($, `[bm-poc] anchor link: no known row starts with ${uuid}; trying it as written`)
+    else log($, `[bm]anchor link: no known row starts with ${uuid}; trying it as written`)
   }
   // The jump records itself in the jumplist (jumpTo), so <leader> o comes back here. The
   // reading position is left alone: it is the person's (djdarcy, 2026-10-09).
@@ -922,7 +923,7 @@ async function jumpTo($: EngineInterface, uuid: string, via: string, label: stri
   }
   const verdict = result.deny ? `DENY: ${result.deny}` : 'ok'
   if (probe && result.deny && /person-initiated/i.test(result.deny)) {
-    log($, `[bm-poc] ${via} scroll -> ${verdict} | target ${label} ${short(uuid)} (probe)`)
+    log($, `[bm]${via} scroll -> ${verdict} | target ${label} ${short(uuid)} (probe)`)
     return result.deny
   }
   // A message Claude Code has not drawn cannot be scrolled to ("nothing drawn under
@@ -933,7 +934,7 @@ async function jumpTo($: EngineInterface, uuid: string, via: string, label: stri
   // Claude Code said, not "older than a compaction" (log, 2026-10-07 06:26:12).
   if (result.deny && !/nothing drawn/i.test(result.deny)) {
     $.ui.toast(`Can't jump there: Claude Code refused the scroll (${result.deny}).`)
-    log($, `[bm-poc] jump refused for another reason: ${result.deny}`)
+    log($, `[bm]jump refused for another reason: ${result.deny}`)
   } else if (result.deny) {
     const text = words ?? rendered.get(uuid) ?? Object.values(markCache).find(m => m.uuid === uuid)?.head
     // The mod cannot open Ctrl+O or fill a search (nothing in $.ui drives the
@@ -954,11 +955,11 @@ async function jumpTo($: EngineInterface, uuid: string, via: string, label: stri
             `${phrase ? `"${phrase}"` : 'a few words of it'}.`,
       { timeoutMs: 12000 },
     )
-    log($, `[bm-poc] jump refused; search phrase ${copied ? 'copied' : 'shown'}: "${phrase ?? ''}"`)
+    log($, `[bm]jump refused; search phrase ${copied ? 'copied' : 'shown'}: "${phrase ?? ''}"`)
   }
   note(`scroll ${uuid} via ${via} -> ${verdict}`)
   log($,
-    `[bm-poc] ${via} scroll -> ${verdict} | target ${label} ${short(uuid)} | ` +
+    `[bm]${via} scroll -> ${verdict} | target ${label} ${short(uuid)} | ` +
       `drawn since load: ${rendered.has(uuid) ? 'yes' : 'NO'}`,
   )
   return result.deny
@@ -1013,11 +1014,11 @@ async function restoreView($: EngineInterface) {
   // Otherwise only when the view actually moved: scrolling back regardless lined up the
   // top message's first line and moved a view that had not dropped (djdarcy, 2026-10-07).
   if (!fromPane && freshOnScreen().some(id => sameMessage(id, here))) {
-    log($, `[bm-poc] view kept after highlight (${short(here)} still on screen)`)
+    log($, `[bm]view kept after highlight (${short(here)} still on screen)`)
     return
   }
   const r = await $.ui.scroll({ to: { requestId: here }, block })
-  log($, `[bm-poc] view restored after highlight -> ${r.deny ? `DENY: ${r.deny}` : 'ok'} | ${short(here)}`)
+  log($, `[bm]view restored after highlight -> ${r.deny ? `DENY: ${r.deny}` : 'ok'} | ${short(here)}`)
 }
 
 // --- Fresh and stale selections ---------------------------------------------------------
@@ -1049,7 +1050,7 @@ async function freshSelection($: EngineInterface, sel: Selection): Promise<Selec
   const at = selectionSeen?.key === key ? selectionSeen.at : 0
   const age = at ? Math.round((Date.now() - at) / 1000) : undefined
   const fresh = age !== undefined && age <= SELECTION_FRESH_SECONDS
-  log($, `[bm-poc] selection "${sel!.text.trim().slice(0, 24)}" is ${age === undefined ? 'of unknown age' : `${age}s old`}: ${fresh ? 'used' : 'ignored (stale)'}`)
+  log($, `[bm]selection "${sel!.text.trim().slice(0, 24)}" is ${age === undefined ? 'of unknown age' : `${age}s old`}: ${fresh ? 'used' : 'ignored (stale)'}`)
   return fresh ? sel : undefined
 }
 
@@ -1092,7 +1093,7 @@ async function setMark($: EngineInterface, letter: string) {
     markCache = { ...fresh, [letter]: mark }
     // Writing `shown` redraws the rows and the band that read it.
     await highlightInPlace($, letter, snippetOf(sel.text))
-    log($, `[bm-poc] SEL: mark ${letter} -> ${uuid} (drawn as ${sel.requestId}; ${check}) | "${headOf(sel.text)}"`)
+    log($, `[bm]SEL: mark ${letter} -> ${uuid} (drawn as ${sel.requestId}; ${check}) | "${headOf(sel.text)}"`)
     $.ui.toast(`mark ${letter} [selection] -> ${headOf(sel.text).slice(0, 40)}`)
     return
   }
@@ -1111,7 +1112,7 @@ async function setMark($: EngineInterface, letter: string) {
   await $.store.set(await marksKey($), { ...fresh, [letter]: mark })
   markCache = { ...fresh, [letter]: mark }
   if (mark.snippet) await highlightInPlace($, letter, mark.snippet)
-  log($, `[bm-poc] mark ${letter} -> ${short(mark.uuid)} (top of screen) | "${mark.head}"`)
+  log($, `[bm]mark ${letter} -> ${short(mark.uuid)} (top of screen) | "${mark.head}"`)
   $.ui.toast(`mark ${letter} [top of screen] -> ${mark.head.slice(0, 40)}`)
 }
 
@@ -1213,7 +1214,7 @@ async function promptHere($: EngineInterface): Promise<string | undefined> {
   })
   const sinceSelf = Date.now() - selfRedrawAt
   if (sinceSelf < SELF_REDRAW_MS && looksLikeRedraw(fresh, trustedScreen, lastHere ? exchangeOfId(lastHere) : undefined, exchangeOfId)) {
-    log($, `[bm-poc] redraw ignored, not a view: ${fresh.map(r => `${r.id.slice(0, 13)} ${r.first}-${r.last}/${r.of}`).join(' ')}; kept ${lastHere ? short(lastHere) : '(none)'} (${sinceSelf} ms after ${selfRedrawWhy})`)
+    log($, `[bm]redraw ignored, not a view: ${fresh.map(r => `${r.id.slice(0, 13)} ${r.first}-${r.last}/${r.of}`).join(' ')}; kept ${lastHere ? short(lastHere) : '(none)'} (${sinceSelf} ms after ${selfRedrawWhy})`)
     lastScreenOrder = [...trustedScreen]
     return held('a redraw')
   }
@@ -1259,7 +1260,7 @@ function noteViewMoved($: EngineInterface) {
       if ((await read($, paneMode)) !== 'list') return
       if (!(await $.ui.panes()).some(p => p.id === PANE)) return
       const here = await promptHere($)
-      if (channelsOn.has('held') && heldBy && heldBy !== lastHeldLogged) log($, `[bm-poc] held by ${heldBy}: kept ${lastHere ? short(lastHere) : '(none)'}`)
+      if (channelsOn.has('held') && heldBy && heldBy !== lastHeldLogged) log($, `[bm]held by ${heldBy}: kept ${lastHere ? short(lastHere) : '(none)'}`)
       lastHeldLogged = heldBy
       if (here === lastHere) return
       // Diagnostic (2026-10-11): the yellow row flipped between #295 and #34 within one
@@ -1277,7 +1278,7 @@ function noteViewMoved($: EngineInterface) {
           return `${id.slice(0, 13)}:${byFour.get(firstFour(id)) ?? '?'}:${s ? `${s.first}-${s.last}/${s.of}` : '?'}`
         })
         .join(' ')
-      log($, `[bm-poc] nearest prompt moved: ${lastHere ? short(lastHere) : '(none)'} -> ${here ? short(here) : '(none)'} | on screen (id:order:first-last/of) ${seen}`)
+      log($, `[bm]nearest prompt moved: ${lastHere ? short(lastHere) : '(none)'} -> ${here ? short(here) : '(none)'} | on screen (id:order:first-last/of) ${seen}`)
       await update($, viewRev, v => v + 1)
       // Keep the yellow row in the pane's view, moving the list the least that does it
       // ('nearest': no move while the row is already showing), and not while the person
@@ -1285,7 +1286,7 @@ function noteViewMoved($: EngineInterface) {
       // jumps under them (djdarcy, 2026-10-11). A setting later (#7): FOLLOW_HERE.
       if (here && FOLLOW_HERE !== 'never' && (FOLLOW_HERE === 'always' || (await read($, bandNum)) === '')) {
         const r = await $.ui.scroll({ in: PANE, to: { key: `p-${here}` }, block: 'nearest' })
-        log($, `[bm-poc] pane follow to ${short(here)} -> ${r.deny ? `DENY: ${r.deny}` : 'ok'}`)
+        log($, `[bm]pane follow to ${short(here)} -> ${r.deny ? `DENY: ${r.deny}` : 'ok'}`)
       }
     })()
   })
@@ -1318,7 +1319,7 @@ async function viewAnchor($: EngineInterface): Promise<{ uuid: string; block: 's
   })
   const pick = pickViewAnchor(reports)
   if (!pick) return { uuid: top, block: 'start' }
-  if (pick.drift > 0) log($, `[bm-poc] view anchor ${short(pick.id)} at the ${pick.block}, ${pick.drift} rows off at best`)
+  if (pick.drift > 0) log($, `[bm]view anchor ${short(pick.id)} at the ${pick.block}, ${pick.drift} rows off at best`)
   return { uuid: pick.id, block: pick.block }
 }
 
@@ -1338,7 +1339,7 @@ async function goToReading($: EngineInterface, reading: Mark, via: string) {
       ? { at: true, back: previous.back, ...(previous.backBlock ? { backBlock: previous.backBlock } : {}) }
       : { at: true, back: anchor?.uuid ?? null, ...(anchor ? { backBlock: anchor.block } : {}) },
   )
-  if (anchor) log($, `[bm-poc] reading position: back will be ${short(anchor.uuid)} at the window's ${anchor.block}`)
+  if (anchor) log($, `[bm]reading position: back will be ${short(anchor.uuid)} at the window's ${anchor.block}`)
   await jumpTo($, reading.uuid, via, `from ${here ? short(here) : '(unknown)'}`)
   await showMark($, READING, reading.snippet ?? reading.head)
 }
@@ -1366,7 +1367,7 @@ async function readingToggle($: EngineInterface) {
     await setReadingState($, { at: false, back: null })
     await highlightInPlace($, READING, picked)
     await restoreView($)
-    log($, `[bm-poc] reading position set -> ${short(uuid)} (${check}) | "${headOf(sel.text)}"`)
+    log($, `[bm]reading position set -> ${short(uuid)} (${check}) | "${headOf(sel.text)}"`)
     $.ui.toast(`reading position set: ${headOf(sel.text).slice(0, 40)}`)
     return
   }
@@ -1404,7 +1405,7 @@ async function readingToggle($: EngineInterface) {
     await showMark($, READING, reading.snippet ?? reading.head)
     $.ui.toast("You're at the reading position. Scroll away and press again to come back here.")
     const seen = [...onScreenNow.entries()].find(([id]) => sameMessage(id, reading.uuid))?.[1]
-    log($, `[bm-poc] reading position: already on screen, stayed put` +
+    log($, `[bm]reading position: already on screen, stayed put` +
       (seen ? ` (reported lines ${seen.first}-${seen.last} of ${seen.of}, ${Date.now() - seen.at} ms ago)` : ''))
     return
   }
@@ -1457,7 +1458,7 @@ async function runCommandLine($: EngineInterface, typed: string, via: 'input' | 
   if (cmdBusy || typed === '') return
   cmdBusy = true
   try {
-    log($, `[bm-poc] band command line ${via}: "${typed}"`)
+    log($, `[bm]band command line ${via}: "${typed}"`)
     // What the keys mean lives in the router's table (core/keys.ts); this performs it.
     const { operation } = route(typed, { pane: 'none' })
     switch (operation.op) {
@@ -1533,7 +1534,7 @@ async function showInPane($: EngineInterface, n: number) {
   const target = bookmarks ? (await bookmarkList($))[n - 1] : (await prompts($))[n - 1]
   if (!target) return
   const r = await $.ui.scroll({ in: PANE, to: { key: `${bookmarks ? 'b' : 'p'}-${target.uuid}` }, block: 'center' })
-  if (r.deny) log($, `[bm-poc] pane scroll to #${n} -> DENY: ${r.deny}`)
+  if (r.deny) log($, `[bm]pane scroll to #${n} -> DENY: ${r.deny}`)
 }
 
 // Browse the prompts one by one from the band, vim's j and k: the band holds the keyboard,
@@ -1590,7 +1591,7 @@ async function diagState($: EngineInterface, when: string) {
 
 async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   expectRedraw('the pane opening')
-  log($, `[bm-poc] ${action.startsWith('command:') ? `leader ran ${action}` : `chord for ${action} pressed the band Button`}`)
+  log($, `[bm]${action.startsWith('command:') ? `leader ran ${action}` : `chord for ${action} pressed the band Button`}`)
   await diagState($, `${mode} (before open)`)
   await update($, paneMode, () => mode)
   const title = mode === 'mark' ? 'mark: press a-z' : mode === 'jump' ? 'jump: press a-z' : mode === 'bookmarks' ? 'bookmarks: type #' : 'prompts: type #'
@@ -1616,12 +1617,12 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   // Probe (2026-10-09): below the engine's width floor the pane waits undrawn and the
   // person sees nothing. Say why, instead of looking broken (djdarcy's shrunk RDP terminal).
   if (opened && opened.isPlaced === false) {
-    log($, `[bm-poc] pane not placed: ${opened.reason ?? '(no reason given)'}`)
+    log($, `[bm]pane not placed: ${opened.reason ?? '(no reason given)'}`)
     $.ui.toast(`Claude Code didn't draw the pane: ${opened.reason ?? 'no reason given'}. A wider terminal (or a smaller font, Ctrl+-) fixes it.`, { timeoutMs: 8000 })
   }
   if (paneView) {
     const r = await $.ui.scroll({ to: { requestId: paneView.uuid }, block: paneView.block })
-    log($, `[bm-poc] view back to ${short(paneView.uuid)} (${paneView.block}) after the pane opened -> ${r.deny ? `DENY: ${r.deny} (again at the next press)` : 'ok'}`)
+    log($, `[bm]view back to ${short(paneView.uuid)} (${paneView.block}) after the pane opened -> ${r.deny ? `DENY: ${r.deny} (again at the next press)` : 'ok'}`)
   }
   // The row cannot be scrolled to before the pane has drawn it (DENY: "no element of
   // its own is drawn under that key", 2026-10-11): the pane's render hook does it right
@@ -1641,7 +1642,7 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   const selNow = await $.ui.selection()
   log(
     $,
-    `[bm-poc] ${mode} pane has the keyboard: ${focused ? 'yes' : 'NO'} (input box holds ${draft.length} chars; ` +
+    `[bm]${mode} pane has the keyboard: ${focused ? 'yes' : 'NO'} (input box holds ${draft.length} chars; ` +
       `selection ${selNow?.text.trim() ? `"${selNow.text.trim().slice(0, 24)}"` : 'none'})`,
   )
   // From a typed command (/bm-mark, /bm-goto, /bm-prompts) the band never holds the
@@ -1668,7 +1669,7 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   // holds them. So the band itself takes the next key; the pane stays open as the list.
   if (!(await paneFocused($))) {
     await update($, bandMode, () => mode)
-    log($, `[bm-poc] pane opened without the keyboard; the band takes the ${mode} key`)
+    log($, `[bm]pane opened without the keyboard; the band takes the ${mode} key`)
     bandTimer?.cancel()
     bandTimer = $.clock.after(BAND_MODE_MS, () => void endBandMode($))
     // Enter's default: `go` for a prompt number, the reading position for a jump (a
@@ -1683,7 +1684,7 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
       bandTimer?.cancel()
       bandTimer = undefined
       await update($, bandMode, () => 'idle')
-      log($, `[bm-poc] ${mode} pane opened by a click: it stays open as a list (close it with its ×)`)
+      log($, `[bm]${mode} pane opened by a click: it stays open as a list (close it with its ×)`)
       return
     }
     // Esc hands the keyboard back to the prompt, and no event says so (djdarcy,
@@ -1709,7 +1710,7 @@ async function focusBand($: EngineInterface, key: string): Promise<string | unde
   if (!bandId) return undefined
   const r = await $.ui.focus({ requestId: bandId, key })
   const deny = 'deny' in r && r.deny ? String(r.deny) : undefined
-  log($, `[bm-poc] band focus ${key}: ${deny ? `DENY ${deny}` : 'ok'}`)
+  log($, `[bm]band focus ${key}: ${deny ? `DENY ${deny}` : 'ok'}`)
   return deny
 }
 
@@ -1740,7 +1741,7 @@ async function togglePin($: EngineInterface, typed: string): Promise<boolean> {
   await $.store.set(await pinsKey($), pinned ? pins.filter(u => u !== target.uuid) : [...pins, target.uuid])
   await update($, pinsRev, v => v + 1)
   $.ui.toast(`${pinned ? 'unpinned' : 'pinned'} #${n}: ${target.head.slice(0, 40)}`)
-  log($, `[bm-poc] ${pinned ? 'unpinned' : 'pinned'} prompt #${n} ${short(target.uuid)}`)
+  log($, `[bm]${pinned ? 'unpinned' : 'pinned'} prompt #${n} ${short(target.uuid)}`)
   return true
 }
 
@@ -1878,7 +1879,7 @@ async function watchBand($: EngineInterface, mode: PaneMode) {
     // its own keys and field included. Closing it there shut the pane the moment its
     // field was clicked (djdarcy, 2026-10-07).
     if (await paneFocused($)) {
-      log($, `[bm-poc] the keyboard moved into the pane: the band steps back, the pane stays`)
+      log($, `[bm]the keyboard moved into the pane: the band steps back, the pane stays`)
       await endBandMode($)
       return
     }
@@ -1888,11 +1889,11 @@ async function watchBand($: EngineInterface, mode: PaneMode) {
     // right, which it shouldn't"). The mark and jump panes only exist for the next
     // letter, so they still close.
     if (listLike(mode)) {
-      log($, `[bm-poc] band lost the keyboard (${r.deny}): the band steps back, the list stays`)
+      log($, `[bm]band lost the keyboard (${r.deny}): the band steps back, the list stays`)
       await endBandMode($)
       return
     }
-    log($, `[bm-poc] band lost the keyboard (${r.deny}): closing the pane`)
+    log($, `[bm]band lost the keyboard (${r.deny}): closing the pane`)
     await closePane($)
   }
 }
@@ -1929,7 +1930,7 @@ let paneGeometry: string | undefined
 async function closePane($: EngineInterface) {
   expectRedraw('the pane closing')
   note('pane close')
-  if (paneGeometry) log($, `[bm-poc] pane was ${paneGeometry}`)
+  if (paneGeometry) log($, `[bm]pane was ${paneGeometry}`)
   await endBandMode($)
   await $.ui.close({ id: PANE })
   // The conversation widens again as the pane goes, and shifts. Unless a jump moved the
@@ -2017,7 +2018,7 @@ export const register: Register = on => {
     await pollSelection($)
     selectionPoll = $.clock.every(1000, () => void pollSelection($))
     // Not awaited: session start should not wait on a third of a second of PowerShell.
-    void backfillPrompts($).catch(err => log($, `[bm-poc] backfill failed: ${String(err)}`))
+    void backfillPrompts($).catch(err => log($, `[bm]backfill failed: ${String(err)}`))
 
     // The tracking mechanism for the borrowed actions: say so whenever the build is
     // not one the chords were verified on.
@@ -2057,7 +2058,7 @@ export const register: Register = on => {
       // A list may stay open beside the input box (paneWhileTyping); the mark and jump
       // panes were waiting for a letter the person has stopped typing.
       const outcome = await settle($, mode, 'prompt-edit')
-      log($, `[bm-poc] prompt edited while the band waited for a key: band ended, pane ${outcome.pane === 'close' ? 'closed' : 'kept'}`)
+      log($, `[bm]prompt edited while the band waited for a key: band ended, pane ${outcome.pane === 'close' ? 'closed' : 'kept'}`)
     }
     return next(e)
   })
@@ -2077,13 +2078,13 @@ export const register: Register = on => {
     // <up> <down> if possible").
     if (e.origin.kind === 'person' && bandRing === 'band-num-go' && (await read($, bandMode)) === 'list' &&
         (e.element === 'band-num-k' || e.element === 'band-num-j')) {
-      log($, `[bm-poc] band arrow -> ${e.element === 'band-num-k' ? 'k (up)' : 'j (down)'}`)
+      log($, `[bm]band arrow -> ${e.element === 'band-num-k' ? 'k (up)' : 'j (down)'}`)
       await bandStep($, e.element === 'band-num-k' ? 'k' : 'j')
       return next({ ...e, element: 'band-num-go' })
     }
     if (e.origin.kind === 'person' && e.element?.startsWith('chord-') && (await read($, bandMode)) === 'idle') {
       const field = `band-cmd-${await read($, cmdRev)}`
-      log($, `[bm-poc] band focus kept on the command field (not ${e.element})`)
+      log($, `[bm]band focus kept on the command field (not ${e.element})`)
       bandRing = field
       return next({ ...e, element: field })
     }
@@ -2354,7 +2355,7 @@ export const register: Register = on => {
     const matched = list.filter(r => rendered.has(r.uuid)).length
     const strays = [...rendered.keys()].filter(id => !appended.has(id))
     log($, 
-      `[bm-poc] ids: ${matched} of ${list.length} appended prompt uuids were seen as ` +
+      `[bm]ids: ${matched} of ${list.length} appended prompt uuids were seen as ` +
         `UserMessage requestIds; ${rendered.size} UserMessage ids drawn since load; ` +
         `${strays.length} drawn ids not among appended prompts`,
     )
@@ -2371,9 +2372,9 @@ export const register: Register = on => {
     const shown = list.slice(-12)
     shown.forEach((r, i) => {
       const n = list.length - shown.length + i + 1
-      log($, `[bm-poc]   #${n} ${short(r.uuid)} ${drawnAs(r)} ${r.head}`)
+      log($, `[bm]  #${n} ${short(r.uuid)} ${drawnAs(r)} ${r.head}`)
     })
-    strays.slice(0, 20).forEach(id => log($, `[bm-poc]   drawn, not appended: ${id} ${rendered.get(id)}`))
+    strays.slice(0, 20).forEach(id => log($, `[bm]  drawn, not appended: ${id} ${rendered.get(id)}`))
     return {}
   })
 
@@ -2411,7 +2412,7 @@ export const register: Register = on => {
       // transcript file (paste a uuid from jq); Claude Code may refuse one never drawn.
       await jumpTo($, arg, '/bm-jump (raw uuid)', 'raw')
     } else {
-      log($, `[bm-poc] nothing captured for "${arg}" (${onlyPrompts.length} prompts captured since load)`)
+      log($, `[bm]nothing captured for "${arg}" (${onlyPrompts.length} prompts captured since load)`)
     }
     return {}
   })
@@ -2457,7 +2458,7 @@ export const register: Register = on => {
     await $.ui.open({ id: PANE, title: 'prompts: type #', focus: true, closeOnEscape: true })
     // The slash-command route to a focused pane (typed, or a `command:bm-pane`
     // keybinding, 2.1.290): record whether the pane actually got the keyboard.
-    log($, `[bm-poc] /bm-pane opened; pane has the keyboard: ${(await paneFocused($)) ? 'yes' : 'NO'}`)
+    log($, `[bm]/bm-pane opened; pane has the keyboard: ${(await paneFocused($)) ? 'yes' : 'NO'}`)
     return {}
   })
 
@@ -2478,7 +2479,7 @@ export const register: Register = on => {
     markCache = kept
     const showing = await read($, shown)
     if (showing && gone.includes(showing.letter)) await clearShown($)
-    log($, `[bm-poc] deleted marks ${gone.join(' ') || '(none)'}${missing.length ? `; not set: ${missing.join(' ')}` : ''}`)
+    log($, `[bm]deleted marks ${gone.join(' ') || '(none)'}${missing.length ? `; not set: ${missing.join(' ')}` : ''}`)
     $.ui.toast(gone.length ? `deleted mark${gone.length > 1 ? 's' : ''} ${gone.join(' ')}` : `not set: ${missing.join(' ')}`)
     return {}
   })
@@ -2486,8 +2487,8 @@ export const register: Register = on => {
   on('command.run', { command: 'bm-marks' }, async $ => {
     const marks = await loadMarks($)
     const entries = Object.entries(marks).sort(([a], [b]) => a.localeCompare(b))
-    if (entries.length === 0) log($, '[bm-poc] no marks in this session')
-    for (const [l, m] of entries) log($, `[bm-poc]   ${l}  ${short(m.uuid)}  ${m.head}`)
+    if (entries.length === 0) log($, '[bm]no marks in this session')
+    for (const [l, m] of entries) log($, `[bm]  ${l}  ${short(m.uuid)}  ${m.head}`)
     return {}
   })
 
@@ -2496,7 +2497,7 @@ export const register: Register = on => {
   on('command.run', { command: 'bm-sel' }, async $ => {
     const sel = await $.ui.selection()
     if (!sel) {
-      log($, '[bm-poc] SEL: no selection (nothing selected, fullscreen off, or cleared by a prompt)')
+      log($, '[bm]SEL: no selection (nothing selected, fullscreen off, or cleared by a prompt)')
       return {}
     }
     const id = sel.requestId
@@ -2505,8 +2506,8 @@ export const register: Register = on => {
       : saved ? `saved ${saved.door} row`
       : rendered.has(id) ? 'drawn id only (not a saved uuid)'
       : 'unknown id (maybe a tool_use_id or a reply)'
-    log($, `[bm-poc] SEL: row ${id ?? '(none)'} -> ${known}; ${sel.text.length} chars`)
-    log($, `[bm-poc] SEL text: ${JSON.stringify(sel.text.slice(0, 300))}`)
+    log($, `[bm]SEL: row ${id ?? '(none)'} -> ${known}; ${sel.text.length} chars`)
+    log($, `[bm]SEL text: ${JSON.stringify(sel.text.slice(0, 300))}`)
     note(`bm-sel row ${id ?? '(none)'} ${known}`)
     return {}
   })
@@ -2514,8 +2515,8 @@ export const register: Register = on => {
   on('command.run', { command: 'bm-timeline' }, async ($, e) => {
     const n = Number(e.args.trim()) || 40
     const recent = timeline.slice(-n)
-    log($, `[bm-poc] timeline: last ${recent.length} of ${timeline.length} events since load`)
-    for (const { t, what } of recent) log($, `[bm-poc]   ${clock(t)} ${what}`)
+    log($, `[bm]timeline: last ${recent.length} of ${timeline.length} events since load`)
+    for (const { t, what } of recent) log($, `[bm]  ${clock(t)} ${what}`)
     return {}
   })
 
@@ -2691,9 +2692,9 @@ export const register: Register = on => {
   on('command.run', { command: 'bm-config' }, async $ => {
     const r = resolveSettings()
     const rows = (Object.keys(r.values) as (keyof Settings)[]).map(k => `${k}=${JSON.stringify(r.values[k])} (${r.sources[k]})`)
-    log($, `[bm-poc] settings: ${rows.join('; ')}`, { always: true })
+    log($, `[bm]settings: ${rows.join('; ')}`, { always: true })
     if (r.rejected.length || r.unknown.length) {
-      log($, `[bm-poc] settings not applied: ${[...r.rejected.map(x => `${x} (does not fit)`), ...r.unknown.map(x => `${x} (no such setting)`)].join('; ')}`, { always: true })
+      log($, `[bm]settings not applied: ${[...r.rejected.map(x => `${x} (does not fit)`), ...r.unknown.map(x => `${x} (no such setting)`)].join('; ')}`, { always: true })
     }
     return {}
   })
@@ -2710,14 +2711,14 @@ export const register: Register = on => {
     const dccVersion = await $.env.get('DCC_PATCHER')
     // A command's answer is always drawn, whatever the echo setting.
     log($,
-      `[bm-poc] ${$.plugin.name} ${await pluginVersion($)} on Claude Code ${v.version} ` +
+      `[bm]${$.plugin.name} ${await pluginVersion($)} on Claude Code ${v.version} ` +
         `(chords verified on ${VERIFIED_CLIENTS.join(', ')}); session ${await $.session.id()}; ` +
         `captured ${promptCount} prompts, ${list.length - promptCount} replies; ${rendered.size} drawn ids; ` +
         describePathOrder(),
       { always: true },
     )
     log($,
-      `[bm-poc] dcc-patcher: ${dccVersion ? `v${dccVersion}` : 'none seen'}; ` +
+      `[bm]dcc-patcher: ${dccVersion ? `v${dccVersion}` : 'none seen'}; ` +
         `DCC_PATCH_H=${dccH ?? '(unset)'}; DCC_PATCHES=${dccPatches ?? '(unset)'}; ` +
         `log echo ${await echoStateLine($)}`,
       { always: true },
@@ -2891,7 +2892,7 @@ export const register: Register = on => {
           $.clock.after(60 * 2 ** n - (n === 0 ? 0 : 60), () => {
             void $.ui.scroll({ in: PANE, to: { key: `p-${target}` }, block: 'center' }).then(r => {
               if (r.deny && n < 3) return attempt(n + 1)
-              log($, `[bm-poc] prompts pane centred on ${short(target)} (nearest to the view) -> ${r.deny ? `DENY after ${n + 1} tries: ${r.deny}` : `ok (try ${n + 1})`}`)
+              log($, `[bm]prompts pane centred on ${short(target)} (nearest to the view) -> ${r.deny ? `DENY after ${n + 1} tries: ${r.deny}` : `ok (try ${n + 1})`}`)
             })
           })
         }

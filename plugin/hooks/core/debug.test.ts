@@ -1,6 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { CHANNELS, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv } from './debug.ts'
+import { CHANNELS, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, screenMirror } from './debug.ts'
+
+test('the screen log mirrors the yellow row lines whole, without the prefix', () => {
+  assert.equal(screenMirror('[bm] nearest prompt moved: 70f2a222 -> 59ec5ce8'), 'nearest prompt moved: 70f2a222 -> 59ec5ce8')
+  assert.equal(screenMirror('[bm] held by a redraw: kept 70f2a222'), 'held by a redraw: kept 70f2a222')
+  assert.equal(screenMirror('[bm] bookmark added: 70f2a222'), undefined)
+  assert.equal(screenMirror('[bm-poc] nearest prompt moved: a -> b'), undefined)
+  assert.equal(screenMirror(`[bm] pane follow ${'x'.repeat(200)}`)?.length, 110)
+})
 
 // PRIVACY.md names one variable, CONVO_BOOKMARKS_DEBUG; the channels share it with the echo.
 test('the echo values from before channels read as they did', () => {
