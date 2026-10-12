@@ -18,7 +18,7 @@ import {
   serializeRegister,
   share,
   type Mint,
-} from './register-file.ts'
+} from '../../plugin/hooks/core/register-file.ts'
 
 const SESSION = '8f0f9b27-33fc-4054-806a-22a6d569dfb5'
 const UUID = '12d637fb-6d1d-4c3f-bbb6-11c107d8af4e'

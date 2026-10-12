@@ -13,7 +13,7 @@ import {
   parsePosition,
   utf8ByteLength,
   type AnchorRecord,
-} from './anchor.ts'
+} from '../../plugin/hooks/core/anchor.ts'
 
 const ROOT = 'C:\\Users\\Extreme\\claude'
 const SESSION = '8f0f9b27-33fc-4054-806a-22a6d569dfb5'

@@ -3,7 +3,7 @@
 // Everything that talks to Claude Code lives here: the render hooks, the panes, the
 // band (the one-line command strip after the leader key), the `/bm-*` commands, the
 // `bookmark` tool, the store and the debug log. The rules themselves are pure modules
-// in core/, each with its tests (`node --test plugin/hooks/core/*.test.ts`), and
+// in core/, each with its tests in the repository's tests/core (`node --test tests/core/*.test.ts`), and
 // docs/engine-quirks.md records what the engine does and does not let a plugin do.
 //
 // Diagnostics report with $.ui.log (a dim transcript row Claude never reads) or a
@@ -400,10 +400,21 @@ async function setChannels($: EngineInterface, on: Set<Channel>) {
   await $.env.set('CONVO_BOOKMARKS_DEBUG', formatDebugEnv(echo, on))
 }
 
-function log($: EngineInterface, line: string, opts?: { always?: boolean }) {
+// `text`: the line carries the conversation's text (a selection, a message's head, a
+// label, highlighted words, a tool's input). PRIVACY.md says the debug log never holds
+// it, so such a line is kept only while this conversation's debugging is on.
+function log($: EngineInterface, line: string, opts?: { always?: boolean; text?: boolean }) {
   readChannels($)
+  if (opts?.text) {
+    void uiEchoEnabled($).then(enabled => { if (enabled) { $.ui.log(line); keepLine($, line) } }).catch(() => {})
+    return
+  }
   if (opts?.always) $.ui.log(line)
   else void uiEchoEnabled($).then(enabled => { if (enabled) $.ui.log(line) }).catch(() => {})
+  keepLine($, line)
+}
+
+function keepLine($: EngineInterface, line: string) {
   logLines.push(`${new Date().toISOString()} ${line}`)
   const mirrored = channelsOn.has('screen') ? screenMirror(line) : undefined
   if (mirrored) screenLines.push(`${clock(Date.now())} >>> ${mirrored}`)
@@ -764,7 +775,7 @@ async function mintBookmark($: EngineInterface, mint: Mint, messageText: string)
   const root = await dataRoot($)
   const href = root ? anchorHref(record, root) : undefined
   const markdown = root ? anchorMarkdown(record, root) : undefined
-  log($, `[bm] bookmark ${added ? 'added' : 'relabelled'}: ${short(record.uuid)} "${record.label}" (${ownerOf(record)}'s list; ${record.by}/${record.source}) rev ${register.rev}`)
+  log($, `[bm] bookmark ${added ? 'added' : 'relabelled'}: ${short(record.uuid)} "${record.label}" (${ownerOf(record)}'s list; ${record.by}/${record.source}) rev ${register.rev}`, { text: true })
   return { record, added, href, markdown, exportPath, rev: register.rev }
 }
 
@@ -848,7 +859,7 @@ function queueProseAnchors($: EngineInterface, anchors: ReturnType<typeof markdo
 // then the same jump as a mark (with its refused-jump fallbacks).
 async function onAnchorPress($: EngineInterface, href: string) {
   const a = parseAnchor(href)
-  log($, `[bm] anchor link pressed: ${href.slice(0, 120)} -> ${a ? `uuid ${a.uuid}` : 'NOT an anchor'}`)
+  log($, `[bm] anchor link pressed: ${href.slice(0, 120)} -> ${a ? `uuid ${a.uuid}` : 'NOT an anchor'}`, { text: true })
   if (!a) return
   let uuid = a.uuid
   if (uuid.length < 36) {
@@ -864,7 +875,7 @@ async function onAnchorPress($: EngineInterface, href: string) {
   const deny = await jumpTo($, uuid, 'anchor press', `anchor ${short(uuid)}${a.line ? ` (line ${a.line})` : ''}`, words)
   if (deny || !words) return
   await highlightWords($, uuid, words)
-  log($, `[bm] anchor words highlighted on ${short(uuid)}: "${words.slice(0, 60)}"`)
+  log($, `[bm] anchor words highlighted on ${short(uuid)}: "${words.slice(0, 60)}"`, { text: true })
 }
 
 // --- Jumplist: back and forward over every jump (vim's Ctrl+O / Ctrl+I) ------------------
@@ -970,7 +981,7 @@ async function jumpTo($: EngineInterface, uuid: string, via: string, label: stri
             `${phrase ? `"${phrase}"` : 'a few words of it'}.`,
       { timeoutMs: 12000 },
     )
-    log($, `[bm] jump refused; search phrase ${copied ? 'copied' : 'shown'}: "${phrase ?? ''}"`)
+    log($, `[bm] jump refused; search phrase ${copied ? 'copied' : 'shown'}: "${phrase ?? ''}"`, { text: true })
   }
   note(`scroll ${uuid} via ${via} -> ${verdict}`)
   log($,
@@ -1065,7 +1076,7 @@ async function freshSelection($: EngineInterface, sel: Selection): Promise<Selec
   const at = selectionSeen?.key === key ? selectionSeen.at : 0
   const age = at ? Math.round((Date.now() - at) / 1000) : undefined
   const fresh = age !== undefined && age <= SELECTION_FRESH_SECONDS
-  log($, `[bm] selection "${sel!.text.trim().slice(0, 24)}" is ${age === undefined ? 'of unknown age' : `${age}s old`}: ${fresh ? 'used' : 'ignored (stale)'}`)
+  log($, `[bm] selection "${sel!.text.trim().slice(0, 24)}" is ${age === undefined ? 'of unknown age' : `${age}s old`}: ${fresh ? 'used' : 'ignored (stale)'}`, { text: true })
   return fresh ? sel : undefined
 }
 
@@ -1108,7 +1119,7 @@ async function setMark($: EngineInterface, letter: string) {
     markCache = { ...fresh, [letter]: mark }
     // Writing `shown` redraws the rows and the band that read it.
     await highlightInPlace($, letter, snippetOf(sel.text))
-    log($, `[bm] SEL: mark ${letter} -> ${uuid} (drawn as ${sel.requestId}; ${check}) | "${headOf(sel.text)}"`)
+    log($, `[bm] SEL: mark ${letter} -> ${uuid} (drawn as ${sel.requestId}; ${check}) | "${headOf(sel.text)}"`, { text: true })
     $.ui.toast(`mark ${letter} [selection] -> ${headOf(sel.text).slice(0, 40)}`)
     return
   }
@@ -1127,7 +1138,7 @@ async function setMark($: EngineInterface, letter: string) {
   await $.store.set(await marksKey($), { ...fresh, [letter]: mark })
   markCache = { ...fresh, [letter]: mark }
   if (mark.snippet) await highlightInPlace($, letter, mark.snippet)
-  log($, `[bm] mark ${letter} -> ${short(mark.uuid)} (top of screen) | "${mark.head}"`)
+  log($, `[bm] mark ${letter} -> ${short(mark.uuid)} (top of screen) | "${mark.head}"`, { text: true })
   $.ui.toast(`mark ${letter} [top of screen] -> ${mark.head.slice(0, 40)}`)
 }
 
@@ -1379,7 +1390,7 @@ async function readingToggle($: EngineInterface) {
     await setReadingState($, { at: false, back: null })
     await highlightInPlace($, READING, picked)
     await restoreView($)
-    log($, `[bm] reading position set -> ${short(uuid)} (${check}) | "${headOf(sel.text)}"`)
+    log($, `[bm] reading position set -> ${short(uuid)} (${check}) | "${headOf(sel.text)}"`, { text: true })
     $.ui.toast(`reading position set: ${headOf(sel.text).slice(0, 40)}`)
     return
   }
@@ -1801,7 +1812,7 @@ async function highlightWords($: EngineInterface, uuid: string, words: string) {
 
 // Jump to a bookmark and highlight its words. Returns the scroll's refusal, if any.
 async function arriveAtBookmark($: EngineInterface, record: { uuid: string; words?: string; label: string }, via: string): Promise<string | undefined> {
-  const deny = await jumpTo($, record.uuid, via, `bookmark "${record.label.slice(0, 30)}"`, record.words)
+  const deny = await jumpTo($, record.uuid, via, `bookmark ${short(record.uuid)}`, record.words)
   if (!deny && record.words) await highlightWords($, record.uuid, record.words)
   return deny
 }
@@ -2359,9 +2370,9 @@ export const register: Register = on => {
     const recent = list.slice(-12)
     recent.forEach((r, i) => {
       const n = list.length - recent.length + i + 1
-      log($, `[bm]  #${n} ${short(r.uuid)} ${drawnAs(r)} ${r.head}`)
+      log($, `[bm]  #${n} ${short(r.uuid)} ${drawnAs(r)} ${r.head}`, { text: true })
     })
-    strays.slice(0, 20).forEach(id => log($, `[bm]  drawn, not appended: ${id} ${rendered.get(id)}`))
+    strays.slice(0, 20).forEach(id => log($, `[bm]  drawn, not appended: ${id} ${rendered.get(id)}`, { text: true }))
     return {}
   })
 
@@ -2475,7 +2486,7 @@ export const register: Register = on => {
     const marks = await loadMarks($)
     const entries = Object.entries(marks).sort(([a], [b]) => a.localeCompare(b))
     if (entries.length === 0) log($, '[bm] no marks in this session')
-    for (const [l, m] of entries) log($, `[bm]  ${l}  ${short(m.uuid)}  ${m.head}`)
+    for (const [l, m] of entries) log($, `[bm]  ${l}  ${short(m.uuid)}  ${m.head}`, { text: true })
     return {}
   })
 
@@ -2494,7 +2505,7 @@ export const register: Register = on => {
       : rendered.has(id) ? 'drawn id only (not a saved uuid)'
       : 'unknown id (maybe a tool_use_id or a reply)'
     log($, `[bm] SEL: row ${id ?? '(none)'} -> ${known}; ${sel.text.length} chars`)
-    log($, `[bm] SEL text: ${JSON.stringify(sel.text.slice(0, 300))}`)
+    log($, `[bm] SEL text: ${JSON.stringify(sel.text.slice(0, 300))}`, { text: true })
     note(`bm-sel row ${id ?? '(none)'} ${known}`)
     return {}
   })
@@ -2503,7 +2514,7 @@ export const register: Register = on => {
     const n = Number(e.args.trim()) || 40
     const recent = timeline.slice(-n)
     log($, `[bm] timeline: last ${recent.length} of ${timeline.length} events since load`)
-    for (const { t, what } of recent) log($, `[bm]  ${clock(t)} ${what}`)
+    for (const { t, what } of recent) log($, `[bm]  ${clock(t)} ${what}`, { text: true })
     return {}
   })
 
@@ -2515,7 +2526,7 @@ export const register: Register = on => {
     const { tool, tool_use_id, agentId, requestMeta, ...input } = e as unknown as Record<string, unknown>
     void agentId
     void requestMeta
-    log($, `[bm] ${String(tool)} called (${String(tool_use_id).slice(0, 12)}) with ${JSON.stringify(input).slice(0, 160)}`)
+    log($, `[bm] ${String(tool)} called (${String(tool_use_id).slice(0, 12)}) with ${JSON.stringify(input).slice(0, 160)}`, { text: true })
     // The result the model reads is a string (or MCP content blocks), not an object:
     // an object is refused as "does not match its output shape" (2.1.295, 2026-10-09).
     const answer = (o: unknown) => ({ result: JSON.stringify(o, null, 2) })
@@ -2552,7 +2563,7 @@ export const register: Register = on => {
         const r = remove(reg, target.uuid, owner, `claude${owner === 'user' ? ' (on the person\'s behalf)' : ''}`, now)
         if ('error' in r) return answer(r)
         await saveRegister($, r.register)
-        log($, `[bm] bookmark removed from ${owner}'s list: ${short(target.uuid)} "${target.label}" (tombstoned)`)
+        log($, `[bm] bookmark removed from ${owner}'s list: ${short(target.uuid)} "${target.label}" (tombstoned)`, { text: true })
         return answer({ ok: true, removed: describe(r.removed), note: 'archived as a tombstone in the register, not deleted' })
       }
       if (action === 'share') {
@@ -2561,7 +2572,7 @@ export const register: Register = on => {
         if ('error' in r) return answer(r)
         await saveRegister($, r.register)
         await writeExport($, r.register, { uuid: target.uuid, sessionId: r.register.sessionId }, '', now)
-        log($, `[bm] bookmark shared ${owner} -> ${to}: ${short(target.uuid)} "${r.record.label}"`)
+        log($, `[bm] bookmark shared ${owner} -> ${to}: ${short(target.uuid)} "${r.record.label}"`, { text: true })
         return answer({ ok: true, added: r.added, shared: describe(r.record), note: `now on ${to === 'user' ? "the person's" : "Claude's"} list too; the original stays` })
       }
       // relabel

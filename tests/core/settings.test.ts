@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { DEFAULTS, FIELDS, fit, manifestUserConfig, resolve } from './settings.ts'
+import { DEFAULTS, FIELDS, fit, manifestUserConfig, resolve } from '../../plugin/hooks/core/settings.ts'
 
 test('with no layers every field is its default, from the default', () => {
   const r = resolve()

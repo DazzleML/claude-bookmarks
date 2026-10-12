@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LINE_COMMANDS, lineHint, lineKeys, linePlaceholder, listHint, route } from './keys.ts'
+import { LINE_COMMANDS, lineHint, lineKeys, linePlaceholder, listHint, route } from '../../plugin/hooks/core/keys.ts'
 
 test('the band placeholder names one key of every command, Space as ␣', () => {
   assert.equal(linePlaceholder(), "' m ␣ p b P o i")

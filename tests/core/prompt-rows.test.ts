@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { looksLikePrompt, promptTextOf, unwrapQueued } from './prompt-rows.ts'
+import { looksLikePrompt, promptTextOf, unwrapQueued } from '../../plugin/hooks/core/prompt-rows.ts'
 
 const user = (content: unknown, extra: Record<string, unknown> = {}) => ({ type: 'user', uuid: 'u1', message: { role: 'user', content }, ...extra })
 

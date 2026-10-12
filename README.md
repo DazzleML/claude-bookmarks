@@ -217,7 +217,7 @@ claude-bookmarks/
 │   ├── hooks/
 │   │   ├── hooks.json        # Points Claude Code at the mod
 │   │   ├── register.tsx      # The mod: the band, panes, highlight, bookmarks, back-fill
-│   │   ├── core/             # Pure modules with their node --test suites (anchor URL, transcript, register)
+│   │   ├── core/             # Pure modules: anchor URL, transcript, register file, keys, view position
 │   │   └── scripts/          # PowerShell fallbacks for reading the transcript on Windows
 │   ├── types/index.d.ts      # Declared $.state values
 │   ├── README.md, LICENSE    # What the plugin directory requires inside the plugin folder
@@ -227,6 +227,7 @@ claude-bookmarks/
 ├── docs/                     # Status, keys, tutorial, usage, troubleshooting, platform support, engine quirks
 ├── scripts/repokit-common/   # Shared repo tooling (git subtree from DazzleTools/git-repokit-common)
 ├── tests/
+│   ├── core/                 # node --test suites for the pure modules (kept out of the installed plugin)
 │   ├── checklists/           # Human test checklists
 │   └── one-offs/             # Probes and measurements
 ├── .repokit-common.toml      # Repo tooling settings (version sync into plugin/.claude-plugin/plugin.json)

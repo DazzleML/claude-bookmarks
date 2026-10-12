@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.15] - 2026-10-12
+
+### Changed
+
+- The debug log keeps no text from the conversation unless debugging is on for it (`/bm-debug on`). Lines that quote a selection, a message's first line, a bookmark's label, highlighted words or the `bookmark` tool's input are written only then, as `PRIVACY.md` describes. `docs/troubleshooting.md` says so.
+- The pure core's tests moved from `plugin/hooks/core/` to `tests/core/`, so the installed plugin carries only the code it runs, and CI now runs them (`node --test tests/core/*.test.ts`) beside the Python checks.
+
 ## [0.4.14] - 2026-10-12
 
 ### Changed
@@ -370,7 +377,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.14...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.15...HEAD
+[0.4.15]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.14...v0.4.15
 [0.4.14]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.13...v0.4.14
 [0.4.13]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.12...v0.4.13
 [0.4.12]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.11...v0.4.12

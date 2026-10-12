@@ -95,6 +95,8 @@ ${CLAUDE_USER_DIR:-~/claude}/bookmarks/debug/<session id>.log
 
 `/bm-env` shows the session id. When something behaves oddly, the last lines of this file show what the plugin saw and did, and they are the most useful thing to attach to an [issue](https://github.com/DazzleML/claude-bookmarks/issues).
 
-To watch the same lines appear in the conversation as you reproduce a problem, type `/bm-debug on`; it affects this conversation only, and `/bm-debug off` ends it. The other forms (`default`, `force`) are in [usage](usage.md#the-log-echo).
+The log holds no text from the conversation: no selection, message, label or highlighted words. The lines that would carry such text are written only while debugging is on for the conversation.
+
+To watch the same lines appear in the conversation as you reproduce a problem, type `/bm-debug on`; it affects this conversation only, and `/bm-debug off` ends it. While it is on, the log also keeps the lines that quote the conversation (the selected words, a message's first line, a bookmark's label), which often explain a wrong mark or jump; read the file before attaching it to an issue. The other forms (`default`, `force`) are in [usage](usage.md#the-log-echo).
 
 For a problem the plain log does not explain, a [debug channel](usage.md#debug-channels) adds more: `/bm-debug enable screen` before reproducing a wrong highlight in the prompts pane, then attach `<session id>.screen.log` from the same folder along with the log. `/bm-debug disable screen` turns it off again; it also ends with the session.

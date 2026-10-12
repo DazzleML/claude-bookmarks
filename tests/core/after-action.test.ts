@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { afterAction, type AfterActionSettings } from './after-action.ts'
+import { afterAction, type AfterActionSettings } from '../../plugin/hooks/core/after-action.ts'
 
 const defaults: AfterActionSettings = { paneAfterJump: 'close', paneWhileTyping: 'stay', afterActionFocus: 'input' }
 

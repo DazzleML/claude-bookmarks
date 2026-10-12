@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { byFirstFour, findByMessage, firstFour, sameMessage } from './message-id.ts'
+import { byFirstFour, findByMessage, firstFour, sameMessage } from '../../plugin/hooks/core/message-id.ts'
 
 test('a position map keyed by first four groups finds a drawn id', () => {
   const m = byFirstFour(new Map([['70f2a222-23f8-4828-b57e-837f3571b5cf', 324000]]))
