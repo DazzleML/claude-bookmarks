@@ -7,6 +7,7 @@ package, so it is loaded by path rather than imported.
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -76,10 +77,17 @@ def test_display_version_includes_project_phase():
         assert display == get_base_version()
 
 
+PEP440 = re.compile(r"^\d+\.\d+\.\d+(?P<pre>(a|b|rc)\d+)?(\.dev\d+)?$")
+
+
 def test_pip_version_pep440():
+    """A PEP 440 version: N.N.N, an optional pre-release (a0, b0, rc1) when
+    PHASE is set, and an optional .devN for a build stamped on a branch other
+    than main. The old form demanded digits and dots only, which no dev-stamped
+    build can meet, and main is fast-forwarded from dev, so it carries the dev
+    stamp too: the test failed on every CI run (0.4.1's included)."""
     pip_v = get_pip_version()
-    assert "-" not in pip_v
-    if PHASE:
-        assert any(c.isalpha() for c in pip_v.split(".")[-1])
-    else:
-        assert all(c.isdigit() or c == "." for c in pip_v)
+    m = PEP440.match(pip_v)
+    assert m, pip_v
+    assert pip_v.startswith(f"{MAJOR}.{MINOR}.{PATCH}")
+    assert bool(m.group("pre")) == bool(PHASE), pip_v
