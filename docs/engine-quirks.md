@@ -115,7 +115,14 @@ Still true: a timer, a `prompt.edit` hook and anything else the person did not p
 
 **Why:** no API returns the keyboard to the composer; only the person's `Esc` does. A second `Ctrl+]` while the band holds the keyboard moves the focus along the band instead of starting fresh. Once that landed on the `mark` button, and `Space`, then `Enter`, overwrote mark `a` (2026-10-07).
 
-**What we do:** while the band is idle, a `ui.focus` hook keeps the focus on the field (a move onto a button is redirected back to it). In mark mode the default focus is a `cancel` button, so a stray `Enter` cancels. In prompt mode, a focus move off `go` onto its neighbour is read as an arrow key (`k` before it, `j` after it), which gives Up/Down browsing.
+**What we do:** while the band is idle, a `ui.focus` hook keeps the focus on the field (a move onto a button is redirected back to it). In mark mode the default focus is a `cancel` button, so a stray `Enter` cancels. In prompt mode, a focus move off `go` onto its neighbour is read as an arrow key (`k` before it, `j` after it), which gives Up/Down browsing. Since 0.4.18, after a band action that leaves the band holding the keyboard (a jump, `o`/`i`, the reading position, a promote), the first key the band does not know shows a toast saying to press `Esc`, once per action, when "Keyboard after an action" is `input` (#24).
+
+**Pathways, for when one exists** (the four of #18: ideal, workaround, patched, current):
+
+- *Ideal:* the plugin performing `abovePrompt:leave`, the documented keybinding action that "returns keyboard focus to the prompt" (default `Esc`; code.claude.com/docs/en/keybindings, "Above-prompt actions"). A plugin cannot run an action: a `Button`'s `action` works the other way (a chord bound to the action presses the button), and no `$` call performs one (typings, 2.1.296). The request to Claude Code is exactly that: a way for a plugin to perform `abovePrompt:leave`, or a `focus: 'prompt'` on `$.ui.focus`.
+- *Workaround, to measure live:* whether a band that draws nothing for a moment after an action lets the focus fall back to the composer; whether a band `Button` carrying a borrowed action that the engine maps to the composer exists at all.
+- *Patched:* the dcc-patcher session teaching the engine the return.
+- *Current:* the `Esc` reminder above.
 
 **Proper fix:** a call that returns the keyboard to the composer, and keyboard handoff between a plugin's own band and pane.
 

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.18] - 2026-10-12
+
+### Changed
+
+- **After a band action, the first stray key says to press `Esc`** ([#24](https://github.com/DazzleML/claude-bookmarks/issues/24)). After a jump, `o`/`i`, the reading position or a promote, the band still holds the keyboard (Claude Code does not let a plugin hand it back), so the words you start typing used to go nowhere. Now the first key the band does not know shows a toast saying to press `Esc`, once per action. With "Keyboard after an action" set to `band` in `/config`, it stays quiet.
+- Every pane close now goes through the same after-action rule ([#29](https://github.com/DazzleML/claude-bookmarks/issues/29)): a mark or jump letter, the jump pane's reading row, `go` with no number, and a pane refused over a typed command. Nothing visible changes at the default settings.
+- The line the debug log writes for each band command quotes what was typed only when "Conversation text in the debug log" allows it, as does the line about the pane taking the keyboard.
+
 ## [0.4.17] - 2026-10-12
 
 ### Added
@@ -391,7 +399,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.17...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.18...HEAD
+[0.4.18]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.17...v0.4.18
 [0.4.17]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.16...v0.4.17
 [0.4.16]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.15...v0.4.16
 [0.4.15]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.14...v0.4.15

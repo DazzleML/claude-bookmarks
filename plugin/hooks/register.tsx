@@ -1492,11 +1492,21 @@ async function handOff($: EngineInterface, mode: PaneMode, focusKey?: string) {
   if (focusKey) await focusBand($, focusKey)
 }
 
+// After a band action that finishes with the band still holding the keyboard (a jump,
+// `o`/`i`, the reading position, a promote), the person's next keys are usually their
+// prompt. The plugin can't hand the keyboard back (#24), so the first key the band does
+// not know says so, once per action, when "Keyboard after an action" is `input`.
+let escReminderOwed = false
+const ESC_REMINDER = 'Press Esc to type in the input box: the band still has the keyboard (Claude Code does not let a plugin hand it back yet).'
+function owedAfterAction() {
+  escReminderOwed = afterAction({ pane: 'none', cause: 'band-command', settings: currentSettings() }).focus === 'input'
+}
+
 async function runCommandLine($: EngineInterface, typed: string, via: 'input' | 'submit') {
   if (cmdBusy || typed === '') return
   cmdBusy = true
   try {
-    log($, `[bm] band command line ${via}: "${typed}"`)
+    log($, `[bm] band command line ${via}: "${cut(typed, 40)}"`, { text: true })
     // What the keys mean lives in the router's table (core/keys.ts); this performs it.
     const { operation } = route(typed, { pane: 'none' })
     switch (operation.op) {
@@ -1514,23 +1524,31 @@ async function runCommandLine($: EngineInterface, typed: string, via: 'input' | 
       case 'jump-mark':
         await clearCommandLine($)
         await jumpToMark($, operation.letter)
+        owedAfterAction()
         return
       case 'reading':
         await clearCommandLine($)
         await readingToggle($)
+        owedAfterAction()
         return
       case 'promote':
         await clearCommandLine($)
         await promoteLetter($, operation.letter)
+        owedAfterAction()
         return
       case 'jumplist':
         // `<leader> ←` / `→` are wanted too; whether an arrow reaches this field is #23.
         await clearCommandLine($)
         await jumplistMove($, operation.dir)
+        owedAfterAction()
         return
       case 'hint':
         await clearCommandLine($)
-        $.ui.toast(operation.reason)
+        if (escReminderOwed) {
+          escReminderOwed = false
+          log($, `[bm] a key the band does not know, after an action: the Esc reminder`)
+          $.ui.toast(ESC_REMINDER)
+        } else $.ui.toast(operation.reason)
         return
       default:
         await clearCommandLine($)
@@ -1612,7 +1630,8 @@ function keepBandWaiting($: EngineInterface) {
 async function bandNumberGo($: EngineInterface) {
   const typed = await read($, bandNum)
   await update($, bandNum, () => '')
-  if (!typed) return void (await closePane($))
+  // "go" with nothing typed: the person is done with the list.
+  if (!typed) return void (await settle($, paneOf(await read($, bandMode)), 'esc'))
   await jumpToListNumber($, typed, 'band list')
 }
 
@@ -1682,7 +1701,8 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   log(
     $,
     `[bm] ${mode} pane has the keyboard: ${focused ? 'yes' : 'NO'} (input box holds ${draft.length} chars; ` +
-      `selection ${selNow?.text.trim() ? `"${selNow.text.trim().slice(0, 24)}"` : 'none'})`,
+      `selection ${selNow?.text.trim() ? `"${cut(selNow.text.trim(), 24)}"` : 'none'})`,
+    { text: true },
   )
   // From a typed command (/bm-mark, /bm-goto, /bm-prompts) the band never holds the
   // keyboard, so the band key mode below can't take the key (log, 2026-10-07 04:56:51).
@@ -1691,7 +1711,7 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   // prompt.edit is "not person-initiated"). So say where the keys work instead: the
   // band leader holds the keyboard by the person's own focus move, draft or not.
   if (!focused && action.startsWith('command:')) {
-    await closePane($)
+    await settle($, mode, 'timer')
     $.ui.toast(
       draft.trim()
         ? 'The keyboard is in the input box (it holds a draft). Use the band leader, Ctrl+] by default, which works over a draft.'
@@ -1936,6 +1956,7 @@ async function watchBand($: EngineInterface, mode: PaneMode) {
 // policy says (core/after-action.ts): the operation's need, then the person's setting,
 // then the default. `focus: 'input'` is what is wanted after most actions; the engine
 // cannot hand the keyboard back yet (#24, docs/engine-quirks.md), so nothing more is done.
+const paneOf = (mode: PaneMode | 'idle'): Pane => (mode === 'idle' ? 'none' : mode)
 async function settle($: EngineInterface, pane: Pane, cause: Cause, needsMore = false) {
   const outcome = afterAction({ pane, cause, needsMore, settings: currentSettings() })
   if (outcome.pane === 'close') await closePane($)
@@ -2093,6 +2114,8 @@ export const register: Register = (on, options) => {
   // itself goes through untouched.
   on('prompt.edit', async ($, e, next) => {
     const now = Date.now()
+    // Typing in the input box: the person has the keyboard back, no reminder owed.
+    escReminderOwed = false
     if (diag.logKeys) {
       const k = e.key
         ? `${e.key.ctrl ? 'ctrl+' : ''}${e.key.meta ? 'meta+' : ''}${e.key.shift ? 'shift+' : ''}${e.key.key.length === 1 ? 'char' : e.key.key}`
@@ -2113,6 +2136,8 @@ export const register: Register = (on, options) => {
   // Where the band's focus ring is, so the keyboard probe (watchBand) aims at the
   // element already holding it and never moves the ring.
   on('ui.focus', { component: 'AbovePrompt' }, async ($, e, next) => {
+    // A focus move of the person's own onto the band starts a new command: no reminder owed.
+    if (e.origin.kind === 'person') escReminderOwed = false
     // While the band is idle, the person's focus moves stay on the command field. After
     // a command the band keeps the keyboard (a plugin can't hand it back; Esc does), so
     // a second Ctrl+] moved the ring onto the `mark` button, Space pressed it, and Enter
@@ -2770,7 +2795,8 @@ export const register: Register = (on, options) => {
     // the keyboard (see openFor). The pane stays open beside it as the readable list.
     if (mode !== 'idle') {
       const marks = await loadMarks($)
-      const done = () => closePane($)
+      // What happens after the key: the after-action rule, by what the key did.
+      const done = (cause: Cause) => settle($, mode, cause)
       let keys: any
       if (mode === 'jump') {
         const reading = marks[READING]
@@ -2779,21 +2805,21 @@ export const register: Register = (on, options) => {
           ...(reading
             ? [<Button key="band-jump-reading" label="reading (Enter)" plain
                 // There, or back to where you were: the leader's Space (readingToggle).
-                onPress={async () => { await readingToggle($); await done() }} />]
+                onPress={async () => { await readingToggle($); await done('band-command') }} />]
             : []),
           ...LETTERS.filter(l => marks[l]).map(l => (
             <Button key={`band-jump-${l}`} hotkey={l} label={(marks[l]?.head ?? '').slice(0, 12)} plain
-              onPress={async () => { await jumpToMark($, l); await done() }} />
+              onPress={async () => { await jumpToMark($, l); await done('jump') }} />
           )),
         ]
       } else if (mode === 'mark') {
         keys = [
           <Text key="band-mark-title" dimColor>mark as:</Text>,
           // The default focus, so a stray Enter cancels rather than overwriting a mark.
-          <Button key="band-mark-cancel" label="cancel (Enter)" plain dimColor onPress={done} />,
+          <Button key="band-mark-cancel" label="cancel (Enter)" plain dimColor onPress={() => done('esc')} />,
           ...LETTERS.map(l => (
             <Button key={`band-mark-${l}`} hotkey={l} label={marks[l] ? '●' : '·'} plain dimColor={!marks[l]}
-              onPress={async () => { await setMark($, l); await done(); await restoreView($) }} />
+              onPress={async () => { await setMark($, l); await done('mark-set'); await restoreView($) }} />
           )),
         ]
       } else {
@@ -3081,7 +3107,7 @@ export const register: Register = (on, options) => {
     const press = async (l: string) => {
       if (mode === 'mark') await setMark($, l)
       else await jumpToMark($, l)
-      await closePane($)
+      await settle($, mode, mode === 'mark' ? 'mark-set' : 'jump')
       await restoreView($)
     }
 
@@ -3103,7 +3129,7 @@ export const register: Register = (on, options) => {
               autoFocus
               onPress={async () => {
                 await goToReading($, reading, 'jump pane reading')
-                await closePane($)
+                await settle($, mode, 'band-command')
               }}
             />
           )}
