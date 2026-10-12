@@ -38,6 +38,7 @@ import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFi
 import { DEBUG_USAGE, configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, parseDebugArgs, selectionKind, settingsRows } from './core/diagnostics'
 import { colorSplit, plainMarkdown, snippetOf, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/highlight'
 import { ScreenModel } from './core/screen-model'
+import { marksShowing, searchPhrase, type Mark, type Marks } from './core/marks'
 import { BOOKMARK_TOOL, answer as toolAnswer, brief as briefRow, describe as describeRecord, listActedOn, listName, parseToolInput, tierFor } from './core/bookmark-tool'
 import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptList, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, transcriptGuess, type PromptRef } from './core/prompt-store'
 
@@ -186,16 +187,9 @@ function markedLine(Text: ElementConstructor<TextProps>, c: ColorSplit) {
   )
 }
 
-// The shown mark, if it is on this row: by real uuid, or a drawn id sharing its first
-// four groups. Only the one mark currently shown is ever highlighted.
+// The shown mark, if it is on this row (core/marks.ts marksShowing), from the cache.
 function marksOnRow(requestId: string, showing: string | undefined): [string, Mark][] {
-  if (!showing) return []
-  return Object.entries(markCache).filter(
-    ([letter, m]) =>
-      letter === showing &&
-      m.source === 'selection' &&
-      sameMessage(m.uuid, requestId),
-  )
+  return marksShowing(markCache, requestId, showing)
 }
 
 // Ids seen at UserMessage render time since this module loaded. A module variable on
@@ -381,9 +375,7 @@ async function flushLog($: EngineInterface) {
   if (logPath) await $.fs.write(logPath, logLines.items.join('\n') + '\n')
 }
 
-// `snippet`: the selection's first line exactly as selected, for highlighting.
-type Mark = { uuid: string; head: string; markedAt: number; source?: 'selection' | 'latest' | 'screen'; snippet?: string }
-type Marks = Record<string, Mark>
+// Mark and Marks: core/marks.ts.
 
 // This plugin's own version, from its manifest (the one Claude Code installs by).
 async function pluginVersion($: EngineInterface): Promise<string> {
@@ -711,23 +703,6 @@ async function marksKey($: EngineInterface): Promise<string> {
 
 async function loadMarks($: EngineInterface): Promise<Marks> {
   return ((await $.store.get(await marksKey($))) as Marks | undefined) ?? {}
-}
-
-// A short, distinctive piece of a message to search for in the Ctrl+O transcript view:
-// the text after any generic opening (`RE:{`, a `<pasted_content …>` tag, braces), cut
-// at a word boundary to about 32 characters.
-function searchPhrase(text: string | undefined): string | undefined {
-  if (!text) return undefined
-  const cleaned = text
-    .replace(/<\/?pasted_content[^>]*>/g, ' ')
-    .replace(/^\s*(RE:\s*)?\{?\s*/i, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (!cleaned) return undefined
-  if (cleaned.length <= 32) return cleaned
-  const cut = cleaned.slice(0, 32)
-  const space = cut.lastIndexOf(' ')
-  return space > 16 ? cut.slice(0, space) : cut
 }
 
 // --- Bookmark anchors (anchors DWP 2026-10-09) -----------------------------------------
