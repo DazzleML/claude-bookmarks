@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { marksShowing, searchPhrase, type Marks } from '../../plugin/hooks/core/marks.ts'
+import { deleteMarks, marksShowing, searchPhrase, type Marks } from '../../plugin/hooks/core/marks.ts'
 
 const U = 'aaaaaaaa-1111-4111-8111-222222222222'
 const DRAWN = 'aaaaaaaa-1111-4111-8111-000000000000' // the same message as Claude Code draws it
@@ -30,4 +30,20 @@ test('the search phrase: openings stripped, whitespace folded, cut at a word nea
   // (mutation sweep 2026-10-12: the earlier case's last space was past 16 either way).
   assert.equal(searchPhrase('abcdefghijklmnop qrstuvwxyzabcdefghij'), 'abcdefghijklmnop qrstuvwxyzabcde')
   assert.equal(searchPhrase('short'), 'short')
+})
+
+test('/bm-delmarks: named letters, or every set one; the reading position is never a letter', () => {
+  const LETTERS = 'abcdefghijklmnopqrstuvwxyz'.split('')
+  const marks: Marks = { a: MARKS.a!, c: MARKS.c!, '`': { uuid: U, head: 'reading', markedAt: 0 } }
+  const named = deleteMarks(marks, ' A, z ', LETTERS)
+  assert.deepEqual(named.letters, ['a', 'z'])
+  assert.deepEqual(named.gone, ['a'])
+  assert.deepEqual(named.missing, ['z'])
+  assert.deepEqual(Object.keys(named.kept).sort(), ['`', 'c'])
+  const all = deleteMarks(marks, 'all', LETTERS)
+  assert.deepEqual(all.gone, ['a', 'c'])
+  assert.deepEqual(Object.keys(all.kept), ['`'])
+  assert.deepEqual(deleteMarks(marks, '!', LETTERS).gone, ['a', 'c'])
+  assert.deepEqual(deleteMarks(marks, '', LETTERS).letters, [])
+  assert.deepEqual(deleteMarks(marks, '1 ab', LETTERS).letters, [])
 })

@@ -38,7 +38,7 @@ import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFi
 import { DEBUG_USAGE, configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, parseDebugArgs, selectionKind, settingsRows } from './core/diagnostics'
 import { colorSplit, plainMarkdown, snippetOf, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/highlight'
 import { ScreenModel } from './core/screen-model'
-import { marksShowing, searchPhrase, type Mark, type Marks } from './core/marks'
+import { deleteMarks, marksShowing, searchPhrase, type Mark, type Marks } from './core/marks'
 import { footnoteAt, listPosition, nextGroup, promptEntry, promptNumberComplete, stepNumber } from './core/band-entry'
 import { age, bookmarkWho, drawnFourOf, foldedLabel, footnoteDisplay, footnotesByPrompt, groupHeader, numberLabel as numberLabelAt, numberNewestFirst, numberWidth, pinnedRowsOf, pointerFor, unreached } from './core/list-model'
 import { BOOKMARK_TOOL, answer as toolAnswer, brief as briefRow, describe as describeRecord, listActedOn, listName, parseToolInput, tierFor } from './core/bookmark-tool'
@@ -2581,19 +2581,13 @@ export const register: Register = (on, options) => {
     return {}
   })
 
-  // vim's :delmarks a b / :delmarks! (U27, djdarcy 2026-10-07: "How can we delete the
-  // 'm' mark?"). The reading position is not a letter and is left alone.
+  // /bm-delmarks: what it deletes is core/marks.ts deleteMarks (vim's :delmarks).
   on('command.run', { command: 'bm-delmarks' }, async ($, e) => {
-    const arg = e.args.trim().toLowerCase()
-    const marks = await loadMarks($)
-    const letters = arg === 'all' || arg === '!' ? LETTERS.filter(l => marks[l]) : arg.split(/[\s,]+/).filter(l => /^[a-z]$/.test(l))
+    const { letters, gone, missing, kept } = deleteMarks(await loadMarks($), e.args, LETTERS)
     if (letters.length === 0) {
       $.ui.toast('Usage: /bm-delmarks a b   (or /bm-delmarks all)')
       return {}
     }
-    const gone = letters.filter(l => marks[l])
-    const missing = letters.filter(l => !marks[l])
-    const kept = Object.fromEntries(Object.entries(marks).filter(([l]) => !gone.includes(l)))
     await $.store.set(await marksKey($), kept)
     markCache = kept
     const showing = await read($, shown)
