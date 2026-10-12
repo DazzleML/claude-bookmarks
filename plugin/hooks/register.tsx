@@ -2305,6 +2305,13 @@ export const register: Register = (on, options) => {
   })
 
   on('session.start', async ($, e, next) => {
+    // A session start is a conversation boundary (a new conversation, /clear, /resume)
+    // in a process whose module state outlives it; what belonged to the conversation
+    // that ended goes back to its defaults (test-plan 2026-10-12__15-25-30, row M).
+    unfoldedFootnotes.clear()
+    paneFilter = ''
+    escReminderOwed = false
+    bandRing = undefined
     void $.config.list().then(rows => {
       const theme = rows.find(r => r.key === 'theme')?.value
       if (typeof theme === 'string') themeName = theme

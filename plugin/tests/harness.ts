@@ -22,6 +22,8 @@ export type WorldOptions = {
   session?: string
   // The plugin's open panes $.ui.panes answers (none by default), e.g. [{ id: 'bm-pane' }].
   panes?: { id: string; isFocused?: boolean }[]
+  // What $.process.run answers, by argv; by default no program runs in tests.
+  process?: (argv: readonly string[]) => { exitCode: number; stdout: string; stderr?: string; isStdoutTruncated?: boolean }
 }
 
 export type World = {
@@ -86,7 +88,7 @@ export function world(on: unknown, options: WorldOptions = {}): World {
     files[norm(e.path)] = String(e.text ?? '')
     return undefined
   })
-  answer('process.run', () => ({ exitCode: 1, stdout: '', stderr: 'no process in tests', isStdoutTruncated: false }))
+  answer('process.run', e => ({ stderr: '', isStdoutTruncated: false, ...(options.process?.(e.argv as readonly string[]) ?? { exitCode: 1, stdout: '', stderr: 'no process in tests' }) }))
   answer('fs.list', () => [])
   // The start path (a test's $.session.start, measured 2026-10-12): the base event passes
   // through with its fields, and the calls the plugin's start hook makes are answered.

@@ -1,5 +1,7 @@
 // The seams register.tsx's split must not change (test-plan 2026-10-12__15-25-30, rows 6a,
-// 7, 4): the start path, prompt capture, and a submitted prompt ending the band's mode.
+// 6b, 7, 4, 2, M): the start path and its back-fill, prompt capture, a submitted prompt
+// ending the band's mode, "go" with nothing typed, and a session start resetting the state
+// that belonged to the conversation before it.
 // Reach measured first (row R): a test's $.session.start, $.prompt.submit and
 // $.session.append reach the plugin's hooks with their base events passed through.
 // Run: claude plugin test plugin
@@ -11,7 +13,7 @@ const LOG = `C:/test-home/claude/bookmarks/debug/${SID}.log`
 const STORE = { [`prompts:${SID}`]: [{ uuid: 'aaaaaaaa-0000-4000-8000-000000000001', head: 'first prompt' }], [`backfilled6:${SID}`]: true }
 const BAND = { plugin: 'bookmarks', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS, requestId: 'band-1' }
 const PANE = { plugin: 'bookmarks', surface: 'terminal', component: 'Pane', requestId: 'bm-pane', props: { title: 'prompts: type #', isFocused: false, bodyColumns: 60, placement: 'dock', scroll: { offset: 0, bodyRows: 20 } } }
-type Ui = { input: (t: object) => Promise<unknown>; findAll: (q: object) => Promise<{ type: string; key?: string; text?: string }[]> }
+type Ui = { input: (t: object) => Promise<unknown>; press: (t: object) => Promise<unknown>; unmount?: () => Promise<void>; findAll: (q: object) => Promise<{ type: string; key?: string; text?: string }[]> }
 type Engine = Record<string, Record<string, (i: object) => Promise<unknown>>>
 const settle = () => new Promise(r => setTimeout(r, 300))
 
@@ -35,6 +37,59 @@ test('6a control: with nothing stale, the prune deletes nothing', async ($, on) 
   await settle()
   expect((w.file(LOG) ?? '').includes('store: pruned')).toBe(false)
   expect((w.file(LOG) ?? '').includes('register:')).toBe(true) // the start hook did run
+})
+
+// Row 6b: the back-fill reads the transcript's user rows through a program; here the
+// program's output is crafted. The transcript only has to exist (the guess from the cwd).
+const TRANSCRIPT = `C:/test-home/.claude/projects/C--test-project/${SID}.jsonl`
+const userRow = (uuid: string, text: string, extra: Record<string, unknown> = {}) =>
+  JSON.stringify({ type: 'user', uuid, message: { role: 'user', content: text }, ...extra })
+const FILE_ROWS = [
+  userRow('bbbbbbbb-0000-4000-8000-000000000001', 'from the file, one'),
+  userRow('bbbbbbbb-0000-4000-8000-000000000002', 'from the file, two'),
+  userRow('bbbbbbbb-0000-4000-8000-000000000003', '<command-name>/compact</command-name><command-message>compact</command-message>'),
+  userRow('bbbbbbbb-0000-4000-8000-000000000004', '[SYSTEM NOTIFICATION - NOT USER INPUT] a notice'),
+  userRow('bbbbbbbb-0000-4000-8000-000000000005', 'a skill body', { isMeta: true }),
+].join('\n')
+// The live capture holds one prompt the file does not (sent while the file was read).
+const LIVE_ONLY = { [`prompts:${SID}`]: [{ uuid: 'cccccccc-0000-4000-8000-000000000007', head: 'live only' }] }
+const start = ($: unknown) => ($ as Engine).session.start({ cwd: 'C:/test-project', surface: 'terminal', isInteractive: true })
+const backfillLines = (w: { file: (p: string) => string | undefined }) => (w.file(LOG) ?? '').split('\n').filter(l => l.includes('backfill:'))
+
+test('6b back-fill: file prompts first, then live-only ones; the footnote, notice and meta rows are not prompts', async ($, on) => {
+  const w = world(on, { session: SID, store: LIVE_ONLY, files: { [TRANSCRIPT]: '' }, process: () => ({ exitCode: 0, stdout: FILE_ROWS }) })
+  await start($)
+  await settle()
+  expect(backfillLines(w).length).toBe(1)
+  expect(backfillLines(w)[0]!.includes('2 prompts from the transcript via powershell')).toBe(true)
+  expect(await listed($)).toEqual([' 3) live only', ' 2) from the file, two', '      … 1 footnote', ' 1) from the file, one'])
+})
+
+test('6b a complete read marks the conversation done: a second start reads nothing', async ($, on) => {
+  const w = world(on, { session: SID, store: LIVE_ONLY, files: { [TRANSCRIPT]: '' }, process: () => ({ exitCode: 0, stdout: FILE_ROWS }) })
+  await start($)
+  await settle()
+  await start($)
+  await settle()
+  expect(backfillLines(w).length).toBe(1)
+})
+
+test('6b a read cut off at 4 MiB says so and is tried again at the next start', async ($, on) => {
+  const w = world(on, { session: SID, store: LIVE_ONLY, files: { [TRANSCRIPT]: '' }, process: () => ({ exitCode: 0, stdout: FILE_ROWS, isStdoutTruncated: true }) })
+  await start($)
+  await settle()
+  expect(backfillLines(w)[0]!.includes('CUT OFF at 4 MiB')).toBe(true)
+  await start($)
+  await settle()
+  expect(backfillLines(w).length).toBe(2)
+})
+
+test('6b control: no program runs, the list starts from the live capture', async ($, on) => {
+  const w = world(on, { session: SID, store: LIVE_ONLY, files: { [TRANSCRIPT]: '' } })
+  await start($)
+  await settle()
+  expect(backfillLines(w)[0]!.includes('neither PowerShell nor sh + grep ran')).toBe(true)
+  expect(await listed($)).toEqual([' 1) live only'])
 })
 
 const append = (engine: Engine, uuid: string, text: string, origin: string, type = 'user', name?: string) =>
@@ -61,6 +116,52 @@ test('7 capture: a notice queued into a running turn is not listed (text)', asyn
   world(on, { session: SID, store: STORE })
   await append($ as unknown as Engine, 'cccccccc-0000-4000-8000-000000000004', '[SYSTEM NOTIFICATION - NOT USER INPUT] done', 'engine', 'attachment', 'queued_command').catch(() => undefined)
   expect(await listed($)).toEqual([' 1) first prompt'])
+})
+
+// Row M: a footnote unfolded by hand stays unfolded across a re-mount of the pane (module
+// state), and a session start folds it again. A mounted pane must be unmounted before the
+// same requestId is mounted afresh ("mounted on the terminal surface already").
+const P1 = 'aaaaaaaa-0000-4000-8000-000000000001'
+const FOOTNOTED = { ...STORE, [`footnotes:${SID}`]: [{ kind: 'command', label: '/compact', uuid: 'ffffffff-0000-4000-8000-000000000009', after: P1 }] }
+const UNFOLDED = [' 1) first prompt', '   1.1 /compact', '      ▴ fold']
+const FOLDED = [' 1) first prompt', '      … 1 footnote']
+const mount = ($: unknown, t: object) => ($ as { ui: { mount: (t: never) => Promise<unknown> } }).ui.mount(t as never) as Promise<Ui>
+
+async function unfoldedThenRemounted($: unknown, between: () => Promise<unknown>) {
+  const band = await mount($, BAND)
+  await band.input({ key: 'band-cmd-0', text: 'p' }).catch(() => undefined)
+  const pane = await mount($, PANE)
+  await pane.press({ key: 'fn-fold-1' })
+  const before = (await pane.findAll({ type: 'Button' })).map(b => b.text)
+  await between()
+  await pane.unmount?.()
+  const after = (await (await mount($, PANE)).findAll({ type: 'Button' })).map(b => b.text)
+  return { before, after }
+}
+
+test('M a session start folds the footnotes the last conversation unfolded', async ($, on) => {
+  world(on, { session: SID, store: FOOTNOTED })
+  const { before, after } = await unfoldedThenRemounted($, () =>
+    ($ as unknown as Engine).session.start({ cwd: 'C:/test-project', surface: 'terminal', isInteractive: true }))
+  expect(before).toEqual(UNFOLDED)
+  expect(after).toEqual(FOLDED)
+})
+
+test('M control: without a session start, a re-mounted pane keeps the footnote unfolded', async ($, on) => {
+  world(on, { session: SID, store: FOOTNOTED })
+  const { before, after } = await unfoldedThenRemounted($, async () => undefined)
+  expect(before).toEqual(UNFOLDED)
+  expect(after).toEqual(UNFOLDED)
+})
+
+test('2 go with nothing typed closes the list and brings the bar back (settle, esc)', async ($, on) => {
+  const w = world(on, { session: SID, store: STORE, panes: [{ id: 'bm-pane' }] })
+  const band = await mount($, BAND)
+  await band.input({ key: 'band-cmd-0', text: 'p' }).catch(() => undefined)
+  const closesBefore = w.calls.filter(c => c.event === 'ui.close').length
+  await band.press({ key: 'band-num-go' }).catch(() => undefined) // the view restore's own scroll throws in the kit
+  expect(w.calls.filter(c => c.event === 'ui.close').length).toBe(closesBefore + 1)
+  expect((await band.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['chord-mark', 'chord-jump', 'chord-prompts', 'chord-read', 'chord-help'])
 })
 
 test('4 a submitted prompt ends the band waiting for a number', async ($, on) => {

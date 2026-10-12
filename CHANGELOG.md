@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.32] - 2026-10-12
+
+### Fixed
+
+- A new conversation in the same Claude Code process (`/clear`, `/resume`) no longer inherits the previous one's open footnotes, prompts filter or band state: a session start puts them back to their defaults.
+
+### Changed
+
+- Tests only, otherwise: the test harness can answer the program the back-fill runs, so the transcript read is pinned (file prompts first, then prompts captured live; commands, notices and skill bodies are not prompts; a complete read is not repeated; a read cut off at 4 MiB is retried at the next start). Also pinned: "go" with nothing typed closes the list, and a session start folds footnotes.
+
 ## [0.4.31] - 2026-10-12
 
 ### Changed
@@ -507,7 +517,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.31...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.32...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
