@@ -16,7 +16,7 @@ import type { PaneMode, Row } from '../types'
 import { describePathOrder } from './engine/select'
 import {
   anchorHref, anchorMarkdown, anchorPath, markLinks, markdownLinks, ownerOf, parseAnchor, tierOf,
-  type AnchorOwner, type AnchorRecord, type AnchorTier, type MarkerStyle,
+  type AnchorOwner, type AnchorRecord, type MarkerStyle,
 } from './core/anchor'
 import {
   addOrRelabel, claim, emptyRegister, exportMarkdown, exportNotesOf, findRecord, listOf, parseRegister, prune, remove, serializeRegister, share,
@@ -38,6 +38,7 @@ import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFi
 import { DEBUG_USAGE, configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, parseDebugArgs, selectionKind, settingsRows } from './core/diagnostics'
 import { colorSplit, plainMarkdown, snippetOf, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/highlight'
 import { ScreenModel } from './core/screen-model'
+import { BOOKMARK_TOOL, answer as toolAnswer, brief as briefRow, describe as describeRecord, listActedOn, listName, parseToolInput, tierFor } from './core/bookmark-tool'
 import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptList, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, transcriptGuess, type PromptRef } from './core/prompt-store'
 
 // How long a `temporary` bookmark is kept before it is pruned (to a tombstone). A
@@ -2203,33 +2204,9 @@ export const register: Register = (on, options) => {
       await $.command.register({ name, description, immediate: true })
     }
 
-    // The model's tool (anchors DWP, 2026-10-09): mint a durable bookmark for a place in
-    // this conversation and get back the markdown link to cite it with. Kept in front
-    // (isDeferred: false) so citing is one call; the description stays short since it is
-    // sent every turn.
+    // The model's tool: what it takes and how it answers is core/bookmark-tool.ts.
     try {
-      const t = await $.tool.register({
-        name: 'bookmark',
-        description:
-          'Bookmark a message: give a verbatim fragment (or uuid) and a label, get a markdown link to cite; a click jumps ' +
-          'there. owner: your list or the person\'s. tier: perma (your default: a stable link, no bookmark glyph) or bookmark. ' +
-          'Actions: add, relabel, remove, share, claim, list.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            query: { type: 'string', description: 'A short verbatim fragment of the message to bookmark (the earliest message containing it)' },
-            uuid: { type: 'string', description: 'The message uuid instead of a fragment (full, or its first 8+ characters)' },
-            label: { type: 'string', description: 'What the bookmark is for: the link text, a few words' },
-            why: { type: 'string', description: 'One or two sentences on why this place matters' },
-            words: { type: 'string', description: 'The exact words to highlight on arrival; defaults to query' },
-            temporary: { type: 'boolean', description: 'Prune after the retention period instead of keeping forever' },
-            tier: { type: 'string', enum: ['perma', 'bookmark'], description: "perma (the default on your own list): a stable link to cite, drawn without the bookmark glyph; bookmark: a named place the person will want again (the default on the person's list)" },
-            owner: { type: 'string', enum: ['claude', 'user'], description: "Whose list: your own (default) or the person's, when they asked you to bookmark it for them" },
-            action: { type: 'string', enum: ['add', 'relabel', 'remove', 'share', 'claim', 'list'], description: 'add (default); relabel/remove act on `owner`\'s list; share copies from `owner`\'s list to the other; claim moves one of yours to the person\'s list (they asked for it); list shows both' },
-          },
-        },
-        isDeferred: false,
-      })
+      const t = await $.tool.register(BOOKMARK_TOOL)
       log($, `[bm] tool registered: ${t.tool}`)
     } catch (err) {
       log($, `[bm] tool.register failed: ${String(err)}`, { always: true })
@@ -2715,25 +2692,12 @@ export const register: Register = (on, options) => {
     void agentId
     void requestMeta
     log($, `[bm] ${String(tool)} called (${String(tool_use_id).slice(0, 12)}) with ${cut(JSON.stringify(input), 160)}`, { text: true })
-    // The result the model reads is a string (or MCP content blocks), not an object:
-    // an object is refused as "does not match its output shape" (2.1.295, 2026-10-09).
-    const answer = (o: unknown) => ({ result: JSON.stringify(o, null, 2) })
-    const query = typeof input.query === 'string' ? input.query.trim() : ''
-    const uuid = typeof input.uuid === 'string' ? input.uuid.trim() : ''
-    const label = typeof input.label === 'string' && input.label.trim() ? input.label.trim() : undefined
-    const action =
-      input.action === 'relabel' || input.action === 'remove' || input.action === 'share' || input.action === 'claim' || input.action === 'list' ? input.action : 'add'
-    // Claude's own references are perma by default: a stable link without the bookmark
-    // glyph (#21, djdarcy 2026-10-11: "That sounds reasonable"); the person's are bookmarks.
-    const tierAsked = input.tier === 'perma' || input.tier === 'bookmark' ? (input.tier as AnchorTier) : undefined
+    const answer = toolAnswer
+    const { query, uuid, label, action, tierAsked, owner, why, words: wordsAsked, temporary } = parseToolInput(input)
     if (action !== 'list' && !query && !uuid) return answer({ error: 'give `query` (a short verbatim fragment of the message) or `uuid`' })
-    // Whose list: Claude's own by default; the person's when they asked for the bookmark.
-    const owner: AnchorOwner = input.owner === 'user' ? 'user' : 'claude'
     const root = await dataRoot($)
-    const describe = (r: AnchorRecord) => ({
-      uuid: r.uuid, owner: ownerOf(r), tier: tierOf(r), label: r.label, why: r.why, words: r.words, line: r.line, sharedFrom: r.sharedFrom,
-      ...(root ? { anchor: anchorHref(r, root), markdown: anchorMarkdown(r, root) } : {}),
-    })
+    const describe = (r: AnchorRecord) => describeRecord(r, root)
+    const brief = briefRow
 
     if (action === 'list') {
       const reg = await loadRegister($)
@@ -2743,7 +2707,7 @@ export const register: Register = (on, options) => {
     if (action === 'relabel' || action === 'remove' || action === 'share' || action === 'claim') {
       // These act on a record that exists: by uuid (full or 8+ prefix) on `owner`'s list
       // (Claude's, for a claim).
-      const from: AnchorOwner = action === 'claim' ? 'claude' : owner
+      const from: AnchorOwner = listActedOn(action, owner)
       const reg = await loadRegister($)
       let target = uuid ? findRecord(reg, uuid, from) : undefined
       if (!target && query) {
@@ -2751,7 +2715,7 @@ export const register: Register = (on, options) => {
         if (found.kind === 'one') target = findRecord(reg, found.row.uuid, from)
         else if (found.kind === 'many') target = found.rows.map(r => findRecord(reg, r.uuid, from)).find(Boolean)
       }
-      if (!target) return answer({ error: `no bookmark for that on ${from === 'user' ? "the person's" : "Claude's"} list`, hint: 'action: "list" shows both lists with their uuids' })
+      if (!target) return answer({ error: `no bookmark for that on ${listName(from)} list`, hint: 'action: "list" shows both lists with their uuids' })
       const now = await $.clock.now()
       if (action === 'claim') {
         const r = claim(reg, target.uuid, now)
@@ -2774,19 +2738,19 @@ export const register: Register = (on, options) => {
         await saveRegister($, r.register)
         await writeExport($, r.register, { uuid: target.uuid, sessionId: r.register.sessionId }, '', now)
         log($, `[bm] bookmark shared ${owner} -> ${to}: ${short(target.uuid)} "${r.record.label}"`, { text: true })
-        return answer({ ok: true, added: r.added, shared: describe(r.record), note: `now on ${to === 'user' ? "the person's" : "Claude's"} list too; the original stays` })
+        return answer({ ok: true, added: r.added, shared: describe(r.record), note: `now on ${listName(to)} list too; the original stays` })
       }
       // relabel
-      if (!label && typeof input.why !== 'string' && typeof input.words !== 'string') return answer({ error: 'relabel needs `label`, `why` or `words`' })
+      if (!label && why === undefined && typeof input.words !== 'string') return answer({ error: 'relabel needs `label`, `why` or `words`' })
       const minted = await mintBookmark(
         $,
         {
           uuid: target.uuid,
           owner,
           label: label ?? target.label,
-          ...(typeof input.why === 'string' ? { why: input.why.trim() } : {}),
-          ...(typeof input.words === 'string' && input.words.trim() ? { words: input.words.trim() } : {}),
-          ...(input.temporary === true ? { temporary: true } : {}),
+          ...(why !== undefined ? { why } : {}),
+          ...(wordsAsked ? { words: wordsAsked } : {}),
+          ...(temporary ? { temporary: true } : {}),
           ...(tierAsked ? { tier: tierAsked } : {}),
           head: target.head,
           by: 'claude',
@@ -2799,7 +2763,6 @@ export const register: Register = (on, options) => {
 
     if (!label) return answer({ error: 'give `label`: what the bookmark is for, a few words' })
     const found = await resolveTarget($, uuid ? { uuid } : { fragment: query })
-    const brief = (r: TranscriptRow) => ({ uuid: r.uuid, role: r.role, line: r.line, bytes: [r.byteStart, r.byteEnd], head: headOf(r.text), timestamp: r.timestamp })
     log($, `[bm] bookmark: ${found.kind}${'via' in found && found.via ? ` via ${found.via} in ${found.ms} ms` : ''}${found.kind === 'none' ? `: ${found.reason}` : ''}`)
     if (found.kind === 'none') return answer({ error: found.reason, hint: 'use a verbatim fragment that appears in the message itself, or its uuid' })
     if (found.kind === 'many') {
@@ -2811,17 +2774,17 @@ export const register: Register = (on, options) => {
       })
     }
     const row = found.row
-    const words = typeof input.words === 'string' && input.words.trim() ? input.words.trim() : query || undefined
+    const words = wordsAsked ?? (query || undefined)
     const minted = await mintBookmark(
       $,
       {
         uuid: row.uuid,
         owner,
         label,
-        ...(typeof input.why === 'string' && input.why.trim() ? { why: input.why.trim() } : {}),
+        ...(why ? { why } : {}),
         ...(words && row.text.includes(words) ? { words } : {}),
-        ...(input.temporary === true ? { temporary: true } : {}),
-        tier: tierAsked ?? (owner === 'claude' ? 'perma' : 'bookmark'),
+        ...(temporary ? { temporary: true } : {}),
+        tier: tierFor(tierAsked, owner),
         line: row.line,
         bytes: [row.byteStart, row.byteEnd],
         head: headOf(row.text),
@@ -2842,7 +2805,7 @@ export const register: Register = (on, options) => {
       ...brief(row),
       words: minted.record.words,
       export: minted.exportPath,
-      note: `on ${owner === 'user' ? "the person's" : "Claude's"} list. Write \`markdown\` in your reply as the citation; a plain click jumps there, a ctrl-click opens the export`,
+      note: `on ${listName(owner)} list. Write \`markdown\` in your reply as the citation; a plain click jumps there, a ctrl-click opens the export`,
     })
   })
 
