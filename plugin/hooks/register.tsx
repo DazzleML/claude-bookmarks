@@ -26,7 +26,7 @@ import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resol
 import { exchangeIndex, looksLikeRedraw, pickViewAnchor, promptNearView } from './core/view-position'
 import { latestBurst, reportTime, type Report } from './core/latest-burst'
 import { CHANNELS, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, screenMirror, type Channel } from './core/debug'
-import { lineHint, route, type Pane } from './core/keys'
+import { lineHint, linePlaceholder, listHint, route, type Pane } from './core/keys'
 import { afterAction, type Cause } from './core/after-action'
 import { resolve as resolveSettings, type Settings } from './core/settings'
 import { looksLikePrompt, promptTextOf, unwrapQueued } from './core/prompt-rows'
@@ -1436,6 +1436,7 @@ async function jumpToMark($: EngineInterface, letter: string, probe = false): Pr
 
 // Generated from the router's table (core/keys.ts), so every key is named once.
 const CMD_HINT = lineHint()
+const BAND_PLACEHOLDER = linePlaceholder()
 
 // The two list-shaped pane modes share the band's number entry (digits, j/k, Enter).
 const listLike = (m: PaneMode | 'idle') => m === 'list' || m === 'bookmarks'
@@ -2817,7 +2818,7 @@ export const register: Register = on => {
               djdarcy) puts the keyboard here; the field takes every key (runCommandLine).
               The Buttons stay for clicks, Tab, and the borrowed-action chords. */}
           {Input ? (
-            <Input key={`band-cmd-${await read($, cmdRev)}`} label="bm:" placeholder="' j m p ␣" submitLabel="run" autoFocus
+            <Input key={`band-cmd-${await read($, cmdRev)}`} label="bm:" placeholder={BAND_PLACEHOLDER} submitLabel="run" autoFocus
               onInput={(typed: string) => runCommandLine($, typed, 'input')}
               onSubmit={(typed: string) => runCommandLine($, typed, 'submit')} />
           ) : (
@@ -3039,7 +3040,7 @@ export const register: Register = on => {
           {numbered.length > 0 && <Text>{header}</Text>}
           {numbered.length > 0 && shownRows.length === 0 && <Text dimColor>{`No bookmarks in "${group.title}" yet.`}</Text>}
           {shownRows.map(row)}
-          {numbered.length > 0 && <Text dimColor>{`${GROUP_CYCLE.prev}/${GROUP_CYCLE.next} group · j/k move · Enter jump · Esc close`}</Text>}
+          {numbered.length > 0 && <Text dimColor>{listHint('bookmarks')}</Text>}
         </Box>
       )
     }

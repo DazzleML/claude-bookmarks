@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-10-12
+
+### Changed
+
+- The band's empty field shows a key for every command (`' m ␣ p b P o i`); it used to show only `' j m p ␣`. The bookmarks pane's key line comes from the same table that decides what the keys do, so the two cannot disagree ([#29](https://github.com/DazzleML/claude-bookmarks/issues/29)).
+
 ## [0.4.7] - 2026-10-12
 
 ### Changed
@@ -328,7 +334,8 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.7...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.8...HEAD
+[0.4.8]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.7...v0.4.8
 [0.4.7]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.6...v0.4.7
 [0.4.6]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.4...v0.4.5

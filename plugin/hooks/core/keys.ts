@@ -132,3 +132,9 @@ export function listHint(pane: Pane): string {
 export function lineKeys(): string[] {
   return LINE_COMMANDS.flatMap(c => [...c.keys])
 }
+
+// The band field's placeholder: the first key of every command, in table order, Space
+// drawn as ␣. It replaces the hand-typed `' j m p ␣`, which left out b, P, o and i.
+export function linePlaceholder(): string {
+  return LINE_COMMANDS.map(c => (c.keys[0] === ' ' ? '␣' : c.keys[0])).join(' ')
+}
