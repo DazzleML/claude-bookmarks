@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.14] - 2026-10-12
+
+### Changed
+
+- Internal tidy: the marked line (the soft band with the mark's letter and words) is drawn by one helper on prompts and replies alike; the plugin's pane id and a few comments lose their prototype-era names. No visible change.
+
 ## [0.4.13] - 2026-10-12
 
 ### Changed
@@ -364,7 +370,9 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.13...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.14...HEAD
+[0.4.14]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.13...v0.4.14
+[0.4.13]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.12...v0.4.13
 [0.4.12]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.11...v0.4.12
 [0.4.11]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.10...v0.4.11
 [0.4.10]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.9...v0.4.10

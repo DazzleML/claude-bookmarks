@@ -10,7 +10,7 @@
 // toast, never as command `text`, because that text becomes a row Claude reads.
 
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, Timer } from 'claude-code'
+import type { ElementConstructor, EngineInterface, Register, TextProps, Timer } from 'claude-code'
 
 import type { PaneMode, Row } from '../types'
 import { describePathOrder } from './engine/select'
@@ -43,7 +43,8 @@ function currentSettings(): Settings {
   return resolveSettings().values
 }
 
-const PANE = 'bm-poc'
+// The plugin's one pane id (prompts, bookmarks, mark and jump panes all open under it).
+const PANE = 'bm-pane'
 
 // Claude Code builds the borrowed-action chords (below) were verified on. The
 // start-up tripwire toasts on any other build, because a new build could give a
@@ -145,7 +146,7 @@ let markCache: Record<string, Mark> = {}
 // across lines would have to rewrite markdown structure, which the plugin doesn't do.
 const snippetOf = (text: string) => (text.split('\n').find(l => l.trim()) ?? '').trim().slice(0, 120)
 
-// Round 4 colors (dark terminal; a light background would need a lighter LINE_BG).
+// Colours for a dark terminal; a light background would need a lighter LINE_BG (#27).
 // LINE_BG: darker than the selection blue #264F78 so it reads as a soft band.
 const LINE_BG = '#1B3754'
 const WORDS_FG = 'yellow'
@@ -192,6 +193,20 @@ function colorSplit(text: string, letter: string, snippet: string | undefined) {
     gapAbove,
     gapBelow,
   }
+}
+
+// The marked line as drawn on a prompt or a reply: the soft band, then the mark's letter
+// and words bold in WORDS_FG.
+function markedLine(Text: ElementConstructor<TextProps>, c: NonNullable<ReturnType<typeof colorSplit>>) {
+  return (
+    <Text backgroundColor={LINE_BG}>
+      {c.pre}
+      <Text color={WORDS_FG} bold>
+        «{c.letter}» {c.snippet}
+      </Text>
+      {c.post}
+    </Text>
+  )
 }
 
 // The shown mark, if it is on this row: by real uuid, or a drawn id sharing its first
@@ -2178,16 +2193,8 @@ export const register: Register = on => {
     const colored = first && colorSplit(text, first[0], first[1].snippet)
     if (colored) {
       const { Box, Text } = $.ui.resolve(e)
-      const { before, pre, snippet, post, after, letter, gapAbove, gapBelow } = colored
-      const line = (
-        <Text backgroundColor={LINE_BG}>
-          {pre}
-          <Text color={WORDS_FG} bold>
-            «{letter}» {snippet}
-          </Text>
-          {post}
-        </Text>
-      )
+      const { before, after, gapAbove, gapBelow } = colored
+      const line = markedLine(Text, colored)
       const engine = before ? await next({ ...e, props: { ...e.props, text: before } }) : null
       return (
         <Box flexDirection="column">
@@ -2250,18 +2257,12 @@ export const register: Register = on => {
       const [first] = marksHere
       const colored = first && colorSplit(e.props.text, first[0], first[1].snippet)
       if (colored) {
-        const { before, pre, snippet, post, after, letter, gapAbove, gapBelow } = colored
+        const { before, after, gapAbove, gapBelow } = colored
         return (
           <Box flexDirection="column">
             {before && md(before, `anchors-${e.requestId}-a`)}
             {gapAbove && <Text> </Text>}
-            <Text backgroundColor={LINE_BG}>
-              {pre}
-              <Text color={WORDS_FG} bold>
-                «{letter}» {snippet}
-              </Text>
-              {post}
-            </Text>
+            {markedLine(Text, colored)}
             {gapBelow && <Text> </Text>}
             {after && md(after, `anchors-${e.requestId}-b`)}
             {legend}
@@ -2286,25 +2287,17 @@ export const register: Register = on => {
     const marks = marksHere
     if (marks.length === 0) return next(e)
 
-    // Round 4: draw the marked LINE ourselves, so it can carry a background and the
-    // selected words a color (markdown has neither). The part before it still goes to
-    // the engine (keeps the reply's bullet and formatting); the part after is drawn
-    // with the Markdown element. Any case this split could mangle falls through to
-    // the round-3 bold rewrite below.
+    // Draw the marked LINE ourselves, so it can carry a background and the selected
+    // words a color (markdown has neither). The part before it still goes to the engine
+    // (keeps the reply's bullet and formatting); the part after is drawn with the
+    // Markdown element. Any case this split could mangle falls through to the bold
+    // rewrite below.
     const [first] = marks
     const colored = first && colorSplit(e.props.text, first[0], first[1].snippet)
     if (colored) {
       const { Box, Text, Markdown } = $.ui.resolve(e)
-      const { before, pre, snippet, post, after, letter, gapAbove, gapBelow } = colored
-      const line = (
-        <Text backgroundColor={LINE_BG}>
-          {pre}
-          <Text color={WORDS_FG} bold>
-            «{letter}» {snippet}
-          </Text>
-          {post}
-        </Text>
-      )
+      const { before, after, gapAbove, gapBelow } = colored
+      const line = markedLine(Text, colored)
       if (before) {
         const engine = await next({ ...e, props: { ...e.props, text: before } })
         return (

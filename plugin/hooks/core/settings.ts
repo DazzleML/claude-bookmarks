@@ -64,7 +64,7 @@ export const FIELDS = {
     values: ['input', 'band'],
     default: 'input',
     title: 'Keyboard after an action',
-    description: 'input: back to the input box when Claude Code allows it (else a reminder); band: stay in the band',
+    description: 'input: back to the input box once Claude Code allows a plugin to do it; band: stay in the band',
   },
   debugDefault: {
     kind: 'enum',

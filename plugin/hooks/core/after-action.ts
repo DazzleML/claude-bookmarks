@@ -13,8 +13,8 @@
 //   - after a completed action the keyboard returns to the input box (#24, widened from
 //     `o`/`i` to every action). The engine cannot yet hand the keyboard back (see
 //     docs/engine-quirks.md, "A plugin can't hand the keyboard back to the input box"), so
-//     `focus: 'input'` is what is wanted; the adapter does what the engine allows and
-//     shows a reminder otherwise.
+//     `focus: 'input'` is what is wanted; the adapter does what the engine allows, which
+//     today is nothing (the person presses Esc).
 
 import type { Pane } from './keys.ts'
 
