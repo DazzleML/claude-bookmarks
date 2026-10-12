@@ -1886,14 +1886,9 @@ async function watchBand($: EngineInterface, mode: PaneMode) {
     // the band steps back and the list stays open, with its yellow row following the
     // view (djdarcy, 2026-10-11: a click in the input box "auto-closes the Panel on the
     // right, which it shouldn't"). The mark and jump panes only exist for the next
-    // letter, so they still close.
-    if (listLike(mode)) {
-      log($, `[bm] band lost the keyboard (${r.deny}): the band steps back, the list stays`)
-      await endBandMode($)
-      return
-    }
-    log($, `[bm] band lost the keyboard (${r.deny}): closing the pane`)
-    await closePane($)
+    // letter, so they still close. The after-action rule decides (paneWhileTyping).
+    const outcome = await settle($, mode, 'focus-left')
+    log($, `[bm] band lost the keyboard (${r.deny}): ${outcome.pane === 'close' ? 'closing the pane' : 'the band steps back, the list stays'}`)
   }
 }
 
