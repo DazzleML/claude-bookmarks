@@ -42,6 +42,7 @@ import { deleteMarks, marksShowing, searchPhrase, type Mark, type Marks } from '
 import { footnoteAt, listPosition, nextGroup, promptEntry, promptNumberComplete, stepNumber } from './core/band-entry'
 import { debugCommand } from './handlers/debug-command'
 import { markedColumn, markedLine, type MarkStyles } from './views/marked-message'
+import { bandView } from './views/band'
 import { configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
 import type { DiagnosticsPorts } from './engine/ports'
 import { age, bookmarkWho, drawnFourOf, foldedLabel, footnoteDisplay, footnotesByPrompt, groupHeader, numberLabel as numberLabelAt, numberNewestFirst, numberWidth, pinnedRowsOf, pointerFor, unreached } from './core/list-model'
@@ -2779,154 +2780,51 @@ export const register: Register = (on, options) => {
   // chords bound to those actions in keybindings.json press them from the input box.
   // (A copy on the hint line under the prompt was tried on 2026-10-04 and removed: it
   // sat below the status line, and the band reads better above the prompt.)
+  // The band is drawn by views/band.tsx; this hook gathers what it draws (the model) and
+  // what its presses do (the actions, closures over `$`).
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const elements = $.ui.resolve(e)
-    const { Box, Button, Text } = elements
-    const Input = 'Input' in elements ? elements.Input : undefined
     const theirs = await next(e)
     const last = await read($, shown)
     bandId = e.requestId
     const mode = await read($, bandMode)
-
-    // The band takes the next key itself when the pane opened from it couldn't take
-    // the keyboard (see openFor). The pane stays open beside it as the readable list.
-    if (mode !== 'idle') {
-      const marks = await loadMarks($)
-      // What happens after the key: the after-action rule, by what the key did.
-      const done = (cause: Cause) => settle($, paneOf(mode), cause)
-      if (mode === 'help') {
-        const s = currentSettings()
-        const now = { leader: 'The leader (Ctrl+] by default)', chords: s.chords === 'on', panes: s.panes === 'on' }
-        // The help must fit the band's window. Taller, it scrolls, and the keyboard probe
-        // (showHelp) -- the only way to learn that Esc took the keyboard back -- focuses
-        // `close`, which scrolls it back to the top; the arrows in the band scroll its
-        // window without moving the ring (log 2026-10-12 18:02-18:09: no focus move onto a
-        // help line). So a band too short for one line per command gets the short form.
-        const full = helpLines(now)
-        const lines = full.length + 1 <= e.props.maxRows ? full : helpShort(now)
-        return (
-          <Box flexDirection="column">
-            {theirs}
-            <Box flexDirection="row" columnGap={1}>
-              <Text {...style('legend')}>bm help</Text>
-              <Button key="band-help-close" label="close (Enter)" plain {...buttonStyle('legend')} onPress={() => endBandMode($)} />
-            </Box>
-            {lines.map((l, i) => <Text key={`band-help-${i}`} {...style('legend')}>{l}</Text>)}
-          </Box>
-        )
-      }
-      let keys: any
-      if (mode === 'jump') {
-        const reading = marks[READING]
-        keys = [
-          <Text key="band-jump-title" {...style('legend')}>jump:</Text>,
-          ...(reading
-            ? [<Button key="band-jump-reading" label="reading (Enter)" plain
-                // There, or back to where you were: the leader's Space (readingToggle).
-                onPress={async () => { await readingToggle($); await done('band-command') }} />]
-            : []),
-          ...LETTERS.filter(l => marks[l]).map(l => (
-            <Button key={`band-jump-${l}`} hotkey={l} label={(marks[l]?.head ?? '').slice(0, 12)} plain
-              onPress={async () => { await jumpToMark($, l); await done('jump') }} />
-          )),
-        ]
-      } else if (mode === 'mark') {
-        keys = [
-          <Text key="band-mark-title" {...style('legend')}>mark as:</Text>,
-          // The default focus, so a stray Enter cancels rather than overwriting a mark.
-          <Button key="band-mark-cancel" label="cancel (Enter)" plain {...buttonStyle('legend')} onPress={() => done('esc')} />,
-          ...LETTERS.map(l => (
-            <Button key={`band-mark-${l}`} hotkey={l} label={marks[l] ? '●' : '·'} plain {...(marks[l] ? {} : buttonStyle('unused'))}
-              onPress={async () => { await setMark($, l); await done('mark-set'); await restoreView($) }} />
-          )),
-        ]
-      } else {
-        // A prompt number, one digit Button per key: a field's typing or Enter can't
-        // scroll ("not person-initiated", 2026-10-05 17:20 and 2026-10-07 07:10), a
-        // Button press can.
-        const bookmarks = mode === 'bookmarks'
-        const count = bookmarks ? (await bookmarkList($)).length : (await prompts($)).length
-        const typed = await read($, bandNum)
-        const listKeys = listKeysFor(bookmarks ? 'bookmarks' : 'list')
-        const byKey = (k: string) => listKeys.find(l => l.key === k)!
-        const listKeyButton = (l: (typeof listKeys)[number]) => (
-          <Button key={`band-num-${l.key}`} hotkey={l.key} label={l.button} plain {...buttonStyle('legend')} onPress={() => bandListKey($, l.route().operation)} />
-        )
-        const groupTitle = bookmarks ? (BOOKMARK_GROUPS[await read($, bandGroup)]?.title ?? '') : ''
-        keys = [
-          <Text key="band-num-title" {...style('legend')}>{bookmarks ? 'bookmark #' : 'prompt #'}</Text>,
-          <Text key="band-num-typed" {...style('emphasis')}>{typed || '_'}</Text>,
-          <Text key="band-num-range" {...style('legend')}>{`(1-${count})`}</Text>,
-          ...'0123456789'.split('').map(d => (
-            <Button key={`band-num-${d}`} hotkey={d} label={d} plain {...buttonStyle('legend')} onPress={() => bandDigit($, d)} />
-          )),
-          // `.` starts a footnote number (`3.` unfolds #3, `3.1` its first footnote, #33). A
-          // hotkey is one letter or digit, so this one is clicked (djdarcy, 2026-10-12).
-          ...(bookmarks ? [] : [<Button key="band-num-dot" label="." plain {...buttonStyle('legend')} onPress={() => bandDot($)} />]),
-          // `go` sits between k and j, so an arrow always has a neighbour to move to:
-          // the ui.focus hook turns that move into k (previous) or j (next).
-          listKeyButton(byKey('k')),
-          <Button key="band-num-go" label="go (Enter)" plain onPress={() => bandNumberGo($)} />,
-          listKeyButton(byKey('j')),
-          // The rest of this list's keys, from the same table as its hint (core/keys.ts
-          // LIST_KEYS); the bookmarks group's name sits between its h and l.
-          ...listKeys
-            .filter(l => l.key !== 'j' && l.key !== 'k')
-            .flatMap(l => {
-              const op = l.route().operation
-              return op.op === 'group' && op.dir === -1
-                ? [listKeyButton(l), <Text key="band-num-group" {...style('legend')}>{groupTitle}</Text>]
-                : [listKeyButton(l)]
-            }),
-        ]
-      }
-      return (
-        <Box flexDirection="column">
-          {theirs}
-          <Box flexDirection="row" columnGap={1} flexWrap="wrap">
-            <Text {...style('legend')}>bm</Text>
-            {keys}
-            <Text {...style('legend')}>(Esc)</Text>
-          </Box>
-        </Box>
-      )
-    }
-
-    return (
-      <Box flexDirection="column">
-        {theirs}
-        <Box flexDirection="row" columnGap={1}>
-          {/* The band leader (abovePrompt:focus: Ctrl+X Tab by default, Ctrl+] for
-              djdarcy) puts the keyboard here; the field takes every key (runCommandLine).
-              The Buttons stay for clicks, Tab, and the borrowed-action chords. */}
-          {Input ? (
-            // The engine draws its own colon after a label (screenshot 2026-10-12: `bm::`).
-            <Input key={`band-cmd-${await read($, cmdRev)}`} label="bm" placeholder="" submitLabel="run" autoFocus
-              onInput={(typed: string) => runCommandLine($, typed, 'input')}
-              onSubmit={(typed: string) => runCommandLine($, typed, 'submit')} />
-          ) : (
-            <Text {...style('legend')}>bm:</Text>
-          )}
-          {/* The bar, from the router's table (core/keys.ts bandButtons): each shown
-              command once, `?` for the rest. A press performs what its key routes to;
-              while chords are on, the four chord commands carry their borrowed action
-              (docs: Optional fast keys). `band: field` draws the field alone. */}
-          {currentSettings().band === 'full' &&
-            bandButtons({ chords: currentSettings().chords === 'on' }).map(b => {
-              const action = b.chord ? CHORD_ACTION[b.chord] : undefined
-              return (
-                <Button key={`chord-${b.id}`} label={b.label} plain {...buttonStyle('legend')}
-                  {...(b.hotkey ? { hotkey: b.hotkey } : {})} {...(action ? { action } : {})}
-                  onPress={() => perform($, route(b.key, { pane: 'none' }).operation, action ?? `button:${b.id}`)} />
-              )
-            })}
-          {last && (
-            <Text wrap="truncate-end">
-              | <Text {...style('emphasis')}>{last.letter}</Text> ▸ {last.text}
-            </Text>
-          )}
-        </Box>
-      </Box>
+    const marks = mode === 'idle' ? {} : await loadMarks($)
+    // What happens after the key: the after-action rule, by what the key did.
+    const done = (cause: Cause) => settle($, paneOf(mode), cause)
+    const s = currentSettings()
+    const now = { leader: 'The leader (Ctrl+] by default)', chords: s.chords === 'on', panes: s.panes === 'on' }
+    // The help must fit the band's window. Taller, it scrolls, and the keyboard probe
+    // (showHelp) -- the only way to learn that Esc took the keyboard back -- focuses
+    // `close`, which scrolls it back to the top; the arrows in the band scroll its
+    // window without moving the ring (log 2026-10-12 18:02-18:09: no focus move onto a
+    // help line). So a band too short for one line per command gets the short form.
+    const full = helpLines(now)
+    const help = full.length + 1 <= e.props.maxRows ? full : helpShort(now)
+    const bookmarks = mode === 'bookmarks'
+    const count = mode === 'list' || bookmarks ? (bookmarks ? (await bookmarkList($)).length : (await prompts($)).length) : 0
+    const listKeys = listKeysFor(bookmarks ? 'bookmarks' : 'list').map(l => ({ key: l.key, button: l.button, operation: l.route().operation }))
+    const groupTitle = bookmarks ? (BOOKMARK_GROUPS[await read($, bandGroup)]?.title ?? '') : ''
+    const bar = s.band === 'full'
+      ? bandButtons({ chords: s.chords === 'on' }).map(b => ({ id: b.id, label: b.label, key: b.key, ...(b.hotkey ? { hotkey: b.hotkey } : {}), ...(b.chord ? { action: CHORD_ACTION[b.chord] } : {}) }))
+      : []
+    return bandView(
+      elements,
+      theirs,
+      { mode, shown: last, help, marks, letters: LETTERS, readingLetter: READING, typed: await read($, bandNum), count, groupTitle, listKeys, bar, cmdRev: await read($, cmdRev) },
+      {
+        endBandMode: () => endBandMode($),
+        readingToggle: async () => { await readingToggle($); await done('band-command') },
+        jumpToMark: async l => { await jumpToMark($, l); await done('jump') },
+        setMark: async l => { await setMark($, l); await done('mark-set'); await restoreView($) },
+        cancel: () => done('esc'),
+        listKey: op => bandListKey($, op),
+        digit: d => bandDigit($, d),
+        dot: () => bandDot($),
+        go: () => bandNumberGo($),
+        runCommandLine: (typed, kind) => runCommandLine($, typed, kind),
+        perform: (key, id, action) => perform($, route(key, { pane: 'none' }).operation, action ?? `button:${id}`),
+      },
+      { text: style, button: buttonStyle },
     )
   })
 
