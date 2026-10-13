@@ -56,12 +56,36 @@ export type ViewPorts = {
   scrollPaneTo: (key: string) => Promise<{ deny?: string }>
 }
 
+/** What navigation (handlers/navigation.ts) needs: the store for the jumplist, the scroll, the clipboard, the person's feedback, and the drawn and marked heads a refused jump quotes. */
+export type NavigationPorts = {
+  sessionId: () => Promise<string>
+  storeGet: (key: string) => Promise<unknown>
+  storeSet: (key: string, value: unknown) => Promise<unknown>
+  scroll: (uuid: string, block: 'start' | 'end') => Promise<{ deny?: string }>
+  copy: (text: string) => Promise<{ isCopied: boolean }>
+  toast: (text: string, timeoutMs?: number) => void
+  /** `text`: the line quotes the conversation (kept per the debugText setting). */
+  log: (line: string, text?: boolean) => void
+  note: (what: string) => void
+  /** The head drawn for a message since load, if it was drawn. */
+  drawnHead: (uuid: string) => string | undefined
+  markHead: (uuid: string) => string | undefined
+  /** Where the person is leaving from: the view before the pane, else the view now. */
+  leavingFrom: () => Promise<{ uuid: string; block: 'start' | 'end' } | undefined>
+  /** PanePosition's: a jump drops the way back; the restore reads and clears. */
+  paneJumped: () => void
+  takeRestore: () => { here: string | undefined; block: 'start' | 'end'; fromPane: boolean }
+  freshOnScreen: () => string[]
+}
+
 // Ownership of shared state (notes/meta/2026-10-12__22-48-40, one owner, read-only ports):
 //   state                                   owner                         readers
 //   screen (ScreenModel)                    register.tsx render hooks     view tracker (read-only Pick)
 //   lastScreenOrder, trustedScreen,         handlers/view-tracker.ts      --
 //     heldBy, lastHere, viewTimer
 //   lastHere (the one outside write)        prompts pane, via drewHere    --
+//   paneAnchor, paneView, restoreTo         core/pane-position.ts         navigation (paneJumped, takeRestore), openFor (opened)
+//   jumplistCache, jumplistMoving           handlers/navigation.ts        --
 //   logLines, screenLines, timeline (Ring)  register.tsx log cluster       diagnostics (timeline, read-only)
 //   rendered (drawn ids)                    register.tsx render hooks     diagnostics, list model (read-only)
 //   markCache                               register.tsx marks cluster    render hooks, band (read-only)
