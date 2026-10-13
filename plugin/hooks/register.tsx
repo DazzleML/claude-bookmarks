@@ -10,7 +10,7 @@
 // toast, never as command `text`, because that text becomes a row Claude reads.
 
 import { atom, read, update } from 'claude-code'
-import type { ElementConstructor, EngineInterface, Register, TextProps, Timer } from 'claude-code'
+import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { PaneMode, Row } from '../types'
 import { describePathOrder } from './engine/select'
@@ -41,6 +41,7 @@ import { ScreenModel } from './core/screen-model'
 import { deleteMarks, marksShowing, searchPhrase, type Mark, type Marks } from './core/marks'
 import { footnoteAt, listPosition, nextGroup, promptEntry, promptNumberComplete, stepNumber } from './core/band-entry'
 import { debugCommand } from './handlers/debug-command'
+import { markedColumn, markedLine, type MarkStyles } from './views/marked-message'
 import { configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
 import type { DiagnosticsPorts } from './engine/ports'
 import { age, bookmarkWho, drawnFourOf, foldedLabel, footnoteDisplay, footnotesByPrompt, groupHeader, numberLabel as numberLabelAt, numberNewestFirst, numberWidth, pinnedRowsOf, pointerFor, unreached } from './core/list-model'
@@ -177,20 +178,9 @@ const style = (role: Role): Style => palette()[role]
 // A Button's label can't be coloured at rest (docs/engine-quirks.md): only its dimness.
 const buttonStyle = (role: Role): { dimColor?: boolean } => (style(role).dimColor ? { dimColor: true } : {})
 
-// Where the marked line sits in a message, and the bold «a» form: core/highlight.ts.
-// The marked line as drawn on a prompt or a reply: the soft band, then the mark's letter
-// and words bold in WORDS_FG.
-function markedLine(Text: ElementConstructor<TextProps>, c: ColorSplit) {
-  return (
-    <Text {...style('markBand')}>
-      {c.pre}
-      <Text {...style('mark')}>
-        «{c.letter}» {c.snippet}
-      </Text>
-      {c.post}
-    </Text>
-  )
-}
+// Where the marked line sits in a message, and the bold «a» form: core/highlight.ts. How
+// it is drawn: views/marked-message.tsx, with these two palette roles.
+const markStyles = (): MarkStyles => ({ band: style('markBand'), mark: style('mark') })
 
 // The shown mark, if it is on this row (core/marks.ts marksShowing), from the cache.
 function marksOnRow(requestId: string, showing: string | undefined): [string, Mark][] {
@@ -2405,19 +2395,10 @@ export const register: Register = (on, options) => {
     const [first] = onRow
     const colored = first && colorSplit(text, first[0], first[1].snippet)
     if (colored) {
-      const { Box, Text } = $.ui.resolve(e)
-      const { before, after, gapAbove, gapBelow } = colored
-      const line = markedLine(Text, colored)
-      const engine = before ? await next({ ...e, props: { ...e.props, text: before } }) : null
-      return (
-        <Box flexDirection="column">
-          {engine}
-          {gapAbove && <Text> </Text>}
-          {line}
-          {gapBelow && <Text> </Text>}
-          {after && <Text>{after}</Text>}
-        </Box>
-      )
+      const elements = $.ui.resolve(e)
+      const { Text } = elements
+      const engine = colored.before ? await next({ ...e, props: { ...e.props, text: colored.before } }) : null
+      return markedColumn(elements, colored, engine, colored.after && <Text>{colored.after}</Text>, markStyles())
     }
     const marked = tagMarksPlain(text, onRow)
     return marked === text ? next(e) : next({ ...e, props: { ...e.props, text: marked } })
@@ -2479,7 +2460,7 @@ export const register: Register = (on, options) => {
           <Box flexDirection="column">
             {before && md(before, `anchors-${e.requestId}-a`)}
             {gapAbove && <Text> </Text>}
-            {markedLine(Text, colored)}
+            {markedLine(Text, colored, markStyles())}
             {gapBelow && <Text> </Text>}
             {after && md(after, `anchors-${e.requestId}-b`)}
             {legend}
@@ -2514,7 +2495,7 @@ export const register: Register = (on, options) => {
     if (colored) {
       const { Box, Text, Markdown } = $.ui.resolve(e)
       const { before, after, gapAbove, gapBelow } = colored
-      const line = markedLine(Text, colored)
+      const line = markedLine(Text, colored, markStyles())
       if (before) {
         const engine = await next({ ...e, props: { ...e.props, text: before } })
         return (
