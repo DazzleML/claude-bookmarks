@@ -41,7 +41,7 @@ import { ScreenModel } from './core/screen-model'
 import { deleteMarks, marksShowing, searchPhrase, type Mark, type Marks } from './core/marks'
 import { footnoteAt, listPosition, nextGroup, promptEntry, promptNumberComplete, stepNumber } from './core/band-entry'
 import { debugCommand } from './handlers/debug-command'
-import { markedColumn, markedLine, type MarkStyles } from './views/marked-message'
+import { anchoredReply, markedColumn, markedReply, type MarkStyles } from './views/marked-message'
 import { bandView } from './views/band'
 import { configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
 import type { DiagnosticsPorts } from './engine/ports'
@@ -2421,18 +2421,14 @@ export const register: Register = (on, options) => {
     const links = markdownLinks(e.props.text)
     const anchors = links.filter(l => l.kind === 'anchor')
     const marksHere = marksOnRow(e.requestId, (await read($, shown))?.letter)
+    // The drawing is views/marked-message.tsx (anchoredReply, markedReply); this hook
+    // gathers what it draws.
     if (anchors.length > 0) {
-      const { Box, Markdown, Text } = $.ui.resolve(e)
       if (!anchorRowsLogged.has(e.requestId)) {
         anchorRowsLogged.add(e.requestId)
         log($, `[bm] reply ${short(e.requestId)}: ${anchors.length} bookmark link(s), ${links.filter(l => l.kind === 'file').length} file link(s)`)
         queueProseAnchors($, anchors)
       }
-      // Kind markers go on the drawn labels only (the transcript is untouched); the hrefs
-      // stay as written so `pressableLinks` matches them. A one-line legend teaches the
-      // two clicks (a setting later, #7). A mark on this reply keeps its highlight: the
-      // bold «a» form, since this branch draws markdown and can't colour a line.
-      const pressable = anchors.map(a => a.href)
       // A perma record's link is drawn without the bookmark glyph (#21).
       const reg = await loadRegister($)
       const isPerma = (href: string) => {
@@ -2440,34 +2436,8 @@ export const register: Register = (on, options) => {
         const r = a && findRecord(reg, a.uuid)
         return r ? tierOf(r) === 'perma' : false
       }
-      const md = (t: string, k: string) => (
-        <Markdown key={k} text={markLinks(t, LINK_MARKERS, isPerma)} pressableLinks={pressable} onLinkPress={link => onAnchorPress($, link.href)} />
-      )
-      const legend = LINK_LEGEND ? (
-        <Text {...style('legend')}>
-          {LINK_MARKERS === 'glyph' ? '⚓' : '[bm]'} click: jump there · ctrl-click: open the bookmark's file
-          {links.some(l => l.kind === 'file') ? `  ${LINK_MARKERS === 'glyph' ? '▤' : '[file]'} ctrl-click: open the file` : ''}
-        </Text>
-      ) : null
-      // A mark on this reply gets the same coloured line as any other message: the text
-      // before and after the marked line are drawn as markdown (links clickable), the
-      // line itself as coloured Text. If the marked line carries a link, that link is
-      // plain text for as long as the highlight shows.
       const [first] = marksHere
       const colored = first && colorSplit(e.props.text, first[0], first[1].snippet)
-      if (colored) {
-        const { before, after, gapAbove, gapBelow } = colored
-        return (
-          <Box flexDirection="column">
-            {before && md(before, `anchors-${e.requestId}-a`)}
-            {gapAbove && <Text> </Text>}
-            {markedLine(Text, colored, markStyles())}
-            {gapBelow && <Text> </Text>}
-            {after && md(after, `anchors-${e.requestId}-b`)}
-            {legend}
-          </Box>
-        )
-      }
       // A mark whose words don't sit on one line: the bold «a» form.
       let text = e.props.text
       for (const [letter, m] of marksHere) {
@@ -2475,11 +2445,18 @@ export const register: Register = (on, options) => {
         if (s && !/[*`_]/.test(s) && text.includes(s)) text = text.replace(s, `**«${letter}» ${s}**`)
         else text = `> **«${letter}» ${s ?? m.head}**\n\n${text}`
       }
-      return (
-        <Box flexDirection="column">
-          {md(text, `anchors-${e.requestId}`)}
-          {legend}
-        </Box>
+      return anchoredReply(
+        $.ui.resolve(e),
+        {
+          keyBase: e.requestId,
+          markText: t => markLinks(t, LINK_MARKERS, isPerma),
+          pressable: anchors.map(a => a.href),
+          colored: colored || undefined,
+          boldText: text,
+          legend: LINK_LEGEND ? { glyph: LINK_MARKERS === 'glyph', hasFile: links.some(l => l.kind === 'file') } : null,
+        },
+        href => onAnchorPress($, href),
+        { ...markStyles(), legend: style('legend') },
       )
     }
 
@@ -2494,34 +2471,8 @@ export const register: Register = (on, options) => {
     const [first] = marks
     const colored = first && colorSplit(e.props.text, first[0], first[1].snippet)
     if (colored) {
-      const { Box, Text, Markdown } = $.ui.resolve(e)
-      const { before, after, gapAbove, gapBelow } = colored
-      const line = markedLine(Text, colored, markStyles())
-      if (before) {
-        const engine = await next({ ...e, props: { ...e.props, text: before } })
-        return (
-          <Box flexDirection="column">
-            {engine}
-            {gapAbove && <Text> </Text>}
-            {line}
-            {gapBelow && <Text> </Text>}
-            {after && <Markdown text={after} />}
-          </Box>
-        )
-      }
-      // The marked line is the message's first. Handing the rest to the engine put the
-      // blank row it draws at the top of a message BELOW our line, so the line ran into
-      // the message above (2026-10-04). So: that blank row first, then the line, then
-      // the rest drawn here, as the branch above draws its part after the line. The
-      // message's bullet is not drawn while its first line is highlighted.
-      return (
-        <Box flexDirection="column">
-          <Text> </Text>
-          {line}
-          {gapBelow && <Text> </Text>}
-          {after && <Markdown text={after} />}
-        </Box>
-      )
+      const engine = colored.before ? await next({ ...e, props: { ...e.props, text: colored.before } }) : null
+      return markedReply($.ui.resolve(e), colored, engine, markStyles())
     }
 
     return next({ ...e, props: { ...e.props, text: tagMarksMarkdown(e.props.text, marks) } })
