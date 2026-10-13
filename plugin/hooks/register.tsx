@@ -47,6 +47,7 @@ import type { DiagnosticsPorts, NavigationPorts, ViewPorts } from './engine/port
 import { Navigation } from './handlers/navigation'
 import { ViewTracker } from './handlers/view-tracker'
 import { PanePosition } from './core/pane-position'
+import { BandState } from './core/band-state'
 import { age, bookmarkWho, drawnFourOf, foldedLabel, footnoteDisplay, footnotesByPrompt, groupHeader, numberLabel as numberLabelAt, numberNewestFirst, numberWidth, pinnedRowsOf, pointerFor, unreached } from './core/list-model'
 import { BOOKMARK_TOOL, answer as toolAnswer, brief as briefRow, describe as describeRecord, listActedOn, listName, parseToolInput, tierFor } from './core/bookmark-tool'
 import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptList, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, transcriptGuess, type PromptRef } from './core/prompt-store'
@@ -1230,14 +1231,12 @@ async function handOff($: EngineInterface, mode: PaneMode, focusKey?: string) {
   if (focusKey) await focusBand($, focusKey)
 }
 
-// After a band action that finishes with the band still holding the keyboard (a jump,
-// `o`/`i`, the reading position, a promote), the person's next keys are usually their
-// prompt. The plugin can't hand the keyboard back (#24), so the first key the band does
-// not know says so, once per action, when "Keyboard after an action" is `input`.
-let escReminderOwed = false
+// The band's own state -- its wait and watch timers, the focus ring, its requestId, the
+// Esc reminder -- is core/band-state.ts BandState, written only through its named methods.
+const band = new BandState()
 const ESC_REMINDER = 'Press Esc to type in the input box: the band still has the keyboard (Claude Code does not let a plugin hand it back yet).'
 function owedAfterAction() {
-  escReminderOwed = afterAction({ pane: 'none', cause: 'band-command', settings: currentSettings() }).focus === 'input'
+  band.oweReminder(afterAction({ pane: 'none', cause: 'band-command', settings: currentSettings() }).focus === 'input')
 }
 
 async function runCommandLine($: EngineInterface, typed: string, via: 'input' | 'submit') {
@@ -1305,8 +1304,8 @@ async function perform($: EngineInterface, operation: Operation, via: 'field' | 
       return
     case 'hint':
       await clearCommandLine($)
-      if (escReminderOwed) {
-        escReminderOwed = false
+      if (band.reminderOwed) {
+        band.oweReminder(false)
         log($, `[bm] a key the band does not know, after an action: the Esc reminder`)
         $.ui.toast(ESC_REMINDER)
       } else $.ui.toast(operation.reason)
@@ -1322,10 +1321,8 @@ async function perform($: EngineInterface, operation: Operation, via: 'field' | 
 const HELP_MS = 60_000
 async function showHelp($: EngineInterface) {
   await update($, bandMode, () => 'help')
-  bandTimer?.cancel()
-  bandTimer = $.clock.after(HELP_MS, () => void endBandMode($))
-  bandWatch?.cancel()
-  bandWatch = undefined
+  band.restartWait(() => $.clock.after(HELP_MS, () => void endBandMode($)))
+  band.stopWatching()
   const deny = await focusBand($, 'band-help-close')
   // A click on `?` leaves the keyboard where it was, so the band never held it: the help
   // stays until `close`, a line pressed, the minute, or a prompt typed. Watching it here
@@ -1336,11 +1333,12 @@ async function showHelp($: EngineInterface) {
   // and end the help once the band no longer holds it. Asking focuses `close`, which
   // scrolls a help taller than the band back to the top (djdarcy: "the UI element seems
   // to refresh and scrolls back to the top"), so the help is drawn to fit (the render).
-  bandWatch = $.clock.every(BAND_WATCH_MS, async () => {
+  band.startWatch(() => $.clock.every(BAND_WATCH_MS, async () => {
+    const bandId = band.id
     if (!bandId || (await read($, bandMode)) !== 'help') return
     const r = await $.ui.focus({ requestId: bandId, key: 'band-help-close' })
     if ('deny' in r && r.deny) await endBandMode($)
-  })
+  }))
 }
 
 // `q` (Q261012-09): the plugin's pane closed and the band back to its bar, from the band at
@@ -1464,8 +1462,7 @@ async function bandClaim($: EngineInterface) {
 
 // Browsing takes as long as it takes: each key restarts the band's wait (BAND_MODE_MS).
 function keepBandWaiting($: EngineInterface) {
-  bandTimer?.cancel()
-  bandTimer = $.clock.after(BAND_MODE_MS, () => void endBandMode($))
+  band.restartWait(() => $.clock.after(BAND_MODE_MS, () => void endBandMode($)))
 }
 async function bandNumberGo($: EngineInterface) {
   const typed = await read($, bandNum)
@@ -1566,8 +1563,7 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   if (!(await paneFocused($))) {
     await update($, bandMode, () => mode)
     log($, `[bm] pane opened without the keyboard; the band takes the ${mode} key`)
-    bandTimer?.cancel()
-    bandTimer = $.clock.after(BAND_MODE_MS, () => void endBandMode($))
+    band.restartWait(() => $.clock.after(BAND_MODE_MS, () => void endBandMode($)))
     // Enter's default: `go` for a prompt number, the reading position for a jump (a
     // missing element, no reading position, is simply denied), and never a letter for a
     // mark: Enter on `a` overwrote mark a (djdarcy, 2026-10-07).
@@ -1577,8 +1573,7 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
     // at once (djdarcy, 2026-10-07: "the panel popped up for a second but then
     // disappeared"; log 08:32:22). So it stays open as a list to click, closed by its ×.
     if (deny && /does not hold the keyboard/i.test(deny)) {
-      bandTimer?.cancel()
-      bandTimer = undefined
+      band.stopWaiting()
       await update($, bandMode, () => 'idle')
       log($, `[bm] ${mode} pane opened by a click: it stays open as a list (close it with its ×)`)
       return
@@ -1588,21 +1583,16 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
     // open"). $.ui.focus on the band is refused once the band no longer holds the
     // keys, so ask every BAND_WATCH_MS, onto the element the ring is already on
     // (no visible move), and close the pane as soon as it is refused.
-    bandWatch?.cancel()
-    bandWatch = $.clock.every(BAND_WATCH_MS, () => void watchBand($, mode))
+    band.startWatch(() => $.clock.every(BAND_WATCH_MS, () => void watchBand($, mode)))
   }
 }
 
 // How long the band waits for the next key before going back to its buttons.
 const BAND_MODE_MS = 15_000
-let bandTimer: Timer | undefined
-
-// The band's own requestId, as its render hook last saw it: $.ui.focus names the site
-// by it, to put the band's ring on the prompts field or the reading entry.
-let bandId: string | undefined
 
 // Returns the refusal, if any.
 async function focusBand($: EngineInterface, key: string): Promise<string | undefined> {
+  const bandId = band.id
   if (!bandId) return undefined
   const r = await $.ui.focus({ requestId: bandId, key })
   const deny = 'deny' in r && r.deny ? String(r.deny) : undefined
@@ -1756,15 +1746,13 @@ async function promoteLetter($: EngineInterface, letter: string) {
 }
 
 const BAND_WATCH_MS = 400
-let bandWatch: Timer | undefined
-// The band element the focus ring is on, as the ui.focus hook last saw it.
-let bandRing: string | undefined
 
 // An element of the band's key mode that is drawn now, to aim the focus probe at:
 // the ring's own element when it belongs to this mode, else a fixed one per mode.
 async function bandProbeKey($: EngineInterface, mode: PaneMode): Promise<string | undefined> {
   const prefix = listLike(mode) ? 'band-num-' : `band-${mode}-`
-  if (bandRing?.startsWith(prefix)) return bandRing
+  const ring = band.ring
+  if (ring?.startsWith(prefix)) return ring
   if (listLike(mode)) return 'band-num-go'
   if (mode === 'mark') return 'band-mark-cancel'
   const marks = await loadMarks($)
@@ -1774,6 +1762,7 @@ async function bandProbeKey($: EngineInterface, mode: PaneMode): Promise<string 
 }
 
 async function watchBand($: EngineInterface, mode: PaneMode) {
+  const bandId = band.id
   if (!bandId || (await read($, bandMode)) === 'idle') return
   const key = await bandProbeKey($, mode)
   if (!key) return // nothing focusable on the band: the timeout or the next edit ends it
@@ -1810,11 +1799,7 @@ async function settle($: EngineInterface, pane: Pane, cause: Cause, needsMore = 
 }
 
 async function endBandMode($: EngineInterface) {
-  bandTimer?.cancel()
-  bandTimer = undefined
-  bandWatch?.cancel()
-  bandWatch = undefined
-  bandRing = undefined
+  band.ended()
   if ((await read($, bandNum)) !== '') await update($, bandNum, () => '')
   if ((await read($, bandMode)) !== 'idle') await update($, bandMode, () => 'idle')
 }
@@ -1898,8 +1883,7 @@ export const register: Register = (on, options) => {
     // that ended goes back to its defaults (test-plan 2026-10-12__15-25-30, row M).
     unfoldedFootnotes.clear()
     paneFilter = ''
-    escReminderOwed = false
-    bandRing = undefined
+    band.newConversation()
     void $.config.list().then(rows => {
       const theme = rows.find(r => r.key === 'theme')?.value
       if (typeof theme === 'string') themeName = theme
@@ -1990,7 +1974,7 @@ export const register: Register = (on, options) => {
   on('prompt.edit', async ($, e, next) => {
     const now = Date.now()
     // Typing in the input box: the person has the keyboard back, no reminder owed.
-    escReminderOwed = false
+    band.oweReminder(false)
     if (diag.logKeys) {
       log($, `[diag] edit ${keyLabel(e.key)}: draft ${e.text.length} -> +${e.inputText.length}, ${diag.lastEditAt ? now - diag.lastEditAt : '-'} ms since last`)
     }
@@ -2009,7 +1993,7 @@ export const register: Register = (on, options) => {
   // element already holding it and never moves the ring.
   on('ui.focus', { component: 'AbovePrompt' }, async ($, e, next) => {
     // A focus move of the person's own onto the band starts a new command: no reminder owed.
-    if (e.origin.kind === 'person') escReminderOwed = false
+    if (e.origin.kind === 'person') band.oweReminder(false)
     // While the band is idle, the person's focus moves stay on the command field. After
     // a command the band keeps the keyboard (a plugin can't hand it back; Esc does), so
     // a second Ctrl+] moved the ring onto the `mark` button, Space pressed it, and Enter
@@ -2020,7 +2004,7 @@ export const register: Register = (on, options) => {
     // k (previous: Up, Left, Shift+Tab) or j (next: Down, Right, Tab), and the ring
     // stays on `go` for Enter (djdarcy, 2026-10-07: "we'd of course also want to add
     // <up> <down> if possible").
-    if (e.origin.kind === 'person' && bandRing === 'band-num-go' && (await read($, bandMode)) === 'list' &&
+    if (e.origin.kind === 'person' && band.ring === 'band-num-go' && (await read($, bandMode)) === 'list' &&
         (e.element === 'band-num-k' || e.element === 'band-num-j')) {
       log($, `[bm] band arrow -> ${e.element === 'band-num-k' ? 'k (up)' : 'j (down)'}`)
       await bandStep($, e.element === 'band-num-k' ? 'k' : 'j')
@@ -2029,10 +2013,10 @@ export const register: Register = (on, options) => {
     if (e.origin.kind === 'person' && e.element?.startsWith('chord-') && (await read($, bandMode)) === 'idle') {
       const field = `band-cmd-${await read($, cmdRev)}`
       log($, `[bm] band focus kept on the command field (not ${e.element})`)
-      bandRing = field
+      band.ringMoved(field)
       return next({ ...e, element: field })
     }
-    if (e.element) bandRing = e.element
+    if (e.element) band.ringMoved(e.element)
     return next(e)
   })
 
@@ -2490,7 +2474,7 @@ export const register: Register = (on, options) => {
     const elements = $.ui.resolve(e)
     const theirs = await next(e)
     const last = await read($, shown)
-    bandId = e.requestId
+    band.drawn(e.requestId)
     const mode = await read($, bandMode)
     const marks = mode === 'idle' ? {} : await loadMarks($)
     // What happens after the key: the after-action rule, by what the key did.

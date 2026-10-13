@@ -86,6 +86,8 @@ export type NavigationPorts = {
 //   lastHere (the one outside write)        prompts pane, via drewHere    --
 //   paneAnchor, paneView, restoreTo         core/pane-position.ts         navigation (paneJumped, takeRestore), openFor (opened)
 //   jumplistCache, jumplistMoving           handlers/navigation.ts        --
+//   band wait/watch timers, ring, id,       core/band-state.ts BandState  band render (drawn), ui.focus (ringMoved),
+//     Esc reminder                                                         prompt.edit (oweReminder), session.start
 //   logLines, screenLines, timeline (Ring)  register.tsx log cluster       diagnostics (timeline, read-only)
 //   rendered (drawn ids)                    register.tsx render hooks     diagnostics, list model (read-only)
 //   markCache (core/marks.ts MarkCache)     register.tsx marks cluster    render hooks, band, navigation
