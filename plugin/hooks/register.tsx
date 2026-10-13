@@ -43,7 +43,8 @@ import { debugCommand } from './handlers/debug-command'
 import { anchoredReply, markedColumn, markedReply, type MarkStyles } from './views/marked-message'
 import { bandView } from './views/band'
 import { configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
-import type { DiagnosticsPorts, NavigationPorts, ViewPorts } from './engine/ports'
+import type { BandPorts, DiagnosticsPorts, NavigationPorts, ViewPorts } from './engine/ports'
+import { closeAll as bandCloseAll, closePane as bandClosePane, endBandMode as bandEnd, paneFocused as bandPaneFocused, settle as bandSettle } from './handlers/band'
 import { Navigation } from './handlers/navigation'
 import { ViewTracker } from './handlers/view-tracker'
 import { PanePosition } from './core/pane-position'
@@ -1341,12 +1342,8 @@ async function showHelp($: EngineInterface) {
   }))
 }
 
-// `q` (Q261012-09): the plugin's pane closed and the band back to its bar, from the band at
-// rest, the band's list row, or a pane's own field.
 async function closeAll($: EngineInterface, via: string) {
-  log($, `[bm] close (${via}): the pane and the band's mode`)
-  if ((await $.ui.panes()).some(p => p.id === PANE)) await closePane($)
-  await endBandMode($)
+  await bandCloseAll(bandPorts($), via)
 }
 
 // A list key pressed on the band's number row (its buttons come from LIST_KEYS).
@@ -1786,43 +1783,43 @@ async function watchBand($: EngineInterface, mode: PaneMode) {
   }
 }
 
-// After an action, close the pane or end only the band's key mode, as the after-action
-// policy says (core/after-action.ts): the operation's need, then the person's setting,
-// then the default. `focus: 'input'` is what is wanted after most actions; the engine
-// cannot hand the keyboard back yet (#24, docs/engine-quirks.md), so nothing more is done.
 const paneOf = (mode: PaneMode | 'idle' | 'help'): Pane => (mode === 'idle' || mode === 'help' ? 'none' : mode)
-async function settle($: EngineInterface, pane: Pane, cause: Cause, needsMore = false) {
-  const outcome = afterAction({ pane, cause, needsMore, settings: currentSettings() })
-  if (outcome.pane === 'close') await closePane($)
-  else if (outcome.band === 'end') await endBandMode($)
-  return outcome
-}
-
-async function endBandMode($: EngineInterface) {
-  band.ended()
-  if ((await read($, bandNum)) !== '') await update($, bandNum, () => '')
-  if ((await read($, bandMode)) !== 'idle') await update($, bandMode, () => 'idle')
-}
-
-async function paneFocused($: EngineInterface): Promise<boolean> {
-  return (await $.ui.panes()).some(p => p.id === PANE && p.isFocused)
-}
 
 // Set by the pane's render hook (which may not write state): the placement and width
 // the surface actually gave it, logged when it closes.
 let paneGeometry: string | undefined
 
+// The band cluster's close path is handlers/band.ts, over these ports.
+function bandPorts($: EngineInterface): BandPorts {
+  return {
+    band,
+    settings: currentSettings,
+    bandNum: () => read($, bandNum),
+    setBandNum: v => update($, bandNum, () => v),
+    bandMode: () => read($, bandMode),
+    setBandMode: v => update($, bandMode, () => v),
+    paneId: PANE,
+    panes: () => $.ui.panes(),
+    closePaneUi: () => $.ui.close({ id: PANE }),
+    expectRedraw,
+    note,
+    log: line => log($, line),
+    paneGeometry: () => paneGeometry,
+    paneAnchored: () => !!panePosition.anchor,
+    restoreView: () => restoreView($),
+  }
+}
+async function settle($: EngineInterface, pane: Pane, cause: Cause, needsMore = false) {
+  return bandSettle(bandPorts($), pane, cause, needsMore)
+}
+async function endBandMode($: EngineInterface) {
+  await bandEnd(bandPorts($))
+}
+async function paneFocused($: EngineInterface): Promise<boolean> {
+  return bandPaneFocused(bandPorts($))
+}
 async function closePane($: EngineInterface) {
-  expectRedraw('the pane closing')
-  note('pane close')
-  if (paneGeometry) log($, `[bm] pane was ${paneGeometry}`)
-  await endBandMode($)
-  await $.ui.close({ id: PANE })
-  // The conversation widens again as the pane goes, and shifts. Unless a jump moved the
-  // view on purpose (it clears the anchor), go back to where it was before the pane
-  // opened: the inverse of the return when it opened (djdarcy, 2026-10-07). From a
-  // timer (the band's Esc check) Claude Code refuses the scroll; the log says so.
-  if (panePosition.anchor) await restoreView($)
+  await bandClosePane(bandPorts($))
 }
 
 // The engine, as the diagnostic commands may hold it (hooks/engine/ports.ts): one closure

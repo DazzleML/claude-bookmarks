@@ -78,6 +78,26 @@ export type NavigationPorts = {
   freshOnScreen: () => string[]
 }
 
+/** What the band cluster (handlers/band.ts) needs: its own state, its atoms, the pane, and the after-action settings. */
+export type BandPorts = {
+  band: import('../core/band-state.ts').BandState
+  settings: () => import('../core/settings.ts').Settings
+  bandNum: () => Promise<string>
+  setBandNum: (v: string) => Promise<unknown>
+  bandMode: () => Promise<string>
+  setBandMode: (v: 'idle') => Promise<unknown>
+  paneId: string
+  panes: () => Promise<readonly { id: string; isFocused?: boolean }[]>
+  closePaneUi: () => Promise<unknown>
+  expectRedraw: (why: string) => void
+  note: (what: string) => void
+  log: (line: string) => void
+  /** The placement and width the pane's render recorded (its writer is the render hook). */
+  paneGeometry: () => string | undefined
+  paneAnchored: () => boolean
+  restoreView: () => Promise<unknown>
+}
+
 // Ownership of shared state (notes/meta/2026-10-12__22-48-40, one owner, read-only ports):
 //   state                                   owner                         readers
 //   screen (ScreenModel)                    register.tsx render hooks     view tracker (read-only Pick)
