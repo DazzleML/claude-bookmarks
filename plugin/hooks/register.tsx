@@ -44,7 +44,7 @@ import { anchoredReply, markedColumn, markedReply, type MarkStyles } from './vie
 import { bandView } from './views/band'
 import { configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
 import type { BandPorts, DiagnosticsPorts, NavigationPorts, ViewPorts } from './engine/ports'
-import { closeAll as bandCloseAll, closePane as bandClosePane, endBandMode as bandEnd, paneFocused as bandPaneFocused, settle as bandSettle, BAND_MODE_MS, paneOf } from './handlers/band'
+import { closeAll as bandCloseAll, closePane as bandClosePane, endBandMode as bandEnd, paneFocused as bandPaneFocused, settle as bandSettle, BAND_MODE_MS, BAND_WATCH_MS, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
 import { Navigation } from './handlers/navigation'
 import { ViewTracker } from './handlers/view-tracker'
@@ -1318,29 +1318,8 @@ async function perform($: EngineInterface, operation: Operation, via: 'field' | 
   }
 }
 
-// `?` (djdarcy, 2026-10-12): the commands the bar does not show, and the rest, in the
-// band itself so it works with lists off too. Enter or Esc, or a minute, ends it.
-const HELP_MS = 60_000
 async function showHelp($: EngineInterface) {
-  await update($, bandMode, () => 'help')
-  band.restartWait(() => $.clock.after(HELP_MS, () => void endBandMode($)))
-  band.stopWatching()
-  const deny = await focusBand($, 'band-help-close')
-  // A click on `?` leaves the keyboard where it was, so the band never held it: the help
-  // stays until `close`, a line pressed, the minute, or a prompt typed. Watching it here
-  // closed it at once (djdarcy, 2026-10-12: "when we click the "?" on the band ... the
-  // info-box instantly closes"), as it once did the list panes (see openFor).
-  if (deny && /does not hold the keyboard/i.test(deny)) return void log($, '[bm] help opened by a click: it stays until closed')
-  // Esc hands the keyboard back with no event (see openFor): ask, as the list modes do,
-  // and end the help once the band no longer holds it. Asking focuses `close`, which
-  // scrolls a help taller than the band back to the top (djdarcy: "the UI element seems
-  // to refresh and scrolls back to the top"), so the help is drawn to fit (the render).
-  band.startWatch(() => $.clock.every(BAND_WATCH_MS, async () => {
-    const bandId = band.id
-    if (!bandId || (await read($, bandMode)) !== 'help') return
-    const r = await $.ui.focus({ requestId: bandId, key: 'band-help-close' })
-    if ('deny' in r && r.deny) await endBandMode($)
-  }))
+  await band_.showHelp(bandPorts($))
 }
 
 async function closeAll($: EngineInterface, via: string) {
@@ -1651,7 +1630,6 @@ async function promoteLetter($: EngineInterface, letter: string) {
   $.ui.toast(`${minted.added ? 'bookmarked' : 'already a bookmark, relabelled'}: ${minted.record.label.slice(0, 40)}${copied ? ' (link copied)' : ''}`, { timeoutMs: 6000 })
 }
 
-const BAND_WATCH_MS = 400
 
 async function watchBand($: EngineInterface, mode: PaneMode) {
   await band_.watchBand(bandPorts($), mode)
@@ -1697,6 +1675,7 @@ function bandPorts($: EngineInterface): BandPorts {
     loadMarks: () => loadMarks($),
     letters: LETTERS,
     readingLetter: READING,
+    every: (ms, fn) => $.clock.every(ms, fn),
   }
 }
 async function settle($: EngineInterface, pane: Pane, cause: Cause, needsMore = false) {

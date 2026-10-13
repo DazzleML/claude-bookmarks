@@ -174,6 +174,33 @@ export async function watchBand(ports: BandPorts, mode: string) {
   }
 }
 
+export const BAND_WATCH_MS = 400
+
+// `?` (djdarcy, 2026-10-12): the commands the bar does not show, and the rest, in the
+// band itself so it works with lists off too. Enter or Esc, or a minute, ends it.
+const HELP_MS = 60_000
+export async function showHelp(ports: BandPorts) {
+  await ports.setBandMode('help')
+  ports.band.restartWait(() => ports.after(HELP_MS, () => void endBandMode(ports)))
+  ports.band.stopWatching()
+  const deny = await focusBand(ports, 'band-help-close')
+  // A click on `?` leaves the keyboard where it was, so the band never held it: the help
+  // stays until `close`, a line pressed, the minute, or a prompt typed. Watching it here
+  // closed it at once (djdarcy, 2026-10-12: "when we click the "?" on the band ... the
+  // info-box instantly closes"), as it once did the list panes (see openFor).
+  if (deny && /does not hold the keyboard/i.test(deny)) return void ports.log('[bm] help opened by a click: it stays until closed')
+  // Esc hands the keyboard back with no event (see openFor): ask, as the list modes do,
+  // and end the help once the band no longer holds it. Asking focuses `close`, which
+  // scrolls a help taller than the band back to the top (djdarcy: "the UI element seems
+  // to refresh and scrolls back to the top"), so the help is drawn to fit (the render).
+  ports.band.startWatch(() => ports.every(BAND_WATCH_MS, async () => {
+    const bandId = ports.band.id
+    if (!bandId || (await ports.bandMode()) !== 'help') return
+    const r = await ports.focus(bandId, 'band-help-close')
+    if ('deny' in r && r.deny) await endBandMode(ports)
+  }))
+}
+
 /** The pane a band mode belongs to, for the after-action policy. */
 export const paneOf = (mode: string): Pane => (mode === 'idle' || mode === 'help' ? 'none' : (mode as Pane))
 

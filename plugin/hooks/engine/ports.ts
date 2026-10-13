@@ -85,7 +85,7 @@ export type BandPorts = {
   bandNum: () => Promise<string>
   setBandNum: (v: string) => Promise<unknown>
   bandMode: () => Promise<string>
-  setBandMode: (v: 'idle') => Promise<unknown>
+  setBandMode: (v: 'idle' | 'help') => Promise<unknown>
   paneId: string
   panes: () => Promise<readonly { id: string; isFocused?: boolean }[]>
   closePaneUi: () => Promise<unknown>
@@ -115,6 +115,7 @@ export type BandPorts = {
   loadMarks: () => Promise<Readonly<Record<string, unknown>>>
   letters: readonly string[]
   readingLetter: string
+  every: (ms: number, fn: () => unknown) => { cancel: () => void }
 }
 
 // Ownership of shared state (notes/meta/2026-10-12__22-48-40, one owner, read-only ports):
