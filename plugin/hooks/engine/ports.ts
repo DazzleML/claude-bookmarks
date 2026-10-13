@@ -110,6 +110,11 @@ export type BandPorts = {
   saveRegister: (reg: import('../core/register-file.ts').Register) => Promise<unknown>
   now: () => Promise<number>
   after: (ms: number, fn: () => void) => { cancel: () => void }
+  // The band's focus probe (focusBand, bandProbeKey, watchBand):
+  focus: (requestId: string, key: string) => Promise<{ deny?: unknown } | object>
+  loadMarks: () => Promise<Readonly<Record<string, unknown>>>
+  letters: readonly string[]
+  readingLetter: string
 }
 
 // Ownership of shared state (notes/meta/2026-10-12__22-48-40, one owner, read-only ports):

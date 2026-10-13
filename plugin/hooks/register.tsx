@@ -1502,14 +1502,8 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
 }
 
 
-// Returns the refusal, if any.
 async function focusBand($: EngineInterface, key: string): Promise<string | undefined> {
-  const bandId = band.id
-  if (!bandId) return undefined
-  const r = await $.ui.focus({ requestId: bandId, key })
-  const deny = 'deny' in r && r.deny ? String(r.deny) : undefined
-  log($, `[bm] band focus ${key}: ${deny ? `DENY ${deny}` : 'ok'}`)
-  return deny
+  return band_.focusBand(bandPorts($), key)
 }
 
 // Jumps to prompt #n, from the prompts pane's field or the band's.
@@ -1659,43 +1653,8 @@ async function promoteLetter($: EngineInterface, letter: string) {
 
 const BAND_WATCH_MS = 400
 
-// An element of the band's key mode that is drawn now, to aim the focus probe at:
-// the ring's own element when it belongs to this mode, else a fixed one per mode.
-async function bandProbeKey($: EngineInterface, mode: PaneMode): Promise<string | undefined> {
-  const prefix = listLike(mode) ? 'band-num-' : `band-${mode}-`
-  const ring = band.ring
-  if (ring?.startsWith(prefix)) return ring
-  if (listLike(mode)) return 'band-num-go'
-  if (mode === 'mark') return 'band-mark-cancel'
-  const marks = await loadMarks($)
-  if (marks[READING]) return 'band-jump-reading'
-  const first = LETTERS.find(l => marks[l])
-  return first ? `band-jump-${first}` : undefined
-}
-
 async function watchBand($: EngineInterface, mode: PaneMode) {
-  const bandId = band.id
-  if (!bandId || (await read($, bandMode)) === 'idle') return
-  const key = await bandProbeKey($, mode)
-  if (!key) return // nothing focusable on the band: the timeout or the next edit ends it
-  const r = await $.ui.focus({ requestId: bandId, key })
-  if ('deny' in r && r.deny) {
-    // Into the pane (a click in it): the band steps back and the pane keeps the keyboard,
-    // its own keys and field included. Closing it there shut the pane the moment its
-    // field was clicked (djdarcy, 2026-10-07).
-    if (await paneFocused($)) {
-      log($, `[bm] the keyboard moved into the pane: the band steps back, the pane stays`)
-      await endBandMode($)
-      return
-    }
-    // A list pane (prompts, bookmarks) is a reference the person reads while typing:
-    // the band steps back and the list stays open, with its yellow row following the
-    // view (djdarcy, 2026-10-11: a click in the input box "auto-closes the Panel on the
-    // right, which it shouldn't"). The mark and jump panes only exist for the next
-    // letter, so they still close. The after-action rule decides (paneWhileTyping).
-    const outcome = await settle($, mode, 'focus-left')
-    log($, `[bm] band lost the keyboard (${r.deny}): ${outcome.pane === 'close' ? 'closing the pane' : 'the band steps back, the list stays'}`)
-  }
+  await band_.watchBand(bandPorts($), mode)
 }
 
 
@@ -1734,6 +1693,10 @@ function bandPorts($: EngineInterface): BandPorts {
     saveRegister: reg => saveRegister($, reg),
     now: () => $.clock.now(),
     after: (ms, fn) => $.clock.after(ms, fn),
+    focus: (requestId, key) => $.ui.focus({ requestId, key }),
+    loadMarks: () => loadMarks($),
+    letters: LETTERS,
+    readingLetter: READING,
   }
 }
 async function settle($: EngineInterface, pane: Pane, cause: Cause, needsMore = false) {

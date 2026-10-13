@@ -3,7 +3,7 @@
 // part is the close path: what an action leaves behind (settle), the band's mode ending,
 // the pane closing, and `q`. The band's state is core/band-state.ts BandState, owned by this
 // cluster and reached through `ports.band`; the pane position is PanePosition's.
-import { afterAction, type Cause } from '../core/after-action.ts'
+import { afterAction, isList, type Cause } from '../core/after-action.ts'
 import { ownerOf } from '../core/anchor.ts'
 import { promptNumberComplete, stepNumber } from '../core/band-entry.ts'
 import { parseListNumber, type Operation, type Pane } from '../core/keys.ts'
@@ -123,6 +123,55 @@ export async function bandListKey(ports: BandPorts, operation: Operation) {
   else if (operation.op === 'pin') await bandPin(ports)
   else if (operation.op === 'group') await ports.groupStep(operation.dir)
   else if (operation.op === 'claim') await bandClaim(ports)
+}
+
+// Returns the refusal, if any.
+export async function focusBand(ports: BandPorts, key: string): Promise<string | undefined> {
+  const bandId = ports.band.id
+  if (!bandId) return undefined
+  const r = await ports.focus(bandId, key)
+  const deny = 'deny' in r && r.deny ? String(r.deny) : undefined
+  ports.log(`[bm] band focus ${key}: ${deny ? `DENY ${deny}` : 'ok'}`)
+  return deny
+}
+
+// An element of the band's key mode that is drawn now, to aim the focus probe at:
+// the ring's own element when it belongs to this mode, else a fixed one per mode.
+export async function bandProbeKey(ports: BandPorts, mode: string): Promise<string | undefined> {
+  const prefix = isList(mode as Pane) ? 'band-num-' : `band-${mode}-`
+  const ring = ports.band.ring
+  if (ring?.startsWith(prefix)) return ring
+  if (isList(mode as Pane)) return 'band-num-go'
+  if (mode === 'mark') return 'band-mark-cancel'
+  const marks = await ports.loadMarks()
+  if (marks[ports.readingLetter]) return 'band-jump-reading'
+  const first = ports.letters.find(l => marks[l])
+  return first ? `band-jump-${first}` : undefined
+}
+
+export async function watchBand(ports: BandPorts, mode: string) {
+  const bandId = ports.band.id
+  if (!bandId || (await ports.bandMode()) === 'idle') return
+  const key = await bandProbeKey(ports, mode)
+  if (!key) return // nothing focusable on the band: the timeout or the next edit ends it
+  const r = await ports.focus(bandId, key)
+  if ('deny' in r && r.deny) {
+    // Into the pane (a click in it): the band steps back and the pane keeps the keyboard,
+    // its own keys and field included. Closing it there shut the pane the moment its
+    // field was clicked (djdarcy, 2026-10-07).
+    if (await paneFocused(ports)) {
+      ports.log(`[bm] the keyboard moved into the pane: the band steps back, the pane stays`)
+      await endBandMode(ports)
+      return
+    }
+    // A list pane (prompts, bookmarks) is a reference the person reads while typing:
+    // the band steps back and the list stays open, with its yellow row following the
+    // view (djdarcy, 2026-10-11: a click in the input box "auto-closes the Panel on the
+    // right, which it shouldn't"). The mark and jump panes only exist for the next
+    // letter, so they still close. The after-action rule decides (paneWhileTyping).
+    const outcome = await settle(ports, mode as Pane, 'focus-left')
+    ports.log(`[bm] band lost the keyboard (${r.deny}): ${outcome.pane === 'close' ? 'closing the pane' : 'the band steps back, the list stays'}`)
+  }
 }
 
 /** The pane a band mode belongs to, for the after-action policy. */
