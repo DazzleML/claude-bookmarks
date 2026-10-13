@@ -45,6 +45,7 @@ import { bandView } from './views/band'
 import { configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
 import type { DiagnosticsPorts, ViewPorts } from './engine/ports'
 import { ViewTracker } from './handlers/view-tracker'
+import { PanePosition } from './core/pane-position'
 import { age, bookmarkWho, drawnFourOf, foldedLabel, footnoteDisplay, footnotesByPrompt, groupHeader, numberLabel as numberLabelAt, numberNewestFirst, numberWidth, pinnedRowsOf, pointerFor, unreached } from './core/list-model'
 import { BOOKMARK_TOOL, answer as toolAnswer, brief as briefRow, describe as describeRecord, listActedOn, listName, parseToolInput, tierFor } from './core/bookmark-tool'
 import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptList, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, transcriptGuess, type PromptRef } from './core/prompt-store'
@@ -935,11 +936,11 @@ async function jumplistMove($: EngineInterface, step: -1 | 1) {
 async function jumpTo($: EngineInterface, uuid: string, via: string, label: string, words?: string, probe = false, block: 'start' | 'end' = 'start'): Promise<string | undefined> {
   // Where the person is leaving from, for the jumplist: the view before the pane opened
   // when a pane is up (the pane shifts the view), else the view now.
-  const from = paneView ?? (await viewAnchor($))
+  const from = panePosition.view ?? (await viewAnchor($))
   const result = await $.ui.scroll({ to: { requestId: uuid }, block })
   // The jump is where the person wants to be: no going back to before the pane.
   if (!result.deny) {
-    paneAnchor = undefined
+    panePosition.jumped()
     await recordJump($, from, { uuid, block })
   }
   const verdict = result.deny ? `DENY: ${result.deny}` : 'ok'
@@ -1003,34 +1004,17 @@ async function resolveSelectionRow($: EngineInterface, id: string, text: string)
   return { uuid: saved?.uuid ?? id, check }
 }
 
-// Highlight a mark just set from a selection, then put the view back. Redrawing the
-// message under a visible selection drops the view to the bottom, even with following
-// the bottom turned off (djdarcy, 2026-10-06; a stale selection, no longer shown, did
-// not; seen only when the pane held the keyboard). So note the message at the top of
-// the screen first, and scroll back to it once the pane has closed: message-level, like
-// the reading position's return. The scroll must run within the keypress's own handler:
-// one from a timer is refused ("not person-initiated", log 2026-10-06 04:22:20).
-let restoreTo: string | undefined
-// The message at the top of the screen just before a pane opened (openFor): where the
-// view goes back to once the pane has done its job. A jump clears it (jumpTo).
-let paneAnchor: string | undefined
-// The same moment as a scroll can restore it: at the bottom, the last message's end.
-let paneView: { uuid: string; block: 'start' | 'end' } | undefined
+// Where the view was before a pane opened, and where it goes back to: core/pane-position.ts
+// (the three fields and their writers, each a named method).
+const panePosition = new PanePosition()
 async function highlightInPlace($: EngineInterface, letter: string, text: string) {
-  restoreTo = paneAnchor ?? (await topOnScreen($))
+  panePosition.noteRestore(panePosition.anchor ?? (await topOnScreen($)))
   await showMark($, letter, text)
 }
 // The shift is Claude Code's, on every route: the old Ctrl+X m chord moved the view by
 // about a screen as well (djdarcy, 2026-10-07, with this scroll-back switched off).
 async function restoreView($: EngineInterface) {
-  // A pane opened and closed: the view was shifted for certain, so go back to where it
-  // was before the pane, whether or not that message is still on screen somewhere.
-  const fromPane = !!paneAnchor
-  const block = (fromPane && paneView?.block) || 'start'
-  const here = (fromPane ? paneView?.uuid ?? paneAnchor : undefined) ?? restoreTo
-  restoreTo = undefined
-  paneAnchor = undefined
-  paneView = undefined
+  const { here, block, fromPane } = panePosition.takeRestore()
   if (!here) return
   // Otherwise only when the view actually moved: scrolling back regardless lined up the
   // top message's first line and moved a view that had not dropped (djdarcy, 2026-10-07).
@@ -1122,7 +1106,7 @@ async function setMark($: EngineInterface, letter: string) {
   // No fresh selection: the message at the top of the screen, as it was BEFORE the pane
   // opened and shifted it (paneAnchor). (The "latest prompt" fallback is gone: prompts
   // have the prompts pane and pins. djdarcy, 2026-10-07.)
-  const mark = await screenTopMark($, paneAnchor)
+  const mark = await screenTopMark($, panePosition.anchor)
   if (!mark) {
     $.ui.toast('Nothing on screen to mark yet: scroll a little, or select some text')
     return
@@ -1611,8 +1595,8 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   // the user was auto-firing a ctrl]' to the hidden mark we just created" (djdarcy):
   // at once where Claude Code allows the scroll (a press: a chord, a click), else at the
   // next press (the letter), or when the person closes the pane.
-  paneAnchor = await topOnScreen($)
-  paneView = await viewAnchor($)
+  panePosition.opened(await topOnScreen($), await viewAnchor($))
+  const paneView = panePosition.view
   // For the prompts pane: the prompt nearest the view, read before the pane shifts it,
   // so the list can open centred on it instead of on the newest (djdarcy, 2026-10-11:
   // scrolled up 30 or 40 pages, "the user doesn't have to scroll in the panel"). The
@@ -1948,7 +1932,7 @@ async function closePane($: EngineInterface) {
   // view on purpose (it clears the anchor), go back to where it was before the pane
   // opened: the inverse of the return when it opened (djdarcy, 2026-10-07). From a
   // timer (the band's Esc check) Claude Code refuses the scroll; the log says so.
-  if (paneAnchor) await restoreView($)
+  if (panePosition.anchor) await restoreView($)
 }
 
 // The engine, as the diagnostic commands may hold it (hooks/engine/ports.ts): one closure
@@ -2160,7 +2144,7 @@ export const register: Register = (on, options) => {
     const closed = await next(e)
     // The person closed it (Esc, its ×) without picking anything: back to where the view
     // was before the pane opened, if Claude Code allows the scroll from here.
-    if (e.origin.kind === 'person' && paneAnchor) await restoreView($)
+    if (e.origin.kind === 'person' && panePosition.anchor) await restoreView($)
     return closed
   })
 
