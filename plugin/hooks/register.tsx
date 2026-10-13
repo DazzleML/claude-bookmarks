@@ -37,7 +37,7 @@ import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFi
 import { configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, selectionKind, settingsRows } from './core/diagnostics'
 import { colorSplit, plainMarkdown, snippetOf, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/highlight'
 import { ScreenModel } from './core/screen-model'
-import { deleteMarks, marksShowing, type Mark, type Marks } from './core/marks'
+import { MarkCache, deleteMarks, marksShowing, type Mark, type Marks } from './core/marks'
 import { footnoteAt, listPosition, nextGroup, promptEntry, promptNumberComplete, stepNumber } from './core/band-entry'
 import { debugCommand } from './handlers/debug-command'
 import { anchoredReply, markedColumn, markedReply, type MarkStyles } from './views/marked-message'
@@ -154,7 +154,8 @@ async function clearShown($: EngineInterface) {
 
 // The session's marks, kept in memory so render hooks can read them without a store
 // call per row. Loaded at session.start and refreshed on every mark write.
-let markCache: Record<string, Mark> = {}
+// (core/marks.ts MarkCache: `replace` and `showTransient` are its only writers.)
+const markCache = new MarkCache()
 
 // Every colour, background, dim and bold the plugin draws comes from the palette by role
 // (#27, core/palette.ts): theme keys first, so a role reads on dark and light themes; the
@@ -187,7 +188,7 @@ const markStyles = (): MarkStyles => ({ band: style('markBand'), mark: style('ma
 
 // The shown mark, if it is on this row (core/marks.ts marksShowing), from the cache.
 function marksOnRow(requestId: string, showing: string | undefined): [string, Mark][] {
-  return marksShowing(markCache, requestId, showing)
+  return marksShowing(markCache.all, requestId, showing)
 }
 
 // Ids seen at UserMessage render time since this module loaded. A module variable on
@@ -888,7 +889,7 @@ function navPorts($: EngineInterface): NavigationPorts {
     log: (line, text) => log($, line, text ? { text: true } : undefined),
     note,
     drawnHead: uuid => rendered.get(uuid),
-    markHead: uuid => Object.values(markCache).find(m => m.uuid === uuid)?.head,
+    markHead: uuid => markCache.headOf(uuid),
     leavingFrom: async () => panePosition.view ?? (await viewAnchor($)),
     paneJumped: () => panePosition.jumped(),
     takeRestore: () => panePosition.takeRestore(),
@@ -999,7 +1000,7 @@ async function setMark($: EngineInterface, letter: string) {
     }
     note(`store.set mark ${letter} -> ${uuid} (selection, drawn ${sel.requestId}, ${check})`)
     await $.store.set(await marksKey($), { ...fresh, [letter]: mark })
-    markCache = { ...fresh, [letter]: mark }
+    markCache.replace({ ...fresh, [letter]: mark })
     // Writing `shown` redraws the rows and the band that read it.
     await highlightInPlace($, letter, snippetOf(sel.text))
     log($, `[bm] SEL: mark ${letter} -> ${uuid} (drawn as ${sel.requestId}; ${check}) | "${headOf(sel.text)}"`, { text: true })
@@ -1019,7 +1020,7 @@ async function setMark($: EngineInterface, letter: string) {
   const fresh = await loadMarks($)
   note(`store.set mark ${letter} -> ${mark.uuid} (top of screen)`)
   await $.store.set(await marksKey($), { ...fresh, [letter]: mark })
-  markCache = { ...fresh, [letter]: mark }
+  markCache.replace({ ...fresh, [letter]: mark })
   if (mark.snippet) await highlightInPlace($, letter, mark.snippet)
   log($, `[bm] mark ${letter} -> ${short(mark.uuid)} (top of screen) | "${mark.head}"`, { text: true })
   $.ui.toast(`mark ${letter} [top of screen] -> ${mark.head.slice(0, 40)}`)
@@ -1134,7 +1135,7 @@ async function readingToggle($: EngineInterface) {
     const { uuid, check } = await resolveSelectionRow($, sel.requestId, sel.text)
     const mark: Mark = { uuid, head: headOf(sel.text), markedAt: await $.clock.now(), source: 'selection', snippet: picked }
     await $.store.set(await marksKey($), { ...marks, [READING]: mark })
-    markCache = { ...marks, [READING]: mark }
+    markCache.replace({ ...marks, [READING]: mark })
     // Next press goes there (from wherever the person has scrolled to by then).
     await setReadingState($, { at: false, back: null })
     await highlightInPlace($, READING, picked)
@@ -1690,7 +1691,7 @@ async function bookmarkList($: EngineInterface) {
 // Highlight `words` on a message, as a letter's jump does, through a transient entry in
 // the mark cache (reloaded from the store on the next mark write).
 async function highlightWords($: EngineInterface, uuid: string, words: string) {
-  markCache = { ...markCache, [ANCHOR_MARK]: { uuid, head: words, markedAt: await $.clock.now(), source: 'selection', snippet: words } }
+  markCache.showTransient(ANCHOR_MARK, { uuid, head: words, markedAt: await $.clock.now(), source: 'selection', snippet: words })
   await showMark($, ANCHOR_MARK, words)
 }
 
@@ -1950,7 +1951,7 @@ export const register: Register = (on, options) => {
       log($, `[bm] register failed to load: ${String(err)}`, { always: true })
     }
 
-    markCache = await loadMarks($)
+    markCache.replace(await loadMarks($))
     // Stamp selections as they change, so a stale one is ignored (freshSelection).
     selectionPoll?.cancel()
     selectionSeen = undefined
@@ -2304,7 +2305,7 @@ export const register: Register = (on, options) => {
       return {}
     }
     await $.store.set(await marksKey($), kept)
-    markCache = kept
+    markCache.replace(kept)
     const showing = await read($, shown)
     if (showing && gone.includes(showing.letter)) await clearShown($)
     log($, `[bm] deleted marks ${gone.join(' ') || '(none)'}${missing.length ? `; not set: ${missing.join(' ')}` : ''}`)

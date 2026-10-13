@@ -36,6 +36,36 @@ export function searchPhrase(text: string | undefined): string | undefined {
   return space > 16 ? cut.slice(0, space) : cut
 }
 
+/**
+ * The session's marks, kept in memory so render hooks can read them without a store call
+ * per row (the one-owner principle, notes/meta/2026-10-12__22-48-40): two named writers,
+ * `replace` for the stored record (after a write, a delete or a session start) and
+ * `showTransient` for a highlight that is never stored (an anchor's words); every reader
+ * gets a read-only view.
+ */
+export class MarkCache {
+  private marks: Marks = {}
+
+  /** The record as stored (after a mark write, a delete, or loading at session start). */
+  replace(marks: Marks): void {
+    this.marks = marks
+  }
+
+  /** A highlight under a key no letter can take, for display only; gone at the next `replace`. */
+  showTransient(key: string, mark: Mark): void {
+    this.marks = { ...this.marks, [key]: mark }
+  }
+
+  get all(): Readonly<Marks> {
+    return this.marks
+  }
+
+  /** The head of the first mark on this message, if any (for a refused jump's search phrase). */
+  headOf(uuid: string): string | undefined {
+    return Object.values(this.marks).find(m => m.uuid === uuid)?.head
+  }
+}
+
 // vim's :delmarks a b / :delmarks! (U27, djdarcy 2026-10-07: "How can we delete the
 // 'm' mark?"). The reading position is not a letter and is left alone.
 export type DeleteMarks = { letters: string[]; gone: string[]; missing: string[]; kept: Marks }

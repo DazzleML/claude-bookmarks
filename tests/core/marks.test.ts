@@ -1,6 +1,18 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { deleteMarks, marksShowing, searchPhrase, type Marks } from '../../plugin/hooks/core/marks.ts'
+import { MarkCache, deleteMarks, marksShowing, searchPhrase, type Marks } from '../../plugin/hooks/core/marks.ts'
+
+test('the mark cache: replace takes the stored record; a transient highlight lasts until the next replace', () => {
+  const c = new MarkCache()
+  assert.deepEqual(c.all, {})
+  c.replace({ a: { uuid: 'u1', head: 'first', markedAt: 1 } })
+  c.showTransient('@', { uuid: 'u2', head: 'anchor words', markedAt: 2, source: 'selection', snippet: 'anchor words' })
+  assert.deepEqual(Object.keys(c.all).sort(), ['@', 'a'])
+  assert.equal(c.headOf('u2'), 'anchor words')
+  assert.equal(c.headOf('nope'), undefined)
+  c.replace({ a: { uuid: 'u1', head: 'first', markedAt: 1 } })
+  assert.deepEqual(Object.keys(c.all), ['a'])
+})
 
 const U = 'aaaaaaaa-1111-4111-8111-222222222222'
 const DRAWN = 'aaaaaaaa-1111-4111-8111-000000000000' // the same message as Claude Code draws it

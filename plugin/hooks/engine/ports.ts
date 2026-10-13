@@ -88,7 +88,8 @@ export type NavigationPorts = {
 //   jumplistCache, jumplistMoving           handlers/navigation.ts        --
 //   logLines, screenLines, timeline (Ring)  register.tsx log cluster       diagnostics (timeline, read-only)
 //   rendered (drawn ids)                    register.tsx render hooks     diagnostics, list model (read-only)
-//   markCache                               register.tsx marks cluster    render hooks, band (read-only)
+//   markCache (core/marks.ts MarkCache)     register.tsx marks cluster    render hooks, band, navigation
+//                                             (writers: replace, showTransient; readers: all, headOf)
 
 /** What `/bm-debug` needs: the debug channels this conversation has on and how to change them, the echo's choice and policy, and where the file log is. */
 export type DebugPorts = ToastPorts &
