@@ -24,7 +24,7 @@ import {
 } from './core/register-file'
 import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution, type TranscriptRow } from './core/transcript-lines'
 import { excerpt, formatDebugEnv, parseDebugEnv, quotesText, screenMirror, type Channel } from './core/debug'
-import { bandButtons, helpLines, helpShort, lineHint, listHint, listKeysFor, parseListNumber, route, type Chord, type Operation, type Pane } from './core/keys'
+import { bandButtons, helpLines, helpShort, lineHint, listHint, listKeysFor, route, type Chord, type Operation, type Pane } from './core/keys'
 import { afterAction, isList, type Cause } from './core/after-action'
 import { debugTextMode, installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
 import { resolvePalette, type Palette, type Role, type Style } from './core/palette'
@@ -38,13 +38,14 @@ import { configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, n
 import { colorSplit, plainMarkdown, snippetOf, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/highlight'
 import { ScreenModel } from './core/screen-model'
 import { MarkCache, deleteMarks, marksShowing, type Mark, type Marks } from './core/marks'
-import { footnoteAt, listPosition, nextGroup, promptEntry, promptNumberComplete, stepNumber } from './core/band-entry'
+import { footnoteAt, listPosition, nextGroup, promptEntry, promptNumberComplete } from './core/band-entry'
 import { debugCommand } from './handlers/debug-command'
 import { anchoredReply, markedColumn, markedReply, type MarkStyles } from './views/marked-message'
 import { bandView } from './views/band'
 import { configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
 import type { BandPorts, DiagnosticsPorts, NavigationPorts, ViewPorts } from './engine/ports'
-import { closeAll as bandCloseAll, closePane as bandClosePane, endBandMode as bandEnd, paneFocused as bandPaneFocused, settle as bandSettle } from './handlers/band'
+import { closeAll as bandCloseAll, closePane as bandClosePane, endBandMode as bandEnd, paneFocused as bandPaneFocused, settle as bandSettle, BAND_MODE_MS, paneOf } from './handlers/band'
+import * as band_ from './handlers/band'
 import { Navigation } from './handlers/navigation'
 import { ViewTracker } from './handlers/view-tracker'
 import { PanePosition } from './core/pane-position'
@@ -1346,13 +1347,8 @@ async function closeAll($: EngineInterface, via: string) {
   await bandCloseAll(bandPorts($), via)
 }
 
-// A list key pressed on the band's number row (its buttons come from LIST_KEYS).
 async function bandListKey($: EngineInterface, operation: Operation) {
-  if (operation.op === 'close') return void (await closeAll($, 'band list'))
-  if (operation.op === 'step') await bandStep($, operation.dir === 1 ? 'j' : 'k')
-  else if (operation.op === 'pin') await bandPin($)
-  else if (operation.op === 'group') await bandGroupStep($, operation.dir)
-  else if (operation.op === 'claim') await bandClaim($)
+  await band_.bandListKey(bandPorts($), operation)
 }
 
 // Lists off (the `panes` setting): the band's own key mode with no pane beside it --
@@ -1367,106 +1363,27 @@ async function bandOnly($: EngineInterface, mode: PaneMode) {
   if (deny && /does not hold the keyboard/i.test(deny)) $.ui.toast('With lists off, the band takes the keys: press the leader (Ctrl+] by default) first.')
 }
 
-// A digit of a prompt number, pressed as a band Button: jumps on the digit that makes
-// the number complete (with 25 prompts, `3` at once, `2` waits), or on `go`.
-// The list the band's number entry works on: the prompts, or the bookmarks.
-async function listCount($: EngineInterface): Promise<number> {
-  return (await read($, paneMode)) === 'bookmarks' ? (await bookmarkList($)).length : (await prompts($)).length
-}
-async function jumpToListNumber($: EngineInterface, typed: string, via: string) {
-  if ((await read($, paneMode)) === 'bookmarks') await jumpToBookmarkNumber($, typed, via)
-  else await jumpToPromptNumber($, typed, via)
-}
-
-// `.` after a prompt number: the footnote part follows (#33). Enter on `3.` unfolds #3.
+// The band's keys are handlers/band.ts; these keep the old signatures for their callers.
 async function bandDot($: EngineInterface) {
-  const typed = await read($, bandNum)
-  if (!typed || typed.includes('.')) return
-  await update($, bandNum, () => `${typed}.`)
-  keepBandWaiting($)
+  await band_.bandDot(bandPorts($))
 }
-
 async function bandDigit($: EngineInterface, digit: string) {
-  const typed = (await read($, bandNum)) + digit
-  const count = await listCount($)
-  if (promptNumberComplete(typed, count)) {
-    await update($, bandNum, () => '')
-    await jumpToListNumber($, typed, 'band list')
-    return
-  }
-  await update($, bandNum, () => typed)
-  await showInPane($, parseListNumber(typed)?.n ?? Number(typed))
-  keepBandWaiting($)
+  await band_.bandDigit(bandPorts($), digit)
 }
-
-// Bring item #n into view in the pane's list, so it can be checked before Enter (its ▶
-// is drawn by the pane). Prompts are keyed `p-<uuid>`, bookmarks `b-<uuid>`.
-async function showInPane($: EngineInterface, n: number) {
-  const bookmarks = (await read($, paneMode)) === 'bookmarks'
-  const target = bookmarks ? (await bookmarkList($))[n - 1] : (await prompts($))[n - 1]
-  if (!target) return
-  const r = await $.ui.scroll({ in: PANE, to: { key: `${bookmarks ? 'b' : 'p'}-${target.uuid}` }, block: 'center' })
-  if (r.deny) log($, `[bm] pane scroll to #${n} -> DENY: ${r.deny}`)
-}
-
-// Browse the prompts one by one from the band, vim's j and k: the band holds the keyboard,
-// so the pane can't take the arrows (djdarcy, 2026-10-07: "the nice thing about the panel
-// is that you can scroll through the prompts 1 by 1"). The list is newest first: j moves
-// the ▶ down (older), k up (newer); the first press lands on the newest. Enter jumps.
 async function bandStep($: EngineInterface, key: 'j' | 'k') {
-  const count = await listCount($)
-  if (count === 0) return
-  const n = stepNumber(await read($, bandNum), count, key)
-  await update($, bandNum, () => String(n))
-  await showInPane($, n)
-  keepBandWaiting($)
+  await band_.bandStep(bandPorts($), key)
 }
-
-// Pin or unpin the prompt under the ▶, from the band's prompt mode: where the list is in
-// view, so the person sees which prompt it is (djdarcy, 2026-10-07: a pin by number
-// alone, with no list in sight, is not useful). `s` for star: `*` can't be a hotkey.
-// The band stays in prompt mode, to pin several.
 async function bandPin($: EngineInterface) {
-  const typed = await read($, bandNum)
-  if (!typed) {
-    $.ui.toast('Pick a prompt first: j/k or the arrows (or its number), then s to pin it')
-    return
-  }
-  await togglePin($, typed)
-  keepBandWaiting($)
+  await band_.bandPin(bandPorts($))
 }
-
-// `c` in the bookmarks list: the person takes the chosen one of Claude's records as
-// their own (#21): same message, id and link (core/register-file.ts, claim).
 async function bandClaim($: EngineInterface) {
-  const typed = await read($, bandNum)
-  const target = typed ? (await bookmarkList($))[Number(typed) - 1] : undefined
-  if (!target) {
-    $.ui.toast('Pick a bookmark first: j/k or the arrows (or its number), then c to claim it')
-    return
-  }
-  if (ownerOf(target) !== 'claude') {
-    $.ui.toast('That one is already on your list')
-    return
-  }
-  const r = claim(await loadRegister($), target.uuid, await $.clock.now())
-  if ('error' in r) return void $.ui.toast(r.error)
-  await saveRegister($, r.register)
-  log($, `[bm] bookmark claimed from the pane: ${short(target.uuid)}`)
-  $.ui.toast(`#${typed} is yours now`)
-  keepBandWaiting($)
+  await band_.bandClaim(bandPorts($))
 }
-
-// Browsing takes as long as it takes: each key restarts the band's wait (BAND_MODE_MS).
 function keepBandWaiting($: EngineInterface) {
-  band.restartWait(() => $.clock.after(BAND_MODE_MS, () => void endBandMode($)))
+  band_.keepBandWaiting(bandPorts($))
 }
 async function bandNumberGo($: EngineInterface) {
-  const typed = await read($, bandNum)
-  await update($, bandNum, () => '')
-  // "go" with nothing typed: the person is done with the list.
-  if (!typed) return void (await settle($, paneOf(await read($, bandMode)), 'esc'))
-  await jumpToListNumber($, typed, 'band list')
+  await band_.bandNumberGo(bandPorts($))
 }
 
 // DIAGNOSTIC (2026-10-07): who holds the keyboard around a key, to explain a pane that is
@@ -1584,8 +1501,6 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   }
 }
 
-// How long the band waits for the next key before going back to its buttons.
-const BAND_MODE_MS = 15_000
 
 // Returns the refusal, if any.
 async function focusBand($: EngineInterface, key: string): Promise<string | undefined> {
@@ -1783,7 +1698,6 @@ async function watchBand($: EngineInterface, mode: PaneMode) {
   }
 }
 
-const paneOf = (mode: PaneMode | 'idle' | 'help'): Pane => (mode === 'idle' || mode === 'help' ? 'none' : mode)
 
 // Set by the pane's render hook (which may not write state): the placement and width
 // the surface actually gave it, logged when it closes.
@@ -1807,6 +1721,19 @@ function bandPorts($: EngineInterface): BandPorts {
     paneGeometry: () => paneGeometry,
     paneAnchored: () => !!panePosition.anchor,
     restoreView: () => restoreView($),
+    paneMode: () => read($, paneMode),
+    prompts: () => prompts($),
+    bookmarkList: () => bookmarkList($),
+    jumpToPromptNumber: (typed, via) => jumpToPromptNumber($, typed, via),
+    jumpToBookmarkNumber: (typed, via) => jumpToBookmarkNumber($, typed, via),
+    scrollPaneCentre: key => $.ui.scroll({ in: PANE, to: { key }, block: 'center' }),
+    toast: text => $.ui.toast(text),
+    togglePin: typed => togglePin($, typed),
+    groupStep: dir => bandGroupStep($, dir),
+    loadRegister: () => loadRegister($),
+    saveRegister: reg => saveRegister($, reg),
+    now: () => $.clock.now(),
+    after: (ms, fn) => $.clock.after(ms, fn),
   }
 }
 async function settle($: EngineInterface, pane: Pane, cause: Cause, needsMore = false) {

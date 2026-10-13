@@ -96,6 +96,20 @@ export type BandPorts = {
   paneGeometry: () => string | undefined
   paneAnchored: () => boolean
   restoreView: () => Promise<unknown>
+  // The band's keys (bandDigit, bandStep, bandPin, bandClaim, bandNumberGo, bandListKey):
+  paneMode: () => Promise<string>
+  prompts: () => Promise<readonly { uuid: string }[]>
+  bookmarkList: () => Promise<readonly import('../core/anchor.ts').AnchorRecord[]>
+  jumpToPromptNumber: (typed: string, via: string) => Promise<unknown>
+  jumpToBookmarkNumber: (typed: string, via: string) => Promise<unknown>
+  scrollPaneCentre: (key: string) => Promise<{ deny?: string }>
+  toast: (text: string) => void
+  togglePin: (typed: string) => Promise<unknown>
+  groupStep: (dir: -1 | 1) => Promise<unknown>
+  loadRegister: () => Promise<import('../core/register-file.ts').Register>
+  saveRegister: (reg: import('../core/register-file.ts').Register) => Promise<unknown>
+  now: () => Promise<number>
+  after: (ms: number, fn: () => void) => { cancel: () => void }
 }
 
 // Ownership of shared state (notes/meta/2026-10-12__22-48-40, one owner, read-only ports):
