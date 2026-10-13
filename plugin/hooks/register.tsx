@@ -23,7 +23,6 @@ import {
   type Mint, type Register as BookmarkRegister, type Retention,
 } from './core/register-file'
 import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution, type TranscriptRow } from './core/transcript-lines'
-import { exchangeIndex, looksLikeRedraw, pickViewAnchor, promptNearView } from './core/view-position'
 import { excerpt, formatDebugEnv, parseDebugEnv, quotesText, screenMirror, type Channel } from './core/debug'
 import { bandButtons, helpLines, helpShort, lineHint, listHint, listKeysFor, parseListNumber, route, type Chord, type Operation, type Pane } from './core/keys'
 import { afterAction, isList, type Cause } from './core/after-action'
@@ -33,7 +32,7 @@ import { shard, withinBudget, type PromptText } from './core/text-store'
 import { filterPrompts, matchLegend } from './core/filter'
 import { pruneStore, type Seen } from './core/store-prune'
 import { footnoteOf, looksLikePrompt, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompt-rows'
-import { byFirstFour, findByMessage, firstFour, sameMessage, short } from './core/message-id'
+import { findByMessage, sameMessage, short } from './core/message-id'
 import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFile, stamped, type EchoPolicy } from './core/log-ring'
 import { configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, selectionKind, settingsRows } from './core/diagnostics'
 import { colorSplit, plainMarkdown, snippetOf, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/highlight'
@@ -44,7 +43,8 @@ import { debugCommand } from './handlers/debug-command'
 import { anchoredReply, markedColumn, markedReply, type MarkStyles } from './views/marked-message'
 import { bandView } from './views/band'
 import { configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
-import type { DiagnosticsPorts } from './engine/ports'
+import type { DiagnosticsPorts, ViewPorts } from './engine/ports'
+import { ViewTracker } from './handlers/view-tracker'
 import { age, bookmarkWho, drawnFourOf, foldedLabel, footnoteDisplay, footnotesByPrompt, groupHeader, numberLabel as numberLabelAt, numberNewestFirst, numberWidth, pinnedRowsOf, pointerFor, unreached } from './core/list-model'
 import { BOOKMARK_TOOL, answer as toolAnswer, brief as briefRow, describe as describeRecord, listActedOn, listName, parseToolInput, tierFor } from './core/bookmark-tool'
 import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptList, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, transcriptGuess, type PromptRef } from './core/prompt-store'
@@ -1158,112 +1158,32 @@ async function setReadingState($: EngineInterface, state: ReadingState) {
   await $.store.set(await readingStateKey($), state)
 }
 
-// The message at the top of the view: of those on screen, the earliest in the
-// conversation. Order is known for every prompt (back-filled) and for the replies
-// captured since load (each placed after the prompt before it).
-async function conversationOrder($: EngineInterface): Promise<Map<string, number>> {
-  const order = new Map<string, number>()
-  const promptList = await prompts($)
-  promptList.forEach((p, i) => order.set(p.uuid, i * 1000))
-  let base = 0
-  let k = 0
-  // A row is a boundary when it is a prompt by kind or by the list: a message queued
-  // before 0.4.1 was kept under the `attachment` door, and its reply-like order overwrote
-  // its place as a prompt (2026-10-11, #341 inside #340's exchange).
-  const promptSet = new Set(promptList.map(p => p.uuid))
-  for (const r of await allRows($)) {
-    if (r.door === 'prompt' || promptSet.has(r.uuid)) {
-      base = order.get(r.uuid) ?? base
-      k = 0
-    } else order.set(r.uuid, base + ++k)
+// The view tracker (handlers/view-tracker.ts) owns which messages are on screen in
+// conversation order, the prompt nearest the view, the view anchor and the pane's
+// follow; it reads the screen model. Its ports are spelled once here.
+const viewTracker = new ViewTracker(screen)
+function viewPorts($: EngineInterface): ViewPorts {
+  return {
+    prompts: () => prompts($),
+    rows: () => allRows($),
+    log: line => log($, line),
+    closeShare: () => currentSettings().closeShare,
+    after: (ms, fn) => $.clock.after(ms, fn),
+    listPaneOpen: async () => (await read($, paneMode)) === 'list' && (await $.ui.panes()).some(p => p.id === PANE),
+    heldChannel: () => channelsOn.has('held'),
+    bumpView: () => update($, viewRev, v => v + 1),
+    followHere: () => currentSettings().followHere,
+    bandNumEmpty: async () => (await read($, bandNum)) === '',
+    scrollPaneTo: key => $.ui.scroll({ in: PANE, to: { key }, block: 'nearest' }),
   }
-  return order
 }
 async function topOnScreen($: EngineInterface): Promise<string | undefined> {
-  const order = await conversationOrder($)
-  // Only the latest burst of reports: what is on screen now, not what was before a jump.
-  const visible = freshOnScreen()
-  const known = visible.filter(id => order.has(id)).sort((a, b) => order.get(a)! - order.get(b)!)
-  // Not yet captured (a reply still arriving) sorts last: it is the newest.
-  lastScreenOrder = [...known, ...visible.filter(id => !order.has(id))]
-  return known[0] ?? visible[0]
+  return viewTracker.topOnScreen(viewPorts($))
 }
-// The messages on screen, top to bottom, as topOnScreen last ordered them.
-let lastScreenOrder: string[] = []
-// The messages the last accepted view held: the set a lone off-screen redraw is judged
-// against, and restored when one is ignored (promptHere).
-let trustedScreen = new Set<string>()
 
-// The prompt the person is nearest to, for the prompts pane: the earliest prompt on
-// screen, else the last prompt at or above the top of the screen (djdarcy, 2026-10-11:
-// between two prompts, the higher one, "so the person has more context"). The rule is
-// core/view-position.ts; this gathers its inputs.
 async function promptHere($: EngineInterface): Promise<string | undefined> {
-  const top = await topOnScreen($)
-  const order = await conversationOrder($)
-  const ids = (await prompts($)).map(p => p.uuid)
-  // A message drawn on screen reports a requestId that shares its uuid's first four
-  // groups and differs in the last (measured 2026-10-11: 5 on screen, 0 placed by exact
-  // id), the same relation marksOnRow() and sameEntry() already allow for. Compare by
-  // the first four groups throughout.
-  const byFour = byFirstFour(order)
-  // Each on-screen message with how many of its lines show, so the exchange that fills
-  // the screen wins, not the prompt that happens to peek in at the bottom.
-  // A reply streaming in is reported as freshly drawn at every growth, so while the
-  // person is scrolled up it is the only "fresh" message and the yellow row would jump
-  // to the newest exchange (2026-10-11: at #256, a scroll up jumped to #309). A growing
-  // message never decides the view: it is dropped from the weights, and when nothing
-  // else is fresh the answer is the one before.
-  const stable = lastScreenOrder.filter(id => !screen.report(id)?.grew)
-  if (stable.length === 0 && lastScreenOrder.length > 0) return held('a reply streaming in')
-  // A message redrawn off screen (a bookmark link minted into it, a highlight cleared)
-  // reports its whole range as if every row showed, and as the newest report it evicts
-  // the real screen set (2026-10-11 20:50: a 39-line reply from an hour earlier was the
-  // only fresh report while the person read five exchanges later; the yellow jumped from
-  // #323 to #316). The engine gives a mod no view event to check against, so the shape
-  // decides (core/view-position.ts looksLikeRedraw): whole-range reports, none in the
-  // trusted set, all far from where the person was -> keep the trusted set and answer.
-  const promptOrders = ids.map(u => order.get(u))
-  const exchangeOfId = (id: string) => {
-    const o = byFour.get(firstFour(id))
-    return o === undefined ? undefined : exchangeIndex(promptOrders, o)
-  }
-  const fresh = stable.flatMap(id => {
-    const s = screen.report(id)
-    return s ? [{ id, first: s.first, last: s.last, of: s.of }] : []
-  })
-  const now = Date.now()
-  if (screen.recentSelfRedraw(now) && looksLikeRedraw(fresh, trustedScreen, lastHere ? exchangeOfId(lastHere) : undefined, exchangeOfId)) {
-    log($, `[bm] redraw ignored, not a view: ${fresh.map(r => `${r.id.slice(0, 13)} ${r.first}-${r.last}/${r.of}`).join(' ')}; kept ${lastHere ? short(lastHere) : '(none)'} (${screen.sinceSelfRedraw(now)} ms after ${screen.selfRedrawWhy})`)
-    lastScreenOrder = [...trustedScreen]
-    return held('a redraw')
-  }
-  trustedScreen = new Set(stable)
-  const visible = stable.map(id => {
-    const seen = screen.report(id)
-    return { id: firstFour(id), lines: seen ? seen.last - seen.first + 1 : 1 }
-  })
-  const stableTop = stable.includes(top ?? '') ? top : stable[0]
-  const i = promptNearView(ids.map(firstFour), visible, stableTop && firstFour(stableTop), k => byFour.get(k), currentSettings().closeShare)
-  // Nothing placeable in the latest burst of reports happens when a new prompt or a
-  // streaming reply is drawn below a view that stays scrolled up (djdarcy, 2026-10-11:
-  // sending a prompt "wipes out the yellow"): the view did not move, so the answer is
-  // the one before.
-  if (i === undefined && !visible.some(m => byFour.has(m.id))) return held(visible.length ? 'nothing placeable' : 'no fresh message (tool rows or none)')
-  heldBy = undefined
-  return i === undefined ? undefined : ids[i]
+  return viewTracker.promptHere(viewPorts($))
 }
-// Which rule kept the yellow row where it was, logged under the `held` debug channel
-// (#35), so a rule that never changes an outcome can be found and removed. Read by
-// noteViewMoved.
-let heldBy: string | undefined
-let lastHeldLogged: string | undefined
-function held(rule: string): string | undefined {
-  heldBy = rule
-  return lastHere
-}
-// The row the pane last drew yellow, and the debounce behind the dynamic update.
-let lastHere: string | undefined
 // The prompt the list should centre on at the pane's next draw (set when it opens).
 let pendingCentre: string | undefined
 // The prompts whose footnotes the person unfolded (`.` or a press on the ellipsis row),
@@ -1272,49 +1192,8 @@ const unfoldedFootnotes = new Set<number>()
 // The prompts filter (#28): the words typed after `/` in the prompts pane's number field
 // (djdarcy, 2026-10-12: "Pane field only"); empty when no filter is active.
 let paneFilter = ''
-let viewTimer: Timer | undefined
-const VIEW_MOVED_MS = 150
-// Called by the message render hooks on every screen report. A short debounce later,
-// if the prompts pane is open and the nearest prompt has moved, viewRev is bumped so
-// the pane redraws its yellow row (djdarcy, 2026-10-11: "as a user scrolls up the
-// color changes dynamically"). The bump runs in the timer, outside the render hook,
-// which may not write state.
 function noteViewMoved($: EngineInterface) {
-  viewTimer?.cancel()
-  viewTimer = $.clock.after(VIEW_MOVED_MS, () => {
-    void (async () => {
-      if ((await read($, paneMode)) !== 'list') return
-      if (!(await $.ui.panes()).some(p => p.id === PANE)) return
-      const here = await promptHere($)
-      if (channelsOn.has('held') && heldBy && heldBy !== lastHeldLogged) log($, `[bm] held by ${heldBy}: kept ${lastHere ? short(lastHere) : '(none)'}`)
-      lastHeldLogged = heldBy
-      if (here === lastHere) return
-      // Diagnostic (2026-10-11): the yellow row flipped between #295 and #34 within one
-      // screen; list what was on screen and where each was placed.
-      const byFour = byFirstFour(await conversationOrder($))
-      const seen = lastScreenOrder
-        .map(id => {
-          const s = screen.report(id)
-          // lines/of: a report whose visible lines equal the message's whole row count is
-          // suspect when it arrives alone; a message redrawn off screen (a bookmark link
-          // minted into it) reported all 39 of its rows while the person read elsewhere
-          // (2026-10-11 20:50, the yellow jumped from #323 to #316).
-          return `${id.slice(0, 13)}:${byFour.get(firstFour(id)) ?? '?'}:${s ? `${s.first}-${s.last}/${s.of}` : '?'}`
-        })
-        .join(' ')
-      log($, `[bm] nearest prompt moved: ${lastHere ? short(lastHere) : '(none)'} -> ${here ? short(here) : '(none)'} | on screen (id:order:first-last/of) ${seen}`)
-      await update($, viewRev, v => v + 1)
-      // Keep the yellow row in the pane's view, moving the list the least that does it
-      // ('nearest': no move while the row is already showing), and not while the person
-      // is browsing the list from the band (a number or j/k typed), so the list never
-      // jumps under them (djdarcy, 2026-10-11). The `followHere` setting (#7).
-      const follow = currentSettings().followHere
-      if (here && follow !== 'never' && (follow === 'always' || (await read($, bandNum)) === '')) {
-        const r = await $.ui.scroll({ in: PANE, to: { key: `p-${here}` }, block: 'nearest' })
-        log($, `[bm] pane follow to ${short(here)} -> ${r.deny ? `DENY: ${r.deny}` : 'ok'}`)
-      }
-    })()
-  })
+  viewTracker.noteViewMoved(viewPorts($))
 }
 // Where "back" goes when you left from the bottom of the conversation (a setting, #7):
 //   'where-it-was': the same text you were reading, even if new replies arrived since
@@ -1324,23 +1203,8 @@ function noteViewMoved($: EngineInterface) {
 //   'newest':       the bottom as it is now, Ctrl+End, new replies included.
 const READING_BACK_FROM_BOTTOM: 'where-it-was' | 'newest' = 'where-it-was'
 
-// Where the view is, as a scroll can put it back: the bottom message's end when its last
-// line shows (at the bottom of the conversation, that is exactly Ctrl+End), else the top
-// message's start. "Back" from the reading position went to the top message's start
-// even from the very bottom, a little above where the person was (djdarcy, 2026-10-07).
-// The candidate with the least drift wins (core/view-position.ts pickViewAnchor): the top
-// message's start, the next message's start, or the bottom message's end (#29).
 async function viewAnchor($: EngineInterface): Promise<{ uuid: string; block: 'start' | 'end' } | undefined> {
-  const top = await topOnScreen($)
-  if (!top) return undefined
-  const reports = lastScreenOrder.flatMap(id => {
-    const s = screen.report(id)
-    return s ? [{ id, first: s.first, last: s.last, of: s.of }] : []
-  })
-  const pick = pickViewAnchor(reports)
-  if (!pick) return { uuid: top, block: 'start' }
-  if (pick.drift > 0) log($, `[bm] view anchor ${short(pick.id)} at the ${pick.block}, ${pick.drift} rows off at best`)
-  return { uuid: pick.id, block: pick.block }
+  return viewTracker.viewAnchor(viewPorts($))
 }
 
 // Go to the reading position, noting where we were so the next Ctrl+X Space swaps back.
@@ -2850,7 +2714,7 @@ export const register: Register = (on, options) => {
       // above and below). Redrawn on every render, so it follows the view while the pane
       // is open.
       const here = await promptHere($)
-      lastHere = here
+      viewTracker.drewHere(here)
       // Centre the list on the nearest prompt once the rows below exist (set by
       // openFor). A timer, since a render hook may not scroll; by then the draw is done.
       if (pendingCentre) {

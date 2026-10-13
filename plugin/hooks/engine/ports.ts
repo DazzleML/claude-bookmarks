@@ -40,6 +40,32 @@ export type DiagnosticsPorts = LogPorts & {
   echoState: () => Promise<string>
 }
 
+/** What the view tracker (handlers/view-tracker.ts) needs: the lists it orders, the settings it reads, and for the pane's follow, a timer, the pane's state and a scroll in it. */
+export type ViewPorts = {
+  prompts: () => Promise<{ uuid: string }[]>
+  rows: () => Promise<{ uuid: string; door: string }[]>
+  log: (line: string) => void
+  closeShare: () => number
+  after: (ms: number, fn: () => void) => { cancel: () => void }
+  /** The prompts list is the pane's mode and the pane is open. */
+  listPaneOpen: () => Promise<boolean>
+  heldChannel: () => boolean
+  bumpView: () => Promise<unknown>
+  followHere: () => 'when-idle' | 'always' | 'never'
+  bandNumEmpty: () => Promise<boolean>
+  scrollPaneTo: (key: string) => Promise<{ deny?: string }>
+}
+
+// Ownership of shared state (notes/meta/2026-10-12__22-48-40, one owner, read-only ports):
+//   state                                   owner                         readers
+//   screen (ScreenModel)                    register.tsx render hooks     view tracker (read-only Pick)
+//   lastScreenOrder, trustedScreen,         handlers/view-tracker.ts      --
+//     heldBy, lastHere, viewTimer
+//   lastHere (the one outside write)        prompts pane, via drewHere    --
+//   logLines, screenLines, timeline (Ring)  register.tsx log cluster       diagnostics (timeline, read-only)
+//   rendered (drawn ids)                    register.tsx render hooks     diagnostics, list model (read-only)
+//   markCache                               register.tsx marks cluster    render hooks, band (read-only)
+
 /** What `/bm-debug` needs: the debug channels this conversation has on and how to change them, the echo's choice and policy, and where the file log is. */
 export type DebugPorts = ToastPorts &
   LogPorts & {
