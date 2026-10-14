@@ -2,7 +2,8 @@
 // option (b); refactor-advisor 2026-10-12 row 2's "one // Diagnostics block"): /bm-ids,
 // /bm-marks, /bm-sel, /bm-timeline, /bm-config, /bm-env. Moved under /move-code, comments
 // as they were; `ports.x(...)` where a handler called `$` or a register.tsx function. Their
-// decisions and formats are core/log/diagnostics.ts. Location provisional (Q261012-11).
+// decisions and formats are core/log/diagnostics.ts. Location provisional (Q261012-11);
+// settled here by the layout pass (0.4.77).
 import { configListedLine, dccLine, idsReport, notAppliedLine, selectionKind, settingsRows } from '../core/log/diagnostics.ts'
 import { clock } from '../core/log/log-ring.ts'
 import { short } from '../core/kit/message-id.ts'

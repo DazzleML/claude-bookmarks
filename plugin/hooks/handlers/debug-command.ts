@@ -2,7 +2,8 @@
 // first handler to leave; djdarcy's example, 2026-10-12: "WHy is it we can't put the
 // entirety of something like this in a separate "debugging.ts*" file?"). Moved under
 // /move-code, comments as they were; the only change is `ports.x(...)` where the handler
-// called `$` or a register.tsx function. Location provisional (Q261012-11, question 3).
+// called `$` or a register.tsx function. Location provisional (Q261012-11, question 3);
+// settled here by the layout pass (0.4.77).
 import { CHANNELS, formatChannels, parseChannels, type Channel } from '../core/log/debug.ts'
 import { DEBUG_USAGE, parseDebugArgs } from '../core/log/diagnostics.ts'
 import type { DebugPorts } from '../engine/ports.ts'

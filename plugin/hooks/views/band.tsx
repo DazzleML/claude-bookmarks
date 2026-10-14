@@ -2,7 +2,8 @@
 // mark and number modes (the second view out of register.tsx, Q261012-11 "hybrid"). The
 // JSX moved verbatim under /move-code, comments as they were; register.tsx builds the
 // model (what to draw) and the actions (closures over `$`) and hands them in with the
-// palette's two lookups. Location provisional (Q261012-11, question 3).
+// palette's two lookups. Location provisional (Q261012-11, question 3);
+// settled here by the layout pass (0.4.77).
 import type { EngineInterface, RenderChildren } from 'claude-code'
 import type { Operation } from '../core/band/keys.ts'
 import type { Role, Style } from '../core/palette.ts'

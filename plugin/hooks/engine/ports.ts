@@ -8,6 +8,8 @@
 // names its needs the same way; register.tsx owns the one place each is built.
 //
 // Location provisional (Q261012-11, question 3): `hooks/engine/` beside `select.ts`.
+// Settled by the layout pass (0.4.77): engine/ for the ports, handlers/ and views/ for what
+// leaves register.tsx whole, core/<cluster>/ for the pure parts, core/kit/ for the reusable.
 
 /** A toast the person sees. */
 export type ToastPorts = { toast: (text: string) => void }

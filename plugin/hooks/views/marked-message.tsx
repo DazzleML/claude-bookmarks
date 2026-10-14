@@ -2,7 +2,8 @@
 // out of register.tsx: Q261012-11 answered "hybrid", 2026-10-12 ~20:20; the 15-06-26 poc's
 // spike (b): JSX in a sub-file taking the resolved elements passes the validator). Moved
 // verbatim under /move-code; the palette styles are passed in, since the palette is
-// register.tsx's. Location provisional (Q261012-11, question 3).
+// register.tsx's. Location provisional (Q261012-11, question 3);
+// settled here by the layout pass (0.4.77).
 import type { ElementConstructor, EngineInterface, RenderChildren, TextProps } from 'claude-code'
 import type { ColorSplit } from '../core/marks/highlight.ts'
 import type { Style } from '../core/palette.ts'
