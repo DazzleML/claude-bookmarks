@@ -34,6 +34,8 @@ export type World = {
   logs: () => string[]
   toasts: () => string[]
   opened: () => unknown[]
+  /** The text of each $.ui.copy, in order. */
+  copied: () => string[]
   clock: ReturnType<typeof mock.clock>
 }
 
@@ -107,8 +109,10 @@ export function world(on: unknown, options: WorldOptions = {}): World {
   answer('config.list', () => [])
   answer('command.register', () => undefined)
   answer('tool.register', e => ({ tool: `mcp__bookmarks__${String(e.name ?? 'bookmark')}` }))
+  // The clipboard (test-scenarios 2026-10-14__02-07-49, S5): copied, and recorded in `calls`.
+  answer('ui.copy', () => ({ isCopied: true }))
 
-  const of = (event: string) => calls.filter(c => c.event === event).map(c => c.input as Record<string, unknown>)
+  const of =(event: string) => calls.filter(c => c.event === event).map(c => c.input as Record<string, unknown>)
   return {
     calls,
     files,
@@ -116,6 +120,7 @@ export function world(on: unknown, options: WorldOptions = {}): World {
     logs: () => of('ui.log').map(e => String(e.text)),
     toasts: () => of('ui.toast').map(e => String(e.text ?? e.message ?? JSON.stringify(e))),
     opened: () => of('ui.open'),
+    copied: () => of('ui.copy').map(e => String(e.text)),
     clock,
   }
 }
