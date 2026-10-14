@@ -1,7 +1,9 @@
 // The band cluster's handlers (moved whole out of register.tsx under /move-code, comments as
-// they were; `ports.x()` where the code called `$` or a register.tsx function). This first
-// part is the close path: what an action leaves behind (settle), the band's mode ending,
-// the pane closing, and `q`. The band's state is core/band-state.ts BandState, owned by this
+// they were; `ports.x()` where the code called `$` or a register.tsx function). It holds the
+// band's keys (digits, steps, pin, claim, Enter), its focus probe and `?` help, the pane
+// opening (handOff, bandOnly, openFor), and the close path: what an action leaves behind
+// (settle), the band's mode ending, the pane closing, and `q`. The command line that calls
+// most of these is handlers/command-line.ts. The band's state is core/band-state.ts BandState, owned by this
 // cluster and reached through `ports.band`; the pane position is PanePosition's.
 import { afterAction, isList, type Cause } from '../core/after-action.ts'
 import { ownerOf } from '../core/anchor.ts'
@@ -60,6 +62,8 @@ export async function showInPane(ports: BandPorts, n: number) {
 // so the pane can't take the arrows (djdarcy, 2026-10-07: "the nice thing about the panel
 // is that you can scroll through the prompts 1 by 1"). The list is newest first: j moves
 // the ▶ down (older), k up (newer); the first press lands on the newest. Enter jumps.
+// j and k are the key table's defaults (core/keys.ts): `dir` arrives as 1 for next (j),
+// -1 for previous (k), so a rebound key steps the same way.
 export async function bandStep(ports: BandPorts, dir: -1 | 1) {
   const count = await listCount(ports)
   if (count === 0) return
@@ -210,7 +214,8 @@ export async function handOff(ports: BandPorts, mode: string, focusKey?: string)
 }
 
 // Lists off (the `panes` setting): the band's own key mode with no pane beside it --
-// digits, j/k and Enter for a list, the letters for a mark or a jump.
+// digits, j/k and Enter for a list, the letters for a mark or a jump (the keys are the key
+// table's defaults, core/keys.ts).
 export async function bandOnly(ports: BandPorts, mode: string) {
   if (mode === 'mark') ports.setSelectionAtChord(await ports.selection())
   await ports.setPaneMode(mode)
@@ -258,9 +263,10 @@ export async function openFor(ports: BandPorts, mode: string, action: string) {
   }
   // The row cannot be scrolled to before the pane has drawn it (DENY: "no element of
   // its own is drawn under that key", 2026-10-11): the pane's render hook does it right
-  // after its first draw, through pendingCentre.
+  // after its first draw, through pendingCentre (register.tsx's, the render hook's to
+  // read and clear; written here only through ports.setPendingCentre).
   if (hereAtOpen) ports.setPendingCentre(hereAtOpen)
-  // The selection is read AFTER the pane opens: an awaited call before $.ui.open looks
+  // The selection is read AFTER the pane opens: an awaited call before $.ui.open (ports.openPane) looks
   // to cost the pane the keyboard (the mark pane, which read it first, was refused in 8
   // of 12 runs; the jump pane, which didn't, almost never; log 2026-10-06/07). The
   // reason for reading it first was an inline pane shifting the transcript (round 1);
@@ -320,7 +326,7 @@ export async function openFor(ports: BandPorts, mode: string, action: string) {
     }
     // Esc hands the keyboard back to the prompt, and no event says so (djdarcy,
     // 2026-10-05: "it goes back to the normal text input bar but the panel stays
-    // open"). $.ui.focus on the band is refused once the band no longer holds the
+    // open"). $.ui.focus (ports.focus, in watchBand) on the band is refused once the band no longer holds the
     // keys, so ask every BAND_WATCH_MS, onto the element the ring is already on
     // (no visible move), and close the pane as soon as it is refused.
     ports.band.startWatch(() => ports.every(BAND_WATCH_MS, () => void watchBand(ports, mode)))

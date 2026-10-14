@@ -40,7 +40,7 @@ export async function runCommandLine(ports: CommandLinePorts, typed: string, via
 
 // The one place a band command is done, whether its key was typed in the field (`field`)
 // or its button was pressed -- clicked, or by a chord bound to its borrowed action (the
-// action's name, which openFor logs). The input DWP's `perform` (2026-10-12): a click and
+// action's name, which openFor in handlers/band.ts logs). The input DWP's `perform` (2026-10-12): a click and
 // a key cannot do different things.
 export async function perform(ports: CommandLinePorts, operation: Operation, via: 'field' | string) {
   switch (operation.op) {
