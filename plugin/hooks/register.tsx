@@ -384,6 +384,20 @@ async function dataRoot($: EngineInterface): Promise<string | undefined> {
   return home ? `${home.replace(/\\/g, '/')}/claude` : undefined
 }
 
+// A new conversation writes its own log files (0.4.74; test-scenarios 2026-10-14__02-07-49,
+// S4): the path was looked up once per process, so after /clear or /resume the new
+// conversation's lines went on into the old one's file. The old conversation's pending
+// writes finish first, under its own path; then the path is looked up again at the next
+// write and the rings start empty (that file's own lines are read back on its first
+// write, as after a reload). A line logged during the wait can miss the new file.
+async function newLogConversation() {
+  await flushing
+  logPath = undefined
+  logLines.clear()
+  screenLines.clear()
+  screenLoaded = false
+}
+
 async function flushLog($: EngineInterface) {
   if (logPath === undefined) {
     const root = await dataRoot($)
@@ -1197,6 +1211,7 @@ export const register: Register = (on, options) => {
     // that ended goes back to its defaults (test-plan 2026-10-12__15-25-30, row M).
     // Since 0.4.67 each cluster resets its own below (startRegister, startMarks), and the
     // register in memory is held per conversation (0.4.65); the panes' and the band's are here.
+    await newLogConversation()
     unfoldedFootnotes.clear()
     paneFilter = ''
     band.newConversation()

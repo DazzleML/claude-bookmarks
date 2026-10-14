@@ -24,6 +24,15 @@ test('after a reload the file\'s lines come first and the oldest of them go', ()
   assert.deepEqual(r.items, ['file-2', 'file-3', 'since-1', 'since-2'])
 })
 
+test('a cleared ring is empty and fills again from the start', () => {
+  const r = new Ring<string>(3)
+  for (const s of ['a', 'b', 'c', 'd']) r.push(s)
+  r.clear()
+  assert.equal(r.length, 0)
+  r.push('e')
+  assert.deepEqual(r.items, ['e'])
+})
+
 test('the stored policy, with the setting behind a missing or malformed default', () => {
   assert.deepEqual(echoPolicyOf(undefined, false), { default: false, forced: false })
   assert.deepEqual(echoPolicyOf(undefined, true), { default: true, forced: false })

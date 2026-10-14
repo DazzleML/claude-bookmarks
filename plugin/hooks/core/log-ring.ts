@@ -23,6 +23,10 @@ export class Ring<T> {
     this.items.unshift(...earlier)
     this.trim()
   }
+  /** A new conversation writes its own file: the ring starts empty (0.4.74). */
+  clear(): void {
+    this.items.length = 0
+  }
   private trim(): void {
     if (this.items.length > this.cap) this.items.splice(0, this.items.length - this.cap)
   }

@@ -196,3 +196,23 @@ test('M2 a new conversation walks its own jumplist, not the one before it', asyn
   await type('o')
   expect(w.toasts().at(-1)).toBe('Nothing to go back to')
 })
+
+// The debug log is the conversation's own (test-scenarios 2026-10-14__02-07-49, S4): its
+// path was looked up once per process, so a new conversation's lines went on into the
+// previous conversation's file.
+test('M3 a new conversation writes its own debug log', async ($, on) => {
+  const B = '99999999-2222-4333-8444-555555555555'
+  const LOG_B = `C:/test-home/claude/bookmarks/debug/${B}.log`
+  const opts = { session: SID, store: STORE }
+  const w = world(on, opts)
+  const start = () => ($ as unknown as Engine).session.start({ cwd: 'C:/test-project', surface: 'terminal', isInteractive: true })
+  await start()
+  await settle()
+  expect((w.file(LOG) ?? '').includes('tool registered')).toBe(true)
+  const linesInA = (w.file(LOG) ?? '').split('\n').length
+  opts.session = B
+  await start()
+  await settle()
+  expect((w.file(LOG_B) ?? '').includes('tool registered')).toBe(true)
+  expect((w.file(LOG) ?? '').split('\n').length).toBe(linesInA)
+})
