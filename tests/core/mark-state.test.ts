@@ -21,6 +21,13 @@ test('the selection at the chord is read once, then forgotten', () => {
   assert.equal(m.takeAtChord(), undefined)
 })
 
+test('a new conversation forgets a chord selection never used', () => {
+  const m = new MarkState()
+  m.setAtChord({ requestId: 'old', text: 'from the conversation that ended' })
+  m.newConversation()
+  assert.equal(m.takeAtChord(), undefined)
+})
+
 test('stopping the poll cancels it and forgets what was seen; a new one starts clean', () => {
   const log: string[] = []
   const m = new MarkState()

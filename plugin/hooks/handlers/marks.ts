@@ -74,6 +74,11 @@ export async function pollSelection(ports: MarksPorts) {
 // The marks' part of a session start (moved out of register.tsx's session.start hook,
 // 0.4.67): the conversation's marks into the cache, and the selection poll from scratch.
 export async function startMarks(ports: MarksPorts) {
+  // What the conversation that ended left behind: its highlight and the timer that would
+  // clear it, and a mark chord's selection never used (0.4.73; test-scenarios
+  // 2026-10-14__02-07-49, S3).
+  await clearShown(ports)
+  ports.state.newConversation()
   ports.markCache.replace(await ports.loadMarks())
   // Stamp selections as they change, so a stale one is ignored (freshSelection).
   ports.state.stopPoll()

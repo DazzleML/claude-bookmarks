@@ -1200,6 +1200,8 @@ export const register: Register = (on, options) => {
     unfoldedFootnotes.clear()
     paneFilter = ''
     band.newConversation()
+    panePosition.newConversation()
+    viewTracker.newConversation()
     void $.config.list().then(rows => {
       const theme = rows.find(r => r.key === 'theme')?.value
       if (typeof theme === 'string') themeName = theme

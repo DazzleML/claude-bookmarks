@@ -32,6 +32,18 @@ export class ViewTracker {
 
   constructor(private readonly screen: Pick<ScreenModel, 'fresh' | 'report' | 'recentSelfRedraw' | 'sinceSelfRedraw' | 'selfRedrawWhy'>) {}
 
+  /** A new conversation (/clear, /resume): the old screen, the held rule and the yellow row
+   * belonged to messages that are gone; a pending view update is cancelled. */
+  newConversation(): void {
+    this.lastScreenOrder = []
+    this.trustedScreen = new Set()
+    this.heldBy = undefined
+    this.lastHeldLogged = undefined
+    this.lastHere = undefined
+    this.viewTimer?.cancel()
+    this.viewTimer = undefined
+  }
+
   /** The prompts pane drew this row yellow (the one write from outside). */
   drewHere(here: string | undefined): void {
     this.lastHere = here

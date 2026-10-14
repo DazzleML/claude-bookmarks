@@ -27,6 +27,13 @@ export class PanePosition {
     this.paneView = view
   }
 
+  /** A new conversation (/clear, /resume): the old one's messages are no place to go back to. */
+  newConversation(): void {
+    this.restoreTo = undefined
+    this.paneAnchor = undefined
+    this.paneView = undefined
+  }
+
   /** The jump is where the person wants to be: no going back to before the pane. */
   jumped(): void {
     this.paneAnchor = undefined

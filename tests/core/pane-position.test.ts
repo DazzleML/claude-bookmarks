@@ -34,3 +34,16 @@ test('a highlight with no pane remembers the top; with a pane up, the pane ancho
   p.noteRestore('top')
   assert.deepEqual(p.takeRestore(), { here: 'anchor', block: 'start', fromPane: true })
 })
+
+// A new conversation (/clear, /resume) forgets the old one's places (test-scenarios
+// 2026-10-14__02-07-49, S3): a mark set with no selection would otherwise land on the
+// anchor, a message of the conversation that ended.
+test('a new conversation forgets the pane anchor, its view and the restore', () => {
+  const p = new PanePosition()
+  p.opened('old-anchor', { uuid: 'old-view', block: 'end' })
+  p.noteRestore('top')
+  p.newConversation()
+  assert.equal(p.anchor, undefined)
+  assert.equal(p.view, undefined)
+  assert.deepEqual(p.takeRestore(), { here: undefined, block: 'start', fromPane: false })
+})

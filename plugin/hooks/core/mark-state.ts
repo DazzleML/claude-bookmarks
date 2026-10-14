@@ -37,6 +37,11 @@ export class MarkState {
   setAtChord(sel: SelectionLike) {
     this.#atChord = sel
   }
+  /** A new conversation: a chord selection from the one before is forgotten (the highlight
+   * and its timer are cleared by clearShown, the poll by stopPoll and startPoll). */
+  newConversation() {
+    this.#atChord = undefined
+  }
   /** Read once by setMark, and forgotten. */
   takeAtChord(): SelectionLike {
     const sel = this.#atChord

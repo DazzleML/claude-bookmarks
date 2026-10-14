@@ -26,7 +26,7 @@ const OWNERS: readonly Owner[] = [
   {
     state: 'MarkState (core/mark-state.ts)',
     receivers: ['ports.state'],
-    writers: ['restartClear', 'stopClear', 'setAtChord', 'takeAtChord', 'see', 'stopPoll', 'startPoll'],
+    writers: ['restartClear', 'stopClear', 'setAtChord', 'takeAtChord', 'see', 'stopPoll', 'startPoll', 'newConversation'],
     files: ['handlers/marks.ts'],
   },
   {
