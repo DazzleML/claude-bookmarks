@@ -32,10 +32,10 @@ import { shard, withinBudget, type PromptText } from './core/text-store'
 import { filterPrompts, matchLegend } from './core/filter'
 import { pruneStore, type Seen } from './core/store-prune'
 import { footnoteOf, looksLikePrompt, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompt-rows'
-import { findByMessage, sameMessage, short } from './core/message-id'
+import { short } from './core/message-id'
 import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFile, stamped, type EchoPolicy } from './core/log-ring'
 import { configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, selectionKind, settingsRows } from './core/diagnostics'
-import { colorSplit, plainMarkdown, snippetOf, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/highlight'
+import { colorSplit, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/highlight'
 import { ScreenModel } from './core/screen-model'
 import { MarkCache, deleteMarks, marksShowing, type Mark, type Marks } from './core/marks'
 import { footnoteAt, listPosition, nextGroup, promptEntry, promptNumberComplete } from './core/band-entry'
@@ -43,10 +43,12 @@ import { debugCommand } from './handlers/debug-command'
 import { anchoredReply, markedColumn, markedReply, type MarkStyles } from './views/marked-message'
 import { bandView } from './views/band'
 import { configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
-import type { BandPorts, CommandLinePorts, DiagnosticsPorts, NavigationPorts, ViewPorts } from './engine/ports'
+import type { BandPorts, CommandLinePorts, DiagnosticsPorts, MarksPorts, NavigationPorts, ViewPorts } from './engine/ports'
 import { closeAll as bandCloseAll, closePane as bandClosePane, endBandMode as bandEnd, paneFocused as bandPaneFocused, settle as bandSettle, BAND_MODE_MS, BAND_WATCH_MS, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
 import * as commandLine from './handlers/command-line'
+import * as marks_ from './handlers/marks'
+import { MarkState } from './core/mark-state'
 import { Navigation } from './handlers/navigation'
 import { ViewTracker } from './handlers/view-tracker'
 import { PanePosition } from './core/pane-position'
@@ -123,12 +125,6 @@ const BOOKMARK_GROUPS: { owner: AnchorOwner | 'all'; title: string }[] = [
   { owner: 'all', title: 'all' },
 ]
 
-// The highlight and the band text are temporary (djdarcy, 2026-10-03: "visible temporarily
-// for maybe a minute or two or until the next action like another prompt is sent").
-// Only the mark just set or jumped to is shown; it clears after HIGHLIGHT_MS or on the
-// next prompt. Display only: nothing here touches what session.append stores.
-const HIGHLIGHT_MS = 120_000
-let clearTimer: Timer | undefined
 
 // What is on screen, and when the plugin itself last caused a redraw: core/screen-model.ts.
 const screen = new ScreenModel()
@@ -136,30 +132,52 @@ function expectRedraw(why: string) {
   screen.expectRedraw(why, Date.now())
 }
 
+// The marks cluster (the highlight, setting a mark, the reading position, jumping to a
+// mark) is handlers/marks.ts; its own state is core/mark-state.ts MarkState.
+const markState = new MarkState()
 async function showMark($: EngineInterface, letter: string, text: string) {
-  expectRedraw('a highlight shown')
-  await update($, shown, () => ({ letter, text }))
-  clearTimer?.cancel()
-  clearTimer = $.clock.after(HIGHLIGHT_MS, () => {
-    void clearShown($)
-  })
-  note(`show mark ${letter} for ${HIGHLIGHT_MS / 1000}s`)
+  await marks_.showMark(marksPorts($), letter, text)
 }
-
 async function clearShown($: EngineInterface) {
-  clearTimer?.cancel()
-  clearTimer = undefined
-  if (await read($, shown)) {
-    expectRedraw('a highlight cleared')
-    await update($, shown, () => null)
-    note('highlight cleared')
-  }
+  await marks_.clearShown(marksPorts($))
 }
 
 // The session's marks, kept in memory so render hooks can read them without a store
 // call per row. Loaded at session.start and refreshed on every mark write.
 // (core/marks.ts MarkCache: `replace` and `showTransient` are its only writers.)
 const markCache = new MarkCache()
+function marksPorts($: EngineInterface): MarksPorts {
+  return {
+    state: markState,
+    markCache,
+    shown: () => read($, shown),
+    setShown: v => update($, shown, () => v),
+    after: (ms, fn) => $.clock.after(ms, fn),
+    expectRedraw,
+    note,
+    log: (line, text) => log($, line, text ? { text: true } : undefined),
+    toast: (text, timeoutMs) => $.ui.toast(text, timeoutMs ? { timeoutMs } : undefined),
+    cut,
+    selection: () => $.ui.selection(),
+    allRows: () => allRows($),
+    drawnText: uuid => rendered.get(uuid),
+    topOnScreen: () => topOnScreen($),
+    viewAnchor: () => viewAnchor($),
+    freshOnScreen,
+    screenEntries: () => screen.entries(),
+    paneAnchor: () => panePosition.anchor,
+    noteRestore: top => panePosition.noteRestore(top),
+    restoreView: () => restoreView($),
+    jumpTo: (uuid, via, label, words, probe, block) => jumpTo($, uuid, via, label, words, probe, block),
+    now: () => $.clock.now(),
+    loadMarks: () => loadMarks($),
+    saveMarks: async m => $.store.set(await marksKey($), m),
+    sessionId: () => $.session.id(),
+    storeGet: key => $.store.get(key),
+    storeSet: (key, value) => $.store.set(key, value),
+    readingLetter: READING,
+  }
+}
 
 // Every colour, background, dim and bold the plugin draws comes from the palette by role
 // (#27, core/palette.ts): theme keys first, so a role reads on dark and light themes; the
@@ -907,148 +925,18 @@ async function jumpTo($: EngineInterface, uuid: string, via: string, label: stri
   return navigation.jumpTo(navPorts($), uuid, via, label, words, probe, block)
 }
 
-// The selection as it stood when the mark chord fired, read BEFORE the pane opens:
-// round 1 read it after, and the mark landed one row too high (the inline pane shifts
-// the transcript; hypothesis: the engine maps the selection to a row by screen position).
-let selectionAtChord: Awaited<ReturnType<EngineInterface['ui']['selection']>> | undefined
-
-// A drawn row id may be the zero-tailed form of the real uuid. Find the saved row it
-// stands for, and say whether the selected text is really in that row.
-async function resolveSelectionRow($: EngineInterface, id: string, text: string) {
-  const list = await allRows($)
-  const saved = findByMessage(list, id)
-  const needle = text.trim().slice(0, 40)
-  const check = !saved ? 'no saved row'
-    : saved.text === undefined ? 'row saved before text capture'
-    : saved.text.includes(needle) ? 'text verified' : 'TEXT NOT IN ROW'
-  return { uuid: saved?.uuid ?? id, check }
-}
-
 // Where the view was before a pane opened, and where it goes back to: core/pane-position.ts
 // (the three fields and their writers, each a named method).
 const panePosition = new PanePosition()
-async function highlightInPlace($: EngineInterface, letter: string, text: string) {
-  panePosition.noteRestore(panePosition.anchor ?? (await topOnScreen($)))
-  await showMark($, letter, text)
-}
 async function restoreView($: EngineInterface) {
   await navigation.restoreView(navPorts($))
 }
 
-// --- Fresh and stale selections ---------------------------------------------------------
-// $.ui.selection() answers what the person LAST selected, even once its highlight is gone
-// (the types' docs), so a mark with nothing selected used a quote selected minutes
-// earlier (2026-10-07 07:13:10, 07:20:21). djdarcy: "if a user selects text we should be
-// attempting to date-time it and if it's older than 1.25 minutes then we should mark the
-// current top-left portion of the screen". No event says when a selection changes, so it
-// is polled once a second and stamped when it does. Becomes a setting (#7).
-const SELECTION_FRESH_SECONDS = 75
-type Selection = Awaited<ReturnType<EngineInterface['ui']['selection']>>
-let selectionSeen: { key: string; at: number } | undefined
-let selectionPoll: Timer | undefined
-const selectionKey = (s: Selection) => (s?.requestId && s.text.trim() ? `${s.requestId}|${s.text}` : '')
-
 async function pollSelection($: EngineInterface) {
-  const key = selectionKey(await $.ui.selection())
-  // The first look has no history: whatever is selected then counts as old.
-  if (!selectionSeen) selectionSeen = { key, at: 0 }
-  else if (key !== selectionSeen.key) selectionSeen = { key, at: Date.now() }
+  await marks_.pollSelection(marksPorts($))
 }
-
-// The selection if it was made within SELECTION_FRESH_SECONDS, else undefined.
-async function freshSelection($: EngineInterface, sel: Selection): Promise<Selection> {
-  const key = selectionKey(sel)
-  if (!key) return undefined
-  // Changed since the last poll: made within the last second.
-  if (selectionSeen && key !== selectionSeen.key) selectionSeen = { key, at: Date.now() }
-  const at = selectionSeen?.key === key ? selectionSeen.at : 0
-  const age = at ? Math.round((Date.now() - at) / 1000) : undefined
-  const fresh = age !== undefined && age <= SELECTION_FRESH_SECONDS
-  log($, `[bm] selection "${cut(sel!.text.trim(), 24)}" is ${age === undefined ? 'of unknown age' : `${age}s old`}: ${fresh ? 'used' : 'ignored (stale)'}`, { text: true })
-  return fresh ? sel : undefined
-}
-
-// The message at the top of the screen, as a mark: the fallback when no fresh selection
-// says where (djdarcy: "the current 'screen' they are looking at from the top left").
-// Message-level, like the reading position; its first line is the one highlighted.
-async function screenTopMark($: EngineInterface, before?: string): Promise<Mark | undefined> {
-  const id = before ?? (await topOnScreen($))
-  if (!id) return undefined
-  const list = await allRows($)
-  const row = findByMessage(list, id)
-  const text = row?.text ?? rendered.get(id) ?? row?.head ?? ''
-  const first = snippetOf(plainMarkdown(text))
-  return {
-    uuid: row?.uuid ?? id,
-    head: headOf(text) || '(message at the top of the screen)',
-    markedAt: await $.clock.now(),
-    source: 'screen',
-    ...(first ? { snippet: first } : {}),
-  }
-}
-
 async function setMark($: EngineInterface, letter: string) {
-  // A fresh mouse selection says where; otherwise the top of the screen.
-  const sel = await freshSelection($, selectionAtChord ?? (await $.ui.selection()))
-  selectionAtChord = undefined
-  note(`selection at mark: ${sel ? `row ${sel.requestId ?? '(none)'} text ${JSON.stringify(sel.text.slice(0, 80))}` : 'none'}`)
-  if (sel?.requestId) {
-    const { uuid, check } = await resolveSelectionRow($, sel.requestId, sel.text)
-    const fresh = await loadMarks($)
-    const mark: Mark = {
-      uuid,
-      head: headOf(sel.text),
-      markedAt: await $.clock.now(),
-      source: 'selection',
-      snippet: snippetOf(sel.text),
-    }
-    note(`store.set mark ${letter} -> ${uuid} (selection, drawn ${sel.requestId}, ${check})`)
-    await $.store.set(await marksKey($), { ...fresh, [letter]: mark })
-    markCache.replace({ ...fresh, [letter]: mark })
-    // Writing `shown` redraws the rows and the band that read it.
-    await highlightInPlace($, letter, snippetOf(sel.text))
-    log($, `[bm] SEL: mark ${letter} -> ${uuid} (drawn as ${sel.requestId}; ${check}) | "${headOf(sel.text)}"`, { text: true })
-    $.ui.toast(`mark ${letter} [selection] -> ${headOf(sel.text).slice(0, 40)}`)
-    return
-  }
-
-  // No fresh selection: the message at the top of the screen, as it was BEFORE the pane
-  // opened and shifted it (paneAnchor). (The "latest prompt" fallback is gone: prompts
-  // have the prompts pane and pins. djdarcy, 2026-10-07.)
-  const mark = await screenTopMark($, panePosition.anchor)
-  if (!mark) {
-    $.ui.toast('Nothing on screen to mark yet: scroll a little, or select some text')
-    return
-  }
-  // Read again right before the write: the store is shared and not atomic.
-  const fresh = await loadMarks($)
-  note(`store.set mark ${letter} -> ${mark.uuid} (top of screen)`)
-  await $.store.set(await marksKey($), { ...fresh, [letter]: mark })
-  markCache.replace({ ...fresh, [letter]: mark })
-  if (mark.snippet) await highlightInPlace($, letter, mark.snippet)
-  log($, `[bm] mark ${letter} -> ${short(mark.uuid)} (top of screen) | "${mark.head}"`, { text: true })
-  $.ui.toast(`mark ${letter} [top of screen] -> ${mark.head.slice(0, 40)}`)
-}
-
-// --- Reading position: Ctrl+X Space ------------------------------------------------
-// One key, no letter (djdarcy, 2026-10-04): with text selected it sets the reading
-// position there; with nothing selected (or the same selection still up) it jumps to
-// it, and pressed again while it is on screen it swaps back to where the person was,
-// like vim's ``. "On screen" comes from what the render hooks report, not from the
-// last press, so scrolling by hand in between does not confuse it.
-// The toggle's state, kept explicitly rather than read off the screen (whose reports go
-// stale after a jump, see onScreenNow): `at` true right after going to the reading
-// position, so the next press goes `back`; false otherwise, so the next press goes there.
-// `backBlock`: which edge of the window `back` was anchored to (viewAnchor).
-type ReadingState = { at: boolean; back: string | null; backBlock?: 'start' | 'end' }
-async function readingStateKey($: EngineInterface): Promise<string> {
-  return `readingState:${await $.session.id()}`
-}
-async function readingState($: EngineInterface): Promise<ReadingState> {
-  return ((await $.store.get(await readingStateKey($))) as ReadingState | undefined) ?? { at: false, back: null }
-}
-async function setReadingState($: EngineInterface, state: ReadingState) {
-  await $.store.set(await readingStateKey($), state)
+  await marks_.setMark(marksPorts($), letter)
 }
 
 // The view tracker (handlers/view-tracker.ts) owns which messages are on screen in
@@ -1088,118 +976,18 @@ let paneFilter = ''
 function noteViewMoved($: EngineInterface) {
   viewTracker.noteViewMoved(viewPorts($))
 }
-// Where "back" goes when you left from the bottom of the conversation (a setting, #7):
-//   'where-it-was': the same text you were reading, even if new replies arrived since
-//                   (djdarcy's choice: "I'd rather have it always go to the exact same
-//                   location where the screen was so I'm reading exactly what I was
-//                   reading before");
-//   'newest':       the bottom as it is now, Ctrl+End, new replies included.
-const READING_BACK_FROM_BOTTOM: 'where-it-was' | 'newest' = 'where-it-was'
-
 async function viewAnchor($: EngineInterface): Promise<{ uuid: string; block: 'start' | 'end' } | undefined> {
   return viewTracker.viewAnchor(viewPorts($))
 }
 
-// Go to the reading position, noting where we were so the next Ctrl+X Space swaps back.
-// Shared by the chord and the jump pane's `␣ reading` entry.
 async function goToReading($: EngineInterface, reading: Mark, via: string) {
-  const here = await topOnScreen($)
-  const anchor = await viewAnchor($)
-  // Already at the reading position (the jump pane's entry used while there, log
-  // 2026-10-05 00:06:17): keep the earlier spot to return to, or "back" would go to
-  // the reading position itself.
-  const atItAlready = !!here && sameMessage(here, reading.uuid)
-  const previous = await readingState($)
-  await setReadingState(
-    $,
-    atItAlready
-      ? { at: true, back: previous.back, ...(previous.backBlock ? { backBlock: previous.backBlock } : {}) }
-      : { at: true, back: anchor?.uuid ?? null, ...(anchor ? { backBlock: anchor.block } : {}) },
-  )
-  if (anchor) log($, `[bm] reading position: back will be ${short(anchor.uuid)} at the window's ${anchor.block}`)
-  await jumpTo($, reading.uuid, via, `from ${here ? short(here) : '(unknown)'}`)
-  await showMark($, READING, reading.snippet ?? reading.head)
+  await marks_.goToReading(marksPorts($), reading, via)
 }
-
 async function readingToggle($: EngineInterface) {
-  // Only a fresh selection moves the reading position (a stale one did, 2026-10-07 07:20:21).
-  const sel = await freshSelection($, await $.ui.selection())
-  const marks = await loadMarks($)
-  const reading = marks[READING]
-  const picked = sel?.requestId && sel.text.trim() ? snippetOf(sel.text) : undefined
-
-  // A selection in a different message: set the reading position there. One inside the
-  // message that already holds it counts as "go there", not "move": terminal
-  // selections appear and linger easily (a click, a drag), and twice a press meant as a
-  // jump re-set it instead, to a stray mid-word selection in the same message (log,
-  // 2026-10-04 23:53:58 and 23:55:09).
-  const inReadingMessage =
-    !!reading && !!sel?.requestId && sameMessage(sel.requestId, reading.uuid)
-  if (sel?.requestId && picked && !inReadingMessage) {
-    const { uuid, check } = await resolveSelectionRow($, sel.requestId, sel.text)
-    const mark: Mark = { uuid, head: headOf(sel.text), markedAt: await $.clock.now(), source: 'selection', snippet: picked }
-    await $.store.set(await marksKey($), { ...marks, [READING]: mark })
-    markCache.replace({ ...marks, [READING]: mark })
-    // Next press goes there (from wherever the person has scrolled to by then).
-    await setReadingState($, { at: false, back: null })
-    await highlightInPlace($, READING, picked)
-    await restoreView($)
-    log($, `[bm] reading position set -> ${short(uuid)} (${check}) | "${headOf(sel.text)}"`, { text: true })
-    $.ui.toast(`reading position set: ${headOf(sel.text).slice(0, 40)}`)
-    return
-  }
-
-  if (!reading) {
-    $.ui.toast('Select some text, then Ctrl+X Space, to set a reading position')
-    return
-  }
-
-  const state = await readingState($)
-  // Go back only while the reading position is actually on screen, judged by the
-  // latest burst of on-screen reports. The there/back state alone was wrong once the
-  // person scrolled elsewhere by hand: the next press "went back" to the old spot
-  // instead of to the mark (djdarcy, 2026-10-04). Old reports alone were wrong after
-  // Ctrl+End (the message left behind still looked visible); the freshness filter
-  // handles that.
-  const onScreenNowFresh = freshOnScreen().some(
-    id => sameMessage(id, reading.uuid),
-  )
-  if (state.at && state.back && onScreenNowFresh) {
-    await setReadingState($, { at: false, back: null })
-    // Left from the bottom, and the setting says "the bottom as it is now": the newest
-    // captured message's end instead of the one that was last then.
-    const newest = state.backBlock === 'end' && READING_BACK_FROM_BOTTOM === 'newest' ? (await allRows($)).at(-1)?.uuid : undefined
-    const target = newest ?? state.back
-    await jumpTo($, target, 'reading position (back)', `to ${short(target)} (${state.backBlock ?? 'start'}${newest ? ', newest' : ''})`, undefined, false, state.backBlock ?? 'start')
-    await clearShown($)
-    return
-  }
-  // Already looking at it, with nowhere real to go back to: stay put. Jumping here
-  // recorded the message just above the mark as "where you were", so the next press
-  // swapped between two spots a few lines apart; and pressing at the mark re-jumped
-  // to it over and over (log, 2026-10-05 00:39-00:42 UTC).
-  if (onScreenNowFresh) {
-    await showMark($, READING, reading.snippet ?? reading.head)
-    $.ui.toast("You're at the reading position. Scroll away and press again to come back here.")
-    const seen = screen.entries().find(([id]) => sameMessage(id, reading.uuid))?.[1]
-    log($, `[bm] reading position: already on screen, stayed put` +
-      (seen ? ` (reported lines ${seen.first}-${seen.last} of ${seen.of}, ${Date.now() - seen.at} ms ago)` : ''))
-    return
-  }
-  // Otherwise: note where we are, then go there.
-  await goToReading($, reading, 'reading position')
+  await marks_.readingToggle(marksPorts($))
 }
-
-// Returns the scroll's refusal, if any ('unset' when there is no such mark).
 async function jumpToMark($: EngineInterface, letter: string, probe = false): Promise<string | undefined> {
-  const mark = (await loadMarks($))[letter]
-  if (!mark) {
-    $.ui.toast(`mark ${letter} is not set`)
-    return 'unset'
-  }
-  const deny = await jumpTo($, mark.uuid, 'chord jump', `mark ${letter}`, undefined, probe)
-  if (!deny) await showMark($, letter, mark.snippet ?? mark.head)
-  return deny
+  return marks_.jumpToMark(marksPorts($), letter, probe)
 }
 
 // --- The band's command line -----------------------------------------------------------
@@ -1490,9 +1278,7 @@ function bandPorts($: EngineInterface): BandPorts {
       pendingCentre = uuid
     },
     selection: () => $.ui.selection(),
-    setSelectionAtChord: sel => {
-      selectionAtChord = sel
-    },
+    setSelectionAtChord: sel => markState.setAtChord(sel),
     draftText: async () => (await $.prompt.read()).text,
     cut,
   }
@@ -1633,10 +1419,9 @@ export const register: Register = (on, options) => {
 
     markCache.replace(await loadMarks($))
     // Stamp selections as they change, so a stale one is ignored (freshSelection).
-    selectionPoll?.cancel()
-    selectionSeen = undefined
+    markState.stopPoll()
     await pollSelection($)
-    selectionPoll = $.clock.every(1000, () => void pollSelection($))
+    markState.startPoll(() => $.clock.every(1000, () => void pollSelection($)))
     // Not awaited: session start should not wait on a third of a second of PowerShell.
     void pruneStoreNow($)
       .catch(err => log($, `[bm] store prune failed: ${String(err)}`))

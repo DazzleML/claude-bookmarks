@@ -136,6 +136,41 @@ export type BandPorts = {
   cut: (text: string, n: number) => string
 }
 
+/** What the marks cluster (handlers/marks.ts) needs: its state, the mark cache, the `shown` atom, the view, the store, the jump, and the person's feedback. */
+export type MarksPorts = {
+  state: import('../core/mark-state.ts').MarkState
+  markCache: import('../core/marks.ts').MarkCache
+  shown: () => Promise<{ letter: string; text: string } | null>
+  setShown: (v: { letter: string; text: string } | null) => Promise<unknown>
+  after: (ms: number, fn: () => void) => { cancel: () => void }
+  expectRedraw: (why: string) => void
+  note: (what: string) => void
+  /** `text`: the line quotes the conversation (kept per the debugText setting). */
+  log: (line: string, text?: boolean) => void
+  toast: (text: string, timeoutMs?: number) => void
+  cut: (text: string, n: number) => string
+  selection: () => Promise<{ requestId?: string; text: string } | undefined>
+  allRows: () => Promise<readonly { uuid: string; head: string; text?: string }[]>
+  /** The text drawn for a message since load (the render hooks' map), if drawn. */
+  drawnText: (uuid: string) => string | undefined
+  topOnScreen: () => Promise<string | undefined>
+  viewAnchor: () => Promise<{ uuid: string; block: 'start' | 'end' } | undefined>
+  freshOnScreen: () => string[]
+  screenEntries: () => readonly [string, import('../core/screen-model.ts').MessageReport][]
+  /** PanePosition's: the view before the pane opened, and where a highlight returns to. */
+  paneAnchor: () => string | undefined
+  noteRestore: (top: string | undefined) => void
+  restoreView: () => Promise<unknown>
+  jumpTo: (uuid: string, via: string, label: string, words?: string, probe?: boolean, block?: 'start' | 'end') => Promise<string | undefined>
+  now: () => Promise<number>
+  loadMarks: () => Promise<import('../core/marks.ts').Marks>
+  saveMarks: (marks: import('../core/marks.ts').Marks) => Promise<unknown>
+  sessionId: () => Promise<string>
+  storeGet: (key: string) => Promise<unknown>
+  storeSet: (key: string, value: unknown) => Promise<unknown>
+  readingLetter: string
+}
+
 /** What the band's command line (handlers/command-line.ts) needs beyond the band's own: the field's redraw, the bookmarks group, and the commands it runs that other clusters own. */
 export type CommandLinePorts = BandPorts & {
   /** Draw the field anew, empty (the cmdRev atom; its writer is this port). */
@@ -160,6 +195,8 @@ export type CommandLinePorts = BandPorts & {
 //   cmdBusy (one command at a time)         handlers/command-line.ts      --
 //   logLines, screenLines, timeline (Ring)  register.tsx log cluster       diagnostics (timeline, read-only)
 //   rendered (drawn ids)                    register.tsx render hooks     diagnostics, list model (read-only)
+//   highlight clear timer, selection at     core/mark-state.ts MarkState  band (setAtChord, via its port),
+//     the chord, selection seen, its poll     (handlers/marks.ts)           session.start (stopPoll, startPoll)
 //   markCache (core/marks.ts MarkCache)     register.tsx marks cluster    render hooks, band, navigation
 //                                             (writers: replace, showTransient; readers: all, headOf)
 
