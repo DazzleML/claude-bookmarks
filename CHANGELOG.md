@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.72] - 2026-10-14
+
+### Fixed
+
+- After `/clear` or `/resume` in the same Claude Code session, `<leader> o` and `<leader> i` could walk the previous conversation's jumps, and the next jump could save them over the new conversation's own back-and-forward history. The jumplist in memory is now held only for the conversation it was read in.
+
 ## [0.4.71] - 2026-10-14
 
 ### Added
@@ -751,7 +757,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.71...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.72...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

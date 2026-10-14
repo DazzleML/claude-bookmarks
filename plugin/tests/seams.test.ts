@@ -173,3 +173,26 @@ test('4 a submitted prompt ends the band waiting for a number', async ($, on) =>
   await ($ as unknown as Engine).prompt.submit({ text: 'hello' })
   expect((await band.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['chord-mark', 'chord-jump', 'chord-prompts', 'chord-read', 'chord-help'])
 })
+
+// The jumplist in memory belongs to one conversation (test-scenarios 2026-10-14__02-07-49,
+// S1: the same class as the register cache, 0.4.65). `i` at the end of A's list moves
+// nothing but loads it; after the switch, `o` must find B's list, which is empty.
+test('M2 a new conversation walks its own jumplist, not the one before it', async ($, on) => {
+  const B = '99999999-2222-4333-8444-555555555555'
+  const jl = { entries: [{ uuid: 'aaaaaaaa-0000-4000-8000-000000000001', block: 'start' }, { uuid: 'aaaaaaaa-0000-4000-8000-000000000002', block: 'start' }], index: 1 }
+  const opts = { session: SID, store: { ...STORE, [`jumplist:${SID}`]: jl } }
+  const w = world(on, opts)
+  const band = (await ($ as { ui: { mount: (t: never) => Promise<unknown> } }).ui.mount(BAND as never)) as Ui
+  const type = async (text: string) => {
+    const field = (await band.findAll({ type: 'Input' }))[0]?.key ?? 'band-cmd-0'
+    // A walk to an entry scrolls, which a plugin's own $.ui.scroll does not reach in the
+    // kit (it throws "no implementation"); only an empty list answers with a toast alone.
+    await band.input({ key: field, text }).catch(() => undefined)
+  }
+  await type('i')
+  expect(w.toasts()).toContain('Nothing to go forward to')
+  opts.session = B
+  await ($ as unknown as Engine).session.start({ cwd: 'C:/test-project', surface: 'terminal', isInteractive: true })
+  await type('o')
+  expect(w.toasts().at(-1)).toBe('Nothing to go back to')
+})

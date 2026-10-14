@@ -20,19 +20,24 @@ const JUMPLIST_MAX = 100
 const sameEntry = (a: JumpEntry | undefined, b: JumpEntry) => !!a && sameMessage(a.uuid, b.uuid)
 
 export class Navigation {
-  private jumplistCache: Jumplist | undefined
+  // Held for the store key (the conversation) it was read or written under: the process
+  // outlives a conversation (/clear, /resume), and an unkeyed cache walked, then saved over,
+  // the next conversation's jumplist with the one before's (0.4.72; seams.test.ts M2).
+  private jumplistCache: { key: string; jumplist: Jumplist } | undefined
   private jumplistMoving = false
 
   private async jumplistKey(ports: NavigationPorts): Promise<string> {
     return `jumplist:${await ports.sessionId()}`
   }
   private async loadJumplist(ports: NavigationPorts): Promise<Jumplist> {
-    if (!this.jumplistCache) this.jumplistCache = ((await ports.storeGet(await this.jumplistKey(ports))) as Jumplist | undefined) ?? { entries: [], index: -1 }
-    return this.jumplistCache
+    const key = await this.jumplistKey(ports)
+    if (this.jumplistCache?.key !== key) this.jumplistCache = { key, jumplist: ((await ports.storeGet(key)) as Jumplist | undefined) ?? { entries: [], index: -1 } }
+    return this.jumplistCache.jumplist
   }
   private async saveJumplist(ports: NavigationPorts, jl: Jumplist) {
-    this.jumplistCache = jl
-    await ports.storeSet(await this.jumplistKey(ports), jl)
+    const key = await this.jumplistKey(ports)
+    this.jumplistCache = { key, jumplist: jl }
+    await ports.storeSet(key, jl)
   }
 
   async recordJump(ports: NavigationPorts, from: JumpEntry | undefined, to: JumpEntry) {
