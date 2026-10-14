@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.75] - 2026-10-14
+
+### Fixed
+
+- The resets of 0.4.73 and 0.4.74 now actually happen at `/clear` and `/resume`. Claude Code does not run a plugin's session-start hook at either, so they were never reached. The plugin now notices a new conversation by its session id, wherever it next looks, and resets what the old one left in memory. A resumed conversation's marked lines are tagged again at once, where before they waited for the next mark set. Compaction keeps the same conversation and resets nothing.
+
 ## [0.4.74] - 2026-10-14
 
 ### Fixed
@@ -769,7 +775,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.74...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.75...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

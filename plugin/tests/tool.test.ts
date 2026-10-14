@@ -57,8 +57,8 @@ test('a new conversation reads its own register, not the one before it', async (
   const opts = { session: SID, files: seeded() }
   world(on, opts)
   expect(((await call($ as never, { action: 'list' })).claudes as unknown[]).length).toBe(1)
+  // /clear: a new id, and no session.start (Q261014-01); the cache is keyed by the id.
   opts.session = '99999999-2222-4333-8444-555555555555'
-  await ($ as unknown as { session: { start: (e: object) => Promise<unknown> } }).session.start({ cwd: 'C:/test-project', surface: 'terminal', isInteractive: true })
   const out = await call($ as never, { action: 'list' })
   expect((out.claudes as unknown[]).length).toBe(0)
 })

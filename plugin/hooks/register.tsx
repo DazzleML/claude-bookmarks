@@ -398,6 +398,48 @@ async function newLogConversation() {
   screenLoaded = false
 }
 
+// --- Conversations (Q261014-01) ---------------------------------------------------------
+// The process outlives a conversation: /clear starts a new one under a new session id, and
+// a resume puts another in its place, its own transcript drawn instead (the source's
+// REPL.tsx: the messages are replaced, not extended). No session.start fires for either.
+// So the plugin notes the id it is working for, and wherever it next looks (a stored row,
+// a submitted prompt, the band or a pane drawn, a band command, a session's end) a changed
+// id means a new conversation: what was held for the one before is reset, and what is
+// kept per conversation (its marks, jumplist, register, log) is read for the new one.
+// Compaction keeps the id, so it resets nothing.
+let conversationId: string | undefined
+async function sameConversation($: EngineInterface): Promise<void> {
+  const id = await $.session.id()
+  if (conversationId === undefined || id === conversationId) {
+    conversationId = id
+    return
+  }
+  const before = conversationId
+  conversationId = id
+  await resetConversationMemory()
+  await bookmarks_.startRegister(bookmarksPorts($))
+  await marks_.startMarks(marksPorts($))
+  log($, `[bm] a new conversation: ${short(before)} -> ${short(id)}; what the one before left in memory is reset`)
+}
+// From a render hook, which may not write state (the reset clears the highlight): notice
+// a changed id there and do the reset on a clock tick.
+function sameConversationSoon($: EngineInterface) {
+  void $.session.id().then(id => {
+    if (conversationId !== undefined && id !== conversationId) $.clock.after(0, () => void sameConversation($).catch(() => {}))
+  }).catch(() => {})
+}
+// What a conversation leaves in memory: its log files' place and rings (0.4.74), the
+// prompts filter and unfolded footnotes, the band's state, the pane position and the view
+// tracker (0.4.73). The register and the marks reset through their own start parts.
+async function resetConversationMemory() {
+  await newLogConversation()
+  unfoldedFootnotes.clear()
+  paneFilter = ''
+  band.newConversation()
+  panePosition.newConversation()
+  viewTracker.newConversation()
+}
+
 async function flushLog($: EngineInterface) {
   if (logPath === undefined) {
     const root = await dataRoot($)
@@ -898,6 +940,7 @@ async function handOff($: EngineInterface, mode: PaneMode, focusKey?: string) {
 // Esc reminder -- is core/band-state.ts BandState, written only through its named methods.
 const band = new BandState()
 async function runCommandLine($: EngineInterface, typed: string, via: 'input' | 'submit') {
+  await sameConversation($)
   await commandLine.runCommandLine(commandLinePorts($), typed, via)
 }
 async function perform($: EngineInterface, operation: Operation, via: 'field' | string) {
@@ -1211,12 +1254,13 @@ export const register: Register = (on, options) => {
     // that ended goes back to its defaults (test-plan 2026-10-12__15-25-30, row M).
     // Since 0.4.67 each cluster resets its own below (startRegister, startMarks), and the
     // register in memory is held per conversation (0.4.65); the panes' and the band's are here.
-    await newLogConversation()
-    unfoldedFootnotes.clear()
-    paneFilter = ''
-    band.newConversation()
-    panePosition.newConversation()
-    viewTracker.newConversation()
+    // Corrected 0.4.75 (Q261014-01): session.start runs once per process and once per fresh
+    // load of the plugin (a reload, an enable), "never /clear", and no session.start fires
+    // after a resume (the engine's types, 2.1.296). So a new conversation is noticed by its
+    // id instead (sameConversation, below); these resets stay for a reload, and the
+    // conversation the process starts in is noted.
+    conversationId = await $.session.id()
+    await resetConversationMemory()
     void $.config.list().then(rows => {
       const theme = rows.find(r => r.key === 'theme')?.value
       if (typeof theme === 'string') themeName = theme
@@ -1255,8 +1299,18 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // A conversation ends at /clear, a resume, or an exit (`e.reason`). After the engine's
+  // end step the process may already be under the next conversation's id: if so, reset now
+  // rather than at the next look (sameConversation). Never in the way of the end itself.
+  on('session.end', async ($, e, next) => {
+    const ended = await next(e)
+    if (e.reason === 'clear' || e.reason === 'resume') await sameConversation($).catch(() => {})
+    return ended
+  })
+
   // The next prompt ends the temporary highlight.
   on('prompt.submit', async ($, e, next) => {
+    await sameConversation($)
     await clearShown($)
     await endBandMode($)
     return next(e)
@@ -1358,6 +1412,7 @@ export const register: Register = (on, options) => {
 
   // Every row stored in the main conversation passes here with its transcript uuid.
   on('session.append', async ($, e, next) => {
+    await sameConversation($)
     const stored = await next(e)
     // A new message is drawn at the bottom and reported whole, wherever the person is
     // reading; an append is one of the causes the redraw rule waits for (22:57Z: each of
@@ -1648,6 +1703,7 @@ export const register: Register = (on, options) => {
   // The band is drawn by views/band.tsx; this hook gathers what it draws (the model) and
   // what its presses do (the actions, closures over `$`).
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    sameConversationSoon($)
     const elements = $.ui.resolve(e)
     const theirs = await next(e)
     const last = await read($, shown)
@@ -1694,6 +1750,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    sameConversationSoon($)
     const elements = $.ui.resolve(e)
     const mode = (await read($, paneMode)) as PaneMode
     // The panes are drawn by views/prompts-pane.tsx, views/bookmarks-pane.tsx and

@@ -191,28 +191,35 @@ test('M2 a new conversation walks its own jumplist, not the one before it', asyn
   }
   await type('i')
   expect(w.toasts()).toContain('Nothing to go forward to')
+  // /clear: the process goes on under a new id, and no session.start fires (Q261014-01);
+  // the next band command notices the new id.
   opts.session = B
-  await ($ as unknown as Engine).session.start({ cwd: 'C:/test-project', surface: 'terminal', isInteractive: true })
   await type('o')
   expect(w.toasts().at(-1)).toBe('Nothing to go back to')
 })
 
 // The debug log is the conversation's own (test-scenarios 2026-10-14__02-07-49, S4): its
 // path was looked up once per process, so a new conversation's lines went on into the
-// previous conversation's file.
+// previous conversation's file. The engine's order (Q261014-01): session.start once, at
+// the process's start; at /clear, session.end with reason `clear`, then the process goes
+// on under a new id with no session.start. An end while the id is still the old one
+// resets nothing (compaction keeps the id too); the first look under the new id does.
 test('M3 a new conversation writes its own debug log', async ($, on) => {
   const B = '99999999-2222-4333-8444-555555555555'
   const LOG_B = `C:/test-home/claude/bookmarks/debug/${B}.log`
   const opts = { session: SID, store: STORE }
   const w = world(on, opts)
-  const start = () => ($ as unknown as Engine).session.start({ cwd: 'C:/test-project', surface: 'terminal', isInteractive: true })
-  await start()
+  on('prompt.submit' as never, {} as never, (async (_h: unknown, e: object) => e) as never)
+  await ($ as unknown as Engine).session.start({ cwd: 'C:/test-project', surface: 'terminal', isInteractive: true })
   await settle()
   expect((w.file(LOG) ?? '').includes('tool registered')).toBe(true)
+  await ($ as unknown as Engine).session.end({ reason: 'clear', sessionId: SID } as never)
+  await settle()
+  expect((w.file(LOG) ?? '').includes('a new conversation')).toBe(false)
   const linesInA = (w.file(LOG) ?? '').split('\n').length
   opts.session = B
-  await start()
+  await ($ as unknown as Engine).prompt.submit({ text: 'hello' })
   await settle()
-  expect((w.file(LOG_B) ?? '').includes('tool registered')).toBe(true)
+  expect((w.file(LOG_B) ?? '').includes('a new conversation')).toBe(true)
   expect((w.file(LOG) ?? '').split('\n').length).toBe(linesInA)
 })
