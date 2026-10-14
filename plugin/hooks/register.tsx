@@ -1225,12 +1225,9 @@ async function clearCommandLine($: EngineInterface) {
   await update($, cmdRev, v => v + 1)
 }
 
-// The band's key mode for `mode`, with the ring on `focusKey` when given (Enter presses
-// it). openFor opens the pane as the list; from the band its focus is refused, so the
-// band takes the key (see openFor).
+// The pane opening (handOff, bandOnly, openFor) is handlers/band.ts.
 async function handOff($: EngineInterface, mode: PaneMode, focusKey?: string) {
-  await openFor($, mode, 'band command line')
-  if (focusKey) await focusBand($, focusKey)
+  await band_.handOff(bandPorts($), mode, focusKey)
 }
 
 // The band's own state -- its wait and watch timers, the focus ring, its requestId, the
@@ -1330,16 +1327,8 @@ async function bandListKey($: EngineInterface, operation: Operation) {
   await band_.bandListKey(bandPorts($), operation)
 }
 
-// Lists off (the `panes` setting): the band's own key mode with no pane beside it --
-// digits, j/k and Enter for a list, the letters for a mark or a jump.
 async function bandOnly($: EngineInterface, mode: PaneMode) {
-  if (mode === 'mark') selectionAtChord = await $.ui.selection()
-  await update($, paneMode, () => mode)
-  await update($, bandMode, () => mode)
-  log($, `[bm] ${mode}: lists are off, the band takes the key`)
-  keepBandWaiting($)
-  const deny = await focusBand($, listLike(mode) ? 'band-num-go' : mode === 'jump' ? 'band-jump-reading' : 'band-mark-cancel')
-  if (deny && /does not hold the keyboard/i.test(deny)) $.ui.toast('With lists off, the band takes the keys: press the leader (Ctrl+] by default) first.')
+  await band_.bandOnly(bandPorts($), mode)
 }
 
 // The band's keys are handlers/band.ts; these keep the old signatures for their callers.
@@ -1374,110 +1363,7 @@ async function diagState($: EngineInterface, when: string) {
 }
 
 async function openFor($: EngineInterface, mode: PaneMode, action: string) {
-  expectRedraw('the pane opening')
-  log($, `[bm] ${action.startsWith('command:') ? `leader ran ${action}` : `chord for ${action} pressed the band Button`}`)
-  await diagState($, `${mode} (before open)`)
-  await update($, paneMode, () => mode)
-  const title = mode === 'mark' ? 'mark: press a-z' : mode === 'jump' ? 'jump: press a-z' : mode === 'bookmarks' ? 'bookmarks: type #' : 'prompts: type #'
-  note(`pane open (${mode}, focus)`)
-  // Narrow on purpose (djdarcy, 2026-10-04: "collapse the panel so it has almost no
-  // width"): it only has to take one letter. Both sizes are requests; a size the
-  // person dragged the pane to wins. `focus` is refused while the composer holds
-  // text, so over typed text the letter goes to the prompt instead (issue #4).
-  // The docked pane narrows the conversation, which rewraps and shifts the view
-  // (djdarcy, 2026-10-07: "the pane itself is what shifts the viewport"). So note the
-  // message at the top of the screen first, a hidden mark, and return to it "as though
-  // the user was auto-firing a ctrl]' to the hidden mark we just created" (djdarcy):
-  // at once where Claude Code allows the scroll (a press: a chord, a click), else at the
-  // next press (the letter), or when the person closes the pane.
-  panePosition.opened(await topOnScreen($), await viewAnchor($))
-  const paneView = panePosition.view
-  // For the prompts pane: the prompt nearest the view, read before the pane shifts it,
-  // so the list can open centred on it instead of on the newest (djdarcy, 2026-10-11:
-  // scrolled up 30 or 40 pages, "the user doesn't have to scroll in the panel"). The
-  // `listOpensAt` setting: 'newest' skips it, and the list opens at its top, the newest.
-  const hereAtOpen = mode === 'list' && currentSettings().listOpensAt === 'nearest' ? await promptHere($) : undefined
-  const opened = (await $.ui.open({ id: PANE, title, focus: true, closeOnEscape: true, columns: 16, rows: 4 })) as
-    { isPlaced?: boolean; reason?: string } | undefined
-  // Probe (2026-10-09): below the engine's width floor the pane waits undrawn and the
-  // person sees nothing. Say why, instead of looking broken (djdarcy's shrunk RDP terminal).
-  if (opened && opened.isPlaced === false) {
-    log($, `[bm] pane not placed: ${opened.reason ?? '(no reason given)'}`)
-    $.ui.toast(`Claude Code didn't draw the pane: ${opened.reason ?? 'no reason given'}. A wider terminal (or a smaller font, Ctrl+-) fixes it.`, { timeoutMs: 8000 })
-  }
-  if (paneView) {
-    const r = await $.ui.scroll({ to: { requestId: paneView.uuid }, block: paneView.block })
-    log($, `[bm] view back to ${short(paneView.uuid)} (${paneView.block}) after the pane opened -> ${r.deny ? `DENY: ${r.deny} (again at the next press)` : 'ok'}`)
-  }
-  // The row cannot be scrolled to before the pane has drawn it (DENY: "no element of
-  // its own is drawn under that key", 2026-10-11): the pane's render hook does it right
-  // after its first draw, through pendingCentre.
-  if (hereAtOpen) pendingCentre = hereAtOpen
-  // The selection is read AFTER the pane opens: an awaited call before $.ui.open looks
-  // to cost the pane the keyboard (the mark pane, which read it first, was refused in 8
-  // of 12 runs; the jump pane, which didn't, almost never; log 2026-10-06/07). The
-  // reason for reading it first was an inline pane shifting the transcript (round 1);
-  // the pane is docked now, and the mark resolves by the selection's message id.
-  if (mode === 'mark') {
-    selectionAtChord = await $.ui.selection()
-    note(`selection at chord: ${selectionAtChord?.requestId ?? 'none'}`)
-  }
-  const focused = await paneFocused($)
-  const draft = (await $.prompt.read()).text
-  const selNow = await $.ui.selection()
-  log(
-    $,
-    `[bm] ${mode} pane has the keyboard: ${focused ? 'yes' : 'NO'} (input box holds ${draft.length} chars; ` +
-      `selection ${selNow?.text.trim() ? `"${cut(selNow.text.trim(), 24)}"` : 'none'})`,
-    { text: true },
-  )
-  // From a typed command (/bm-mark, /bm-goto, /bm-prompts) the band never holds the
-  // keyboard, so the band key mode below can't take the key (log, 2026-10-07 04:56:51).
-  // Claude Code refuses the pane over a draft, and often just after a mouse selection
-  // (2026-10-06/07); working around that from the input box failed (a scroll from
-  // prompt.edit is "not person-initiated"). So say where the keys work instead: the
-  // band leader holds the keyboard by the person's own focus move, draft or not.
-  if (!focused && action.startsWith('command:')) {
-    await settle($, mode, 'timer')
-    $.ui.toast(
-      draft.trim()
-        ? 'The keyboard is in the input box (it holds a draft). Use the band leader, Ctrl+] by default, which works over a draft.'
-        : "Claude Code didn't give the pane the keyboard. Use the band leader, Ctrl+] by default.",
-      { timeoutMs: 8000 },
-    )
-    return
-  }
-  // Pressed from the band (its hotkey after `abovePrompt:focus`, Ctrl+X Tab or a
-  // rebound key), the focus request is refused: "an element of the band ... the person
-  // holds" has the keys, so the pane opened without them and the next letter went
-  // nowhere (djdarcy, 2026-10-05: "the cursor is staying in the normal input box"). A
-  // re-request 120 ms later was refused too (log 12:24:16, 12:24:28): the band still
-  // holds them. So the band itself takes the next key; the pane stays open as the list.
-  if (!(await paneFocused($))) {
-    await update($, bandMode, () => mode)
-    log($, `[bm] pane opened without the keyboard; the band takes the ${mode} key`)
-    band.restartWait(() => $.clock.after(BAND_MODE_MS, () => void endBandMode($)))
-    // Enter's default: `go` for a prompt number, the reading position for a jump (a
-    // missing element, no reading position, is simply denied), and never a letter for a
-    // mark: Enter on `a` overwrote mark a (djdarcy, 2026-10-07).
-    const deny = await focusBand($, listLike(mode) ? 'band-num-go' : mode === 'jump' ? 'band-jump-reading' : 'band-mark-cancel')
-    // The band never had the keyboard: the button was clicked (over a draft, a click
-    // presses it without moving the keys). The watcher below would then close the pane
-    // at once (djdarcy, 2026-10-07: "the panel popped up for a second but then
-    // disappeared"; log 08:32:22). So it stays open as a list to click, closed by its ×.
-    if (deny && /does not hold the keyboard/i.test(deny)) {
-      band.stopWaiting()
-      await update($, bandMode, () => 'idle')
-      log($, `[bm] ${mode} pane opened by a click: it stays open as a list (close it with its ×)`)
-      return
-    }
-    // Esc hands the keyboard back to the prompt, and no event says so (djdarcy,
-    // 2026-10-05: "it goes back to the normal text input bar but the panel stays
-    // open"). $.ui.focus on the band is refused once the band no longer holds the
-    // keys, so ask every BAND_WATCH_MS, onto the element the ring is already on
-    // (no visible move), and close the pane as soon as it is refused.
-    band.startWatch(() => $.clock.every(BAND_WATCH_MS, () => void watchBand($, mode)))
-  }
+  await band_.openFor(bandPorts($), mode, action)
 }
 
 
@@ -1654,7 +1540,7 @@ function bandPorts($: EngineInterface): BandPorts {
     closePaneUi: () => $.ui.close({ id: PANE }),
     expectRedraw,
     note,
-    log: line => log($, line),
+    log: (line, text) => log($, line, text ? { text: true } : undefined),
     paneGeometry: () => paneGeometry,
     paneAnchored: () => !!panePosition.anchor,
     restoreView: () => restoreView($),
@@ -1664,7 +1550,7 @@ function bandPorts($: EngineInterface): BandPorts {
     jumpToPromptNumber: (typed, via) => jumpToPromptNumber($, typed, via),
     jumpToBookmarkNumber: (typed, via) => jumpToBookmarkNumber($, typed, via),
     scrollPaneCentre: key => $.ui.scroll({ in: PANE, to: { key }, block: 'center' }),
-    toast: text => $.ui.toast(text),
+    toast: (text, timeoutMs) => $.ui.toast(text, timeoutMs ? { timeoutMs } : undefined),
     togglePin: typed => togglePin($, typed),
     groupStep: dir => bandGroupStep($, dir),
     loadRegister: () => loadRegister($),
@@ -1676,6 +1562,26 @@ function bandPorts($: EngineInterface): BandPorts {
     letters: LETTERS,
     readingLetter: READING,
     every: (ms, fn) => $.clock.every(ms, fn),
+    diagState: when => diagState($, when),
+    setPaneMode: mode => update($, paneMode, () => mode as PaneMode),
+    topOnScreen: () => topOnScreen($),
+    viewAnchor: () => viewAnchor($),
+    promptHere: () => promptHere($),
+    paneOpened: (anchor, view) => panePosition.opened(anchor, view),
+    paneView: () => panePosition.view,
+    openPane: async title =>
+      (await $.ui.open({ id: PANE, title, focus: true, closeOnEscape: true, columns: 16, rows: 4 })) as
+        { isPlaced?: boolean; reason?: string } | undefined,
+    scroll: (uuid, block) => $.ui.scroll({ to: { requestId: uuid }, block }),
+    setPendingCentre: uuid => {
+      pendingCentre = uuid
+    },
+    selection: () => $.ui.selection(),
+    setSelectionAtChord: sel => {
+      selectionAtChord = sel
+    },
+    draftText: async () => (await $.prompt.read()).text,
+    cut,
   }
 }
 async function settle($: EngineInterface, pane: Pane, cause: Cause, needsMore = false) {

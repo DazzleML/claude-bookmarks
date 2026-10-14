@@ -85,13 +85,14 @@ export type BandPorts = {
   bandNum: () => Promise<string>
   setBandNum: (v: string) => Promise<unknown>
   bandMode: () => Promise<string>
-  setBandMode: (v: 'idle' | 'help') => Promise<unknown>
+  setBandMode: (v: string) => Promise<unknown>
   paneId: string
   panes: () => Promise<readonly { id: string; isFocused?: boolean }[]>
   closePaneUi: () => Promise<unknown>
   expectRedraw: (why: string) => void
   note: (what: string) => void
-  log: (line: string) => void
+  /** `text`: the line quotes the conversation (kept per the debugText setting). */
+  log: (line: string, text?: boolean) => void
   /** The placement and width the pane's render recorded (its writer is the render hook). */
   paneGeometry: () => string | undefined
   paneAnchored: () => boolean
@@ -103,7 +104,7 @@ export type BandPorts = {
   jumpToPromptNumber: (typed: string, via: string) => Promise<unknown>
   jumpToBookmarkNumber: (typed: string, via: string) => Promise<unknown>
   scrollPaneCentre: (key: string) => Promise<{ deny?: string }>
-  toast: (text: string) => void
+  toast: (text: string, timeoutMs?: number) => void
   togglePin: (typed: string) => Promise<unknown>
   groupStep: (dir: -1 | 1) => Promise<unknown>
   loadRegister: () => Promise<import('../core/register-file.ts').Register>
@@ -116,6 +117,23 @@ export type BandPorts = {
   letters: readonly string[]
   readingLetter: string
   every: (ms: number, fn: () => unknown) => { cancel: () => void }
+  // The pane opening (openFor, bandOnly, handOff):
+  diagState: (when: string) => Promise<unknown>
+  setPaneMode: (mode: string) => Promise<unknown>
+  topOnScreen: () => Promise<string | undefined>
+  viewAnchor: () => Promise<{ uuid: string; block: 'start' | 'end' } | undefined>
+  promptHere: () => Promise<string | undefined>
+  /** PanePosition's: the pane opened, and the view before it. */
+  paneOpened: (anchor: string | undefined, view: { uuid: string; block: 'start' | 'end' } | undefined) => void
+  paneView: () => { uuid: string; block: 'start' | 'end' } | undefined
+  openPane: (title: string) => Promise<{ isPlaced?: boolean; reason?: string } | undefined>
+  scroll: (uuid: string, block: 'start' | 'end') => Promise<{ deny?: string }>
+  setPendingCentre: (uuid: string) => void
+  selection: () => Promise<{ requestId?: string; text: string } | undefined>
+  /** The marks cluster's: the selection as it stood when the mark chord fired. */
+  setSelectionAtChord: (sel: { requestId?: string; text: string } | undefined) => void
+  draftText: () => Promise<string>
+  cut: (text: string, n: number) => string
 }
 
 // Ownership of shared state (notes/meta/2026-10-12__22-48-40, one owner, read-only ports):

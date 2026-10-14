@@ -201,6 +201,132 @@ export async function showHelp(ports: BandPorts) {
   }))
 }
 
+// The band's key mode for `mode`, with the ring on `focusKey` when given (Enter presses
+// it). openFor opens the pane as the list; from the band its focus is refused, so the
+// band takes the key (see openFor).
+export async function handOff(ports: BandPorts, mode: string, focusKey?: string) {
+  await openFor(ports, mode, 'band command line')
+  if (focusKey) await focusBand(ports, focusKey)
+}
+
+// Lists off (the `panes` setting): the band's own key mode with no pane beside it --
+// digits, j/k and Enter for a list, the letters for a mark or a jump.
+export async function bandOnly(ports: BandPorts, mode: string) {
+  if (mode === 'mark') ports.setSelectionAtChord(await ports.selection())
+  await ports.setPaneMode(mode)
+  await ports.setBandMode(mode)
+  ports.log(`[bm] ${mode}: lists are off, the band takes the key`)
+  keepBandWaiting(ports)
+  const deny = await focusBand(ports, isList(mode as Pane) ? 'band-num-go' : mode === 'jump' ? 'band-jump-reading' : 'band-mark-cancel')
+  if (deny && /does not hold the keyboard/i.test(deny)) ports.toast('With lists off, the band takes the keys: press the leader (Ctrl+] by default) first.')
+}
+
+export async function openFor(ports: BandPorts, mode: string, action: string) {
+  ports.expectRedraw('the pane opening')
+  ports.log(`[bm] ${action.startsWith('command:') ? `leader ran ${action}` : `chord for ${action} pressed the band Button`}`)
+  await ports.diagState(`${mode} (before open)`)
+  await ports.setPaneMode(mode)
+  const title = mode === 'mark' ? 'mark: press a-z' : mode === 'jump' ? 'jump: press a-z' : mode === 'bookmarks' ? 'bookmarks: type #' : 'prompts: type #'
+  ports.note(`pane open (${mode}, focus)`)
+  // Narrow on purpose (djdarcy, 2026-10-04: "collapse the panel so it has almost no
+  // width"): it only has to take one letter. Both sizes are requests; a size the
+  // person dragged the pane to wins. `focus` is refused while the composer holds
+  // text, so over typed text the letter goes to the prompt instead (issue #4).
+  // The docked pane narrows the conversation, which rewraps and shifts the view
+  // (djdarcy, 2026-10-07: "the pane itself is what shifts the viewport"). So note the
+  // message at the top of the screen first, a hidden mark, and return to it "as though
+  // the user was auto-firing a ctrl]' to the hidden mark we just created" (djdarcy):
+  // at once where Claude Code allows the scroll (a press: a chord, a click), else at the
+  // next press (the letter), or when the person closes the pane.
+  ports.paneOpened(await ports.topOnScreen(), await ports.viewAnchor())
+  const paneView = ports.paneView()
+  // For the prompts pane: the prompt nearest the view, read before the pane shifts it,
+  // so the list can open centred on it instead of on the newest (djdarcy, 2026-10-11:
+  // scrolled up 30 or 40 pages, "the user doesn't have to scroll in the panel"). The
+  // `listOpensAt` setting: 'newest' skips it, and the list opens at its top, the newest.
+  const hereAtOpen = mode === 'list' && ports.settings().listOpensAt === 'nearest' ? await ports.promptHere() : undefined
+  const opened = await ports.openPane(title)
+  // Probe (2026-10-09): below the engine's width floor the pane waits undrawn and the
+  // person sees nothing. Say why, instead of looking broken (djdarcy's shrunk RDP terminal).
+  if (opened && opened.isPlaced === false) {
+    ports.log(`[bm] pane not placed: ${opened.reason ?? '(no reason given)'}`)
+    ports.toast(`Claude Code didn't draw the pane: ${opened.reason ?? 'no reason given'}. A wider terminal (or a smaller font, Ctrl+-) fixes it.`, 8000)
+  }
+  if (paneView) {
+    const r = await ports.scroll(paneView.uuid, paneView.block)
+    ports.log(`[bm] view back to ${short(paneView.uuid)} (${paneView.block}) after the pane opened -> ${r.deny ? `DENY: ${r.deny} (again at the next press)` : 'ok'}`)
+  }
+  // The row cannot be scrolled to before the pane has drawn it (DENY: "no element of
+  // its own is drawn under that key", 2026-10-11): the pane's render hook does it right
+  // after its first draw, through pendingCentre.
+  if (hereAtOpen) ports.setPendingCentre(hereAtOpen)
+  // The selection is read AFTER the pane opens: an awaited call before $.ui.open looks
+  // to cost the pane the keyboard (the mark pane, which read it first, was refused in 8
+  // of 12 runs; the jump pane, which didn't, almost never; log 2026-10-06/07). The
+  // reason for reading it first was an inline pane shifting the transcript (round 1);
+  // the pane is docked now, and the mark resolves by the selection's message id.
+  if (mode === 'mark') {
+    const sel = await ports.selection()
+    ports.setSelectionAtChord(sel)
+    ports.note(`selection at chord: ${sel?.requestId ?? 'none'}`)
+  }
+  const focused = await paneFocused(ports)
+  const draft = await ports.draftText()
+  const selNow = await ports.selection()
+  ports.log(
+    `[bm] ${mode} pane has the keyboard: ${focused ? 'yes' : 'NO'} (input box holds ${draft.length} chars; ` +
+      `selection ${selNow?.text.trim() ? `"${ports.cut(selNow.text.trim(), 24)}"` : 'none'})`,
+    true,
+  )
+  // From a typed command (/bm-mark, /bm-goto, /bm-prompts) the band never holds the
+  // keyboard, so the band key mode below can't take the key (log, 2026-10-07 04:56:51).
+  // Claude Code refuses the pane over a draft, and often just after a mouse selection
+  // (2026-10-06/07); working around that from the input box failed (a scroll from
+  // prompt.edit is "not person-initiated"). So say where the keys work instead: the
+  // band leader holds the keyboard by the person's own focus move, draft or not.
+  if (!focused && action.startsWith('command:')) {
+    await settle(ports, mode as Pane, 'timer')
+    ports.toast(
+      draft.trim()
+        ? 'The keyboard is in the input box (it holds a draft). Use the band leader, Ctrl+] by default, which works over a draft.'
+        : "Claude Code didn't give the pane the keyboard. Use the band leader, Ctrl+] by default.",
+      8000,
+    )
+    return
+  }
+  // Pressed from the band (its hotkey after `abovePrompt:focus`, Ctrl+X Tab or a
+  // rebound key), the focus request is refused: "an element of the band ... the person
+  // holds" has the keys, so the pane opened without them and the next letter went
+  // nowhere (djdarcy, 2026-10-05: "the cursor is staying in the normal input box"). A
+  // re-request 120 ms later was refused too (log 12:24:16, 12:24:28): the band still
+  // holds them. So the band itself takes the next key; the pane stays open as the list.
+  if (!(await paneFocused(ports))) {
+    await ports.setBandMode(mode)
+    ports.log(`[bm] pane opened without the keyboard; the band takes the ${mode} key`)
+    ports.band.restartWait(() => ports.after(BAND_MODE_MS, () => void endBandMode(ports)))
+    // Enter's default: `go` for a prompt number, the reading position for a jump (a
+    // missing element, no reading position, is simply denied), and never a letter for a
+    // mark: Enter on `a` overwrote mark a (djdarcy, 2026-10-07).
+    const deny = await focusBand(ports, isList(mode as Pane) ? 'band-num-go' : mode === 'jump' ? 'band-jump-reading' : 'band-mark-cancel')
+    // The band never had the keyboard: the button was clicked (over a draft, a click
+    // presses it without moving the keys). The watcher below would then close the pane
+    // at once (djdarcy, 2026-10-07: "the panel popped up for a second but then
+    // disappeared"; log 08:32:22). So it stays open as a list to click, closed by its ×.
+    if (deny && /does not hold the keyboard/i.test(deny)) {
+      ports.band.stopWaiting()
+      await ports.setBandMode('idle')
+      ports.log(`[bm] ${mode} pane opened by a click: it stays open as a list (close it with its ×)`)
+      return
+    }
+    // Esc hands the keyboard back to the prompt, and no event says so (djdarcy,
+    // 2026-10-05: "it goes back to the normal text input bar but the panel stays
+    // open"). $.ui.focus on the band is refused once the band no longer holds the
+    // keys, so ask every BAND_WATCH_MS, onto the element the ring is already on
+    // (no visible move), and close the pane as soon as it is refused.
+    ports.band.startWatch(() => ports.every(BAND_WATCH_MS, () => void watchBand(ports, mode)))
+  }
+}
+
 /** The pane a band mode belongs to, for the after-action policy. */
 export const paneOf = (mode: string): Pane => (mode === 'idle' || mode === 'help' ? 'none' : (mode as Pane))
 
