@@ -146,6 +146,8 @@ export type ResolveOutcome =
 export type BookmarksPorts = {
   /** `text`: the line quotes the conversation (kept per the debugText setting). */
   log: (line: string, text?: boolean) => void
+  /** A line drawn into the conversation whether or not debugging is on (a failure the person should see). */
+  logAlways: (line: string) => void
   toast: (text: string, timeoutMs?: number) => void
   cut: (text: string, n: number) => string
   expectRedraw: (why: string) => void
@@ -181,6 +183,7 @@ export type MarksPorts = {
   shown: () => Promise<{ letter: string; text: string } | null>
   setShown: (v: { letter: string; text: string } | null) => Promise<unknown>
   after: (ms: number, fn: () => void) => { cancel: () => void }
+  every: (ms: number, fn: () => unknown) => { cancel: () => void }
   expectRedraw: (why: string) => void
   note: (what: string) => void
   /** `text`: the line quotes the conversation (kept per the debugText setting). */

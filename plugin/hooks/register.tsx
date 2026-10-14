@@ -18,10 +18,7 @@ import {
   markLinks, markdownLinks, ownerOf, parseAnchor, tierOf,
   type AnchorOwner, type MarkerStyle,
 } from './core/anchor'
-import {
-  findRecord, prune,
-  type Register as BookmarkRegister, type Retention,
-} from './core/register-file'
+import { findRecord, type Register as BookmarkRegister } from './core/register-file'
 import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution } from './core/transcript-lines'
 import { excerpt, formatDebugEnv, parseDebugEnv, quotesText, screenMirror, type Channel } from './core/debug'
 import { bandButtons, helpLines, helpShort, listHint, listKeysFor, route, type Chord, type Operation, type Pane } from './core/keys'
@@ -56,11 +53,9 @@ import { PanePosition } from './core/pane-position'
 import { BandState } from './core/band-state'
 import { age, bookmarkWho, drawnFourOf, foldedLabel, footnoteDisplay, footnotesByPrompt, groupHeader, numberLabel as numberLabelAt, numberNewestFirst, numberWidth, pinnedRowsOf, pointerFor, unreached } from './core/list-model'
 import { BOOKMARK_TOOL } from './core/bookmark-tool'
+import { COMMANDS } from './core/commands'
 import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptList, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, transcriptGuess, type PromptRef } from './core/prompt-store'
 
-// How long a `temporary` bookmark is kept before it is pruned (to a tombstone). A
-// setting with the archive-retention picker (#7, #10); a constant until then.
-const TEMPORARY_RETENTION: Retention = '30d'
 
 // The plugin's settings as they stand: the person's /config values (the `userConfig` in
 // plugin.json), which Claude Code hands to `register` with every default filled in and
@@ -154,6 +149,7 @@ function marksPorts($: EngineInterface): MarksPorts {
     shown: () => read($, shown),
     setShown: v => update($, shown, () => v),
     after: (ms, fn) => $.clock.after(ms, fn),
+    every: (ms, fn) => $.clock.every(ms, fn),
     expectRedraw,
     note,
     log: (line, text) => log($, line, text ? { text: true } : undefined),
@@ -728,6 +724,7 @@ async function loadMarks($: EngineInterface): Promise<Marks> {
 function bookmarksPorts($: EngineInterface): BookmarksPorts {
   return {
     log: (line, text) => log($, line, text ? { text: true } : undefined),
+    logAlways: line => log($, line, { always: true }),
     toast: (text, timeoutMs) => $.ui.toast(text, timeoutMs ? { timeoutMs } : undefined),
     cut,
     expectRedraw,
@@ -753,9 +750,6 @@ function bookmarksPorts($: EngineInterface): BookmarksPorts {
     markCache,
     showMark: (letter, text) => showMark($, letter, text),
   }
-}
-async function registerPath($: EngineInterface): Promise<string | undefined> {
-  return bookmarks_.registerPath(bookmarksPorts($))
 }
 async function loadRegister($: EngineInterface): Promise<BookmarkRegister> {
   return bookmarks_.loadRegister(bookmarksPorts($))
@@ -814,9 +808,6 @@ async function restoreView($: EngineInterface) {
   await navigation.restoreView(navPorts($))
 }
 
-async function pollSelection($: EngineInterface) {
-  await marks_.pollSelection(marksPorts($))
-}
 async function setMark($: EngineInterface, letter: string) {
   await marks_.setMark(marksPorts($), letter)
 }
@@ -1210,30 +1201,8 @@ export const register: Register = (on, options) => {
       const theme = rows.find(r => r.key === 'theme')?.value
       if (typeof theme === 'string') themeName = theme
     }).catch(() => {})
-    const commands: [string, string][] = [
-      ['bm-ids', 'Diagnostics: compare captured prompt ids with the ids drawn on screen'],
-      ['bm-jump', 'Diagnostics: scroll to a prompt (first | last | N | r<N> | uuid)'],
-      ['bm-pane', 'Diagnostics: open the prompts pane without the band; type a number and Enter to jump'],
-      ['bm-marks', 'List the marks set in this conversation'],
-      ['bm-delmarks', 'Delete marks: /bm-delmarks a b (letters), or /bm-delmarks all'],
-      ['bm-env', 'Show the version, the session id and what has been captured'],
-      ['bm-config', 'Show every setting, its value and where it came from'],
-      ['bm-timeline', 'Diagnostics: show the last N plugin events (draws, appends, pane, store, toast, scroll)'],
-      ['bm-sel', 'Diagnostics: show what Claude Code reports for your mouse selection'],
-      ['bm-pin', 'Pin or unpin prompt #N in the prompts pane (no number: the newest)'],
-      // Typed commands for the same actions as the band leader (they also work as
-      // `command:<name>` keybindings, 2.1.290). A pane they open takes the keyboard from
-      // an empty input box; over a draft they point to the band leader instead.
-      ['bm-mark', 'Set a mark: opens the mark pane, then press a letter'],
-      ['bm-goto', 'Jump to a mark: opens the jump pane, then press a letter'],
-      ['bm-prompts', 'Jump to a prompt: opens the prompts pane, then type its number'],
-      ['bm-read', 'Reading position: go there, or back to where you were'],
-      ['bm-bookmarks', 'List the bookmarks of this conversation; type a number and Enter to jump'],
-      ['bm-promote', 'Promote a mark into a bookmark: /bm-promote a'],
-      ['bm-diag-keys', 'Diagnostics: log each keystroke in the input box (on | off | toggle)'],
-      ['bm-debug', 'Echo the plugin\'s log lines into this conversation as dim rows (on | off | status), or turn debug channels on (channels | enable | disable); off by default'],
-    ]
-    for (const [name, description] of commands) {
+    // The command table is core/commands.ts.
+    for (const [name, description] of COMMANDS) {
       await $.command.register({ name, description, immediate: true })
     }
 
@@ -1244,24 +1213,10 @@ export const register: Register = (on, options) => {
     } catch (err) {
       log($, `[bm] tool.register failed: ${String(err)}`, { always: true })
     }
-    try {
-      const reg = await loadRegister($)
-      log($, `[bm] register: ${reg.perma.length} bookmark(s), rev ${reg.rev}, ${await registerPath($)}`)
-      // Temporary bookmarks age out (a setting later, #7); each leaves a tombstone.
-      const { register: pruned, pruned: gone } = prune(reg, TEMPORARY_RETENTION, await $.clock.now())
-      if (gone.length > 0) {
-        await saveRegister($, pruned)
-        log($, `[bm] register: pruned ${gone.length} temporary bookmark(s) older than ${TEMPORARY_RETENTION}`)
-      }
-    } catch (err) {
-      log($, `[bm] register failed to load: ${String(err)}`, { always: true })
-    }
-
-    markCache.replace(await loadMarks($))
-    // Stamp selections as they change, so a stale one is ignored (freshSelection).
-    markState.stopPoll()
-    await pollSelection($)
-    markState.startPoll(() => $.clock.every(1000, () => void pollSelection($)))
+    // Each cluster's own part of a conversation's start: handlers/bookmarks.ts (the
+    // register), handlers/marks.ts (the marks and the selection poll).
+    await bookmarks_.startRegister(bookmarksPorts($))
+    await marks_.startMarks(marksPorts($))
     // Not awaited: session start should not wait on a third of a second of PowerShell.
     void pruneStoreNow($)
       .catch(err => log($, `[bm] store prune failed: ${String(err)}`))

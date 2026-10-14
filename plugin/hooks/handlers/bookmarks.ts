@@ -9,8 +9,8 @@ import {
   type AnchorOwner, type AnchorRecord,
 } from '../core/anchor.ts'
 import {
-  addOrRelabel, claim, emptyRegister, exportMarkdown, exportNotesOf, findRecord, listOf, parseRegister, remove, serializeRegister, share,
-  type Mint, type Register as BookmarkRegister,
+  addOrRelabel, claim, emptyRegister, exportMarkdown, exportNotesOf, findRecord, listOf, parseRegister, prune, remove, serializeRegister, share,
+  type Mint, type Register as BookmarkRegister, type Retention,
 } from '../core/register-file.ts'
 import { headOf } from '../core/transcript-lines.ts'
 import { short } from '../core/message-id.ts'
@@ -79,6 +79,27 @@ export async function saveRegister(ports: BookmarksPorts, reg: BookmarkRegister)
   if (await ports.fsExists(path)) await ports.fsWrite(`${path}.bak`, await ports.fsRead(path))
   await ports.fsWrite(path, serializeRegister({ ...reg, writer: `${ports.pluginName} ${await ports.pluginVersion()}` }))
   registerCache = { session: await ports.sessionId(), register: reg }
+}
+
+// How long a `temporary` bookmark is kept before it is pruned (to a tombstone). A
+// setting with the archive-retention picker (#7, #10); a constant until then.
+const TEMPORARY_RETENTION: Retention = '30d'
+
+// The register's part of a session start (moved out of register.tsx's session.start hook,
+// 0.4.67): load it, say where it is, and age out temporary bookmarks.
+export async function startRegister(ports: BookmarksPorts) {
+    try {
+      const reg = await loadRegister(ports)
+      ports.log(`[bm] register: ${reg.perma.length} bookmark(s), rev ${reg.rev}, ${await registerPath(ports)}`)
+      // Temporary bookmarks age out (a setting later, #7); each leaves a tombstone.
+      const { register: pruned, pruned: gone } = prune(reg, TEMPORARY_RETENTION, await ports.now())
+      if (gone.length > 0) {
+        await saveRegister(ports, pruned)
+        ports.log(`[bm] register: pruned ${gone.length} temporary bookmark(s) older than ${TEMPORARY_RETENTION}`)
+      }
+    } catch (err) {
+      ports.logAlways(`[bm] register failed to load: ${String(err)}`)
+    }
 }
 
 // Mint a bookmark: add or relabel the record, save the register, write the export, and
