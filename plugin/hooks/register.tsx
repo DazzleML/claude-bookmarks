@@ -1687,7 +1687,8 @@ export const register: Register = (on, options) => {
       const all = await prompts($)
       const kept = await keptFootnotes($)
       const footnoteMode = currentSettings().footnotes
-      // Pinned prompts: listed first, in the order pinned, and starred in the full list.
+      // Pinned prompts: listed first, in the order pinned, and starred in the full list
+      // (drawn by views/prompts-pane.tsx; the reads below stay here so a change redraws).
       await read($, pinsRev) // read so a pin toggle redraws the pane
       await read($, viewRev) // and so a scroll that moves the nearest prompt redraws it
       const pinIds = await loadPins($)
@@ -1701,6 +1702,8 @@ export const register: Register = (on, options) => {
       viewTracker.drewHere(here)
       // Centre the list on the nearest prompt once the rows below exist (set by
       // openFor). A timer, since a render hook may not scroll; by then the draw is done.
+      // (The rows are views/prompts-pane.tsx's; openFor is handlers/band.ts's and sets
+      // pendingCentre through its setPendingCentre port.)
       if (pendingCentre) {
         const target = pendingCentre
         pendingCentre = undefined

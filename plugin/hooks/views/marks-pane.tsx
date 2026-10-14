@@ -27,57 +27,57 @@ export function marksPaneView(elements: Elements, m: MarksPaneModel, a: MarksPan
   const { mode, marks } = m
   const LETTERS = m.letters
 
-    // mark / jump: the vim leg. One letter completes it.
-    const used = LETTERS.filter(l => marks[l])
-    const press = (l: string) => a.press(l)
+  // mark / jump: the vim leg. One letter completes it.
+  const used = LETTERS.filter(l => marks[l])
+  const press = (l: string) => a.press(l)
 
-    // Jump needs only the letters in use: one per line, `a: <text>`, so the pane can
-    // stay narrow (djdarcy, 2026-10-04, "collapsed any smaller").
-    if (mode === 'jump') {
-      // The reading position (Ctrl+X Space) heads the list (djdarcy, 2026-10-04). A hotkey
-      // must be a letter or digit, so it can't be pressed by ` or Space; instead the
-      // pane's focus starts on it, and Ctrl+X ' then Enter goes there.
-      const reading = marks[m.readingLetter]
-      return (
-        <Box flexDirection="column">
-          {used.length === 0 && !reading && <Text {...style('legend')}>No marks yet. Esc</Text>}
-          {reading && (
-            <Button
-              key="jump-reading"
-              label={`␣ reading: ${reading.head.slice(0, 32)}`}
-              plain
-              autoFocus
-              onPress={() => a.goToReading(reading)}
-            />
-          )}
-          {used.map(l => (
-            <Button key={`jump-${l}`} hotkey={l} label={(marks[l]?.head ?? '').slice(0, 40)} plain onPress={() => press(l)} />
-          ))}
-        </Box>
-      )
-    }
-
-    // Mark: any letter. Letters in use are drawn at full strength and listed below with
-    // their text, letter in bold (a Button has no bold), like vim's :marks; free
-    // letters are dim.
+  // Jump needs only the letters in use: one per line, `a: <text>`, so the pane can
+  // stay narrow (djdarcy, 2026-10-04, "collapsed any smaller").
+  if (mode === 'jump') {
+    // The reading position (Ctrl+X Space) heads the list (djdarcy, 2026-10-04). A hotkey
+    // must be a letter or digit, so it can't be pressed by ` or Space; instead the
+    // pane's focus starts on it, and Ctrl+X ' then Enter goes there.
+    const reading = marks[m.readingLetter]
     return (
       <Box flexDirection="column">
-        <Text {...style('legend')}>Mark as: (Esc)</Text>
-        <Box flexDirection="row" columnGap={1} flexWrap="wrap">
-          {LETTERS.map(l => (
-            // A Button takes no color (djdarcy asked for "slightly grayreddish"), and a
-            // non-plain `primary` one draws as a wider `[ a ]` that breaks the grid
-            // (screenshot, 2026-10-04). So a letter in use shows a dot, `a: ●`, at
-            // full strength; a free one shows itself, dim. Same width either way.
-            <Button key={`mark-${l}`} hotkey={l} label={marks[l] ? '●' : l} plain {...(marks[l] ? {} : buttonStyle('unused'))} onPress={() => press(l)} />
-          ))}
-        </Box>
-        {used.length === 0 && <Text {...style('legend')}>No marks in this session yet.</Text>}
+        {used.length === 0 && !reading && <Text {...style('legend')}>No marks yet. Esc</Text>}
+        {reading && (
+          <Button
+            key="jump-reading"
+            label={`␣ reading: ${reading.head.slice(0, 32)}`}
+            plain
+            autoFocus
+            onPress={() => a.goToReading(reading)}
+          />
+        )}
         {used.map(l => (
-          <Text wrap="truncate-end">
-            <Text {...style('emphasis')} {...style('used')}>{l}</Text> ▸ {marks[l]?.head}
-          </Text>
+          <Button key={`jump-${l}`} hotkey={l} label={(marks[l]?.head ?? '').slice(0, 40)} plain onPress={() => press(l)} />
         ))}
       </Box>
     )
+  }
+
+  // Mark: any letter. Letters in use are drawn at full strength and listed below with
+  // their text, letter in bold (a Button has no bold), like vim's :marks; free
+  // letters are dim.
+  return (
+    <Box flexDirection="column">
+      <Text {...style('legend')}>Mark as: (Esc)</Text>
+      <Box flexDirection="row" columnGap={1} flexWrap="wrap">
+        {LETTERS.map(l => (
+          // A Button takes no color (djdarcy asked for "slightly grayreddish"), and a
+          // non-plain `primary` one draws as a wider `[ a ]` that breaks the grid
+          // (screenshot, 2026-10-04). So a letter in use shows a dot, `a: ●`, at
+          // full strength; a free one shows itself, dim. Same width either way.
+          <Button key={`mark-${l}`} hotkey={l} label={marks[l] ? '●' : l} plain {...(marks[l] ? {} : buttonStyle('unused'))} onPress={() => press(l)} />
+        ))}
+      </Box>
+      {used.length === 0 && <Text {...style('legend')}>No marks in this session yet.</Text>}
+      {used.map(l => (
+        <Text wrap="truncate-end">
+          <Text {...style('emphasis')} {...style('used')}>{l}</Text> ▸ {marks[l]?.head}
+        </Text>
+      ))}
+    </Box>
+  )
 }

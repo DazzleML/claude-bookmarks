@@ -40,70 +40,71 @@ export function bookmarksPaneView(elements: Elements, m: BookmarksPaneModel, a: 
   const { all, fromBand, now } = m
   const BOOKMARK_GROUPS = m.groups
 
-      // Every bookmark of this conversation, numbered in the order minted (#1 the first,
-      // so a number stays good), listed newest first like the prompts. Digits typed in
-      // the band show in the `#` field and as a ▶; Enter jumps and highlights the words.
-      const numbered = numberNewestFirst(all)
-      const width = numberWidth(all.length)
-      const targetN = fromBand ? Number(fromBand) : undefined
-      const pointer = pointerFor(fromBand, targetN)
-      const go = (typed: string) => a.go(typed)
-      // One group at a time, one numbering across all of them. The band's h/l cycle the
-      // group; the header shows where you are.
-      const group = BOOKMARK_GROUPS[m.groupIndex] ?? BOOKMARK_GROUPS[0]!
-      const inGroup = (g: (typeof BOOKMARK_GROUPS)[number]) => (g.owner === 'all' ? numbered : numbered.filter(r => ownerOf(r) === g.owner))
-      const shownRows = inGroup(group)
-      const header = groupHeader(BOOKMARK_GROUPS, group, g => inGroup(g).length)
-      const who = (r: (typeof numbered)[number]) => bookmarkWho(r, now)
-      // Dim as the prompts pane dims: by the uuid's first four groups, since a drawn id
-      // differs in its last (refactor-advisor 2026-10-12 row 17: by exact id, every
-      // bookmark row was dim).
-      const drawnFour = drawnFourOf(m.drawn)
-      const row = (r: (typeof numbered)[number]) => {
-        const dim = unreached(drawnFour, r.uuid) && r.n !== targetN
-        return (
-          <Box key={`b-row-${r.uuid}-${ownerOf(r)}`} flexDirection="column">
-            <Box flexDirection="row">
-              <Box flexShrink={0}>
-                <Text {...(dim ? style('unreached') : {})}>{`${pointer(r.n)}${String(r.n).padStart(width)}) `}</Text>
-                {m.glyph && <Text {...style('pinned')}>⚓ </Text>}
-              </Box>
-              <Button
-                key={`b-${r.uuid}-${ownerOf(r)}`}
-                label={r.label}
-                plain
-                {...(dim ? buttonStyle('unreached') : {})}
-                onPress={() => a.arrive(r)}
-              />
-            </Box>
-            <Text {...style('legend')} wrap="truncate-end">
-              {`${' '.repeat(width + 4)}${who(r)}${r.why ? ` · ${r.why}` : ''}`}
-            </Text>
+  // Every bookmark of this conversation, numbered in the order minted (#1 the first,
+  // so a number stays good), listed newest first like the prompts. Digits typed in
+  // the band show in the `#` field and as a ▶; Enter jumps and highlights the words.
+  const numbered = numberNewestFirst(all)
+  const width = numberWidth(all.length)
+  const targetN = fromBand ? Number(fromBand) : undefined
+  const pointer = pointerFor(fromBand, targetN)
+  const go = (typed: string) => a.go(typed)
+  // One group at a time, one numbering across all of them. The band's h/l cycle the
+  // group; the header shows where you are. (h and l are the key table's defaults,
+  // core/keys.ts; the group index arrives in the model from the hook.)
+  const group = BOOKMARK_GROUPS[m.groupIndex] ?? BOOKMARK_GROUPS[0]!
+  const inGroup = (g: (typeof BOOKMARK_GROUPS)[number]) => (g.owner === 'all' ? numbered : numbered.filter(r => ownerOf(r) === g.owner))
+  const shownRows = inGroup(group)
+  const header = groupHeader(BOOKMARK_GROUPS, group, g => inGroup(g).length)
+  const who = (r: (typeof numbered)[number]) => bookmarkWho(r, now)
+  // Dim as the prompts pane dims: by the uuid's first four groups, since a drawn id
+  // differs in its last (refactor-advisor 2026-10-12 row 17: by exact id, every
+  // bookmark row was dim).
+  const drawnFour = drawnFourOf(m.drawn)
+  const row = (r: (typeof numbered)[number]) => {
+    const dim = unreached(drawnFour, r.uuid) && r.n !== targetN
+    return (
+      <Box key={`b-row-${r.uuid}-${ownerOf(r)}`} flexDirection="column">
+        <Box flexDirection="row">
+          <Box flexShrink={0}>
+            <Text {...(dim ? style('unreached') : {})}>{`${pointer(r.n)}${String(r.n).padStart(width)}) `}</Text>
+            {m.glyph && <Text {...style('pinned')}>⚓ </Text>}
           </Box>
-        )
-      }
-      return (
-        <Box flexDirection="column">
-          {numbered.length === 0 && <Text {...style('legend')}>No bookmarks yet. Claude mints them with its bookmark tool; P + a letter promotes one of your marks.</Text>}
-          {numbered.length > 0 && Input && (
-            <Input
-              key="bookmark-number"
-              label="#"
-              placeholder={`1-${all.length}`}
-              submitLabel="jump"
-              {...(fromBand !== undefined ? { value: fromBand } : {})}
-              autoFocus
-              onInput={(typed: string) => {
-                if (typed === 'q') return void a.close()
-                if (promptNumberComplete(typed, all.length)) void go(typed)
-              }}
-              onSubmit={(typed: string) => void go(typed)}
-            />
-          )}
-          {numbered.length > 0 && <Text>{header}</Text>}
-          {numbered.length > 0 && shownRows.length === 0 && <Text {...style('legend')}>{`No bookmarks in "${group.title}" yet.`}</Text>}
-          {shownRows.map(row)}
-          {numbered.length > 0 && <Text {...style('legend')}>{m.hint}</Text>}
+          <Button
+            key={`b-${r.uuid}-${ownerOf(r)}`}
+            label={r.label}
+            plain
+            {...(dim ? buttonStyle('unreached') : {})}
+            onPress={() => a.arrive(r)}
+          />
         </Box>
-      )
+        <Text {...style('legend')} wrap="truncate-end">
+          {`${' '.repeat(width + 4)}${who(r)}${r.why ? ` · ${r.why}` : ''}`}
+        </Text>
+      </Box>
+    )
+  }
+  return (
+    <Box flexDirection="column">
+      {numbered.length === 0 && <Text {...style('legend')}>No bookmarks yet. Claude mints them with its bookmark tool; P + a letter promotes one of your marks.</Text>}
+      {numbered.length > 0 && Input && (
+        <Input
+          key="bookmark-number"
+          label="#"
+          placeholder={`1-${all.length}`}
+          submitLabel="jump"
+          {...(fromBand !== undefined ? { value: fromBand } : {})}
+          autoFocus
+          onInput={(typed: string) => {
+            if (typed === 'q') return void a.close()
+            if (promptNumberComplete(typed, all.length)) void go(typed)
+          }}
+          onSubmit={(typed: string) => void go(typed)}
+        />
+      )}
+      {numbered.length > 0 && <Text>{header}</Text>}
+      {numbered.length > 0 && shownRows.length === 0 && <Text {...style('legend')}>{`No bookmarks in "${group.title}" yet.`}</Text>}
+      {shownRows.map(row)}
+      {numbered.length > 0 && <Text {...style('legend')}>{m.hint}</Text>}
+    </Box>
+  )
 }
