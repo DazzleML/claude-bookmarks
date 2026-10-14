@@ -15,7 +15,7 @@ import type { EngineInterface, Register, Timer } from 'claude-code'
 import type { PaneMode, Row } from '../types'
 import { describePathOrder } from './engine/select'
 import {
-  markLinks, markdownLinks, ownerOf, parseAnchor, tierOf,
+  markLinks, markdownLinks, parseAnchor, tierOf,
   type AnchorOwner, type MarkerStyle,
 } from './core/anchor'
 import { findRecord, type Register as BookmarkRegister } from './core/register-file'
@@ -26,7 +26,6 @@ import type { Cause } from './core/after-action'
 import { debugTextMode, installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
 import { resolvePalette, type Palette, type Role, type Style } from './core/palette'
 import { shard, withinBudget, type PromptText } from './core/text-store'
-import { filterPrompts, matchLegend } from './core/filter'
 import { pruneStore, type Seen } from './core/store-prune'
 import { footnoteOf, looksLikePrompt, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompt-rows'
 import { short } from './core/message-id'
@@ -35,10 +34,13 @@ import { configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, n
 import { colorSplit, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/highlight'
 import { ScreenModel } from './core/screen-model'
 import { MarkCache, deleteMarks, marksShowing, type Mark, type Marks } from './core/marks'
-import { footnoteAt, listPosition, nextGroup, promptEntry, promptNumberComplete } from './core/band-entry'
+import { footnoteAt, listPosition, nextGroup, promptEntry } from './core/band-entry'
 import { debugCommand } from './handlers/debug-command'
 import { anchoredReply, markedColumn, markedReply, type MarkStyles } from './views/marked-message'
 import { bandView } from './views/band'
+import { bookmarksPaneView } from './views/bookmarks-pane'
+import { marksPaneView } from './views/marks-pane'
+import { promptsPaneView } from './views/prompts-pane'
 import { configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
 import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, MarksPorts, NavigationPorts, ResolveOutcome, ViewPorts } from './engine/ports'
 import { closeAll as bandCloseAll, closePane as bandClosePane, endBandMode as bandEnd, paneFocused as bandPaneFocused, settle as bandSettle, BAND_MODE_MS, BAND_WATCH_MS, paneOf } from './handlers/band'
@@ -51,7 +53,6 @@ import { Navigation } from './handlers/navigation'
 import { ViewTracker } from './handlers/view-tracker'
 import { PanePosition } from './core/pane-position'
 import { BandState } from './core/band-state'
-import { age, bookmarkWho, drawnFourOf, foldedLabel, footnoteDisplay, footnotesByPrompt, groupHeader, numberLabel as numberLabelAt, numberNewestFirst, numberWidth, pinnedRowsOf, pointerFor, unreached } from './core/list-model'
 import { BOOKMARK_TOOL } from './core/bookmark-tool'
 import { COMMANDS } from './core/commands'
 import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptList, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, transcriptGuess, type PromptRef } from './core/prompt-store'
@@ -1677,70 +1678,21 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const elements = $.ui.resolve(e)
-    const { Box, Button, Text } = elements
-    // Every surface draws an Input except the mobile app (no fields yet).
-    const Input = 'Input' in elements ? elements.Input : undefined
     const mode = (await read($, paneMode)) as PaneMode
+    // The panes are drawn by views/prompts-pane.tsx, views/bookmarks-pane.tsx and
+    // views/marks-pane.tsx; what they read, and what touches the engine, is here.
+    const styles = { text: style, button: buttonStyle }
 
     if (mode === 'list') {
-      // Every prompt the mod knows, numbered in the order sent (#1 the first), listed
-      // newest first (djdarcy, 2026-10-04). The number is typed into a focused Input
-      // (djdarcy: "Ctrl-X p 21 <enter>"): it jumps on Enter, or at once when the digits
-      // typed can't become a larger prompt number (with 25 prompts, `3` jumps, `2`
-      // waits for 2x or Enter). A hotkey is one character, so it can't do this.
       const all = await prompts($)
-      const numbered = numberNewestFirst(all)
-      // The list's model (numbering, footnotes under their prompt, the pinned group, the
-      // pointer, the dim rule): core/list-model.ts. The rows are drawn here.
       const kept = await keptFootnotes($)
-      const byPrompt = footnotesByPrompt(all.map(p => p.uuid), kept)
       const footnoteMode = currentSettings().footnotes
-      const footnoteRows = (n: number) => {
-        const list = byPrompt.get(n)
-        const display = footnoteDisplay(footnoteMode, !!list, unfoldedFootnotes.has(n))
-        if (!list || display === 'none') return []
-        if (display === 'folded') {
-          return [
-            <Button key={`fn-fold-${n}`} label={foldedLabel(list.length)} plain {...buttonStyle('footnote')}
-              onPress={async () => { unfoldedFootnotes.add(n); await update($, viewRev, v => v + 1) }} />,
-          ]
-        }
-        const rows = list.map(({ f, k }) => (
-          <Button key={`fn-${f.uuid}`} label={`   ${n}.${k} ${f.label}`} plain {...buttonStyle('footnote')}
-            onPress={async () => {
-              await jumpTo($, f.uuid, 'prompts pane', `footnote ${n}.${k}`)
-              await settle($, 'list', 'row-press')
-            }} />
-        ))
-        // Folded by default and opened by hand: a row to fold them again (djdarcy,
-        // 2026-10-12: "a way to "recollapse" our "footnotes" ... after we open them").
-        if (display === 'open') return rows
-        return [
-          ...rows,
-          <Button key={`fn-refold-${n}`} label="      ▴ fold" plain {...buttonStyle('footnote')}
-            onPress={async () => { unfoldedFootnotes.delete(n); await update($, viewRev, v => v + 1) }} />,
-        ]
-      }
-      const width = numberWidth(all.length)
-      const numberLabel = (n: number) => numberLabelAt(n, width)
-      const go = (typed: string) => jumpToPromptNumber($, typed, 'prompts pane')
       // Pinned prompts: listed first, in the order pinned, and starred in the full list.
       await read($, pinsRev) // read so a pin toggle redraws the pane
       await read($, viewRev) // and so a scroll that moves the nearest prompt redraws it
-      const drawnFour = drawnFourOf(rendered.keys())
       const pinIds = await loadPins($)
-      const byUuid = new Map(numbered.map(r => [r.uuid, r]))
-      // The filter (#28): only the prompts matching `/words` in the field; numbers kept.
       const texts = await promptTexts($)
-      const filtered = filterPrompts(numbered, paneFilter, r => texts.get(r.uuid) ?? r.head)
-      const listed = new Set(filtered.shown.map(r => r.uuid))
-      const matchLine = matchLegend(filtered.shown.length, filtered.of, paneFilter)
-      const pinnedRows = pinnedRowsOf(pinIds, byUuid, listed)
-      const pinSet = new Set(pinIds)
-      type NumberedPrompt = (typeof numbered)[number]
       const fromBand = (await read($, bandMode)) === 'list' ? await read($, bandNum) : undefined
-      const targetN = fromBand ? Number(fromBand) : undefined
-      const pointer = pointerFor(fromBand, targetN)
       // The prompt nearest the view, drawn with its number in yellow (djdarcy, 2026-10-11:
       // "so the user knows roughly where they are" and can read what they were thinking
       // above and below). Redrawn on every render, so it follows the view while the pane
@@ -1766,153 +1718,50 @@ export const register: Register = (on, options) => {
         }
         attempt(0)
       }
-      const promptRow = (r: NumberedPrompt, group: string) => {
-        const isHere = r.uuid === here
-        const dim = unreached(drawnFour, r.uuid) && !isHere
-        const press = async () => {
-          await jumpTo($, r.uuid, 'prompts pane', `prompt #${r.n}`, r.head)
-          await settle($, 'list', 'row-press')
-        }
-        if (!pinSet.has(r.uuid) && !isHere) {
-          return <Button key={`${group}-${r.uuid}`} label={`${pointer(r.n)}${numberLabel(r.n)}${r.head}`} plain {...(dim && r.n !== targetN ? buttonStyle('unreached') : {})} onPress={press} />
-        }
-        // `245★) `: a gold star inside the number, so it reads as the row's marker, not
-        // part of the prompt (djdarcy, 2026-10-05, over a background band and a star
-        // before the number). A Button's label takes no colour at rest (2.1.289), so the
-        // number and star are Text beside the Button; flexShrink 0 keeps them from being
-        // squeezed to nothing next to a long label that wraps (seen in the look test).
-        // The nearest-to-view row uses the same shape with its number in yellow.
-        return (
-          <Box key={`${group}-row-${r.uuid}`} flexDirection="row">
-            <Box flexShrink={0}>
-              <Text {...(dim ? style('unreached') : {})} {...(isHere ? style('here') : {})}>{`${pointer(r.n)}${String(r.n).padStart(width)}`}</Text>
-              {pinSet.has(r.uuid) && <Text {...style('pinned')}>★</Text>}
-              <Text {...(dim ? style('unreached') : {})} {...(isHere ? style('here') : {})}>{') '}</Text>
-            </Box>
-            <Button key={`${group}-${r.uuid}`} label={r.head} plain {...(dim ? buttonStyle('unreached') : {})} onPress={press} />
-          </Box>
-        )
-      }
-      return (
-        <Box flexDirection="column">
-          {numbered.length === 0 && <Text {...style('legend')}>No prompts yet.</Text>}
-          {numbered.length > 0 && Input && (
-            <Input
-              key="prompt-number"
-              label="#"
-              placeholder={`1-${all.length}, or /words to filter`}
-              submitLabel="jump"
-              {...(fromBand !== undefined ? { value: fromBand } : {})}
-              autoFocus
-              onInput={(typed: string) => {
-                // `q` closes the pane, as in the band (Q261012-09).
-                if (typed === 'q') return void closeAll($, 'prompts pane')
-                // `/words` filters the list (#28); clearing the slash clears the filter.
-                const query = typed.startsWith('/') ? typed.slice(1) : ''
-                if (query !== paneFilter) {
-                  log($, `[bm] prompts filter: "${cut(query, 40)}"`, { text: true })
-                  paneFilter = query
-                  void update($, viewRev, v => v + 1)
-                  return
-                }
-                if (promptNumberComplete(typed, all.length)) void go(typed)
-              }}
-              onSubmit={(typed: string) => void go(typed)}
-            />
-          )}
-          {/* One by one through this list (djdarcy, 2026-10-04): the pane keeps the arrows
-              for scrolling, but Tab walks the focus ring down the Buttons below from the
-              newest, Shift+Tab back up, Enter jumps. A Select was tried: on the terminal
-              its arrows open a pop-up list of its own instead (screenshot, 2026-10-04). */}
-          {numbered.length > 0 && <Text {...style('legend')}>or Tab / Shift+Tab, Enter; *N pins</Text>}
-          {here && (
-            <Text {...style('legend')}>
-              <Text {...style('here')}>#N</Text> = nearest to your view
-            </Text>
-          )}
-          {matchLine && <Text {...style('legend')}>{`/${paneFilter}: ${matchLine}`}</Text>}
-          {pinnedRows.length > 0 && <Text {...style('legend')}>★ pinned</Text>}
-          {pinnedRows.map(r => promptRow(r, 'pin'))}
-          {pinnedRows.length > 0 && <Text {...style('legend')}>all prompts</Text>}
-          {numbered.filter(r => listed.has(r.uuid)).flatMap(r => [promptRow(r, 'p'), ...footnoteRows(r.n)])}
-          {footnoteRows(0)}
-        </Box>
+      return promptsPaneView(
+        elements,
+        { all, kept, footnoteMode, unfolded: unfoldedFootnotes, drawn: rendered.keys(), pinIds, texts, paneFilter, fromBand, here },
+        {
+          unfold: async n => { unfoldedFootnotes.add(n); await update($, viewRev, v => v + 1) },
+          refold: async n => { unfoldedFootnotes.delete(n); await update($, viewRev, v => v + 1) },
+          footnote: async (uuid, label) => {
+            await jumpTo($, uuid, 'prompts pane', label)
+            await settle($, 'list', 'row-press')
+          },
+          pressPrompt: async r => {
+            await jumpTo($, r.uuid, 'prompts pane', `prompt #${r.n}`, r.head)
+            await settle($, 'list', 'row-press')
+          },
+          go: typed => jumpToPromptNumber($, typed, 'prompts pane'),
+          close: () => closeAll($, 'prompts pane'),
+          setFilter: query => {
+            if (query === paneFilter) return false
+            log($, `[bm] prompts filter: "${cut(query, 40)}"`, { text: true })
+            paneFilter = query
+            void update($, viewRev, v => v + 1)
+            return true
+          },
+        },
+        styles,
       )
     }
 
     if (mode === 'bookmarks') {
-      // Every bookmark of this conversation, numbered in the order minted (#1 the first,
-      // so a number stays good), listed newest first like the prompts. Digits typed in
-      // the band show in the `#` field and as a ▶; Enter jumps and highlights the words.
       const all = await bookmarkList($)
-      const numbered = numberNewestFirst(all)
-      const width = numberWidth(all.length)
       const fromBand = (await read($, bandMode)) === 'bookmarks' ? await read($, bandNum) : undefined
-      const targetN = fromBand ? Number(fromBand) : undefined
-      const pointer = pointerFor(fromBand, targetN)
-      const go = (typed: string) => jumpToBookmarkNumber($, typed, 'bookmarks pane')
-      const now = Date.now()
-      // One group at a time, one numbering across all of them. The band's h/l cycle the
-      // group; the header shows where you are.
       const groupIndex = await read($, bandGroup)
-      const group = BOOKMARK_GROUPS[groupIndex] ?? BOOKMARK_GROUPS[0]!
-      const inGroup = (g: (typeof BOOKMARK_GROUPS)[number]) => (g.owner === 'all' ? numbered : numbered.filter(r => ownerOf(r) === g.owner))
-      const shownRows = inGroup(group)
-      const header = groupHeader(BOOKMARK_GROUPS, group, g => inGroup(g).length)
-      const who = (r: (typeof numbered)[number]) => bookmarkWho(r, now)
-      // Dim as the prompts pane dims: by the uuid's first four groups, since a drawn id
-      // differs in its last (refactor-advisor 2026-10-12 row 17: by exact id, every
-      // bookmark row was dim).
-      const drawnFour = drawnFourOf(rendered.keys())
-      const row = (r: (typeof numbered)[number]) => {
-        const dim = unreached(drawnFour, r.uuid) && r.n !== targetN
-        return (
-          <Box key={`b-row-${r.uuid}-${ownerOf(r)}`} flexDirection="column">
-            <Box flexDirection="row">
-              <Box flexShrink={0}>
-                <Text {...(dim ? style('unreached') : {})}>{`${pointer(r.n)}${String(r.n).padStart(width)}) `}</Text>
-                {LINK_MARKERS === 'glyph' && <Text {...style('pinned')}>⚓ </Text>}
-              </Box>
-              <Button
-                key={`b-${r.uuid}-${ownerOf(r)}`}
-                label={r.label}
-                plain
-                {...(dim ? buttonStyle('unreached') : {})}
-                onPress={async () => {
-                  await arriveAtBookmark($, r, 'bookmarks pane')
-                  await settle($, 'bookmarks', 'row-press')
-                }}
-              />
-            </Box>
-            <Text {...style('legend')} wrap="truncate-end">
-              {`${' '.repeat(width + 4)}${who(r)}${r.why ? ` · ${r.why}` : ''}`}
-            </Text>
-          </Box>
-        )
-      }
-      return (
-        <Box flexDirection="column">
-          {numbered.length === 0 && <Text {...style('legend')}>No bookmarks yet. Claude mints them with its bookmark tool; P + a letter promotes one of your marks.</Text>}
-          {numbered.length > 0 && Input && (
-            <Input
-              key="bookmark-number"
-              label="#"
-              placeholder={`1-${all.length}`}
-              submitLabel="jump"
-              {...(fromBand !== undefined ? { value: fromBand } : {})}
-              autoFocus
-              onInput={(typed: string) => {
-                if (typed === 'q') return void closeAll($, 'bookmarks pane')
-                if (promptNumberComplete(typed, all.length)) void go(typed)
-              }}
-              onSubmit={(typed: string) => void go(typed)}
-            />
-          )}
-          {numbered.length > 0 && <Text>{header}</Text>}
-          {numbered.length > 0 && shownRows.length === 0 && <Text {...style('legend')}>{`No bookmarks in "${group.title}" yet.`}</Text>}
-          {shownRows.map(row)}
-          {numbered.length > 0 && <Text {...style('legend')}>{listHint('bookmarks')}</Text>}
-        </Box>
+      return bookmarksPaneView(
+        elements,
+        { all, groups: BOOKMARK_GROUPS, groupIndex, fromBand, drawn: rendered.keys(), now: Date.now(), glyph: LINK_MARKERS === 'glyph', hint: listHint('bookmarks') },
+        {
+          arrive: async r => {
+            await arriveAtBookmark($, r, 'bookmarks pane')
+            await settle($, 'bookmarks', 'row-press')
+          },
+          go: typed => jumpToBookmarkNumber($, typed, 'bookmarks pane'),
+          close: () => closeAll($, 'bookmarks pane'),
+        },
+        styles,
       )
     }
 
@@ -1920,67 +1769,23 @@ export const register: Register = (on, options) => {
     // narrow request held or the engine has a minimum width.
     paneGeometry = `${e.props.placement}, ${e.props.bodyColumns} body columns`
 
-    // mark / jump: the vim leg. One letter completes it.
     const marks = await loadMarks($)
-    const used = LETTERS.filter(l => marks[l])
-    const press = async (l: string) => {
-      if (mode === 'mark') await setMark($, l)
-      else await jumpToMark($, l)
-      await settle($, mode, mode === 'mark' ? 'mark-set' : 'jump')
-      await restoreView($)
-    }
-
-    // Jump needs only the letters in use: one per line, `a: <text>`, so the pane can
-    // stay narrow (djdarcy, 2026-10-04, "collapsed any smaller").
-    if (mode === 'jump') {
-      // The reading position (Ctrl+X Space) heads the list (djdarcy, 2026-10-04). A hotkey
-      // must be a letter or digit, so it can't be pressed by ` or Space; instead the
-      // pane's focus starts on it, and Ctrl+X ' then Enter goes there.
-      const reading = marks[READING]
-      return (
-        <Box flexDirection="column">
-          {used.length === 0 && !reading && <Text {...style('legend')}>No marks yet. Esc</Text>}
-          {reading && (
-            <Button
-              key="jump-reading"
-              label={`␣ reading: ${reading.head.slice(0, 32)}`}
-              plain
-              autoFocus
-              onPress={async () => {
-                await goToReading($, reading, 'jump pane reading')
-                await settle($, mode, 'band-command')
-              }}
-            />
-          )}
-          {used.map(l => (
-            <Button key={`jump-${l}`} hotkey={l} label={(marks[l]?.head ?? '').slice(0, 40)} plain onPress={() => press(l)} />
-          ))}
-        </Box>
-      )
-    }
-
-    // Mark: any letter. Letters in use are drawn at full strength and listed below with
-    // their text, letter in bold (a Button has no bold), like vim's :marks; free
-    // letters are dim.
-    return (
-      <Box flexDirection="column">
-        <Text {...style('legend')}>Mark as: (Esc)</Text>
-        <Box flexDirection="row" columnGap={1} flexWrap="wrap">
-          {LETTERS.map(l => (
-            // A Button takes no color (djdarcy asked for "slightly grayreddish"), and a
-            // non-plain `primary` one draws as a wider `[ a ]` that breaks the grid
-            // (screenshot, 2026-10-04). So a letter in use shows a dot, `a: ●`, at
-            // full strength; a free one shows itself, dim. Same width either way.
-            <Button key={`mark-${l}`} hotkey={l} label={marks[l] ? '●' : l} plain {...(marks[l] ? {} : buttonStyle('unused'))} onPress={() => press(l)} />
-          ))}
-        </Box>
-        {used.length === 0 && <Text {...style('legend')}>No marks in this session yet.</Text>}
-        {used.map(l => (
-          <Text wrap="truncate-end">
-            <Text {...style('emphasis')} {...style('used')}>{l}</Text> ▸ {marks[l]?.head}
-          </Text>
-        ))}
-      </Box>
+    return marksPaneView(
+      elements,
+      { mode, marks, letters: LETTERS, readingLetter: READING },
+      {
+        press: async l => {
+          if (mode === 'mark') await setMark($, l)
+          else await jumpToMark($, l)
+          await settle($, mode, mode === 'mark' ? 'mark-set' : 'jump')
+          await restoreView($)
+        },
+        goToReading: async reading => {
+          await goToReading($, reading, 'jump pane reading')
+          await settle($, mode, 'band-command')
+        },
+      },
+      styles,
     )
   })
 }
