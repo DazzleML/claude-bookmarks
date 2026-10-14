@@ -223,7 +223,11 @@ export type CommandLinePorts = BandPorts & {
   jumplistMove: (dir: -1 | 1) => Promise<unknown>
 }
 
-// Ownership of shared state (notes/meta/2026-10-12__22-48-40, one owner, read-only ports):
+// Ownership of shared state (notes/meta/2026-10-12__22-48-40, one owner, read-only ports).
+// tests/core/ownership.test.ts checks it: the writers of BandState, MarkState and
+// MarkCache are called only from their owners' files (BandState's: handlers/band.ts and
+// the band's command line, handlers/command-line.ts), no handler or view imports
+// register.tsx, and every module-level variable in a handler is named below.
 //   state                                   owner                         readers
 //   screen (ScreenModel)                    register.tsx render hooks     view tracker (read-only Pick)
 //   lastScreenOrder, trustedScreen,         handlers/view-tracker.ts      --
