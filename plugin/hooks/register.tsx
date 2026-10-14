@@ -1338,8 +1338,8 @@ async function bandDot($: EngineInterface) {
 async function bandDigit($: EngineInterface, digit: string) {
   await band_.bandDigit(bandPorts($), digit)
 }
-async function bandStep($: EngineInterface, key: 'j' | 'k') {
-  await band_.bandStep(bandPorts($), key)
+async function bandStep($: EngineInterface, dir: -1 | 1) {
+  await band_.bandStep(bandPorts($), dir)
 }
 async function bandPin($: EngineInterface) {
   await band_.bandPin(bandPorts($))
@@ -1779,7 +1779,7 @@ export const register: Register = (on, options) => {
     if (e.origin.kind === 'person' && band.ring === 'band-num-go' && (await read($, bandMode)) === 'list' &&
         (e.element === 'band-num-k' || e.element === 'band-num-j')) {
       log($, `[bm] band arrow -> ${e.element === 'band-num-k' ? 'k (up)' : 'j (down)'}`)
-      await bandStep($, e.element === 'band-num-k' ? 'k' : 'j')
+      await bandStep($, e.element === 'band-num-k' ? -1 : 1)
       return next({ ...e, element: 'band-num-go' })
     }
     if (e.origin.kind === 'person' && e.element?.startsWith('chord-') && (await read($, bandMode)) === 'idle') {

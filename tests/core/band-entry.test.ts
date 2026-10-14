@@ -13,14 +13,15 @@ test('a number is complete when no further digit could name a prompt, and only i
   assert.equal(promptNumberComplete('3', 25), false) // the default waits for Enter
 })
 
-test('j and k: the first press lands on the newest; j goes older, k newer, clamped', () => {
-  assert.equal(stepNumber('', 10, 'j'), 10)
-  assert.equal(stepNumber('', 10, 'k'), 10)
-  assert.equal(stepNumber('5', 10, 'j'), 4)
-  assert.equal(stepNumber('5', 10, 'k'), 6)
-  assert.equal(stepNumber('1', 10, 'j'), 1)
-  assert.equal(stepNumber('10', 10, 'k'), 10)
-  assert.equal(stepNumber('abc', 10, 'j'), 10)
+// dir 1 is next (j by default), -1 previous (k): the key table's directions.
+test('next and previous: the first press lands on the newest; next goes older, previous newer, clamped', () => {
+  assert.equal(stepNumber('', 10, 1), 10)
+  assert.equal(stepNumber('', 10, -1), 10)
+  assert.equal(stepNumber('5', 10, 1), 4)
+  assert.equal(stepNumber('5', 10, -1), 6)
+  assert.equal(stepNumber('1', 10, 1), 1)
+  assert.equal(stepNumber('10', 10, -1), 10)
+  assert.equal(stepNumber('abc', 10, 1), 10)
 })
 
 test('a list position: in range, whole, trimmed; empty names the newest only when asked', () => {

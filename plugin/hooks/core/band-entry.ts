@@ -26,9 +26,11 @@ export function promptNumberComplete(typed: string, count: number, jumpsAt: 'ent
 // so the pane can't take the arrows (djdarcy, 2026-10-07: "the nice thing about the panel
 // is that you can scroll through the prompts 1 by 1"). The list is newest first: j moves
 // the ▶ down (older), k up (newer); the first press lands on the newest. Enter jumps.
-export function stepNumber(typed: string, count: number, key: 'j' | 'k'): number {
+// `dir` is the key table's (core/keys.ts): 1 is next (j by default), -1 previous (k), so
+// the key itself stays configurable; the number moves the other way, newest first.
+export function stepNumber(typed: string, count: number, dir: -1 | 1): number {
   const cur = Number(typed)
-  return !typed || !cur ? count : Math.min(count, Math.max(1, cur + (key === 'j' ? -1 : 1)))
+  return !typed || !cur ? count : Math.min(count, Math.max(1, cur - dir))
 }
 
 /** The 1-based list position a typed number names, if it names one; an empty entry names the newest when `emptyIsNewest`. */

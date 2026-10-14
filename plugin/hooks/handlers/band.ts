@@ -60,10 +60,10 @@ export async function showInPane(ports: BandPorts, n: number) {
 // so the pane can't take the arrows (djdarcy, 2026-10-07: "the nice thing about the panel
 // is that you can scroll through the prompts 1 by 1"). The list is newest first: j moves
 // the ▶ down (older), k up (newer); the first press lands on the newest. Enter jumps.
-export async function bandStep(ports: BandPorts, key: 'j' | 'k') {
+export async function bandStep(ports: BandPorts, dir: -1 | 1) {
   const count = await listCount(ports)
   if (count === 0) return
-  const n = stepNumber(await ports.bandNum(), count, key)
+  const n = stepNumber(await ports.bandNum(), count, dir)
   await ports.setBandNum(String(n))
   await showInPane(ports, n)
   keepBandWaiting(ports)
@@ -119,7 +119,7 @@ export async function bandNumberGo(ports: BandPorts) {
 // A list key pressed on the band's number row (its buttons come from LIST_KEYS).
 export async function bandListKey(ports: BandPorts, operation: Operation) {
   if (operation.op === 'close') return void (await closeAll(ports, 'band list'))
-  if (operation.op === 'step') await bandStep(ports, operation.dir === 1 ? 'j' : 'k')
+  if (operation.op === 'step') await bandStep(ports, operation.dir)
   else if (operation.op === 'pin') await bandPin(ports)
   else if (operation.op === 'group') await ports.groupStep(operation.dir)
   else if (operation.op === 'claim') await bandClaim(ports)
