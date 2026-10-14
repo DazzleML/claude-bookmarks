@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { footnoteAt, listPosition, nextGroup, promptEntry, promptNumberComplete, stepNumber } from '../../plugin/hooks/core/band-entry.ts'
+import { footnoteAt, listPosition, nextGroup, promptEntry, promptNumberComplete, stepNumber } from '../../plugin/hooks/core/band/band-entry.ts'
 
 test('a number is complete when no further digit could name a prompt, and only in the complete mode', () => {
   assert.equal(promptNumberComplete('3', 25, 'complete'), true)

@@ -105,7 +105,7 @@ export const FIELDS = {
   },
   // #33: the person's slash commands, `!` shell commands and interruptions, as N.k rows
   // under their prompt in the prompts list. The fold is the first ladder on the
-  // continuum (core/continuum.ts): hidden (-1) < folded (0) < shown (+1).
+  // continuum (core/kit/continuum.ts): hidden (-1) < folded (0) < shown (+1).
   footnotes: {
     kind: 'enum',
     values: ['folded', 'shown', 'hidden'],

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { BOOKMARK_TOOL, answer, brief, describe, listActedOn, listName, parseToolInput, tierFor } from '../../plugin/hooks/core/bookmark-tool.ts'
+import { BOOKMARK_TOOL, answer, brief, describe, listActedOn, listName, parseToolInput, tierFor } from '../../plugin/hooks/core/bookmarks/bookmark-tool.ts'
 
 test('the tool stays in front with every action and both lists in its schema', () => {
   assert.equal(BOOKMARK_TOOL.name, 'bookmark')

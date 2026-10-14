@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, parseDebugArgs, selectionKind, settingsRows } from '../../plugin/hooks/core/diagnostics.ts'
+import { configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, parseDebugArgs, selectionKind, settingsRows } from '../../plugin/hooks/core/log/diagnostics.ts'
 
 test('a keystroke\'s label: modifiers, char or the key name, paste without a key', () => {
   assert.equal(keyLabel({ key: 'a' }), 'char')

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { filterPrompts, matchLegend, matches, queryWords } from '../../plugin/hooks/core/filter.ts'
+import { filterPrompts, matchLegend, matches, queryWords } from '../../plugin/hooks/core/prompts/filter.ts'
 
 const rows = [
   { n: 1, text: 'Set up the plugin and its Band' },

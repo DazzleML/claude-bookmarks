@@ -17,20 +17,20 @@ type Owner = { state: string; receivers: readonly string[]; writers: readonly st
 // The table, as data. `files` are relative to plugin/hooks.
 const OWNERS: readonly Owner[] = [
   {
-    state: 'BandState (core/band-state.ts)',
+    state: 'BandState (core/band/band-state.ts)',
     receivers: ['ports.band'],
     writers: ['restartWait', 'stopWaiting', 'startWatch', 'stopWatching', 'ended', 'newConversation', 'ringMoved', 'drawn', 'oweReminder'],
     // The band cluster, its command line included.
     files: ['handlers/band.ts', 'handlers/command-line.ts'],
   },
   {
-    state: 'MarkState (core/mark-state.ts)',
+    state: 'MarkState (core/marks/mark-state.ts)',
     receivers: ['ports.state'],
     writers: ['restartClear', 'stopClear', 'setAtChord', 'takeAtChord', 'see', 'stopPoll', 'startPoll', 'newConversation'],
     files: ['handlers/marks.ts'],
   },
   {
-    state: 'MarkCache (core/marks.ts)',
+    state: 'MarkCache (core/marks/marks.ts)',
     receivers: ['ports.markCache'],
     writers: ['replace', 'showTransient'],
     // replace: the marks; showTransient: a bookmark's highlight.

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { exchangeIndex, looksLikeRedraw, pickViewAnchor, promptNearView, type ScreenReport, type VisibleMessage } from '../../plugin/hooks/core/view-position.ts'
+import { exchangeIndex, looksLikeRedraw, pickViewAnchor, promptNearView, type ScreenReport, type VisibleMessage } from '../../plugin/hooks/core/prompts/view-position.ts'
 
 // Five prompts p0..p4, each followed by one reply r0..r4. Order: p_i = i*1000, r_i = i*1000+1.
 const prompts = ['p0', 'p1', 'p2', 'p3', 'p4']

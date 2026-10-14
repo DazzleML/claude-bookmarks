@@ -1,7 +1,7 @@
 // The marks' pure parts (the census's marks cluster; the seventh move of the register.tsx
 // split, Q261012-06), moved from register.tsx under /move-code, comments as they were. The
 // store reads and writes, the highlight timer and the pane stay there.
-import { sameMessage } from './message-id.ts'
+import { sameMessage } from '../kit/message-id.ts'
 
 // `snippet`: the selection's first line exactly as selected, for highlighting.
 export type Mark = { uuid: string; head: string; markedAt: number; source?: 'selection' | 'latest' | 'screen'; snippet?: string }

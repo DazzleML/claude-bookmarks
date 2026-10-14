@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { PanePosition } from '../../plugin/hooks/core/pane-position.ts'
+import { PanePosition } from '../../plugin/hooks/core/kit/pane-position.ts'
 
 test('after a pane: the view before it, with its edge, and cleared once read', () => {
   const p = new PanePosition()

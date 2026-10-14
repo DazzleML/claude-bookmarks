@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { colorSplit, plainMarkdown, snippetOf, tagMarksMarkdown, tagMarksPlain } from '../../plugin/hooks/core/highlight.ts'
+import { colorSplit, plainMarkdown, snippetOf, tagMarksMarkdown, tagMarksPlain } from '../../plugin/hooks/core/marks/highlight.ts'
 
 test('snippetOf: the first non-blank line, trimmed, at most 120 characters', () => {
   assert.equal(snippetOf('\n\n  the words  \nmore'), 'the words')

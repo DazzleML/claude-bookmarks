@@ -17,24 +17,24 @@ import { describePathOrder } from './engine/select'
 import {
   markLinks, markdownLinks, parseAnchor, tierOf,
   type AnchorOwner, type MarkerStyle,
-} from './core/anchor'
-import { findRecord, type Register as BookmarkRegister } from './core/register-file'
-import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution } from './core/transcript-lines'
-import { excerpt, formatDebugEnv, parseDebugEnv, quotesText, screenMirror, type Channel } from './core/debug'
-import { bandButtons, helpLines, helpShort, listHint, listKeysFor, route, type Chord, type Operation, type Pane } from './core/keys'
-import type { Cause } from './core/after-action'
+} from './core/bookmarks/anchor'
+import { findRecord, type Register as BookmarkRegister } from './core/bookmarks/register-file'
+import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution } from './core/bookmarks/transcript-lines'
+import { excerpt, formatDebugEnv, parseDebugEnv, quotesText, screenMirror, type Channel } from './core/log/debug'
+import { bandButtons, helpLines, helpShort, listHint, listKeysFor, route, type Chord, type Operation, type Pane } from './core/band/keys'
+import type { Cause } from './core/band/after-action'
 import { debugTextMode, installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
 import { resolvePalette, type Palette, type Role, type Style } from './core/palette'
-import { shard, withinBudget, type PromptText } from './core/text-store'
+import { shard, withinBudget, type PromptText } from './core/prompts/text-store'
 import { pruneStore, type Seen } from './core/store-prune'
-import { footnoteOf, looksLikePrompt, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompt-rows'
-import { short } from './core/message-id'
-import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFile, stamped, type EchoPolicy } from './core/log-ring'
-import { configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, selectionKind, settingsRows } from './core/diagnostics'
-import { colorSplit, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/highlight'
-import { ScreenModel } from './core/screen-model'
-import { MarkCache, deleteMarks, marksShowing, type Mark, type Marks } from './core/marks'
-import { footnoteAt, listPosition, nextGroup, promptEntry } from './core/band-entry'
+import { footnoteOf, looksLikePrompt, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
+import { short } from './core/kit/message-id'
+import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFile, stamped, type EchoPolicy } from './core/log/log-ring'
+import { configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, selectionKind, settingsRows } from './core/log/diagnostics'
+import { colorSplit, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/marks/highlight'
+import { ScreenModel } from './core/kit/screen-model'
+import { MarkCache, deleteMarks, marksShowing, type Mark, type Marks } from './core/marks/marks'
+import { footnoteAt, listPosition, nextGroup, promptEntry } from './core/band/band-entry'
 import { debugCommand } from './handlers/debug-command'
 import { anchoredReply, markedColumn, markedReply, type MarkStyles } from './views/marked-message'
 import { bandView } from './views/band'
@@ -48,14 +48,14 @@ import * as band_ from './handlers/band'
 import * as commandLine from './handlers/command-line'
 import * as marks_ from './handlers/marks'
 import * as bookmarks_ from './handlers/bookmarks'
-import { MarkState } from './core/mark-state'
+import { MarkState } from './core/marks/mark-state'
 import { Navigation } from './handlers/navigation'
 import { ViewTracker } from './handlers/view-tracker'
-import { PanePosition } from './core/pane-position'
-import { BandState } from './core/band-state'
-import { BOOKMARK_TOOL } from './core/bookmark-tool'
-import { COMMANDS } from './core/commands'
-import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptList, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, transcriptGuess, type PromptRef } from './core/prompt-store'
+import { PanePosition } from './core/kit/pane-position'
+import { BandState } from './core/band/band-state'
+import { BOOKMARK_TOOL } from './core/bookmarks/bookmark-tool'
+import { COMMANDS } from './core/band/commands'
+import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptList, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, transcriptGuess, type PromptRef } from './core/prompts/prompt-store'
 
 
 // The plugin's settings as they stand: the person's /config values (the `userConfig` in
@@ -123,14 +123,14 @@ const BOOKMARK_GROUPS: { owner: AnchorOwner | 'all'; title: string }[] = [
 ]
 
 
-// What is on screen, and when the plugin itself last caused a redraw: core/screen-model.ts.
+// What is on screen, and when the plugin itself last caused a redraw: core/kit/screen-model.ts.
 const screen = new ScreenModel()
 function expectRedraw(why: string) {
   screen.expectRedraw(why, Date.now())
 }
 
 // The marks cluster (the highlight, setting a mark, the reading position, jumping to a
-// mark) is handlers/marks.ts; its own state is core/mark-state.ts MarkState.
+// mark) is handlers/marks.ts; its own state is core/marks/mark-state.ts MarkState.
 const markState = new MarkState()
 async function showMark($: EngineInterface, letter: string, text: string) {
   await marks_.showMark(marksPorts($), letter, text)
@@ -141,7 +141,7 @@ async function clearShown($: EngineInterface) {
 
 // The session's marks, kept in memory so render hooks can read them without a store
 // call per row. Loaded at session.start and refreshed on every mark write.
-// (core/marks.ts MarkCache: `replace` and `showTransient` are its only writers.)
+// (core/marks/marks.ts MarkCache: `replace` and `showTransient` are its only writers.)
 const markCache = new MarkCache()
 function marksPorts($: EngineInterface): MarksPorts {
   return {
@@ -202,11 +202,11 @@ const style = (role: Role): Style => palette()[role]
 // A Button's label can't be coloured at rest (docs/engine-quirks.md): only its dimness.
 const buttonStyle = (role: Role): { dimColor?: boolean } => (style(role).dimColor ? { dimColor: true } : {})
 
-// Where the marked line sits in a message, and the bold «a» form: core/highlight.ts. How
+// Where the marked line sits in a message, and the bold «a» form: core/marks/highlight.ts. How
 // it is drawn: views/marked-message.tsx, with these two palette roles.
 const markStyles = (): MarkStyles => ({ band: style('markBand'), mark: style('mark') })
 
-// The shown mark, if it is on this row (core/marks.ts marksShowing), from the cache.
+// The shown mark, if it is on this row (core/marks/marks.ts marksShowing), from the cache.
 function marksOnRow(requestId: string, showing: string | undefined): [string, Mark][] {
   return marksShowing(markCache.all, requestId, showing)
 }
@@ -216,7 +216,7 @@ function marksOnRow(requestId: string, showing: string | undefined): [string, Ma
 // "never drawn since load" (a jump target Claude Code may refuse) means what it says.
 const rendered = new Map<string, string>()
 
-// A message's on-screen report (core/screen-model.ts noteMessage: which ids count, what is news).
+// A message's on-screen report (core/kit/screen-model.ts noteMessage: which ids count, what is news).
 function noteOnScreen(requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
   screen.noteMessage(requestId, onScreen, Date.now())
 }
@@ -251,7 +251,7 @@ async function flushScreen($: EngineInterface) {
   await $.fs.write(path, screenLines.items.join('\n') + '\n')
 }
 
-// A non-message row's report dates the latest burst (core/screen-model.ts noteOther).
+// A non-message row's report dates the latest burst (core/kit/screen-model.ts noteOther).
 function noteOtherOnScreen(requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
   screen.noteOther(requestId, onScreen, Date.now())
 }
@@ -323,7 +323,7 @@ async function echoStateLine($: EngineInterface): Promise<string> {
   return describeEcho(await echoPolicy($), await sessionEchoChoice($))
 }
 
-// Debug channels (#35, core/debug.ts): this conversation's choice, read from its
+// Debug channels (#35, core/log/debug.ts): this conversation's choice, read from its
 // environment once and kept here so a check is synchronous (a render hook and note()
 // cannot await). Until it is read, every channel is off, the safe side.
 const channelsOn = new Set<Channel>()
@@ -450,7 +450,7 @@ async function flushLog($: EngineInterface) {
   if (logPath) await $.fs.write(logPath, logLines.items.join('\n') + '\n')
 }
 
-// Mark and Marks: core/marks.ts.
+// Mark and Marks: core/marks/marks.ts.
 
 // This plugin's own version, from its manifest (the one Claude Code installs by).
 async function pluginVersion($: EngineInterface): Promise<string> {
@@ -470,7 +470,7 @@ async function allRows($: EngineInterface): Promise<Row[]> {
 // empty when the session restarts, so every prompt is also kept in $.store under the
 // session id (djdarcy, 2026-10-04: number prompts from the first message). Prompts sent
 // before the mod was loaded are not known: reading them needs the transcript (#6).
-// The keys, the merge and the list's filter: core/prompt-store.ts.
+// The keys, the merge and the list's filter: core/prompts/prompt-store.ts.
 async function promptsKey($: EngineInterface): Promise<string> {
   return promptsKeyOf(await $.session.id())
 }
@@ -478,7 +478,7 @@ async function keptPrompts($: EngineInterface): Promise<PromptRef[]> {
   return ((await $.store.get(await promptsKey($))) as PromptRef[] | undefined) ?? []
 }
 // Footnotes (#33): the person's slash commands, `!` shell commands and interruptions,
-// each kept with the prompt it follows (core/prompt-rows.ts footnoteOf); numbered N.k at
+// each kept with the prompt it follows (core/prompts/prompt-rows.ts footnoteOf); numbered N.k at
 // draw time from the prompts' order.
 async function footnotesKey($: EngineInterface): Promise<string> {
   return footnotesKeyOf(await $.session.id())
@@ -488,7 +488,7 @@ async function keptFootnotes($: EngineInterface): Promise<FootnoteRef[]> {
 }
 
 // The prompts' text for the filter (#28): held in memory while the plugin runs, kept as
-// much as the `promptTextBudget` setting allows (0 = unlimited; core/text-store.ts) in
+// much as the `promptTextBudget` setting allows (0 = unlimited; core/prompts/text-store.ts) in
 // files under the data root, <dataRoot>/bookmarks/prompttext/<sid>.json (the piece
 // count) and <sid>.<i>.json (pieces under the 4 MiB that $.fs.read takes). Not in the
 // plugin store: its 4 MiB is for the whole store, every conversation's marks and pins
@@ -573,7 +573,7 @@ async function keepPrompt($: EngineInterface, p: PromptRef) {
 // measurement in tests/one-offs/thinking/prompt-history/ (2026-10-04: 152/152 prompts,
 // identical text; ~1 MB of output; 328 ms PowerShell, 81 ms sh + grep). Runs once per
 // conversation; after that the live capture keeps the list current.
-// Which rows are prompts, and the words of a queued one: core/prompt-rows.ts (tested),
+// Which rows are prompts, and the words of a queued one: core/prompts/prompt-rows.ts (tested),
 // shared by the transcript back-fill below and the live capture in session.append.
 
 // The PowerShell fallbacks are scripts shipped with the plugin (hooks/scripts/*.ps1),
@@ -760,7 +760,7 @@ async function backfillPrompts($: EngineInterface) {
 const AUTOMATED_ORIGINS = new Set(['task-notification', 'scheduled-trigger', 'peer-send-message', 'coordinator', 'observer', 'observer-activity', 'auto-continuation', 'projects-relay', 'channel'])
 
 // The stored prompts that are prompts, then the rows captured live this session that the
-// store lacks (core/prompt-store.ts promptList). Rows kept before the list knew them for
+// store lacks (core/prompts/prompt-store.ts promptList). Rows kept before the list knew them for
 // notices drop out, so the numbers match the transcript's; a `<task-notification>` row
 // the rebuild dropped once came back as the newest prompt and sent the yellow row to the
 // bottom (djdarcy, 2026-10-11: scrolling up from #325 moved it to #342).
@@ -858,7 +858,7 @@ async function jumpTo($: EngineInterface, uuid: string, via: string, label: stri
   return navigation.jumpTo(navPorts($), uuid, via, label, words, probe, block)
 }
 
-// Where the view was before a pane opened, and where it goes back to: core/pane-position.ts
+// Where the view was before a pane opened, and where it goes back to: core/kit/pane-position.ts
 // (the three fields and their writers, each a named method).
 const panePosition = new PanePosition()
 async function restoreView($: EngineInterface) {
@@ -937,7 +937,7 @@ async function handOff($: EngineInterface, mode: PaneMode, focusKey?: string) {
 }
 
 // The band's own state -- its wait and watch timers, the focus ring, its requestId, the
-// Esc reminder -- is core/band-state.ts BandState, written only through its named methods.
+// Esc reminder -- is core/band/band-state.ts BandState, written only through its named methods.
 const band = new BandState()
 async function runCommandLine($: EngineInterface, typed: string, via: 'input' | 'submit') {
   await sameConversation($)
@@ -1034,7 +1034,7 @@ async function togglePin($: EngineInterface, typed: string): Promise<boolean> {
   return true
 }
 
-// What the entry means (pin, filter, unfold, footnote, jump): core/band-entry.ts promptEntry.
+// What the entry means (pin, filter, unfold, footnote, jump): core/band/band-entry.ts promptEntry.
 async function jumpToPromptNumber($: EngineInterface, typed: string, via: string) {
   const all = await prompts($)
   const entry = promptEntry(typed, all.length)
@@ -1265,12 +1265,12 @@ export const register: Register = (on, options) => {
       const theme = rows.find(r => r.key === 'theme')?.value
       if (typeof theme === 'string') themeName = theme
     }).catch(() => {})
-    // The command table is core/commands.ts.
+    // The command table is core/band/commands.ts.
     for (const [name, description] of COMMANDS) {
       await $.command.register({ name, description, immediate: true })
     }
 
-    // The model's tool: what it takes and how it answers is core/bookmark-tool.ts.
+    // The model's tool: what it takes and how it answers is core/bookmarks/bookmark-tool.ts.
     try {
       const t = await $.tool.register(BOOKMARK_TOOL)
       log($, `[bm] tool registered: ${t.tool}`)
@@ -1428,7 +1428,7 @@ export const register: Register = (on, options) => {
     // a scheduled firing, another session's message, a coordinator or observer: none is a
     // prompt (djdarcy, 2026-10-12: the list shows "genuine user inputs, full stop"). A
     // notice queued into a running turn is stamped `engine`, as the person's own queued
-    // message is; its text tells them apart (NOT_A_PROMPT, core/prompt-rows.ts).
+    // message is; its text tells them apart (NOT_A_PROMPT, core/prompts/prompt-rows.ts).
     const automated = AUTOMATED_ORIGINS.has(e.origin.kind)
     if (!automated && (queued || (!e.agentId && isWanted && !e.message.isMeta))) {
       const raw = e.message.content.map(block => (block.type === 'text' ? block.text : '')).join(' ')
@@ -1632,7 +1632,7 @@ export const register: Register = (on, options) => {
     return {}
   })
 
-  // /bm-delmarks: what it deletes is core/marks.ts deleteMarks (vim's :delmarks).
+  // /bm-delmarks: what it deletes is core/marks/marks.ts deleteMarks (vim's :delmarks).
   on('command.run', { command: 'bm-delmarks' }, async ($, e) => {
     const { letters, gone, missing, kept } = deleteMarks(await loadMarks($), e.args, LETTERS)
     if (letters.length === 0) {

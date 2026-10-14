@@ -5,14 +5,14 @@
 // palette's two lookups; the numbering, filtering and rows are worked out here. Local
 // names follow the hook's, so the JSX reads as it did there.
 import type { EngineInterface } from 'claude-code'
-import { filterPrompts, matchLegend } from '../core/filter.ts'
-import { promptNumberComplete } from '../core/band-entry.ts'
+import { filterPrompts, matchLegend } from '../core/prompts/filter.ts'
+import { promptNumberComplete } from '../core/band/band-entry.ts'
 import {
   drawnFourOf, footnoteDisplay, footnotesByPrompt, foldedLabel, numberLabel as numberLabelAt, numberNewestFirst, numberWidth,
   pinnedRowsOf, pointerFor, unreached, type FootnoteMode,
-} from '../core/list-model.ts'
-import type { FootnoteRef } from '../core/prompt-rows.ts'
-import type { PromptRef } from '../core/prompt-store.ts'
+} from '../core/prompts/list-model.ts'
+import type { FootnoteRef } from '../core/prompts/prompt-rows.ts'
+import type { PromptRef } from '../core/prompts/prompt-store.ts'
 import type { Role, Style } from '../core/palette.ts'
 
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
@@ -65,7 +65,7 @@ export function promptsPaneView(elements: Elements, m: PromptsPaneModel, a: Prom
   // waits for 2x or Enter). A hotkey is one character, so it can't do this.
   const numbered = numberNewestFirst(all)
   // The list's model (numbering, footnotes under their prompt, the pinned group, the
-  // pointer, the dim rule): core/list-model.ts. The rows are drawn here.
+  // pointer, the dim rule): core/prompts/list-model.ts. The rows are drawn here.
   const byPrompt = footnotesByPrompt(all.map(p => p.uuid), kept)
   const footnoteRows = (n: number) => {
     const list = byPrompt.get(n)

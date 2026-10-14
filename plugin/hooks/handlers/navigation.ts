@@ -4,8 +4,8 @@
 // `$` or a register.tsx function). It owns the jumplist's cache and its walking flag
 // (the one-owner principle, notes/meta/2026-10-12__22-48-40); the pane position is the
 // PanePosition class's, reached through two ports.
-import { searchPhrase } from '../core/marks.ts'
-import { sameMessage, short } from '../core/message-id.ts'
+import { searchPhrase } from '../core/marks/marks.ts'
+import { sameMessage, short } from '../core/kit/message-id.ts'
 import type { NavigationPorts } from '../engine/ports.ts'
 
 // --- Jumplist: back and forward over every jump (vim's Ctrl+O / Ctrl+I) ------------------

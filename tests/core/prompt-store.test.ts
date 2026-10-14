@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { appendOnce, backfillLine, backfilledKey, footnotesKey, mergeBackfill, parseBackfill, promptList, promptTextBase, promptsKey, transcriptGuess } from '../../plugin/hooks/core/prompt-store.ts'
+import { appendOnce, backfillLine, backfilledKey, footnotesKey, mergeBackfill, parseBackfill, promptList, promptTextBase, promptsKey, transcriptGuess } from '../../plugin/hooks/core/prompts/prompt-store.ts'
 
 const row = (uuid: string, text: string, extra: Record<string, unknown> = {}) => JSON.stringify({ type: 'user', uuid, message: { role: 'user', content: text }, ...extra })
 

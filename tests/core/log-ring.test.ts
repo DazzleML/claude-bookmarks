@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFile, stamped } from '../../plugin/hooks/core/log-ring.ts'
+import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFile, stamped } from '../../plugin/hooks/core/log/log-ring.ts'
 
 test('a ring keeps the newest cap items, oldest first', () => {
   const r = new Ring<number>(3)

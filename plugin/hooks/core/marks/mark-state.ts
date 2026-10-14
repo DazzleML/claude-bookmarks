@@ -1,5 +1,5 @@
 // The marks cluster's own state (handlers/marks.ts), one owner with named writers, as
-// core/band-state.ts is for the band (notes/meta/2026-10-12__22-48-40):
+// core/band/band-state.ts is for the band (notes/meta/2026-10-12__22-48-40):
 //   - the highlight's clear timer (a mark shown clears after HIGHLIGHT_MS);
 //   - the selection as it stood when the mark chord fired;
 //   - when the current selection was first seen, and the poll that stamps it.

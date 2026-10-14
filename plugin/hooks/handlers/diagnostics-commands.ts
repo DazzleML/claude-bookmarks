@@ -2,10 +2,10 @@
 // option (b); refactor-advisor 2026-10-12 row 2's "one // Diagnostics block"): /bm-ids,
 // /bm-marks, /bm-sel, /bm-timeline, /bm-config, /bm-env. Moved under /move-code, comments
 // as they were; `ports.x(...)` where a handler called `$` or a register.tsx function. Their
-// decisions and formats are core/diagnostics.ts. Location provisional (Q261012-11).
-import { configListedLine, dccLine, idsReport, notAppliedLine, selectionKind, settingsRows } from '../core/diagnostics.ts'
-import { clock } from '../core/log-ring.ts'
-import { short } from '../core/message-id.ts'
+// decisions and formats are core/log/diagnostics.ts. Location provisional (Q261012-11).
+import { configListedLine, dccLine, idsReport, notAppliedLine, selectionKind, settingsRows } from '../core/log/diagnostics.ts'
+import { clock } from '../core/log/log-ring.ts'
+import { short } from '../core/kit/message-id.ts'
 import { debugTextMode } from '../core/settings.ts'
 import { describePathOrder } from '../engine/select.ts'
 import type { DiagnosticsPorts } from '../engine/ports.ts'
@@ -77,6 +77,6 @@ export async function envCommand(ports: DiagnosticsPorts): Promise<void> {
       describePathOrder(),
     true,
   )
-  // dcc-patcher's build signal (core/diagnostics.ts, dccLine).
+  // dcc-patcher's build signal (core/log/diagnostics.ts, dccLine).
   ports.log(dccLine(await ports.dccPatcher(), await ports.dccPatchH(), await ports.dccPatches(), await ports.echoState()), true)
 }

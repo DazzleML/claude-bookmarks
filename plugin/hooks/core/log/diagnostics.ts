@@ -2,7 +2,7 @@
 // move of the register.tsx split, Q261012-06): what the /bm-* diagnostic commands decide
 // and say. register.tsx's handlers keep only the engine reads (the state, the selection,
 // the environment) and the log calls.
-import { firstFour, short } from './message-id.ts'
+import { firstFour, short } from '../kit/message-id.ts'
 
 /** A keystroke for the keystroke log (/bm-diag-keys): modifiers, then `char` for a printable key or the key's own name; a paste or a burst carries no key. */
 export function keyLabel(key: { ctrl?: boolean; meta?: boolean; shift?: boolean; key: string } | undefined): string {

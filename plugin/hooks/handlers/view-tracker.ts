@@ -8,9 +8,9 @@
 // order, the trusted set, the rule that held the yellow row, and the row last drawn yellow.
 // The one write from outside -- the prompts pane recording what it drew -- is a named
 // method, `drewHere`. The screen model is read, never written, from here.
-import { byFirstFour, firstFour, short } from '../core/message-id.ts'
-import type { ScreenModel } from '../core/screen-model.ts'
-import { exchangeIndex, looksLikeRedraw, pickViewAnchor, promptNearView } from '../core/view-position.ts'
+import { byFirstFour, firstFour, short } from '../core/kit/message-id.ts'
+import type { ScreenModel } from '../core/kit/screen-model.ts'
+import { exchangeIndex, looksLikeRedraw, pickViewAnchor, promptNearView } from '../core/prompts/view-position.ts'
 import type { ViewPorts } from '../engine/ports.ts'
 
 const VIEW_MOVED_MS = 150
@@ -89,7 +89,7 @@ export class ViewTracker {
   // The prompt the person is nearest to, for the prompts pane: the earliest prompt on
   // screen, else the last prompt at or above the top of the screen (djdarcy, 2026-10-11:
   // between two prompts, the higher one, "so the person has more context"). The rule is
-  // core/view-position.ts; this gathers its inputs.
+  // core/prompts/view-position.ts; this gathers its inputs.
   async promptHere(ports: ViewPorts): Promise<string | undefined> {
     const top = await this.topOnScreen(ports)
     const order = await this.conversationOrder(ports)
@@ -113,7 +113,7 @@ export class ViewTracker {
     // the real screen set (2026-10-11 20:50: a 39-line reply from an hour earlier was the
     // only fresh report while the person read five exchanges later; the yellow jumped from
     // #323 to #316). The engine gives a mod no view event to check against, so the shape
-    // decides (core/view-position.ts looksLikeRedraw): whole-range reports, none in the
+    // decides (core/prompts/view-position.ts looksLikeRedraw): whole-range reports, none in the
     // trusted set, all far from where the person was -> keep the trusted set and answer.
     const promptOrders = ids.map(u => order.get(u))
     const exchangeOfId = (id: string) => {
@@ -192,7 +192,7 @@ export class ViewTracker {
   // line shows (at the bottom of the conversation, that is exactly Ctrl+End), else the top
   // message's start. "Back" from the reading position went to the top message's start
   // even from the very bottom, a little above where the person was (djdarcy, 2026-10-07).
-  // The candidate with the least drift wins (core/view-position.ts pickViewAnchor): the top
+  // The candidate with the least drift wins (core/prompts/view-position.ts pickViewAnchor): the top
   // message's start, the next message's start, or the bottom message's end (#29).
   async viewAnchor(ports: ViewPorts): Promise<{ uuid: string; block: 'start' | 'end' } | undefined> {
     const top = await this.topOnScreen(ports)

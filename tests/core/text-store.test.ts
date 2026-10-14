@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { shard, utf8Bytes, withinBudget } from '../../plugin/hooks/core/text-store.ts'
+import { shard, utf8Bytes, withinBudget } from '../../plugin/hooks/core/prompts/text-store.ts'
 
 test('bytes are counted as UTF-8', () => {
   assert.equal(utf8Bytes('abc'), 3)

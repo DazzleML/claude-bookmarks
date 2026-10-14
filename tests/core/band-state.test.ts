@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { BandState } from '../../plugin/hooks/core/band-state.ts'
+import { BandState } from '../../plugin/hooks/core/band/band-state.ts'
 
 const timer = (log: string[], name: string) => () => ({ cancel: () => log.push(`cancel ${name}`) })
 

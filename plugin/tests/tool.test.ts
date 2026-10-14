@@ -1,6 +1,6 @@
 // The `bookmark` tool's tiers and claim (#21), as Claude calls it. Run: claude plugin test plugin
 import { expect, test } from 'claude-code/testing'
-import { addOrRelabel, emptyRegister, serializeRegister } from '../hooks/core/register-file.ts'
+import { addOrRelabel, emptyRegister, serializeRegister } from '../hooks/core/bookmarks/register-file.ts'
 import { BAND_PROPS, world } from './harness.ts'
 
 const SID = '11111111-2222-4333-8444-555555555555'

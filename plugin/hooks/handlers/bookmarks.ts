@@ -7,18 +7,18 @@
 import {
   anchorHref, anchorMarkdown, anchorPath, markdownLinks, ownerOf, parseAnchor,
   type AnchorOwner, type AnchorRecord,
-} from '../core/anchor.ts'
+} from '../core/bookmarks/anchor.ts'
 import {
   addOrRelabel, claim, emptyRegister, exportMarkdown, exportNotesOf, findRecord, listOf, parseRegister, prune, remove, serializeRegister, share,
   type Mint, type Register as BookmarkRegister, type Retention,
-} from '../core/register-file.ts'
-import { headOf } from '../core/transcript-lines.ts'
-import { short } from '../core/message-id.ts'
-import { answer as toolAnswer, brief as briefRow, describe as describeRecord, listActedOn, listName, parseToolInput, tierFor } from '../core/bookmark-tool.ts'
+} from '../core/bookmarks/register-file.ts'
+import { headOf } from '../core/bookmarks/transcript-lines.ts'
+import { short } from '../core/kit/message-id.ts'
+import { answer as toolAnswer, brief as briefRow, describe as describeRecord, listActedOn, listName, parseToolInput, tierFor } from '../core/bookmarks/bookmark-tool.ts'
 import type { BookmarksPorts } from '../engine/ports.ts'
 
 // --- Bookmark anchors (anchors DWP 2026-10-09) -----------------------------------------
-// The URL format, its parser and the link finder live in hooks/core/anchor.ts (pure, with
+// The URL format, its parser and the link finder live in hooks/core/bookmarks/anchor.ts (pure, with
 // tests under `node --test`). This file holds what needs the engine: the press, the jump,
 // the highlight, the tool and the register's I/O. (Written in register.tsx; since 0.4.64
 // this file reaches the engine through BookmarksPorts, engine/ports.ts, and register.tsx
@@ -263,7 +263,7 @@ export async function promoteLetter(ports: BookmarksPorts, letter: string) {
 }
 
 // The model's tool call (`mcp__bookmarks__bookmark`): what it takes and how it answers is
-// core/bookmark-tool.ts; register.tsx's tool.call hook hands the event here.
+// core/bookmarks/bookmark-tool.ts; register.tsx's tool.call hook hands the event here.
 export async function bookmarkTool(ports: BookmarksPorts, e: unknown) {
   const { tool, tool_use_id, agentId, requestMeta, ...input } = e as unknown as Record<string, unknown>
   void agentId

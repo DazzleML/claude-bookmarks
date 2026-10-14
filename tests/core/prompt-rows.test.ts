@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { footnoteOf, looksLikePrompt, numberFootnotes, numberRows, promptTextOf, unwrapQueued } from '../../plugin/hooks/core/prompt-rows.ts'
+import { footnoteOf, looksLikePrompt, numberFootnotes, numberRows, promptTextOf, unwrapQueued } from '../../plugin/hooks/core/prompts/prompt-rows.ts'
 
 test('kept footnotes number by the prompt they follow', () => {
   const f = (uuid: string, after: string | null) => ({ uuid, after, kind: 'command' as const, label: '/x' })

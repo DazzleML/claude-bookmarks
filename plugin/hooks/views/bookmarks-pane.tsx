@@ -3,9 +3,9 @@
 // group, and the drawn ids, and hands them in with the actions and the palette's lookups;
 // the numbering, grouping and rows are worked out here, with the hook's local names.
 import type { EngineInterface } from 'claude-code'
-import { ownerOf, type AnchorOwner, type AnchorRecord } from '../core/anchor.ts'
-import { promptNumberComplete } from '../core/band-entry.ts'
-import { bookmarkWho, drawnFourOf, groupHeader, numberNewestFirst, numberWidth, pointerFor, unreached } from '../core/list-model.ts'
+import { ownerOf, type AnchorOwner, type AnchorRecord } from '../core/bookmarks/anchor.ts'
+import { promptNumberComplete } from '../core/band/band-entry.ts'
+import { bookmarkWho, drawnFourOf, groupHeader, numberNewestFirst, numberWidth, pointerFor, unreached } from '../core/prompts/list-model.ts'
 import type { PaneStyles } from './prompts-pane.tsx'
 
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
@@ -50,7 +50,7 @@ export function bookmarksPaneView(elements: Elements, m: BookmarksPaneModel, a: 
   const go = (typed: string) => a.go(typed)
   // One group at a time, one numbering across all of them. The band's h/l cycle the
   // group; the header shows where you are. (h and l are the key table's defaults,
-  // core/keys.ts; the group index arrives in the model from the hook.)
+  // core/band/keys.ts; the group index arrives in the model from the hook.)
   const group = BOOKMARK_GROUPS[m.groupIndex] ?? BOOKMARK_GROUPS[0]!
   const inGroup = (g: (typeof BOOKMARK_GROUPS)[number]) => (g.owner === 'all' ? numbered : numbered.filter(r => ownerOf(r) === g.owner))
   const shownRows = inGroup(group)

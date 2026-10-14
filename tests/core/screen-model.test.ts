@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { ScreenModel } from '../../plugin/hooks/core/screen-model.ts'
+import { ScreenModel } from '../../plugin/hooks/core/kit/screen-model.ts'
 
 const A = 'aaaaaaaa-0000-4000-8000-000000000001'
 const B = 'bbbbbbbb-0000-4000-8000-000000000002'

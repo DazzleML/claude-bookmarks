@@ -4,7 +4,7 @@
 // model (what to draw) and the actions (closures over `$`) and hands them in with the
 // palette's two lookups. Location provisional (Q261012-11, question 3).
 import type { EngineInterface, RenderChildren } from 'claude-code'
-import type { Operation } from '../core/keys.ts'
+import type { Operation } from '../core/band/keys.ts'
 import type { Role, Style } from '../core/palette.ts'
 
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
@@ -117,7 +117,7 @@ export function bandView(elements: Elements, theirs: RenderChildren, m: BandMode
         listKeyButton(byKey('k')),
         <Button key="band-num-go" label="go (Enter)" plain onPress={() => a.go()} />,
         listKeyButton(byKey('j')),
-        // The rest of this list's keys, from the same table as its hint (core/keys.ts
+        // The rest of this list's keys, from the same table as its hint (core/band/keys.ts
         // LIST_KEYS); the bookmarks group's name sits between its h and l.
         ...m.listKeys
           .filter(l => l.key !== 'j' && l.key !== 'k')
@@ -156,7 +156,7 @@ export function bandView(elements: Elements, theirs: RenderChildren, m: BandMode
         ) : (
           <Text {...s.text('legend')}>bm:</Text>
         )}
-        {/* The bar, from the router's table (core/keys.ts bandButtons): each shown
+        {/* The bar, from the router's table (core/band/keys.ts bandButtons): each shown
             command once, `?` for the rest. A press performs what its key routes to;
             while chords are on, the four chord commands carry their borrowed action
             (docs: Optional fast keys). `band: field` draws the field alone. */}

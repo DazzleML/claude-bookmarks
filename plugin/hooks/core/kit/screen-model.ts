@@ -23,7 +23,7 @@ export class ScreenModel {
 
   // The other transcript rows (tool calls and results, tool groups, command output, the
   // turn-duration line, notices) are not placed on a prompt, but their reports date the
-  // latest burst (core/latest-burst.ts: a screen of tool rows after a jump otherwise left
+  // latest burst (core/kit/latest-burst.ts: a screen of tool rows after a jump otherwise left
   // the messages jumped away from as "on screen now").
   private readonly otherOnScreen = new Map<string, Report>()
   private otherNewsAt = 0

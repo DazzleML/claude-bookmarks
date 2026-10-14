@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LINE_COMMANDS, bandButtons, helpLines, helpShort, lineHint, lineKeys, listHint, parseListNumber, route } from '../../plugin/hooks/core/keys.ts'
+import { LINE_COMMANDS, bandButtons, helpLines, helpShort, lineHint, lineKeys, listHint, parseListNumber, route } from '../../plugin/hooks/core/band/keys.ts'
 
 test('a typed list number: a prompt, an unfold, or a footnote', () => {
   assert.deepEqual(parseListNumber('3'), { n: 3 })

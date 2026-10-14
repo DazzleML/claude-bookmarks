@@ -3,14 +3,14 @@
 // band's keys (digits, steps, pin, claim, Enter), its focus probe and `?` help, the pane
 // opening (handOff, bandOnly, openFor), and the close path: what an action leaves behind
 // (settle), the band's mode ending, the pane closing, and `q`. The command line that calls
-// most of these is handlers/command-line.ts. The band's state is core/band-state.ts BandState, owned by this
+// most of these is handlers/command-line.ts. The band's state is core/band/band-state.ts BandState, owned by this
 // cluster and reached through `ports.band`; the pane position is PanePosition's.
-import { afterAction, isList, type Cause } from '../core/after-action.ts'
-import { ownerOf } from '../core/anchor.ts'
-import { promptNumberComplete, stepNumber } from '../core/band-entry.ts'
-import { parseListNumber, type Operation, type Pane } from '../core/keys.ts'
-import { short } from '../core/message-id.ts'
-import { claim } from '../core/register-file.ts'
+import { afterAction, isList, type Cause } from '../core/band/after-action.ts'
+import { ownerOf } from '../core/bookmarks/anchor.ts'
+import { promptNumberComplete, stepNumber } from '../core/band/band-entry.ts'
+import { parseListNumber, type Operation, type Pane } from '../core/band/keys.ts'
+import { short } from '../core/kit/message-id.ts'
+import { claim } from '../core/bookmarks/register-file.ts'
 import type { BandPorts } from '../engine/ports.ts'
 
 // How long the band waits for the next key before going back to its buttons.
@@ -62,7 +62,7 @@ export async function showInPane(ports: BandPorts, n: number) {
 // so the pane can't take the arrows (djdarcy, 2026-10-07: "the nice thing about the panel
 // is that you can scroll through the prompts 1 by 1"). The list is newest first: j moves
 // the ▶ down (older), k up (newer); the first press lands on the newest. Enter jumps.
-// j and k are the key table's defaults (core/keys.ts): `dir` arrives as 1 for next (j),
+// j and k are the key table's defaults (core/band/keys.ts): `dir` arrives as 1 for next (j),
 // -1 for previous (k), so a rebound key steps the same way.
 export async function bandStep(ports: BandPorts, dir: -1 | 1) {
   const count = await listCount(ports)
@@ -88,7 +88,7 @@ export async function bandPin(ports: BandPorts) {
 }
 
 // `c` in the bookmarks list: the person takes the chosen one of Claude's records as
-// their own (#21): same message, id and link (core/register-file.ts, claim).
+// their own (#21): same message, id and link (core/bookmarks/register-file.ts, claim).
 export async function bandClaim(ports: BandPorts) {
   const typed = await ports.bandNum()
   const target = typed ? (await ports.bookmarkList())[Number(typed) - 1] : undefined
@@ -215,7 +215,7 @@ export async function handOff(ports: BandPorts, mode: string, focusKey?: string)
 
 // Lists off (the `panes` setting): the band's own key mode with no pane beside it --
 // digits, j/k and Enter for a list, the letters for a mark or a jump (the keys are the key
-// table's defaults, core/keys.ts).
+// table's defaults, core/band/keys.ts).
 export async function bandOnly(ports: BandPorts, mode: string) {
   if (mode === 'mark') ports.setSelectionAtChord(await ports.selection())
   await ports.setPaneMode(mode)
@@ -337,7 +337,7 @@ export async function openFor(ports: BandPorts, mode: string, action: string) {
 export const paneOf = (mode: string): Pane => (mode === 'idle' || mode === 'help' ? 'none' : (mode as Pane))
 
 // After an action, close the pane or end only the band's key mode, as the after-action
-// policy says (core/after-action.ts): the operation's need, then the person's setting,
+// policy says (core/band/after-action.ts): the operation's need, then the person's setting,
 // then the default. `focus: 'input'` is what is wanted after most actions; the engine
 // cannot hand the keyboard back yet (#24, docs/engine-quirks.md), so nothing more is done.
 export async function settle(ports: BandPorts, pane: Pane, cause: Cause, needsMore = false) {

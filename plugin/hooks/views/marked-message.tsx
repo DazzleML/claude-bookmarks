@@ -4,7 +4,7 @@
 // verbatim under /move-code; the palette styles are passed in, since the palette is
 // register.tsx's. Location provisional (Q261012-11, question 3).
 import type { ElementConstructor, EngineInterface, RenderChildren, TextProps } from 'claude-code'
-import type { ColorSplit } from '../core/highlight.ts'
+import type { ColorSplit } from '../core/marks/highlight.ts'
 import type { Style } from '../core/palette.ts'
 
 /** The two roles a marked line draws with: the soft band, and the letter and words. */

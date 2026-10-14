@@ -2,7 +2,7 @@
 // /move-code, 0.4.69, comments as they were). register.tsx reads the marks and hands them
 // in with the letters, the actions and the palette's lookups.
 import type { EngineInterface } from 'claude-code'
-import type { Mark } from '../core/marks.ts'
+import type { Mark } from '../core/marks/marks.ts'
 import type { PaneStyles } from './prompts-pane.tsx'
 
 type Elements = ReturnType<EngineInterface['ui']['resolve']>

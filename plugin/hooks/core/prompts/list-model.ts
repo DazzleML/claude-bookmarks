@@ -1,11 +1,11 @@
-// The lists' pure model (refactor-advisor 2026-10-12__15-06-26 row 1, its `core/list-model.ts`;
+// The lists' pure model (refactor-advisor 2026-10-12__15-06-26 row 1, its `core/prompts/list-model.ts`;
 // the eighth move of the register.tsx split, Q261012-06): numbering, the footnotes under
 // their prompt and whether they show, the pinned group, the ▶ pointer, the dim rule, and
 // the bookmarks pane's words. Moved from register.tsx's Pane render hook under /move-code,
 // comments as they were; the JSX stays there.
-import { firstFour } from './message-id.ts'
+import { firstFour } from '../kit/message-id.ts'
 import { numberFootnotes, type FootnoteRef } from './prompt-rows.ts'
-import { ownerOf, type AnchorRecord } from './anchor.ts'
+import { ownerOf, type AnchorRecord } from '../bookmarks/anchor.ts'
 
 /** Numbered in the order sent (#1 the first), listed newest first (djdarcy, 2026-10-04). */
 export function numberNewestFirst<T>(all: readonly T[]): (T & { n: number })[] {

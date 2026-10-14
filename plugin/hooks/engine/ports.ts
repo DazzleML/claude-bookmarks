@@ -80,7 +80,7 @@ export type NavigationPorts = {
 
 /** What the band cluster (handlers/band.ts) needs: its own state, its atoms, the pane, and the after-action settings. */
 export type BandPorts = {
-  band: import('../core/band-state.ts').BandState
+  band: import('../core/band/band-state.ts').BandState
   settings: () => import('../core/settings.ts').Settings
   bandNum: () => Promise<string>
   setBandNum: (v: string) => Promise<unknown>
@@ -100,15 +100,15 @@ export type BandPorts = {
   // The band's keys (bandDigit, bandStep, bandPin, bandClaim, bandNumberGo, bandListKey):
   paneMode: () => Promise<string>
   prompts: () => Promise<readonly { uuid: string }[]>
-  bookmarkList: () => Promise<readonly import('../core/anchor.ts').AnchorRecord[]>
+  bookmarkList: () => Promise<readonly import('../core/bookmarks/anchor.ts').AnchorRecord[]>
   jumpToPromptNumber: (typed: string, via: string) => Promise<unknown>
   jumpToBookmarkNumber: (typed: string, via: string) => Promise<unknown>
   scrollPaneCentre: (key: string) => Promise<{ deny?: string }>
   toast: (text: string, timeoutMs?: number) => void
   togglePin: (typed: string) => Promise<unknown>
   groupStep: (dir: -1 | 1) => Promise<unknown>
-  loadRegister: () => Promise<import('../core/register-file.ts').Register>
-  saveRegister: (reg: import('../core/register-file.ts').Register) => Promise<unknown>
+  loadRegister: () => Promise<import('../core/bookmarks/register-file.ts').Register>
+  saveRegister: (reg: import('../core/bookmarks/register-file.ts').Register) => Promise<unknown>
   now: () => Promise<number>
   after: (ms: number, fn: () => void) => { cancel: () => void }
   // The band's focus probe (focusBand, bandProbeKey, watchBand):
@@ -138,8 +138,8 @@ export type BandPorts = {
 
 /** Finding a message in the transcript by uuid or by a verbatim fragment (register.tsx's resolveTarget). */
 export type ResolveOutcome =
-  | { kind: 'one'; row: import('../core/transcript-lines.ts').TranscriptRow; via: string; ms: number }
-  | { kind: 'many'; rows: import('../core/transcript-lines.ts').TranscriptRow[]; earliest: import('../core/transcript-lines.ts').TranscriptRow; via: string; ms: number }
+  | { kind: 'one'; row: import('../core/bookmarks/transcript-lines.ts').TranscriptRow; via: string; ms: number }
+  | { kind: 'many'; rows: import('../core/bookmarks/transcript-lines.ts').TranscriptRow[]; earliest: import('../core/bookmarks/transcript-lines.ts').TranscriptRow; via: string; ms: number }
   | { kind: 'none'; via?: string; ms?: number; reason: string }
 
 /** What the bookmarks cluster (handlers/bookmarks.ts) needs: the register's files, who and where this session is, the transcript, the jump, the mark highlight, the clipboard and the person's feedback. */
@@ -169,17 +169,17 @@ export type BookmarksPorts = {
   transcriptPath: () => Promise<string | undefined>
   allRows: () => Promise<readonly { uuid: string }[]>
   jumpTo: (uuid: string, via: string, label: string, words?: string) => Promise<string | undefined>
-  loadMarks: () => Promise<import('../core/marks.ts').Marks>
+  loadMarks: () => Promise<import('../core/marks/marks.ts').Marks>
   copy: (text: string) => Promise<{ isCopied: boolean }>
   /** The marks cluster's: a transient highlight entry, and showing it. */
-  markCache: import('../core/marks.ts').MarkCache
+  markCache: import('../core/marks/marks.ts').MarkCache
   showMark: (letter: string, text: string) => Promise<unknown>
 }
 
 /** What the marks cluster (handlers/marks.ts) needs: its state, the mark cache, the `shown` atom, the view, the store, the jump, and the person's feedback. */
 export type MarksPorts = {
-  state: import('../core/mark-state.ts').MarkState
-  markCache: import('../core/marks.ts').MarkCache
+  state: import('../core/marks/mark-state.ts').MarkState
+  markCache: import('../core/marks/marks.ts').MarkCache
   shown: () => Promise<{ letter: string; text: string } | null>
   setShown: (v: { letter: string; text: string } | null) => Promise<unknown>
   after: (ms: number, fn: () => void) => { cancel: () => void }
@@ -197,15 +197,15 @@ export type MarksPorts = {
   topOnScreen: () => Promise<string | undefined>
   viewAnchor: () => Promise<{ uuid: string; block: 'start' | 'end' } | undefined>
   freshOnScreen: () => string[]
-  screenEntries: () => readonly [string, import('../core/screen-model.ts').MessageReport][]
+  screenEntries: () => readonly [string, import('../core/kit/screen-model.ts').MessageReport][]
   /** PanePosition's: the view before the pane opened, and where a highlight returns to. */
   paneAnchor: () => string | undefined
   noteRestore: (top: string | undefined) => void
   restoreView: () => Promise<unknown>
   jumpTo: (uuid: string, via: string, label: string, words?: string, probe?: boolean, block?: 'start' | 'end') => Promise<string | undefined>
   now: () => Promise<number>
-  loadMarks: () => Promise<import('../core/marks.ts').Marks>
-  saveMarks: (marks: import('../core/marks.ts').Marks) => Promise<unknown>
+  loadMarks: () => Promise<import('../core/marks/marks.ts').Marks>
+  saveMarks: (marks: import('../core/marks/marks.ts').Marks) => Promise<unknown>
   sessionId: () => Promise<string>
   storeGet: (key: string) => Promise<unknown>
   storeSet: (key: string, value: unknown) => Promise<unknown>
@@ -233,17 +233,17 @@ export type CommandLinePorts = BandPorts & {
 //   lastScreenOrder, trustedScreen,         handlers/view-tracker.ts      --
 //     heldBy, lastHere, viewTimer
 //   lastHere (the one outside write)        prompts pane, via drewHere    --
-//   paneAnchor, paneView, restoreTo         core/pane-position.ts         navigation (paneJumped, takeRestore), openFor (opened)
+//   paneAnchor, paneView, restoreTo         core/kit/pane-position.ts         navigation (paneJumped, takeRestore), openFor (opened)
 //   jumplistCache, jumplistMoving           handlers/navigation.ts        --
-//   band wait/watch timers, ring, id,       core/band-state.ts BandState  band render (drawn), ui.focus (ringMoved),
+//   band wait/watch timers, ring, id,       core/band/band-state.ts BandState  band render (drawn), ui.focus (ringMoved),
 //     Esc reminder                                                         prompt.edit (oweReminder), session.start
 //   cmdBusy (one command at a time)         handlers/command-line.ts      --
 //   registerCache, proseQueued              handlers/bookmarks.ts         --
 //   logLines, screenLines, timeline (Ring)  register.tsx log cluster       diagnostics (timeline, read-only)
 //   rendered (drawn ids)                    register.tsx render hooks     diagnostics, list model (read-only)
-//   highlight clear timer, selection at     core/mark-state.ts MarkState  band (setAtChord, via its port),
+//   highlight clear timer, selection at     core/marks/mark-state.ts MarkState  band (setAtChord, via its port),
 //     the chord, selection seen, its poll     (handlers/marks.ts)           session.start (stopPoll, startPoll)
-//   markCache (core/marks.ts MarkCache)     the marks cluster:            render hooks, band, navigation
+//   markCache (core/marks/marks.ts MarkCache)     the marks cluster:            render hooks, band, navigation
 //                                             handlers/marks.ts (replace), (readers: all, headOf)
 //                                             and in register.tsx the start
 //                                             hook and /bm-delmarks (replace),

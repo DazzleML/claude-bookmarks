@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { latestBurst, reportTime } from '../../plugin/hooks/core/latest-burst.ts'
+import { latestBurst, reportTime } from '../../plugin/hooks/core/kit/latest-burst.ts'
 
 const FRESH = 1500
 const at = (entries: [string, number][]) => new Map(entries.map(([id, t]) => [id, { at: t }]))

@@ -1,9 +1,9 @@
 // The band's command line: the field the leader lands on, and `perform`, the one place a
 // band command is done. Moved whole from register.tsx (0.4.60, /move-code); it reads the
-// router's table (core/keys.ts), which is where a configurable keymap will plug in.
+// router's table (core/band/keys.ts), which is where a configurable keymap will plug in.
 
-import { afterAction } from '../core/after-action.ts'
-import { lineHint, route, type Operation } from '../core/keys.ts'
+import { afterAction } from '../core/band/after-action.ts'
+import { lineHint, route, type Operation } from '../core/band/keys.ts'
 import type { CommandLinePorts } from '../engine/ports.ts'
 import { bandOnly, closeAll, handOff, openFor, showHelp } from './band.ts'
 
@@ -15,7 +15,7 @@ import { bandOnly, closeAll, handOff, openFor, showHelp } from './band.ts'
 // only until the handler returns; a fire-and-forget `void` lost it, 2026-10-09). So the
 // keys below act directly; the once-per-version probe that used to decide this is gone.
 
-// Generated from the router's table (core/keys.ts), so every key is named once.
+// Generated from the router's table (core/band/keys.ts), so every key is named once.
 const CMD_HINT = lineHint()
 
 // Owned here: one command at a time.
@@ -31,7 +31,7 @@ export async function runCommandLine(ports: CommandLinePorts, typed: string, via
   cmdBusy = true
   try {
     ports.log(`[bm] band command line ${via}: "${ports.cut(typed, 40)}"`, true)
-    // What the keys mean lives in the router's table (core/keys.ts); perform does it.
+    // What the keys mean lives in the router's table (core/band/keys.ts); perform does it.
     await perform(ports, route(typed, { pane: 'none' }).operation, 'field')
   } finally {
     cmdBusy = false

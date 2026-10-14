@@ -1,4 +1,4 @@
-// node --test hooks/core/register-file.test.ts
+// node --test hooks/core/bookmarks/register-file.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -19,8 +19,8 @@ import {
   share,
   claim,
   type Mint,
-} from '../../plugin/hooks/core/register-file.ts'
-import { anchorHref, tierOf } from '../../plugin/hooks/core/anchor.ts'
+} from '../../plugin/hooks/core/bookmarks/register-file.ts'
+import { anchorHref, tierOf } from '../../plugin/hooks/core/bookmarks/anchor.ts'
 
 test('a perma mint stays perma until asked to be a bookmark, never the other way', () => {
   const r0 = emptyRegister('8f0f9b27-33fc-4054-806a-22a6d569dfb5', 'test', 1)

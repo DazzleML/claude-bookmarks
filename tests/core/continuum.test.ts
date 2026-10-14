@@ -18,7 +18,7 @@ import {
   type ContinuumProtocol,
   type ContinuumSpaceProtocol,
   type ContinuumSubtype,
-} from '../../plugin/hooks/core/continuum.ts'
+} from '../../plugin/hooks/core/kit/continuum.ts'
 
 // Ported from dazzle-lib tests/test_continuum.py (the first ten), then the surface those
 // ten do not reach. Expected values for the extra cases were read off the Python module.
@@ -441,7 +441,7 @@ test('promote steps one rung up the ladder', () => {
 // -- the charter -------------------------------------------------------------------------------
 
 test('the module is pure: it imports nothing', () => {
-  const src = readFileSync(new URL('../../plugin/hooks/core/continuum.ts', import.meta.url), 'utf8')
+  const src = readFileSync(new URL('../../plugin/hooks/core/kit/continuum.ts', import.meta.url), 'utf8')
   assert.doesNotMatch(src, /^\s*import\b/m)
   assert.doesNotMatch(src, /\brequire\(|\bimport\(/)
 })

@@ -4,7 +4,7 @@
 // and which group comes next. Moved from register.tsx under /move-code, comments as they
 // were. The state reads, the scrolls, the toasts and the timers stay there.
 import { parseListNumber } from './keys.ts'
-import { numberFootnotes, type FootnoteRef } from './prompt-rows.ts'
+import { numberFootnotes, type FootnoteRef } from '../prompts/prompt-rows.ts'
 
 // When a typed prompt number jumps (a setting, #7): 'enter' waits for Enter, so the
 // person can check the number first; 'complete' jumps on the digit that makes it complete.
@@ -26,7 +26,7 @@ export function promptNumberComplete(typed: string, count: number, jumpsAt: 'ent
 // so the pane can't take the arrows (djdarcy, 2026-10-07: "the nice thing about the panel
 // is that you can scroll through the prompts 1 by 1"). The list is newest first: j moves
 // the ▶ down (older), k up (newer); the first press lands on the newest. Enter jumps.
-// `dir` is the key table's (core/keys.ts): 1 is next (j by default), -1 previous (k), so
+// `dir` is the key table's (core/band/keys.ts): 1 is next (j by default), -1 previous (k), so
 // the key itself stays configurable; the number moves the other way, newest first.
 export function stepNumber(typed: string, count: number, dir: -1 | 1): number {
   const cur = Number(typed)

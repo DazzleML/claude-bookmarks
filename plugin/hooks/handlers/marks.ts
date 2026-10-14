@@ -1,14 +1,14 @@
 // The marks cluster (moved whole out of register.tsx under /move-code, 0.4.62, comments as
 // they were; `ports.x()` where the code called `$`, read register.tsx's state, or called
 // another cluster): the highlight, setting a mark, the reading position and jumping to a
-// mark. Its state is core/mark-state.ts MarkState, reached through `ports.state`; the
-// marks themselves are in the store, with core/marks.ts MarkCache as their in-memory copy.
+// mark. Its state is core/marks/mark-state.ts MarkState, reached through `ports.state`; the
+// marks themselves are in the store, with core/marks/marks.ts MarkCache as their in-memory copy.
 
-import { sameMessage, findByMessage, short } from '../core/message-id.ts'
-import { plainMarkdown, snippetOf } from '../core/highlight.ts'
-import { headOf } from '../core/transcript-lines.ts'
-import type { Mark } from '../core/marks.ts'
-import type { SelectionLike } from '../core/mark-state.ts'
+import { sameMessage, findByMessage, short } from '../core/kit/message-id.ts'
+import { plainMarkdown, snippetOf } from '../core/marks/highlight.ts'
+import { headOf } from '../core/bookmarks/transcript-lines.ts'
+import type { Mark } from '../core/marks/marks.ts'
+import type { SelectionLike } from '../core/marks/mark-state.ts'
 import type { MarksPorts } from '../engine/ports.ts'
 
 // The highlight and the band text are temporary (djdarcy, 2026-10-03: "visible temporarily
@@ -167,7 +167,7 @@ export async function setMark(ports: MarksPorts, letter: string) {
 // like vim's ``. "On screen" comes from what the render hooks report, not from the
 // last press, so scrolling by hand in between does not confuse it.
 // The toggle's state, kept explicitly rather than read off the screen (whose reports go
-// stale after a jump, see ScreenModel's onScreenNow, core/screen-model.ts): `at` true right after going to the reading
+// stale after a jump, see ScreenModel's onScreenNow, core/kit/screen-model.ts): `at` true right after going to the reading
 // position, so the next press goes `back`; false otherwise, so the next press goes there.
 // `backBlock`: which edge of the window `back` was anchored to (viewAnchor, handlers/view-tracker.ts).
 type ReadingState = { at: boolean; back: string | null; backBlock?: 'start' | 'end' }

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { CHANNELS, excerpt, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, quotesText, screenMirror } from '../../plugin/hooks/core/debug.ts'
+import { CHANNELS, excerpt, formatChannels, formatDebugEnv, parseChannels, parseDebugEnv, quotesText, screenMirror } from '../../plugin/hooks/core/log/debug.ts'
 
 test('log lines quote the conversation by channel, by setting, or with debugging on', () => {
   assert.equal(quotesText('off', false, true), false)

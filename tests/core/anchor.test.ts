@@ -1,4 +1,4 @@
-// node --test hooks/core/anchor.test.ts   (Node 22 runs .ts directly; breakpoints work in VS Code)
+// node --test hooks/core/bookmarks/anchor.test.ts   (Node 22 runs .ts directly; breakpoints work in VS Code)
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -13,7 +13,7 @@ import {
   parsePosition,
   utf8ByteLength,
   type AnchorRecord,
-} from '../../plugin/hooks/core/anchor.ts'
+} from '../../plugin/hooks/core/bookmarks/anchor.ts'
 
 const ROOT = 'C:\\Users\\Extreme\\claude'
 const SESSION = '8f0f9b27-33fc-4054-806a-22a6d569dfb5'

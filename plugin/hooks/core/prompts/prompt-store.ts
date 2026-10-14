@@ -2,9 +2,9 @@
 // move of the register.tsx split, Q261012-06): the store keys, what a transcript read
 // yields, how it merges with what the live capture already holds, and the list the pane
 // draws. The engine calls (the store, the files, the program that reads the transcript)
-// stay in register.tsx. Which rows are prompts: core/prompt-rows.ts.
+// stay in register.tsx. Which rows are prompts: core/prompts/prompt-rows.ts.
 import { footnoteOf, looksLikePrompt, promptTextOf, type FootnoteRef } from './prompt-rows.ts'
-import { headOf } from './transcript-lines.ts'
+import { headOf } from '../bookmarks/transcript-lines.ts'
 
 /** A prompt as the list keeps it: its uuid and first line. */
 export type PromptRef = { uuid: string; head: string }

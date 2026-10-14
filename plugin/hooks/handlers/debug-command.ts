@@ -3,8 +3,8 @@
 // entirety of something like this in a separate "debugging.ts*" file?"). Moved under
 // /move-code, comments as they were; the only change is `ports.x(...)` where the handler
 // called `$` or a register.tsx function. Location provisional (Q261012-11, question 3).
-import { CHANNELS, formatChannels, parseChannels, type Channel } from '../core/debug.ts'
-import { DEBUG_USAGE, parseDebugArgs } from '../core/diagnostics.ts'
+import { CHANNELS, formatChannels, parseChannels, type Channel } from '../core/log/debug.ts'
+import { DEBUG_USAGE, parseDebugArgs } from '../core/log/diagnostics.ts'
 import type { DebugPorts } from '../engine/ports.ts'
 
 export async function debugCommand(args: string, ports: DebugPorts): Promise<void> {

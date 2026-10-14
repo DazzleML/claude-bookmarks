@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { age, bookmarkWho, drawnFourOf, foldedLabel, footnoteDisplay, footnotesByPrompt, groupHeader, numberLabel, numberNewestFirst, numberWidth, pinnedRowsOf, pointerFor, unreached } from '../../plugin/hooks/core/list-model.ts'
+import { age, bookmarkWho, drawnFourOf, foldedLabel, footnoteDisplay, footnotesByPrompt, groupHeader, numberLabel, numberNewestFirst, numberWidth, pinnedRowsOf, pointerFor, unreached } from '../../plugin/hooks/core/prompts/list-model.ts'
 
 test('numbered in the order sent, listed newest first; labels right-aligned', () => {
   assert.deepEqual(numberNewestFirst([{ uuid: 'a' }, { uuid: 'b' }, { uuid: 'c' }]), [{ uuid: 'c', n: 3 }, { uuid: 'b', n: 2 }, { uuid: 'a', n: 1 }])

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MarkCache, deleteMarks, marksShowing, searchPhrase, type Marks } from '../../plugin/hooks/core/marks.ts'
+import { MarkCache, deleteMarks, marksShowing, searchPhrase, type Marks } from '../../plugin/hooks/core/marks/marks.ts'
 
 test('the mark cache: replace takes the stored record; a transient highlight lasts until the next replace', () => {
   const c = new MarkCache()

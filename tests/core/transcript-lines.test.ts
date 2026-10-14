@@ -1,7 +1,7 @@
-// node --test hooks/core/transcript-lines.test.ts
+// node --test hooks/core/bookmarks/transcript-lines.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { utf8ByteLength } from '../../plugin/hooks/core/anchor.ts'
+import { utf8ByteLength } from '../../plugin/hooks/core/bookmarks/anchor.ts'
 import {
   headOf,
   jsonEscaped,
@@ -10,7 +10,7 @@ import {
   resolveRows,
   rowsFromGrep,
   uuidPattern,
-} from '../../plugin/hooks/core/transcript-lines.ts'
+} from '../../plugin/hooks/core/bookmarks/transcript-lines.ts'
 
 // A small transcript: the shapes Claude Code writes, in file order.
 const lines = [

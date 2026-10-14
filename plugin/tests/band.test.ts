@@ -2,7 +2,7 @@
 // what its key does, and the switches `band`, `chords`, `panes`. Run: claude plugin test plugin
 import { expect, test } from 'claude-code/testing'
 import { BAND_PROPS, world } from './harness.ts'
-import { listHint, listKeysFor } from '../hooks/core/keys.ts'
+import { listHint, listKeysFor } from '../hooks/core/band/keys.ts'
 
 const SID = '11111111-2222-4333-8444-555555555555'
 const STORE = {

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MarkState } from '../../plugin/hooks/core/mark-state.ts'
+import { MarkState } from '../../plugin/hooks/core/marks/mark-state.ts'
 
 const timer = (log: string[], name: string) => () => ({ cancel: () => log.push(`cancel ${name}`) })
 

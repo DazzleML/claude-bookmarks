@@ -26,7 +26,7 @@ type Found = { type: string; key: string | undefined; text?: string }
 const leaves = (els: unknown[]) =>
   (els as Found[]).filter(e => e.type !== 'Box').map(e => `${e.type}:${e.key ?? ''}:${e.text ?? ''}`)
 
-// The bar is drawn from the router's table (core/keys.ts bandButtons): each shown command
+// The bar is drawn from the router's table (core/band/keys.ts bandButtons): each shown command
 // once, `?` for the rest; the field has no placeholder (it listed keys without saying
 // what they did). Slice 5, 2026-10-12.
 test('the idle band: the command field, the labelled commands, and ?', async ($, on) => {
