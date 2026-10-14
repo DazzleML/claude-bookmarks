@@ -29,6 +29,10 @@ export class MarkState {
   // The selection as it stood when the mark chord fired, read BEFORE the pane opens:
   // round 1 read it after, and the mark landed one row too high (the inline pane shifts
   // the transcript; hypothesis: the engine maps the selection to a row by screen position).
+  // Later (2026-10-06/07): the pane is docked now, and an awaited read before $.ui.open
+  // looked to cost the pane the keyboard, so openFor (handlers/band.ts) reads it AFTER the
+  // pane opens and the mark resolves by the selection's message id; bandOnly, which opens
+  // no pane, still reads it first. openFor's comment has the measurements.
   /** The selection as it stood when the mark chord fired (openFor, bandOnly). */
   setAtChord(sel: SelectionLike) {
     this.#atChord = sel

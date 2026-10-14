@@ -197,8 +197,12 @@ export type CommandLinePorts = BandPorts & {
 //   rendered (drawn ids)                    register.tsx render hooks     diagnostics, list model (read-only)
 //   highlight clear timer, selection at     core/mark-state.ts MarkState  band (setAtChord, via its port),
 //     the chord, selection seen, its poll     (handlers/marks.ts)           session.start (stopPoll, startPoll)
-//   markCache (core/marks.ts MarkCache)     register.tsx marks cluster    render hooks, band, navigation
-//                                             (writers: replace, showTransient; readers: all, headOf)
+//   markCache (core/marks.ts MarkCache)     the marks cluster:            render hooks, band, navigation
+//                                             handlers/marks.ts (replace), (readers: all, headOf)
+//                                             and in register.tsx the start
+//                                             hook and /bm-delmarks (replace),
+//                                             highlightWords (showTransient,
+//                                             moves with the bookmarks)
 
 /** What `/bm-debug` needs: the debug channels this conversation has on and how to change them, the echo's choice and policy, and where the file log is. */
 export type DebugPorts = ToastPorts &

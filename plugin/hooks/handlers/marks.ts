@@ -55,7 +55,7 @@ export async function highlightInPlace(ports: MarksPorts, letter: string, text: 
 }
 
 // --- Fresh and stale selections ---------------------------------------------------------
-// $.ui.selection() answers what the person LAST selected, even once its highlight is gone
+// $.ui.selection() (ports.selection) answers what the person LAST selected, even once its highlight is gone
 // (the types' docs), so a mark with nothing selected used a quote selected minutes
 // earlier (2026-10-07 07:13:10, 07:20:21). djdarcy: "if a user selects text we should be
 // attempting to date-time it and if it's older than 1.25 minutes then we should mark the
@@ -128,7 +128,7 @@ export async function setMark(ports: MarksPorts, letter: string) {
   }
 
   // No fresh selection: the message at the top of the screen, as it was BEFORE the pane
-  // opened and shifted it (paneAnchor). (The "latest prompt" fallback is gone: prompts
+  // opened and shifted it (PanePosition's anchor, ports.paneAnchor). (The "latest prompt" fallback is gone: prompts
   // have the prompts pane and pins. djdarcy, 2026-10-07.)
   const mark = await screenTopMark(ports, ports.paneAnchor())
   if (!mark) {
@@ -152,9 +152,9 @@ export async function setMark(ports: MarksPorts, letter: string) {
 // like vim's ``. "On screen" comes from what the render hooks report, not from the
 // last press, so scrolling by hand in between does not confuse it.
 // The toggle's state, kept explicitly rather than read off the screen (whose reports go
-// stale after a jump, see onScreenNow): `at` true right after going to the reading
+// stale after a jump, see ScreenModel's onScreenNow, core/screen-model.ts): `at` true right after going to the reading
 // position, so the next press goes `back`; false otherwise, so the next press goes there.
-// `backBlock`: which edge of the window `back` was anchored to (viewAnchor).
+// `backBlock`: which edge of the window `back` was anchored to (viewAnchor, handlers/view-tracker.ts).
 type ReadingState = { at: boolean; back: string | null; backBlock?: 'start' | 'end' }
 async function readingStateKey(ports: MarksPorts): Promise<string> {
   return `readingState:${await ports.sessionId()}`

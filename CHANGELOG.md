@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.63] - 2026-10-13
+
+### Changed
+
+- Internal, comments only: the comments moved in 0.4.62 re-read against their new files. One described an order the code had since reversed (when the mark chord reads the selection) and now says both; four now say where a relocated thing lives; the ownership note for the mark cache names its writers in both files.
+
 ## [0.4.62] - 2026-10-13
 
 ### Changed
@@ -697,7 +703,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.62...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.63...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
