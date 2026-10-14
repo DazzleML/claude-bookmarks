@@ -88,18 +88,18 @@ const TEMPORARY_RETENTION: Retention = '30d'
 // The register's part of a session start (moved out of register.tsx's session.start hook,
 // 0.4.67): load it, say where it is, and age out temporary bookmarks.
 export async function startRegister(ports: BookmarksPorts) {
-    try {
-      const reg = await loadRegister(ports)
-      ports.log(`[bm] register: ${reg.perma.length} bookmark(s), rev ${reg.rev}, ${await registerPath(ports)}`)
-      // Temporary bookmarks age out (a setting later, #7); each leaves a tombstone.
-      const { register: pruned, pruned: gone } = prune(reg, TEMPORARY_RETENTION, await ports.now())
-      if (gone.length > 0) {
-        await saveRegister(ports, pruned)
-        ports.log(`[bm] register: pruned ${gone.length} temporary bookmark(s) older than ${TEMPORARY_RETENTION}`)
-      }
-    } catch (err) {
-      ports.logAlways(`[bm] register failed to load: ${String(err)}`)
+  try {
+    const reg = await loadRegister(ports)
+    ports.log(`[bm] register: ${reg.perma.length} bookmark(s), rev ${reg.rev}, ${await registerPath(ports)}`)
+    // Temporary bookmarks age out (a setting later, #7); each leaves a tombstone.
+    const { register: pruned, pruned: gone } = prune(reg, TEMPORARY_RETENTION, await ports.now())
+    if (gone.length > 0) {
+      await saveRegister(ports, pruned)
+      ports.log(`[bm] register: pruned ${gone.length} temporary bookmark(s) older than ${TEMPORARY_RETENTION}`)
     }
+  } catch (err) {
+    ports.logAlways(`[bm] register failed to load: ${String(err)}`)
+  }
 }
 
 // Mint a bookmark: add or relabel the record, save the register, write the export, and

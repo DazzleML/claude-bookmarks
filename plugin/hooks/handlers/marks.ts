@@ -74,11 +74,11 @@ export async function pollSelection(ports: MarksPorts) {
 // The marks' part of a session start (moved out of register.tsx's session.start hook,
 // 0.4.67): the conversation's marks into the cache, and the selection poll from scratch.
 export async function startMarks(ports: MarksPorts) {
-    ports.markCache.replace(await ports.loadMarks())
-    // Stamp selections as they change, so a stale one is ignored (freshSelection).
-    ports.state.stopPoll()
-    await pollSelection(ports)
-    ports.state.startPoll(() => ports.every(1000, () => void pollSelection(ports)))
+  ports.markCache.replace(await ports.loadMarks())
+  // Stamp selections as they change, so a stale one is ignored (freshSelection).
+  ports.state.stopPoll()
+  await pollSelection(ports)
+  ports.state.startPoll(() => ports.every(1000, () => void pollSelection(ports)))
 }
 
 // The selection if it was made within SELECTION_FRESH_SECONDS, else undefined.

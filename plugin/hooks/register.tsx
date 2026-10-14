@@ -1194,6 +1194,8 @@ export const register: Register = (on, options) => {
     // A session start is a conversation boundary (a new conversation, /clear, /resume)
     // in a process whose module state outlives it; what belonged to the conversation
     // that ended goes back to its defaults (test-plan 2026-10-12__15-25-30, row M).
+    // Since 0.4.67 each cluster resets its own below (startRegister, startMarks), and the
+    // register in memory is held per conversation (0.4.65); the panes' and the band's are here.
     unfoldedFootnotes.clear()
     paneFilter = ''
     band.newConversation()
