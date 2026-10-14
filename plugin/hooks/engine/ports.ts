@@ -136,6 +136,44 @@ export type BandPorts = {
   cut: (text: string, n: number) => string
 }
 
+/** Finding a message in the transcript by uuid or by a verbatim fragment (register.tsx's resolveTarget). */
+export type ResolveOutcome =
+  | { kind: 'one'; row: import('../core/transcript-lines.ts').TranscriptRow; via: string; ms: number }
+  | { kind: 'many'; rows: import('../core/transcript-lines.ts').TranscriptRow[]; earliest: import('../core/transcript-lines.ts').TranscriptRow; via: string; ms: number }
+  | { kind: 'none'; via?: string; ms?: number; reason: string }
+
+/** What the bookmarks cluster (handlers/bookmarks.ts) needs: the register's files, who and where this session is, the transcript, the jump, the mark highlight, the clipboard and the person's feedback. */
+export type BookmarksPorts = {
+  /** `text`: the line quotes the conversation (kept per the debugText setting). */
+  log: (line: string, text?: boolean) => void
+  toast: (text: string, timeoutMs?: number) => void
+  cut: (text: string, n: number) => string
+  expectRedraw: (why: string) => void
+  dataRoot: () => Promise<string | undefined>
+  sessionId: () => Promise<string>
+  cwd: () => Promise<string>
+  pluginName: string
+  pluginVersion: () => Promise<string>
+  // One port per variable: the validator wants $.env.get's name literal.
+  userProfile: () => Promise<string | undefined>
+  home: () => Promise<string | undefined>
+  claudeConfigDir: () => Promise<string | undefined>
+  now: () => Promise<number>
+  after: (ms: number, fn: () => void) => { cancel: () => void }
+  fsExists: (path: string) => Promise<boolean>
+  fsRead: (path: string) => Promise<string>
+  fsWrite: (path: string, text: string) => Promise<unknown>
+  resolveTarget: (want: { uuid?: string; fragment?: string }) => Promise<ResolveOutcome>
+  transcriptPath: () => Promise<string | undefined>
+  allRows: () => Promise<readonly { uuid: string }[]>
+  jumpTo: (uuid: string, via: string, label: string, words?: string) => Promise<string | undefined>
+  loadMarks: () => Promise<import('../core/marks.ts').Marks>
+  copy: (text: string) => Promise<{ isCopied: boolean }>
+  /** The marks cluster's: a transient highlight entry, and showing it. */
+  markCache: import('../core/marks.ts').MarkCache
+  showMark: (letter: string, text: string) => Promise<unknown>
+}
+
 /** What the marks cluster (handlers/marks.ts) needs: its state, the mark cache, the `shown` atom, the view, the store, the jump, and the person's feedback. */
 export type MarksPorts = {
   state: import('../core/mark-state.ts').MarkState
@@ -193,6 +231,7 @@ export type CommandLinePorts = BandPorts & {
 //   band wait/watch timers, ring, id,       core/band-state.ts BandState  band render (drawn), ui.focus (ringMoved),
 //     Esc reminder                                                         prompt.edit (oweReminder), session.start
 //   cmdBusy (one command at a time)         handlers/command-line.ts      --
+//   registerCache, proseQueued              handlers/bookmarks.ts         --
 //   logLines, screenLines, timeline (Ring)  register.tsx log cluster       diagnostics (timeline, read-only)
 //   rendered (drawn ids)                    register.tsx render hooks     diagnostics, list model (read-only)
 //   highlight clear timer, selection at     core/mark-state.ts MarkState  band (setAtChord, via its port),
