@@ -629,7 +629,8 @@ async function grepTranscript($: EngineInterface, path: string, pattern: string)
 
 // The message a request names, with its line and byte range: by uuid (full or 8+
 // prefix), or by a fragment of its text (earliest real message that contains it; several
-// are returned as candidates). The anchors DWP's resolver (2026-10-09).
+// are returned as candidates). The anchors DWP's resolver (2026-10-09). Its outcome type,
+// ResolveOutcome, is in engine/ports.ts since 0.4.64: handlers/bookmarks.ts names it too.
 async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment?: string }): Promise<ResolveOutcome> {
   const path = await transcriptPath($)
   if (!path) return { kind: 'none', reason: 'transcript not found' }

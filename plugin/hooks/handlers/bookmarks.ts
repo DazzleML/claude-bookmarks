@@ -20,7 +20,9 @@ import type { BookmarksPorts } from '../engine/ports.ts'
 // --- Bookmark anchors (anchors DWP 2026-10-09) -----------------------------------------
 // The URL format, its parser and the link finder live in hooks/core/anchor.ts (pure, with
 // tests under `node --test`). This file holds what needs the engine: the press, the jump,
-// the highlight, the tool and the register's I/O.
+// the highlight, the tool and the register's I/O. (Written in register.tsx; since 0.4.64
+// this file reaches the engine through BookmarksPorts, engine/ports.ts, and register.tsx
+// keeps the tool.call hook and the render hooks that draw anchors.)
 
 // The transient mark an anchor press shows: the words the anchor names, highlighted on
 // the target row like a letter's selection, under a key no letter can take. Display
@@ -30,7 +32,7 @@ export const ANCHOR_MARK = '@'
 
 // --- The register: <dataRoot>/bookmarks/sessions/<sessionId>.json, and one export per
 // bookmark beside it. The file is the source of truth (#6); this cache is a copy of what
-// was last read or written. `.bak` is written before the file, since `$.fs.write` is not
+// was last read or written. `.bak` is written before the file, since `$.fs.write` (ports.fsWrite) is not
 // atomic; a main file that fails to parse falls back to it.
 // Held for the conversation it was read or written in (`session`): the process outlives a
 // conversation (/clear, /resume), and an unkeyed cache handed the next conversation the
@@ -173,7 +175,7 @@ export async function onAnchorPress(ports: BookmarksPorts, href: string) {
     if (row) uuid = row.uuid
     else ports.log(`[bm] anchor link: no known row starts with ${uuid}; trying it as written`)
   }
-  // The jump records itself in the jumplist (jumpTo), so <leader> o comes back here. The
+  // The jump records itself in the jumplist (jumpTo, handlers/navigation.ts), so <leader> o comes back here. The
   // reading position is left alone: it is the person's (djdarcy, 2026-10-09).
   // The words to highlight (and, on a refused jump, the phrase the fallback copies): the
   // link's `q`, else the register's record.
@@ -242,123 +244,123 @@ export async function promoteLetter(ports: BookmarksPorts, letter: string) {
 // The model's tool call (`mcp__bookmarks__bookmark`): what it takes and how it answers is
 // core/bookmark-tool.ts; register.tsx's tool.call hook hands the event here.
 export async function bookmarkTool(ports: BookmarksPorts, e: unknown) {
-    const { tool, tool_use_id, agentId, requestMeta, ...input } = e as unknown as Record<string, unknown>
-    void agentId
-    void requestMeta
-    ports.log(`[bm] ${String(tool)} called (${String(tool_use_id).slice(0, 12)}) with ${ports.cut(JSON.stringify(input), 160)}`, true)
-    const answer = toolAnswer
-    const { query, uuid, label, action, tierAsked, owner, why, words: wordsAsked, temporary } = parseToolInput(input)
-    if (action !== 'list' && !query && !uuid) return answer({ error: 'give `query` (a short verbatim fragment of the message) or `uuid`' })
-    const root = await ports.dataRoot()
-    const describe = (r: AnchorRecord) => describeRecord(r, root)
-    const brief = briefRow
+  const { tool, tool_use_id, agentId, requestMeta, ...input } = e as unknown as Record<string, unknown>
+  void agentId
+  void requestMeta
+  ports.log(`[bm] ${String(tool)} called (${String(tool_use_id).slice(0, 12)}) with ${ports.cut(JSON.stringify(input), 160)}`, true)
+  const answer = toolAnswer
+  const { query, uuid, label, action, tierAsked, owner, why, words: wordsAsked, temporary } = parseToolInput(input)
+  if (action !== 'list' && !query && !uuid) return answer({ error: 'give `query` (a short verbatim fragment of the message) or `uuid`' })
+  const root = await ports.dataRoot()
+  const describe = (r: AnchorRecord) => describeRecord(r, root)
+  const brief = briefRow
 
-    if (action === 'list') {
-      const reg = await loadRegister(ports)
-      return answer({ yours: listOf(reg, 'user').map(describe), claudes: listOf(reg, 'claude').map(describe), tombstones: reg.tombstones.length })
-    }
+  if (action === 'list') {
+    const reg = await loadRegister(ports)
+    return answer({ yours: listOf(reg, 'user').map(describe), claudes: listOf(reg, 'claude').map(describe), tombstones: reg.tombstones.length })
+  }
 
-    if (action === 'relabel' || action === 'remove' || action === 'share' || action === 'claim') {
-      // These act on a record that exists: by uuid (full or 8+ prefix) on `owner`'s list
-      // (Claude's, for a claim).
-      const from: AnchorOwner = listActedOn(action, owner)
-      const reg = await loadRegister(ports)
-      let target = uuid ? findRecord(reg, uuid, from) : undefined
-      if (!target && query) {
-        const found = await ports.resolveTarget({ fragment: query })
-        if (found.kind === 'one') target = findRecord(reg, found.row.uuid, from)
-        else if (found.kind === 'many') target = found.rows.map(r => findRecord(reg, r.uuid, from)).find(Boolean)
-      }
-      if (!target) return answer({ error: `no bookmark for that on ${listName(from)} list`, hint: 'action: "list" shows both lists with their uuids' })
-      const now = await ports.now()
-      if (action === 'claim') {
-        const r = claim(reg, target.uuid, now)
-        if ('error' in r) return answer(r)
-        await saveRegister(ports, r.register)
-        ports.log(`[bm] bookmark claimed by the person: ${short(target.uuid)} "${r.record.label}"`, true)
-        return answer({ ok: true, claimed: describe(r.record), note: "now on the person's list; same message, id and link" })
-      }
-      if (action === 'remove') {
-        const r = remove(reg, target.uuid, owner, `claude${owner === 'user' ? ' (on the person\'s behalf)' : ''}`, now)
-        if ('error' in r) return answer(r)
-        await saveRegister(ports, r.register)
-        ports.log(`[bm] bookmark removed from ${owner}'s list: ${short(target.uuid)} "${target.label}" (tombstoned)`, true)
-        return answer({ ok: true, removed: describe(r.removed), note: 'archived as a tombstone in the register, not deleted' })
-      }
-      if (action === 'share') {
-        const to: AnchorOwner = owner === 'claude' ? 'user' : 'claude'
-        const r = share(reg, target.uuid, owner, to, now)
-        if ('error' in r) return answer(r)
-        await saveRegister(ports, r.register)
-        await writeExport(ports, r.register, { uuid: target.uuid, sessionId: r.register.sessionId }, '', now)
-        ports.log(`[bm] bookmark shared ${owner} -> ${to}: ${short(target.uuid)} "${r.record.label}"`, true)
-        return answer({ ok: true, added: r.added, shared: describe(r.record), note: `now on ${listName(to)} list too; the original stays` })
-      }
-      // relabel
-      if (!label && why === undefined && typeof input.words !== 'string') return answer({ error: 'relabel needs `label`, `why` or `words`' })
-      const minted = await mintBookmark(
-        ports,
-        {
-          uuid: target.uuid,
-          owner,
-          label: label ?? target.label,
-          ...(why !== undefined ? { why } : {}),
-          ...(wordsAsked ? { words: wordsAsked } : {}),
-          ...(temporary ? { temporary: true } : {}),
-          ...(tierAsked ? { tier: tierAsked } : {}),
-          head: target.head,
-          by: 'claude',
-          source: target.source,
-        },
-        '',
-      )
-      return answer({ ok: true, relabelled: describe(minted.record) })
+  if (action === 'relabel' || action === 'remove' || action === 'share' || action === 'claim') {
+    // These act on a record that exists: by uuid (full or 8+ prefix) on `owner`'s list
+    // (Claude's, for a claim).
+    const from: AnchorOwner = listActedOn(action, owner)
+    const reg = await loadRegister(ports)
+    let target = uuid ? findRecord(reg, uuid, from) : undefined
+    if (!target && query) {
+      const found = await ports.resolveTarget({ fragment: query })
+      if (found.kind === 'one') target = findRecord(reg, found.row.uuid, from)
+      else if (found.kind === 'many') target = found.rows.map(r => findRecord(reg, r.uuid, from)).find(Boolean)
     }
-
-    if (!label) return answer({ error: 'give `label`: what the bookmark is for, a few words' })
-    const found = await ports.resolveTarget(uuid ? { uuid } : { fragment: query })
-    ports.log(`[bm] bookmark: ${found.kind}${'via' in found && found.via ? ` via ${found.via} in ${found.ms} ms` : ''}${found.kind === 'none' ? `: ${found.reason}` : ''}`)
-    if (found.kind === 'none') return answer({ error: found.reason, hint: 'use a verbatim fragment that appears in the message itself, or its uuid' })
-    if (found.kind === 'many') {
-      return answer({
-        ambiguous: true,
-        note: 'several messages contain that fragment; the earliest is where it was first said. Call again with `uuid` to choose, or a longer fragment.',
-        earliest: brief(found.earliest),
-        candidates: found.rows.slice(0, 12).map(brief),
-      })
+    if (!target) return answer({ error: `no bookmark for that on ${listName(from)} list`, hint: 'action: "list" shows both lists with their uuids' })
+    const now = await ports.now()
+    if (action === 'claim') {
+      const r = claim(reg, target.uuid, now)
+      if ('error' in r) return answer(r)
+      await saveRegister(ports, r.register)
+      ports.log(`[bm] bookmark claimed by the person: ${short(target.uuid)} "${r.record.label}"`, true)
+      return answer({ ok: true, claimed: describe(r.record), note: "now on the person's list; same message, id and link" })
     }
-    const row = found.row
-    const words = wordsAsked ?? (query || undefined)
+    if (action === 'remove') {
+      const r = remove(reg, target.uuid, owner, `claude${owner === 'user' ? ' (on the person\'s behalf)' : ''}`, now)
+      if ('error' in r) return answer(r)
+      await saveRegister(ports, r.register)
+      ports.log(`[bm] bookmark removed from ${owner}'s list: ${short(target.uuid)} "${target.label}" (tombstoned)`, true)
+      return answer({ ok: true, removed: describe(r.removed), note: 'archived as a tombstone in the register, not deleted' })
+    }
+    if (action === 'share') {
+      const to: AnchorOwner = owner === 'claude' ? 'user' : 'claude'
+      const r = share(reg, target.uuid, owner, to, now)
+      if ('error' in r) return answer(r)
+      await saveRegister(ports, r.register)
+      await writeExport(ports, r.register, { uuid: target.uuid, sessionId: r.register.sessionId }, '', now)
+      ports.log(`[bm] bookmark shared ${owner} -> ${to}: ${short(target.uuid)} "${r.record.label}"`, true)
+      return answer({ ok: true, added: r.added, shared: describe(r.record), note: `now on ${listName(to)} list too; the original stays` })
+    }
+    // relabel
+    if (!label && why === undefined && typeof input.words !== 'string') return answer({ error: 'relabel needs `label`, `why` or `words`' })
     const minted = await mintBookmark(
       ports,
       {
-        uuid: row.uuid,
+        uuid: target.uuid,
         owner,
-        label,
-        ...(why ? { why } : {}),
-        ...(words && row.text.includes(words) ? { words } : {}),
+        label: label ?? target.label,
+        ...(why !== undefined ? { why } : {}),
+        ...(wordsAsked ? { words: wordsAsked } : {}),
         ...(temporary ? { temporary: true } : {}),
-        tier: tierFor(tierAsked, owner),
-        line: row.line,
-        bytes: [row.byteStart, row.byteEnd],
-        head: headOf(row.text),
+        ...(tierAsked ? { tier: tierAsked } : {}),
+        head: target.head,
         by: 'claude',
-        source: 'tool',
-        transcript: (await ports.transcriptPath())?.replace(/\\/g, '/'),
-        role: row.role,
-        ...(row.timestamp ? { timestamp: row.timestamp } : {}),
+        source: target.source,
       },
-      row.text,
+      '',
     )
+    return answer({ ok: true, relabelled: describe(minted.record) })
+  }
+
+  if (!label) return answer({ error: 'give `label`: what the bookmark is for, a few words' })
+  const found = await ports.resolveTarget(uuid ? { uuid } : { fragment: query })
+  ports.log(`[bm] bookmark: ${found.kind}${'via' in found && found.via ? ` via ${found.via} in ${found.ms} ms` : ''}${found.kind === 'none' ? `: ${found.reason}` : ''}`)
+  if (found.kind === 'none') return answer({ error: found.reason, hint: 'use a verbatim fragment that appears in the message itself, or its uuid' })
+  if (found.kind === 'many') {
     return answer({
-      ok: true,
-      added: minted.added,
-      owner,
-      anchor: minted.href,
-      markdown: minted.markdown,
-      ...brief(row),
-      words: minted.record.words,
-      export: minted.exportPath,
-      note: `on ${listName(owner)} list. Write \`markdown\` in your reply as the citation; a plain click jumps there, a ctrl-click opens the export`,
+      ambiguous: true,
+      note: 'several messages contain that fragment; the earliest is where it was first said. Call again with `uuid` to choose, or a longer fragment.',
+      earliest: brief(found.earliest),
+      candidates: found.rows.slice(0, 12).map(brief),
     })
+  }
+  const row = found.row
+  const words = wordsAsked ?? (query || undefined)
+  const minted = await mintBookmark(
+    ports,
+    {
+      uuid: row.uuid,
+      owner,
+      label,
+      ...(why ? { why } : {}),
+      ...(words && row.text.includes(words) ? { words } : {}),
+      ...(temporary ? { temporary: true } : {}),
+      tier: tierFor(tierAsked, owner),
+      line: row.line,
+      bytes: [row.byteStart, row.byteEnd],
+      head: headOf(row.text),
+      by: 'claude',
+      source: 'tool',
+      transcript: (await ports.transcriptPath())?.replace(/\\/g, '/'),
+      role: row.role,
+      ...(row.timestamp ? { timestamp: row.timestamp } : {}),
+    },
+    row.text,
+  )
+  return answer({
+    ok: true,
+    added: minted.added,
+    owner,
+    anchor: minted.href,
+    markdown: minted.markdown,
+    ...brief(row),
+    words: minted.record.words,
+    export: minted.exportPath,
+    note: `on ${listName(owner)} list. Write \`markdown\` in your reply as the citation; a plain click jumps there, a ctrl-click opens the export`,
+  })
 }
