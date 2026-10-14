@@ -136,6 +136,17 @@ export type BandPorts = {
   cut: (text: string, n: number) => string
 }
 
+/** What the band's command line (handlers/command-line.ts) needs beyond the band's own: the field's redraw, the bookmarks group, and the commands it runs that other clusters own. */
+export type CommandLinePorts = BandPorts & {
+  /** Draw the field anew, empty (the cmdRev atom; its writer is this port). */
+  clearCommandLine: () => Promise<unknown>
+  setBandGroup: (group: number) => Promise<unknown>
+  jumpToMark: (letter: string) => Promise<unknown>
+  readingToggle: () => Promise<unknown>
+  promoteLetter: (letter: string) => Promise<unknown>
+  jumplistMove: (dir: -1 | 1) => Promise<unknown>
+}
+
 // Ownership of shared state (notes/meta/2026-10-12__22-48-40, one owner, read-only ports):
 //   state                                   owner                         readers
 //   screen (ScreenModel)                    register.tsx render hooks     view tracker (read-only Pick)
@@ -146,6 +157,7 @@ export type BandPorts = {
 //   jumplistCache, jumplistMoving           handlers/navigation.ts        --
 //   band wait/watch timers, ring, id,       core/band-state.ts BandState  band render (drawn), ui.focus (ringMoved),
 //     Esc reminder                                                         prompt.edit (oweReminder), session.start
+//   cmdBusy (one command at a time)         handlers/command-line.ts      --
 //   logLines, screenLines, timeline (Ring)  register.tsx log cluster       diagnostics (timeline, read-only)
 //   rendered (drawn ids)                    register.tsx render hooks     diagnostics, list model (read-only)
 //   markCache (core/marks.ts MarkCache)     register.tsx marks cluster    render hooks, band, navigation

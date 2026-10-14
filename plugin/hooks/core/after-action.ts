@@ -47,7 +47,7 @@ export type AfterActionSettings = {
   afterActionFocus: 'input' | 'band'
 }
 
-/** The two list-shaped panes (prompts and bookmarks), which share the band's number entry. */
+/** The two list-shaped panes (prompts and bookmarks), which share the band's number entry (digits, j/k, Enter). */
 export const isList = (pane: Pane | 'idle') => pane === 'list' || pane === 'bookmarks'
 
 export function afterAction(input: { pane: Pane; cause: Cause; needsMore?: boolean; settings: AfterActionSettings }): Outcome {

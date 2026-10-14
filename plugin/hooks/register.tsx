@@ -24,8 +24,8 @@ import {
 } from './core/register-file'
 import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution, type TranscriptRow } from './core/transcript-lines'
 import { excerpt, formatDebugEnv, parseDebugEnv, quotesText, screenMirror, type Channel } from './core/debug'
-import { bandButtons, helpLines, helpShort, lineHint, listHint, listKeysFor, route, type Chord, type Operation, type Pane } from './core/keys'
-import { afterAction, isList, type Cause } from './core/after-action'
+import { bandButtons, helpLines, helpShort, listHint, listKeysFor, route, type Chord, type Operation, type Pane } from './core/keys'
+import type { Cause } from './core/after-action'
 import { debugTextMode, installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
 import { resolvePalette, type Palette, type Role, type Style } from './core/palette'
 import { shard, withinBudget, type PromptText } from './core/text-store'
@@ -43,9 +43,10 @@ import { debugCommand } from './handlers/debug-command'
 import { anchoredReply, markedColumn, markedReply, type MarkStyles } from './views/marked-message'
 import { bandView } from './views/band'
 import { configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
-import type { BandPorts, DiagnosticsPorts, NavigationPorts, ViewPorts } from './engine/ports'
+import type { BandPorts, CommandLinePorts, DiagnosticsPorts, NavigationPorts, ViewPorts } from './engine/ports'
 import { closeAll as bandCloseAll, closePane as bandClosePane, endBandMode as bandEnd, paneFocused as bandPaneFocused, settle as bandSettle, BAND_MODE_MS, BAND_WATCH_MS, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
+import * as commandLine from './handlers/command-line'
 import { Navigation } from './handlers/navigation'
 import { ViewTracker } from './handlers/view-tracker'
 import { PanePosition } from './core/pane-position'
@@ -1202,23 +1203,10 @@ async function jumpToMark($: EngineInterface, letter: string, probe = false): Pr
 }
 
 // --- The band's command line -----------------------------------------------------------
-// Design 2026-10-07__02-58-22 (and its POC addendum). The band leader (abovePrompt:focus,
-// Ctrl+] for djdarcy) puts the keyboard on the band, whose first element is a field
-// that takes every printable key, ' and Space included, over a draft and mid-turn.
-// The field's typing and Enter DO scroll the conversation, as long as the handler is
-// still running when the scroll is asked (the engine credits the work to the keystroke
-// only until the handler returns; a fire-and-forget `void` lost it, 2026-10-09). So the
-// keys below act directly; the once-per-version probe that used to decide this is gone.
-
-// Generated from the router's table (core/keys.ts), so every key is named once.
-const CMD_HINT = lineHint()
+// The band's command line (the field the leader lands on, and `perform`) is
+// handlers/command-line.ts.
 // The borrowed engine action each chord command's button carries while chords are on.
 const CHORD_ACTION: Record<Chord, string> = { mark: MARK_ACTION, jump: JUMP_ACTION, prompts: PROMPTS_ACTION, read: READING_ACTION }
-
-// The two list-shaped pane modes share the band's number entry (digits, j/k, Enter):
-// core/after-action.ts isList.
-const listLike = isList
-let cmdBusy = false
 
 // Draw the field anew, empty.
 async function clearCommandLine($: EngineInterface) {
@@ -1233,86 +1221,11 @@ async function handOff($: EngineInterface, mode: PaneMode, focusKey?: string) {
 // The band's own state -- its wait and watch timers, the focus ring, its requestId, the
 // Esc reminder -- is core/band-state.ts BandState, written only through its named methods.
 const band = new BandState()
-const ESC_REMINDER = 'Press Esc to type in the input box: the band still has the keyboard (Claude Code does not let a plugin hand it back yet).'
-function owedAfterAction() {
-  band.oweReminder(afterAction({ pane: 'none', cause: 'band-command', settings: currentSettings() }).focus === 'input')
-}
-
 async function runCommandLine($: EngineInterface, typed: string, via: 'input' | 'submit') {
-  if (cmdBusy || typed === '') return
-  cmdBusy = true
-  try {
-    log($, `[bm] band command line ${via}: "${cut(typed, 40)}"`, { text: true })
-    // What the keys mean lives in the router's table (core/keys.ts); perform does it.
-    await perform($, route(typed, { pane: 'none' }).operation, 'field')
-  } finally {
-    cmdBusy = false
-  }
+  await commandLine.runCommandLine(commandLinePorts($), typed, via)
 }
-
-// The one place a band command is done, whether its key was typed in the field (`field`)
-// or its button was pressed -- clicked, or by a chord bound to its borrowed action (the
-// action's name, which openFor logs). The input DWP's `perform` (2026-10-12): a click and
-// a key cannot do different things.
 async function perform($: EngineInterface, operation: Operation, via: 'field' | string) {
-  switch (operation.op) {
-    case 'wait':
-      return // `P` waits for its letter
-    case 'help':
-      await clearCommandLine($)
-      await showHelp($)
-      return
-    case 'close':
-      await clearCommandLine($)
-      await closeAll($, via)
-      return
-    case 'open':
-      await clearCommandLine($)
-      if (operation.pane === 'list' || operation.pane === 'bookmarks') await update($, bandNum, () => '')
-      if (operation.pane === 'bookmarks') await update($, bandGroup, () => 0) // start on the person's own bookmarks
-      // Lists off (the `panes` setting): the band takes the key with no pane beside it.
-      if (currentSettings().panes === 'off') return void (await bandOnly($, operation.pane))
-      // A pressed button opens the pane as the chords always did; the band's own keys
-      // are the fallback openFor sets up when the pane can't take the keyboard.
-      if (via !== 'field') return void (await openFor($, operation.pane, via))
-      // The jump pane is the readable list of marks, the band's letter buttons taking the
-      // letter (v0.1.7's shape; djdarcy, 2026-10-09: "the panel isn't opening"). A mark
-      // scrolls back after its highlight (restoreView), so its cancel button is pressed.
-      await handOff($, operation.pane, operation.pane === 'mark' ? 'band-mark-cancel' : undefined)
-      return
-    case 'jump-mark':
-      await clearCommandLine($)
-      await jumpToMark($, operation.letter)
-      owedAfterAction()
-      return
-    case 'reading':
-      await clearCommandLine($)
-      await readingToggle($)
-      owedAfterAction()
-      return
-    case 'promote':
-      await clearCommandLine($)
-      await promoteLetter($, operation.letter)
-      owedAfterAction()
-      return
-    case 'jumplist':
-      // `<leader> ←` / `→` are wanted too; whether an arrow reaches this field is #23.
-      await clearCommandLine($)
-      await jumplistMove($, operation.dir)
-      owedAfterAction()
-      return
-    case 'hint':
-      await clearCommandLine($)
-      if (band.reminderOwed) {
-        band.oweReminder(false)
-        log($, `[bm] a key the band does not know, after an action: the Esc reminder`)
-        $.ui.toast(ESC_REMINDER)
-      } else $.ui.toast(operation.reason)
-      return
-    default:
-      await clearCommandLine($)
-      $.ui.toast(CMD_HINT)
-  }
+  await commandLine.perform(commandLinePorts($), operation, via)
 }
 
 async function showHelp($: EngineInterface) {
@@ -1582,6 +1495,17 @@ function bandPorts($: EngineInterface): BandPorts {
     },
     draftText: async () => (await $.prompt.read()).text,
     cut,
+  }
+}
+function commandLinePorts($: EngineInterface): CommandLinePorts {
+  return {
+    ...bandPorts($),
+    clearCommandLine: () => clearCommandLine($),
+    setBandGroup: group => update($, bandGroup, () => group),
+    jumpToMark: letter => jumpToMark($, letter),
+    readingToggle: () => readingToggle($),
+    promoteLetter: letter => promoteLetter($, letter),
+    jumplistMove: dir => jumplistMove($, dir),
   }
 }
 async function settle($: EngineInterface, pane: Pane, cause: Cause, needsMore = false) {
