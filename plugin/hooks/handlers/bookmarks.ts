@@ -32,7 +32,10 @@ export const ANCHOR_MARK = '@'
 // bookmark beside it. The file is the source of truth (#6); this cache is a copy of what
 // was last read or written. `.bak` is written before the file, since `$.fs.write` is not
 // atomic; a main file that fails to parse falls back to it.
-let registerCache: BookmarkRegister | undefined
+// Held for the conversation it was read or written in (`session`): the process outlives a
+// conversation (/clear, /resume), and an unkeyed cache handed the next conversation the
+// register of the one before (0.4.65; tool.test.ts, "a new conversation reads its own").
+let registerCache: { session: string; register: BookmarkRegister } | undefined
 
 export async function registerPath(ports: BookmarksPorts): Promise<string | undefined> {
   const root = await ports.dataRoot()
@@ -40,7 +43,8 @@ export async function registerPath(ports: BookmarksPorts): Promise<string | unde
 }
 
 export async function loadRegister(ports: BookmarksPorts): Promise<BookmarkRegister> {
-  if (registerCache) return registerCache
+  const session = await ports.sessionId()
+  if (registerCache?.session === session) return registerCache.register
   const path = await registerPath(ports)
   let reg: BookmarkRegister | undefined
   if (path) {
@@ -62,7 +66,7 @@ export async function loadRegister(ports: BookmarksPorts): Promise<BookmarkRegis
       cwd: (await ports.cwd()).replace(/\\/g, '/'),
     })
   }
-  registerCache = reg
+  registerCache = { session, register: reg }
   return reg
 }
 
@@ -72,7 +76,7 @@ export async function saveRegister(ports: BookmarksPorts, reg: BookmarkRegister)
   if (!path) return
   if (await ports.fsExists(path)) await ports.fsWrite(`${path}.bak`, await ports.fsRead(path))
   await ports.fsWrite(path, serializeRegister({ ...reg, writer: `${ports.pluginName} ${await ports.pluginVersion()}` }))
-  registerCache = reg
+  registerCache = { session: await ports.sessionId(), register: reg }
 }
 
 // Mint a bookmark: add or relabel the record, save the register, write the export, and

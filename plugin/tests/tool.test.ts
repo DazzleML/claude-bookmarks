@@ -48,3 +48,17 @@ test('claim moves Claude\'s record to the person\'s list, same id and tier', asy
   expect(claimed.tier).toBe('perma')
   expect(w.file(PATH)).toContain('"owner": "user"')
 })
+
+// The process outlives a conversation (/clear, /resume start a new one in it), so the
+// register held in memory must be the current conversation's. Found moving the bookmarks
+// cluster (0.4.64): the cache was never keyed or reset, so the next conversation listed,
+// and on its next save wrote under its own name, the register of the one before.
+test('a new conversation reads its own register, not the one before it', async ($, on) => {
+  const opts = { session: SID, files: seeded() }
+  world(on, opts)
+  expect(((await call($ as never, { action: 'list' })).claudes as unknown[]).length).toBe(1)
+  opts.session = '99999999-2222-4333-8444-555555555555'
+  await ($ as unknown as { session: { start: (e: object) => Promise<unknown> } }).session.start({ cwd: 'C:/test-project', surface: 'terminal', isInteractive: true })
+  const out = await call($ as never, { action: 'list' })
+  expect((out.claudes as unknown[]).length).toBe(0)
+})
