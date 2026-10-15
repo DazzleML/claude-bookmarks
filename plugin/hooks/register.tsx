@@ -419,7 +419,18 @@ async function sameConversation($: EngineInterface): Promise<void> {
   await resetConversationMemory()
   await bookmarks_.startRegister(bookmarksPorts($))
   await marks_.startMarks(marksPorts($))
+  pruneThenBackfill($)
   log($, `[bm] a new conversation: ${short(before)} -> ${short(id)}; what the one before left in memory is reset`)
+}
+// The store's prune, then this conversation's back-fill (done once per conversation, by its
+// flag): at session.start, and when the process moves to another conversation (0.4.79;
+// acceptance check 2026-10-14__16-55-20, #15: a resumed conversation was never back-filled
+// until the next process start). Not awaited, by either.
+function pruneThenBackfill($: EngineInterface) {
+  void pruneStoreNow($)
+    .catch(err => log($, `[bm] store prune failed: ${String(err)}`))
+    .then(() => backfillPrompts($))
+    .catch(err => log($, `[bm] backfill failed: ${String(err)}`))
 }
 // From a render hook, which may not write state (the reset clears the highlight): notice
 // a changed id there and do the reset on a clock tick.
@@ -1282,10 +1293,7 @@ export const register: Register = (on, options) => {
     await bookmarks_.startRegister(bookmarksPorts($))
     await marks_.startMarks(marksPorts($))
     // Not awaited: session start should not wait on a third of a second of PowerShell.
-    void pruneStoreNow($)
-      .catch(err => log($, `[bm] store prune failed: ${String(err)}`))
-      .then(() => backfillPrompts($))
-      .catch(err => log($, `[bm] backfill failed: ${String(err)}`))
+    pruneThenBackfill($)
 
     // The tracking mechanism for the borrowed actions: say so whenever the build is
     // not one the chords were verified on.

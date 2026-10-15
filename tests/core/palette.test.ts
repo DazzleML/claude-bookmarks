@@ -1,20 +1,35 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { DEFAULTS, MARK_BAND, THEME_KEYS, brightness, isColour, resolvePalette } from '../../plugin/hooks/core/palette.ts'
 
-// #27: register.tsx names no colour; every style comes from the palette by role.
-test('register.tsx draws no colour of its own', () => {
-  const source = readFileSync(new URL('../../plugin/hooks/register.tsx', import.meta.url), 'utf8')
-  const code = source.split('\n').filter(l => !l.trim().startsWith('//'))
-  const offenders = code.filter(
+// #27: nothing that draws names a colour; every style comes from the palette by role.
+// register.tsx and, since the split (0.4.46-0.4.69), the views and handlers it moved into
+// (acceptance check 2026-10-14__16-55-20: the scan had stayed on register.tsx alone).
+const DRAWING = [
+  new URL('../../plugin/hooks/register.tsx', import.meta.url),
+  ...['views', 'handlers'].flatMap(dir => {
+    const base = new URL(`../../plugin/hooks/${dir}/`, import.meta.url)
+    return readdirSync(base).filter(f => /\.tsx?$/.test(f)).map(f => new URL(f, base))
+  }),
+]
+export function colourOffenders(source: string): string[] {
+  // Comments and type declarations (a style's shape, `dimColor?: boolean`) name no colour.
+  const code = source.split('\n').filter(l => !l.trim().startsWith('//') && !/^\s*(export\s+)?type\s/.test(l))
+  return code.filter(
     l =>
       /\b(color|backgroundColor)=/.test(l) ||
       /['"]#[0-9a-fA-F]{6}['"]/.test(l) ||
       /['"](black|red|green|yellow|blue|magenta|cyan|white|gray|grey)(Bright)?['"]/.test(l) ||
       (/\bdimColor\b/.test(l) && !l.includes('const buttonStyle')),
   )
+}
+test('nothing that draws names a colour of its own (register.tsx, views, handlers)', () => {
+  const offenders = DRAWING.flatMap(u => colourOffenders(readFileSync(u, 'utf8')).map(l => `${u.pathname.split('/hooks/')[1]}: ${l.trim()}`))
   assert.deepEqual(offenders, [])
+})
+test('the colour scan catches a named colour in a view', () => {
+  assert.equal(colourOffenders('<Text color="cyan">x</Text>').length, 1)
 })
 
 test('defaults use theme keys for every foreground colour', () => {

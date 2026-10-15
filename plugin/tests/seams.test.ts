@@ -223,3 +223,21 @@ test('M3 a new conversation writes its own debug log', async ($, on) => {
   expect((w.file(LOG_B) ?? '').includes('a new conversation')).toBe(true)
   expect((w.file(LOG) ?? '').split('\n').length).toBe(linesInA)
 })
+
+// A conversation the process moves to (a resume, or /clear) is back-filled too: the
+// back-fill started only from session.start, which never fires there (acceptance check
+// 2026-10-14__16-55-20, #15; Q261014-01). Its done flag is per conversation, so B is read.
+test('6b a conversation the process moves to is back-filled when its id is first seen', async ($, on) => {
+  const B = '99999999-2222-4333-8444-555555555555'
+  const LOG_B = `C:/test-home/claude/bookmarks/debug/${B}.log`
+  const opts = { session: SID, store: LIVE_ONLY, files: { [TRANSCRIPT]: '', [TRANSCRIPT.replace(SID, B)]: '' }, process: () => ({ exitCode: 0, stdout: FILE_ROWS }) }
+  const w = world(on, opts)
+  on('prompt.submit' as never, {} as never, (async (_h: unknown, e: object) => e) as never)
+  await start($)
+  await settle()
+  expect(backfillLines(w).length).toBe(1)
+  opts.session = B
+  await ($ as unknown as Engine).prompt.submit({ text: 'hello' })
+  await settle()
+  expect((w.file(LOG_B) ?? '').split('\n').some(l => l.includes('backfill:'))).toBe(true)
+})
