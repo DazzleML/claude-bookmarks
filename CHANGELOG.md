@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.99] - 2026-10-15
+
+### Fixed
+
+- A scheduled `/loop` firing is no longer listed as one of your footnotes in the prompts list. A loop that runs a slash command every few minutes added one footnote per firing; in the author's store they were 535 of 671 footnotes and most of the plugin store's size, which counts against Claude Code's 4 MiB limit for a plugin's store. The first start after upgrading reads each conversation's transcript once more and rewrites its footnotes without them.
+- A footnote's label is cut to 120 characters, ending in "…". A slash command carrying a long brief as its arguments drew as one label spanning many rows.
+
 ## [0.4.98] - 2026-10-15
 
 ### Changed
@@ -921,7 +928,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.98...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.99...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

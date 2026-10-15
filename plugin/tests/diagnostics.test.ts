@@ -47,14 +47,14 @@ test('/bm-sel with nothing selected says so', async ($, on) => {
 // S3 of the 20-00-06 scenarios: a `text` line through the port follows the debugText setting
 // exactly as a direct log($) call does -- kept in a folder build by default, dropped when off.
 test('a prompt row from /bm-ids is a text line: kept by default in a folder build', async ($, on) => {
-  const w = world(on, { session: SID, store: { [`prompts:${SID}`]: [{ uuid: 'aaaaaaaa-0000-4000-8000-000000000001', head: 'first prompt' }], [`backfilled6:${SID}`]: true } })
+  const w = world(on, { session: SID, store: { [`prompts:${SID}`]: [{ uuid: 'aaaaaaaa-0000-4000-8000-000000000001', head: 'first prompt' }], [`backfilled7:${SID}`]: true } })
   await run($, 'bm-ids')
   await settle()
   expect(fileLines(w).some(l => l.startsWith('[bm]  #1 aaaaaaaa ----- first prompt'))).toBe(true)
 })
 
 test('a prompt row from /bm-ids is a text line: dropped with debugText off', { options: { debugText: 'off' } }, async ($, on) => {
-  const w = world(on, { session: SID, store: { [`prompts:${SID}`]: [{ uuid: 'aaaaaaaa-0000-4000-8000-000000000001', head: 'first prompt' }], [`backfilled6:${SID}`]: true } })
+  const w = world(on, { session: SID, store: { [`prompts:${SID}`]: [{ uuid: 'aaaaaaaa-0000-4000-8000-000000000001', head: 'first prompt' }], [`backfilled7:${SID}`]: true } })
   await run($, 'bm-ids')
   await settle()
   expect(fileLines(w).some(l => l.startsWith('[bm] ids: 0 of 1'))).toBe(true) // the summary is not a text line
@@ -62,7 +62,7 @@ test('a prompt row from /bm-ids is a text line: dropped with debugText off', { o
 })
 
 test('/bm-ids reports the drawn ids against the appended prompts', async ($, on) => {
-  const w = world(on, { session: SID, store: { [`prompts:${SID}`]: [{ uuid: 'aaaaaaaa-0000-4000-8000-000000000001', head: 'first prompt' }], [`backfilled6:${SID}`]: true } })
+  const w = world(on, { session: SID, store: { [`prompts:${SID}`]: [{ uuid: 'aaaaaaaa-0000-4000-8000-000000000001', head: 'first prompt' }], [`backfilled7:${SID}`]: true } })
   await run($, 'bm-ids')
   await settle()
   expect(fileLines(w).some(l => l.startsWith('[bm] ids: 0 of 1 appended prompt uuids were seen'))).toBe(true)

@@ -532,7 +532,7 @@ async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment
 }
 
 // The back-fill's version; the done flag is `backfilled<N>:<sessionId>`.
-const BACKFILL_VERSION = 6
+const BACKFILL_VERSION = 7
 // A conversation not opened for this long gives up what its transcript rebuilds (#15).
 const PRUNE_AFTER_MS = 30 * 86_400_000
 
@@ -566,6 +566,9 @@ async function backfillPrompts($: EngineInterface) {
   // kept with the prompt each follows (#33).
   // `6`: the prompts' whole text for the filter (#28), which a conversation read under
   // `5` never collected.
+  // `7`: /loop firings are no longer footnotes and a footnote's label is cut to
+  // FOOTNOTE_LABEL_MAX; the re-read rewrites the stored footnotes without them
+  // (2026-10-15: 535 of 671 stored footnotes were firings, 848 KB of a 1.34 MB store).
   const doneKey = backfilledKey(BACKFILL_VERSION, await $.session.id())
   if (await $.store.get(doneKey)) return
   const path = await transcriptPath($)
@@ -1219,8 +1222,10 @@ export const register: Register = (on, options) => {
       }
     }
     // A footnote (#33): the person's slash command, `!` shell command or interruption,
-    // kept with the prompt it follows, as the back-fill keeps it.
-    if (!e.agentId && !queued && e.door !== 'response') {
+    // kept with the prompt it follows, as the back-fill keeps it. A row the person did not
+    // cause is no footnote either: a /loop firing runs a slash command (2026-10-15: 535 of
+    // the 671 stored footnotes were firings).
+    if (!automated && !e.agentId && !queued && e.door !== 'response') {
       const fn = footnoteOf({ type: 'user', isMeta: e.message.isMeta, message: { content: e.message.content } })
       if (fn) await prompts_.keepFootnote(promptsPorts($), { ...fn, uuid: e.uuid, after: (await keptPrompts($)).at(-1)?.uuid ?? null })
     }

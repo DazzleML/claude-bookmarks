@@ -38,6 +38,11 @@ export function unwrapQueued(rendered: string): string {
   return s.trim() || rendered.trim()
 }
 
+// A row a schedule sent: a /loop firing is a plain user row carrying the command it runs,
+// stamped `turnOrigin: "scheduled"` and the task's id (one conversation kept 337 of them
+// as footnotes, 2026-10-15). It is the schedule's, never the person's.
+const scheduled = (o: any): boolean => o?.turnOrigin === 'scheduled' || o?.scheduledTaskId !== undefined
+
 // A transcript row's prompt text, or undefined when the row is not a prompt.
 export function promptTextOf(o: any): string | undefined {
   if (o?.type === 'attachment') {
@@ -50,7 +55,7 @@ export function promptTextOf(o: any): string | undefined {
   // A compaction summary is a user row flagged `isCompactSummary` (4 in this session's
   // transcript, 2026-10-11); the flag is checked before the opening sentence, which is
   // the engine's wording and may change.
-  if (o?.type !== 'user' || o.isMeta || o.isSidechain || o.isCompactSummary) return undefined
+  if (o?.type !== 'user' || o.isMeta || o.isSidechain || o.isCompactSummary || scheduled(o)) return undefined
   const content = o.message?.content
   let text: string | undefined
   if (typeof content === 'string') text = content
@@ -71,11 +76,21 @@ export function promptTextOf(o: any): string | undefined {
 export type FootnoteKind = 'command' | 'shell' | 'interrupted'
 export type Footnote = { kind: FootnoteKind; label: string }
 
+// The longest footnote label kept. A command's label is its name and arguments, and a
+// /goal can carry its whole brief as arguments (3,155 characters seen, 2026-10-15); the
+// pane draws a label whole, so a long one wrapped over many rows and filled the store.
+export const FOOTNOTE_LABEL_MAX = 120
+
 const tagged = (text: string, tag: string) => new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(text)?.[1]?.trim()
 
 // A transcript row's footnote, or undefined when the row is not one.
 export function footnoteOf(o: any): Footnote | undefined {
-  if (o?.type !== 'user' || o.isMeta || o.isSidechain || o.isCompactSummary) return undefined
+  const fn = footnoteWhole(o)
+  return fn && fn.label.length > FOOTNOTE_LABEL_MAX ? { ...fn, label: `${fn.label.slice(0, FOOTNOTE_LABEL_MAX - 1)}…` } : fn
+}
+
+function footnoteWhole(o: any): Footnote | undefined {
+  if (o?.type !== 'user' || o.isMeta || o.isSidechain || o.isCompactSummary || scheduled(o)) return undefined
   const content = o.message?.content
   let text: string | undefined
   if (typeof content === 'string') text = content

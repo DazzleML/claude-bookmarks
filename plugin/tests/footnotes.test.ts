@@ -16,7 +16,7 @@ const STORE = {
     { uuid: 'f0000000-0000-4000-8000-000000000001', kind: 'command', label: '/compact', after: P1 },
     { uuid: 'f0000000-0000-4000-8000-000000000002', kind: 'shell', label: '!git status', after: P1 },
   ],
-  [`backfilled6:${SID}`]: true,
+  [`backfilled7:${SID}`]: true,
 }
 const BAND = { plugin: 'bookmarks', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS, requestId: 'band-1' }
 const PANE = {
