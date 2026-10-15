@@ -165,6 +165,12 @@ export type LogFilesPorts = {
   after: (ms: number, fn: () => void) => { cancel: () => void }
 }
 
+/** What the Logger (handlers/log.ts) needs: the echo's and the file log's ports, the engine's $.ui.log, and whether this build was loaded from a folder (for `debugText`'s `auto`). */
+export type LoggerPorts = EchoPorts & LogFilesPorts & {
+  uiLog: (line: string) => void
+  folderBuild: boolean
+}
+
 /** What the prompt store (handlers/prompts.ts) needs: the session's id, the plugin store, the data root and its files, a timer, and the settings (the text budget). */
 export type PromptsPorts = {
   sessionId: () => Promise<string>
@@ -286,16 +292,17 @@ export type CommandLinePorts = BandPorts & {
 //   cmdBusy (one command at a time)         handlers/command-line.ts      --
 //   registerCache, proseQueued              handlers/bookmarks.ts         --
 //   debug channels (DebugChannels)          handlers/log.ts (writers:     log, the screen channel, the view
-//                                             read, set); instance in     tracker (held), /bm-debug (on)
-//                                             register.tsx
+//                                             read, set); the Logger's    tracker (held), /bm-debug (on)
+//                                             (0.4.95), one in register.tsx
 //   promptTextCache, promptTextSave,        handlers/prompts.ts           --
 //     storedPromptTextDropped
 //   logLines, screenLines, logPath, the     handlers/log.ts LogFiles      /bm-debug (path, read-only)
 //     write chain, the screen file's        (writers: keep, screenReport,
-//     flush and load flags                  newConversation); instance
-//                                           in register.tsx
-//   timeline (handlers/log.ts Timeline)     note(); instance in           diagnostics (items, read-only)
-//                                             register.tsx
+//     flush and load flags                  newConversation); the
+//                                           Logger's (0.4.95)
+//   timeline (handlers/log.ts Timeline)     note(); the Logger's          diagnostics (items, read-only)
+//                                             (0.4.95)
+//   Logger (handlers/log.ts)                log() (Logger.log, keepLine)  --; one instance in register.tsx
 //   rendered (drawn ids)                    register.tsx render hooks     diagnostics, list model (read-only)
 //   highlight clear timer, selection at     core/marks/mark-state.ts MarkState  band (setAtChord, via its port),
 //     the chord, selection seen, its poll     (handlers/marks.ts)           session.start (stopPoll, startPoll)

@@ -20,15 +20,14 @@ import {
 } from './core/bookmarks/anchor'
 import { findRecord, type Register as BookmarkRegister } from './core/bookmarks/register-file'
 import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution } from './core/bookmarks/transcript-lines'
-import { excerpt, quotesText, type Channel } from './core/log/debug'
+import { excerpt, type Channel } from './core/log/debug'
 import { bandButtons, helpLines, helpShort, listHint, listKeysFor, route, type Chord, type Operation, type Pane } from './core/band/keys'
 import type { Cause } from './core/band/after-action'
-import { debugTextMode, installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
+import { installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
 import { resolvePalette, type Palette, type Role, type Style } from './core/palette'
 import { pruneStore, type Seen } from './core/store-prune'
 import { footnoteOf, looksLikePrompt, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
 import { short } from './core/kit/message-id'
-import { type EchoPolicy } from './core/log/log-ring'
 import { configListedLine, dccLine, diagLine, idsReport, keyLabel, notAppliedLine, selectionKind, settingsRows } from './core/log/diagnostics'
 import { colorSplit, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/marks/highlight'
 import { ScreenModel } from './core/kit/screen-model'
@@ -41,7 +40,7 @@ import { bookmarksPaneView } from './views/bookmarks-pane'
 import { marksPaneView } from './views/marks-pane'
 import { promptsPaneView } from './views/prompts-pane'
 import { VERIFIED_CLIENTS, configCommand, envCommand, idsCommand, jumpCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
-import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LogFilesPorts, MarksPorts, NavigationPorts, PromptsPorts, ResolveOutcome, ViewPorts } from './engine/ports'
+import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PromptsPorts, ResolveOutcome, ViewPorts } from './engine/ports'
 import { closeAll as bandCloseAll, closePane as bandClosePane, endBandMode as bandEnd, paneFocused as bandPaneFocused, settle as bandSettle, BAND_MODE_MS, BAND_WATCH_MS, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
 import * as commandLine from './handlers/command-line'
@@ -223,7 +222,7 @@ function noteOnScreen(requestId: string, onScreen: { first: number; last: number
 }
 // The `screen` debug channel (#35): handlers/log.ts LogFiles.screenReport, when the channel is on.
 function rawScreen($: EngineInterface, component: string, requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
-  readChannels($)
+  channels.read(echoPorts($))
   if (!channels.has('screen')) return
   logFiles.screenReport(logFilesPorts($), component, requestId, onScreen)
 }
@@ -244,14 +243,17 @@ function freshOnScreen(): string[] {
   return screen.fresh()
 }
 
-// The timeline (handlers/log.ts Timeline): the one instance, and note() its one writer.
-const timeline = new log_.Timeline()
+// The logger (handlers/log.ts Logger): the one instance. It owns the timeline, the file
+// log and the debug channels; the names below are its parts, for their readers here.
+const logger = new log_.Logger()
+// The timeline (handlers/log.ts Timeline), and note() its one writer.
+const timeline = logger.timeline
 function note(what: string) {
   timeline.note(what)
 }
 // The file log, the screen channel's file and their rings: handlers/log.ts LogFiles, the
-// one instance, over logFilesPorts($).
-const logFiles = new log_.LogFiles()
+// logger's, over logFilesPorts($).
+const logFiles = logger.files
 function logFilesPorts($: EngineInterface): LogFilesPorts {
   return {
     sessionId: () => $.session.id(),
@@ -264,7 +266,7 @@ function logFilesPorts($: EngineInterface): LogFilesPorts {
 }
 
 // The debug echo (the machine-wide policy and this conversation's choice) is
-// handlers/log.ts, over echoPorts($); these keep the old signatures.
+// handlers/log.ts, over echoPorts($); its callers call it directly with these ports.
 function echoPorts($: EngineInterface): EchoPorts {
   return {
     storeGet: key => $.store.get(key),
@@ -274,61 +276,26 @@ function echoPorts($: EngineInterface): EchoPorts {
     setDebugEnv: value => $.env.set('CONVO_BOOKMARKS_DEBUG', value),
   }
 }
-async function echoPolicy($: EngineInterface): Promise<EchoPolicy> {
-  return log_.echoPolicy(echoPorts($))
-}
-async function setEchoPolicy($: EngineInterface, policy: EchoPolicy) {
-  await log_.setEchoPolicy(echoPorts($), policy)
-}
-async function sessionEchoChoice($: EngineInterface): Promise<boolean | undefined> {
-  return log_.sessionEchoChoice(echoPorts($))
-}
-async function setSessionEcho($: EngineInterface, enabled: boolean | undefined) {
-  await log_.setSessionEcho(echoPorts($), enabled)
-}
-async function uiEchoEnabled($: EngineInterface): Promise<boolean> {
-  return log_.uiEchoEnabled(echoPorts($))
-}
-async function echoStateLine($: EngineInterface): Promise<string> {
-  return log_.echoStateLine(echoPorts($))
-}
 
-// The debug channels are handlers/log.ts DebugChannels; this is the one instance.
-const channels = new log_.DebugChannels()
-function readChannels($: EngineInterface) {
-  channels.read(echoPorts($))
-}
-async function setChannels($: EngineInterface, on: Set<Channel>) {
-  await channels.set(echoPorts($), on)
-}
+// The debug channels are handlers/log.ts DebugChannels; the logger's.
+const channels = logger.channels
 
-// `text`: the line quotes the conversation (a selection, a message's head, a label,
-// highlighted words, a tool's input). It is kept when the `text` channel is on, or the
-// `debugText` setting allows it: `auto` is always in a build loaded from a folder (a
-// developer's) and off in an installed one; `with-debug` follows this conversation's
-// debugging (djdarcy, 2026-10-12: the person decides, and nothing is lost while we debug).
-function log($: EngineInterface, line: string, opts?: { always?: boolean; text?: boolean }) {
-  readChannels($)
-  if (opts?.text) {
-    const mode = debugTextMode(currentSettings().debugText, !installedFromCache($.plugin.root))
-    void uiEchoEnabled($).then(debugging => {
-      if (!quotesText(mode, channels.has('text'), debugging)) return
-      if (opts.always || debugging) $.ui.log(line)
-      keepLine($, line)
-    }).catch(() => {})
-    return
+// log() is handlers/log.ts Logger.log, over these ports: the echo's, the file log's, the
+// engine's $.ui.log, and whether this build was loaded from a folder.
+function logPorts($: EngineInterface): LoggerPorts {
+  return {
+    ...echoPorts($),
+    ...logFilesPorts($),
+    uiLog: line => $.ui.log(line),
+    folderBuild: !installedFromCache($.plugin.root),
   }
-  if (opts?.always) $.ui.log(line)
-  else void uiEchoEnabled($).then(enabled => { if (enabled) $.ui.log(line) }).catch(() => {})
-  keepLine($, line)
+}
+function log($: EngineInterface, line: string, opts?: { always?: boolean; text?: boolean }) {
+  logger.log(logPorts($), line, opts)
 }
 
 // A quoted excerpt in a log line: short, or whole when `debugTextLength` is `full`.
 const cut = (text: string, n: number) => excerpt(text, n, currentSettings().debugTextLength)
-
-function keepLine($: EngineInterface, line: string) {
-  logFiles.keep(logFilesPorts($), line, channels.has('screen'))
-}
 
 // The data root: where this plugin keeps what is the person's (bookmarks, exports, the
 // debug log). `CLAUDE_USER_DIR`, else `<home>/claude`; never under `~/.claude`, which is
@@ -1115,7 +1082,7 @@ function diagnosticsPorts($: EngineInterface): DiagnosticsPorts {
     dccPatcher: () => $.env.get('DCC_PATCHER'),
     dccPatchH: () => $.env.get('DCC_PATCH_H'),
     dccPatches: () => $.env.get('DCC_PATCHES'),
-    echoState: () => echoStateLine($),
+    echoState: () => log_.echoStateLine(echoPorts($)),
   }
 }
 
@@ -1544,14 +1511,14 @@ export const register: Register = (on, options) => {
       toast: text => $.ui.toast(text),
       log: (line, always) => log($, line, always ? { always: true } : undefined),
       channelsOn: () => {
-        readChannels($)
+        channels.read(echoPorts($))
         return channels.on
       },
-      setChannels: next => setChannels($, next as Set<Channel>),
-      setSessionEcho: choice => setSessionEcho($, choice),
-      setEchoPolicy: policy => setEchoPolicy($, policy),
-      echoState: () => echoStateLine($),
-      logPath: () => logFiles.path,
+      setChannels: next => channels.set(echoPorts($), next as Set<Channel>),
+      setSessionEcho: choice => log_.setSessionEcho(echoPorts($), choice),
+      setEchoPolicy: policy => log_.setEchoPolicy(echoPorts($), policy),
+      echoState: () => log_.echoStateLine(echoPorts($)),
+  logPath: () => logFiles.path,
     })
     return {}
   })

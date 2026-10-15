@@ -29,10 +29,14 @@ def removed_lines(commit: str, source: str) -> list[str]:
 def main() -> int:
     commit, source, destination, *subs = sys.argv[1:]
     pairs = [s.split('=>', 1) for s in subs]
-    dest = subprocess.run(
-        ['git', 'show', f'{commit}:{destination}'],
-        capture_output=True, text=True, encoding='utf-8', check=True,
-    ).stdout
+    # One destination, or several separated by commas (a move that split across files).
+    dest = '\n'.join(
+        subprocess.run(
+            ['git', 'show', f'{commit}:{d}'],
+            capture_output=True, text=True, encoding='utf-8', check=True,
+        ).stdout
+        for d in destination.split(',')
+    )
     missing = []
     lines = removed_lines(commit, source)
     for text in lines:

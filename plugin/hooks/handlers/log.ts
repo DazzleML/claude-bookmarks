@@ -1,12 +1,13 @@
 // The log cluster's handlers (moved out of register.tsx under /move-code, comments as they
 // were; `ports.x()` where the code called `$`). First part, 0.4.85: the debug echo -- the
 // machine-wide policy and this conversation's own choice. Then the debug channels (0.4.86),
-// and the rings with the file log and the timeline (0.4.87). What decides whether a line is
-// echoed or kept (log() itself) stays in register.tsx, where $.ui.log is called.
+// and the rings with the file log and the timeline (0.4.87). Then log() itself, as the
+// Logger class (0.4.95); the engine's $.ui.log reaches it as the `uiLog` port.
 
 import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFile, stamped, type EchoPolicy } from '../core/log/log-ring.ts'
-import { formatDebugEnv, parseDebugEnv, screenMirror, type Channel } from '../core/log/debug.ts'
-import type { EchoPorts, LogFilesPorts } from '../engine/ports.ts'
+import { formatDebugEnv, parseDebugEnv, quotesText, screenMirror, type Channel } from '../core/log/debug.ts'
+import { debugTextMode } from '../core/settings.ts'
+import type { EchoPorts, LogFilesPorts, LoggerPorts } from '../engine/ports.ts'
 
 // Whether log lines are also echoed into the transcript as dim rows. Off by default: the
 // file log is always written; the echo is for the person debugging one conversation, and
@@ -168,5 +169,39 @@ export class LogFiles {
       if (await ports.fsExists(path)) this.#screen.prepend([...(await ports.fsRead(path)).split('\n').filter(l => l.trim()), '--- reload ---'])
     }
     await ports.fsWrite(path, this.#screen.items.join('\n') + '\n')
+  }
+}
+
+// The logger: the debug channels, the file log and the timeline, and log() over them
+// (0.4.95: moved from register.tsx under the move-code skill; register.tsx keeps the one
+// instance and a one-line log(), and calls the engine's $.ui.log through `uiLog`).
+export class Logger {
+  readonly channels = new DebugChannels()
+  readonly files = new LogFiles()
+  readonly timeline = new Timeline()
+
+  // `text`: the line quotes the conversation (a selection, a message's head, a label,
+  // highlighted words, a tool's input). It is kept when the `text` channel is on, or the
+  // `debugText` setting allows it: `auto` is always in a build loaded from a folder (a
+  // developer's) and off in an installed one; `with-debug` follows this conversation's
+  // debugging (djdarcy, 2026-10-12: the person decides, and nothing is lost while we debug).
+  log(ports: LoggerPorts, line: string, opts?: { always?: boolean; text?: boolean }) {
+    this.channels.read(ports)
+    if (opts?.text) {
+      const mode = debugTextMode(ports.settings().debugText, ports.folderBuild)
+      void uiEchoEnabled(ports).then(debugging => {
+        if (!quotesText(mode, this.channels.has('text'), debugging)) return
+        if (opts.always || debugging) ports.uiLog(line)
+        this.keepLine(ports, line)
+      }).catch(() => {})
+      return
+    }
+    if (opts?.always) ports.uiLog(line)
+    else void uiEchoEnabled(ports).then(enabled => { if (enabled) ports.uiLog(line) }).catch(() => {})
+    this.keepLine(ports, line)
+  }
+
+  keepLine(ports: LoggerPorts, line: string) {
+    this.files.keep(ports, line, this.channels.has('screen'))
   }
 }
