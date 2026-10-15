@@ -149,6 +149,16 @@ export type EchoPorts = {
   setDebugEnv: (value: string | undefined) => Promise<unknown>
 }
 
+/** What the file log and the screen channel's file (handlers/log.ts LogFiles) need: the session's id, the data root and its files, and a timer. */
+export type LogFilesPorts = {
+  sessionId: () => Promise<string>
+  dataRoot: () => Promise<string | undefined>
+  fsExists: (path: string) => Promise<boolean>
+  fsRead: (path: string) => Promise<string>
+  fsWrite: (path: string, text: string) => Promise<unknown>
+  after: (ms: number, fn: () => void) => { cancel: () => void }
+}
+
 /** What the prompt store (handlers/prompts.ts) needs: the session's id, the plugin store, the data root and its files, a timer, and the settings (the text budget). */
 export type PromptsPorts = {
   sessionId: () => Promise<string>
@@ -272,7 +282,12 @@ export type CommandLinePorts = BandPorts & {
 //                                             register.tsx
 //   promptTextCache, promptTextSave,        handlers/prompts.ts           --
 //     storedPromptTextDropped
-//   logLines, screenLines, timeline (Ring)  register.tsx log cluster       diagnostics (timeline, read-only)
+//   logLines, screenLines, logPath, the     handlers/log.ts LogFiles      /bm-debug (path, read-only)
+//     write chain, the screen file's        (writers: keep, screenReport,
+//     flush and load flags                  newConversation); instance
+//                                           in register.tsx
+//   timeline (handlers/log.ts Timeline)     note(); instance in           diagnostics (items, read-only)
+//                                             register.tsx
 //   rendered (drawn ids)                    register.tsx render hooks     diagnostics, list model (read-only)
 //   highlight clear timer, selection at     core/marks/mark-state.ts MarkState  band (setAtChord, via its port),
 //     the chord, selection seen, its poll     (handlers/marks.ts)           session.start (stopPoll, startPoll)

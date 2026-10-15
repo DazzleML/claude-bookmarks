@@ -20,7 +20,7 @@ import {
 } from './core/bookmarks/anchor'
 import { findRecord, type Register as BookmarkRegister } from './core/bookmarks/register-file'
 import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution } from './core/bookmarks/transcript-lines'
-import { excerpt, formatDebugEnv, parseDebugEnv, quotesText, screenMirror, type Channel } from './core/log/debug'
+import { excerpt, quotesText, type Channel } from './core/log/debug'
 import { bandButtons, helpLines, helpShort, listHint, listKeysFor, route, type Chord, type Operation, type Pane } from './core/band/keys'
 import type { Cause } from './core/band/after-action'
 import { debugTextMode, installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
@@ -28,7 +28,7 @@ import { resolvePalette, type Palette, type Role, type Style } from './core/pale
 import { pruneStore, type Seen } from './core/store-prune'
 import { footnoteOf, looksLikePrompt, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
 import { short } from './core/kit/message-id'
-import { Ring, clock, logFile, screenFile, stamped, type EchoPolicy } from './core/log/log-ring'
+import { type EchoPolicy } from './core/log/log-ring'
 import { configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, selectionKind, settingsRows } from './core/log/diagnostics'
 import { colorSplit, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/marks/highlight'
 import { ScreenModel } from './core/kit/screen-model'
@@ -41,7 +41,7 @@ import { bookmarksPaneView } from './views/bookmarks-pane'
 import { marksPaneView } from './views/marks-pane'
 import { promptsPaneView } from './views/prompts-pane'
 import { configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
-import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, MarksPorts, NavigationPorts, PromptsPorts, ResolveOutcome, ViewPorts } from './engine/ports'
+import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LogFilesPorts, MarksPorts, NavigationPorts, PromptsPorts, ResolveOutcome, ViewPorts } from './engine/ports'
 import { closeAll as bandCloseAll, closePane as bandClosePane, endBandMode as bandEnd, paneFocused as bandPaneFocused, settle as bandSettle, BAND_MODE_MS, BAND_WATCH_MS, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
 import * as commandLine from './handlers/command-line'
@@ -221,35 +221,11 @@ const rendered = new Map<string, string>()
 function noteOnScreen(requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
   screen.noteMessage(requestId, onScreen, Date.now())
 }
-// The `screen` debug channel (#35): every raw onScreen report, unfiltered, nulls and
-// repeats included, to <debug>/<session>.screen.log, so the yellow row's moves can be
-// lined up against what Claude Code actually sent (it found the 0.4.1 tool-row bug;
-// tests/one-offs/thinking/screen-reports/analyse_screen_log.py reads it). Off unless
-// `/bm-debug enable screen`.
-const screenLines = new Ring<string>(6000)
-let screenFlushPending = false
-let screenLoaded = false
+// The `screen` debug channel (#35): handlers/log.ts LogFiles.screenReport, when the channel is on.
 function rawScreen($: EngineInterface, component: string, requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
   readChannels($)
   if (!channels.has('screen')) return
-  const range = onScreen ? `${onScreen.first}-${onScreen.last}/${onScreen.of}` : onScreen === null ? 'null' : 'absent'
-  screenLines.push(`${clock(Date.now())} ${component} ${requestId} ${range}`)
-  if (screenFlushPending) return
-  screenFlushPending = true
-  $.clock.after(500, () => {
-    screenFlushPending = false
-    flushing = flushing.then(() => flushScreen($)).catch(() => {})
-  })
-}
-async function flushScreen($: EngineInterface) {
-  if (logPath === undefined) await flushLog($)
-  if (!logPath) return
-  const path = screenFile(logPath)
-  if (!screenLoaded) {
-    screenLoaded = true
-    if (await $.fs.exists(path)) screenLines.prepend([...(await $.fs.read(path)).split('\n').filter(l => l.trim()), '--- reload ---'])
-  }
-  await $.fs.write(path, screenLines.items.join('\n') + '\n')
+  logFiles.screenReport(logFilesPorts($), component, requestId, onScreen)
 }
 
 // A non-message row's report dates the latest burst (core/kit/screen-model.ts noteOther).
@@ -268,21 +244,24 @@ function freshOnScreen(): string[] {
   return screen.fresh()
 }
 
-// A timeline of what the mod saw and did, so a drawn-id mismatch can be lined up
-// against the pane, store and toast activity just before it. Module-level: a reload
-// starts it over, the same as `rendered`.
-const timeline = new Ring<{ t: number; what: string }>(400)
+// The timeline (handlers/log.ts Timeline): the one instance, and note() its one writer.
+const timeline = new log_.Timeline()
 function note(what: string) {
-  timeline.push({ t: Date.now(), what })
+  timeline.note(what)
 }
-// The [bm] log lines, also written to <user dir>/bookmarks/debug/<session>.log:
-// $.ui.log rows are only drawn, so a session that reads files (Claude, while
-// developing this) cannot see them. Kept outside the plugin folder on purpose: a write
-// inside it trips the folder watch and reloads the mod on every line. $.fs has no
-// append, so the file is rewritten whole, last 400 lines, one write at a time.
-const logLines = new Ring<string>(400)
-let logPath: string | null | undefined // undefined: not looked up yet; null: no usable place
-let flushing: Promise<void> = Promise.resolve()
+// The file log, the screen channel's file and their rings: handlers/log.ts LogFiles, the
+// one instance, over logFilesPorts($).
+const logFiles = new log_.LogFiles()
+function logFilesPorts($: EngineInterface): LogFilesPorts {
+  return {
+    sessionId: () => $.session.id(),
+    dataRoot: () => dataRoot($),
+    fsExists: path => $.fs.exists(path),
+    fsRead: path => $.fs.read(path),
+    fsWrite: (path, text) => $.fs.write(path, text),
+    after: (ms, fn) => $.clock.after(ms, fn),
+  }
+}
 
 // The debug echo (the machine-wide policy and this conversation's choice) is
 // handlers/log.ts, over echoPorts($); these keep the old signatures.
@@ -348,10 +327,7 @@ function log($: EngineInterface, line: string, opts?: { always?: boolean; text?:
 const cut = (text: string, n: number) => excerpt(text, n, currentSettings().debugTextLength)
 
 function keepLine($: EngineInterface, line: string) {
-  logLines.push(stamped(line, Date.now()))
-  const mirrored = channels.has('screen') ? screenMirror(line) : undefined
-  if (mirrored) screenLines.push(`${clock(Date.now())} >>> ${mirrored}`)
-  flushing = flushing.then(() => flushLog($)).catch(() => {})
+  logFiles.keep(logFilesPorts($), line, channels.has('screen'))
 }
 
 // The data root: where this plugin keeps what is the person's (bookmarks, exports, the
@@ -364,18 +340,9 @@ async function dataRoot($: EngineInterface): Promise<string | undefined> {
   return home ? `${home.replace(/\\/g, '/')}/claude` : undefined
 }
 
-// A new conversation writes its own log files (0.4.74; test-scenarios 2026-10-14__02-07-49,
-// S4): the path was looked up once per process, so after /clear or /resume the new
-// conversation's lines went on into the old one's file. The old conversation's pending
-// writes finish first, under its own path; then the path is looked up again at the next
-// write and the rings start empty (that file's own lines are read back on its first
-// write, as after a reload). A line logged during the wait can miss the new file.
+// A new conversation writes its own log files: handlers/log.ts LogFiles.newConversation.
 async function newLogConversation() {
-  await flushing
-  logPath = undefined
-  logLines.clear()
-  screenLines.clear()
-  screenLoaded = false
+  await logFiles.newConversation()
 }
 
 // --- Conversations (Q261014-01) ---------------------------------------------------------
@@ -429,16 +396,6 @@ async function resetConversationMemory() {
   band.newConversation()
   panePosition.newConversation()
   viewTracker.newConversation()
-}
-
-async function flushLog($: EngineInterface) {
-  if (logPath === undefined) {
-    const root = await dataRoot($)
-    logPath = root ? logFile(root, await $.session.id()) : null
-    // A reload starts the module over: keep what the file already holds.
-    if (logPath && (await $.fs.exists(logPath))) logLines.prepend((await $.fs.read(logPath)).split('\n').filter(l => l.trim()))
-  }
-  if (logPath) await $.fs.write(logPath, logLines.items.join('\n') + '\n')
 }
 
 // Mark and Marks: core/marks/marks.ts.
@@ -1615,7 +1572,7 @@ export const register: Register = (on, options) => {
       setSessionEcho: choice => setSessionEcho($, choice),
       setEchoPolicy: policy => setEchoPolicy($, policy),
       echoState: () => echoStateLine($),
-      logPath: () => logPath,
+      logPath: () => logFiles.path,
     })
     return {}
   })
