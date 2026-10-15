@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.98] - 2026-10-15
+
+### Changed
+
+- The plugin's README now also says which Claude Code events the plugin hooks and that each is passed on unchanged, names the selection call as Claude Code's own, and lists the prompt text kept for the prompts filter (under `~/claude/bookmarks/prompttext/`); it no longer says that nothing you type is stored.
+
 ## [0.4.97] - 2026-10-15
 
 ### Changed
@@ -915,7 +921,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.97...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.98...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
