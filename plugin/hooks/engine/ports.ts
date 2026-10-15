@@ -111,8 +111,8 @@ export type BandPorts = {
   toast: (text: string, timeoutMs?: number) => void
   togglePin: (typed: string) => Promise<unknown>
   groupStep: (dir: -1 | 1) => Promise<unknown>
-  loadRegister: () => Promise<import('../core/bookmarks/register-file.ts').Register>
-  saveRegister: (reg: import('../core/bookmarks/register-file.ts').Register) => Promise<unknown>
+  /** `c`: one of Claude's bookmarks becomes the person's (handlers/bookmarks.ts claimBookmark). */
+  claimBookmark: (uuid: string) => Promise<ReturnType<typeof import('../core/bookmarks/register-file.ts').claim>>
   now: () => Promise<number>
   after: (ms: number, fn: () => void) => { cancel: () => void }
   // The band's focus probe (focusBand, bandProbeKey, watchBand):
@@ -206,10 +206,8 @@ export type BookmarksPorts = {
   cwd: () => Promise<string>
   pluginName: string
   pluginVersion: () => Promise<string>
-  // One port per variable: the validator wants $.env.get's name literal.
-  userProfile: () => Promise<string | undefined>
-  home: () => Promise<string | undefined>
-  claudeConfigDir: () => Promise<string | undefined>
+  /** Claude Code's config folder, forward slashes (register.tsx configDir; the env names stay literal there for the validator). */
+  configDir: () => Promise<string | undefined>
   now: () => Promise<number>
   after: (ms: number, fn: () => void) => { cancel: () => void }
   fsExists: (path: string) => Promise<boolean>
@@ -221,9 +219,8 @@ export type BookmarksPorts = {
   jumpTo: (uuid: string, via: string, label: string, words?: string) => Promise<string | undefined>
   loadMarks: () => Promise<import('../core/marks/marks.ts').Marks>
   copy: (text: string) => Promise<{ isCopied: boolean }>
-  /** The marks cluster's: a transient highlight entry, and showing it. */
-  markCache: import('../core/marks/marks.ts').MarkCache
-  showMark: (letter: string, text: string) => Promise<unknown>
+  /** The marks cluster's: highlight `words` on a message under `letter` (handlers/marks.ts showWords). */
+  highlightWords: (letter: string, uuid: string, words: string) => Promise<unknown>
 }
 
 /** What the marks cluster (handlers/marks.ts) needs: its state, the mark cache, the `shown` atom, the view, the store, the jump, and the person's feedback. */
@@ -307,11 +304,10 @@ export type CommandLinePorts = BandPorts & {
 //   highlight clear timer, selection at     core/marks/mark-state.ts MarkState  band (setAtChord, via its port),
 //     the chord, selection seen, its poll     (handlers/marks.ts)           session.start (stopPoll, startPoll)
 //   markCache (core/marks/marks.ts MarkCache)     the marks cluster:            render hooks, band, navigation
-//                                             handlers/marks.ts (replace), (readers: all, headOf)
-//                                             and in register.tsx the start
-//                                             hook and /bm-delmarks (replace),
-//                                             highlightWords (showTransient,
-//                                             moves with the bookmarks)
+//                                             handlers/marks.ts only: writeMarks (readers: all, headOf)
+//                                             and startMarks (replace), showWords
+//                                             (showTransient, for a bookmark's
+//                                             arrival through its port)
 
 /** What `/bm-debug` needs: the debug channels this conversation has on and how to change them, the echo's choice and policy, and where the file log is. */
 export type DebugPorts = ToastPorts &

@@ -17,7 +17,7 @@ import {
   markLinks, markdownLinks, parseAnchor, tierOf,
   type AnchorOwner, type MarkerStyle,
 } from './core/bookmarks/anchor'
-import { findRecord, type Register as BookmarkRegister } from './core/bookmarks/register-file'
+import { findRecord } from './core/bookmarks/register-file'
 import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution } from './core/bookmarks/transcript-lines'
 import { excerpt, type Channel } from './core/log/debug'
 import { bandButtons, helpLines, helpShort, listHint, listKeysFor, route, type Chord, type Operation, type Pane } from './core/band/keys'
@@ -27,6 +27,7 @@ import { resolvePalette, type Palette, type Role, type Style } from './core/pale
 import { pruneStore, type Seen } from './core/store-prune'
 import { footnoteOf, looksLikePrompt, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
 import { short } from './core/kit/message-id'
+import { configDirOf, dataRootOf } from './core/kit/paths'
 import { diagLine, keyLabel } from './core/log/diagnostics'
 import { colorSplit, tagMarksMarkdown, tagMarksPlain } from './core/marks/highlight'
 import { ScreenModel } from './core/kit/screen-model'
@@ -130,9 +131,6 @@ function expectRedraw(why: string) {
 // The marks cluster (the highlight, setting a mark, the reading position, jumping to a
 // mark) is handlers/marks.ts; its own state is core/marks/mark-state.ts MarkState.
 const markState = new MarkState()
-async function showMark($: EngineInterface, letter: string, text: string) {
-  await marks_.showMark(marksPorts($), letter, text)
-}
 
 // The session's marks, kept in memory so render hooks can read them without a store
 // call per row. Loaded at session.start and refreshed on every mark write.
@@ -286,14 +284,20 @@ function log($: EngineInterface, line: string, opts?: { always?: boolean; text?:
 // A quoted excerpt in a log line: short, or whole when `debugTextLength` is `full`.
 const cut = (text: string, n: number) => excerpt(text, n, currentSettings().debugTextLength)
 
+// The person's home folder: USERPROFILE (Windows), else HOME. Read here, where the
+// validator follows `$.env.get`; what is built from it is core/kit/paths.ts.
+async function homeDir($: EngineInterface): Promise<string | undefined> {
+  return (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME'))
+}
+// Claude Code's config folder (core/kit/paths.ts configDirOf).
+async function configDir($: EngineInterface): Promise<string | undefined> {
+  return configDirOf(await $.env.get('CLAUDE_CONFIG_DIR'), await homeDir($))
+}
 // The data root: where this plugin keeps what is the person's (bookmarks, exports, the
-// debug log). `CLAUDE_USER_DIR`, else `<home>/claude`; never under `~/.claude`, which is
-// Claude Code's to clean (#6). Forward slashes, no trailing slash.
+// debug log); core/kit/paths.ts dataRootOf.
 async function dataRoot($: EngineInterface): Promise<string | undefined> {
   const fromEnv = await $.env.get('CLAUDE_USER_DIR')
-  if (fromEnv) return fromEnv.replace(/\\/g, '/').replace(/\/+$/, '')
-  const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME'))
-  return home ? `${home.replace(/\\/g, '/')}/claude` : undefined
+  return dataRootOf(fromEnv, fromEnv ? undefined : await homeDir($))
 }
 
 // A new conversation writes its own log files: handlers/log.ts LogFiles.newConversation.
@@ -423,8 +427,7 @@ async function savePromptTexts($: EngineInterface) {
 // project folder is the cwd with every non-alphanumeric character turned into `-`;
 // if that guess misses, every project folder is looked in.
 async function transcriptPath($: EngineInterface): Promise<string | undefined> {
-  const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME'))
-  const config = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? (home ? `${home}/.claude` : undefined)
+  const config = await configDir($)
   if (!config) return undefined
   const sid = await $.session.id()
   const file = `${sid}.jsonl`
@@ -627,9 +630,7 @@ function bookmarksPorts($: EngineInterface): BookmarksPorts {
     cwd: () => $.session.cwd(),
     pluginName: $.plugin.name,
     pluginVersion: () => pluginVersion($),
-    userProfile: () => $.env.get('USERPROFILE'),
-    home: () => $.env.get('HOME'),
-    claudeConfigDir: () => $.env.get('CLAUDE_CONFIG_DIR'),
+    configDir: () => configDir($),
     now: () => $.clock.now(),
     after: (ms, fn) => $.clock.after(ms, fn),
     fsExists: path => $.fs.exists(path),
@@ -641,15 +642,8 @@ function bookmarksPorts($: EngineInterface): BookmarksPorts {
     jumpTo: (uuid, via, label, words) => jumpTo($, uuid, via, label, words),
     loadMarks: () => loadMarks($),
     copy: text => $.ui.copy({ text }),
-    markCache,
-    showMark: (letter, text) => showMark($, letter, text),
+    highlightWords: (letter, uuid, words) => marks_.showWords(marksPorts($), letter, uuid, words),
   }
-}
-async function loadRegister($: EngineInterface): Promise<BookmarkRegister> {
-  return bookmarks_.loadRegister(bookmarksPorts($))
-}
-async function saveRegister($: EngineInterface, reg: BookmarkRegister) {
-  await bookmarks_.saveRegister(bookmarksPorts($), reg)
 }
 
 // How link kinds are told apart in a reply (djdarcy, 2026-10-09: "how can we denote that
@@ -802,9 +796,9 @@ async function loadPins($: EngineInterface): Promise<string[]> {
 }
 
 // Toggles the pin on prompt #n (the newest when `typed` names none). Returns false when
-// there is no such prompt.
-async function togglePin($: EngineInterface, typed: string): Promise<boolean> {
-  const all = await prompts($)
+// there is no such prompt. `known`: the list the caller already read (move audit F6).
+async function togglePin($: EngineInterface, typed: string, known?: PromptRef[]): Promise<boolean> {
+  const all = known ?? (await prompts($))
   const n = listPosition(typed, all.length, true)
   const target = n === undefined ? undefined : all[n - 1]
   if (!target) {
@@ -825,7 +819,7 @@ async function jumpToPromptNumber($: EngineInterface, typed: string, via: string
   const all = await prompts($)
   const entry = promptEntry(typed, all.length)
   if (entry.kind === 'pin') {
-    await togglePin($, entry.typed)
+    await togglePin($, entry.typed, all)
     return
   }
   if (entry.kind === 'filter') {
@@ -924,8 +918,7 @@ function bandPorts($: EngineInterface): BandPorts {
     toast: (text, timeoutMs) => (timeoutMs ? $.ui.toast(text, { timeoutMs }) : $.ui.toast(text)),
     togglePin: typed => togglePin($, typed),
     groupStep: dir => bandGroupStep($, dir),
-    loadRegister: () => loadRegister($),
-    saveRegister: reg => saveRegister($, reg),
+    claimBookmark: uuid => bookmarks_.claimBookmark(bookmarksPorts($), uuid),
     now: () => $.clock.now(),
     after: (ms, fn) => $.clock.after(ms, fn),
     focus: (requestId, key) => $.ui.focus({ requestId, key }),
@@ -1295,7 +1288,7 @@ export const register: Register = (on, options) => {
         bookmarks_.queueProseAnchors(bookmarksPorts($), anchors)
       }
       // A perma record's link is drawn without the bookmark glyph (#21).
-      const reg = await loadRegister($)
+      const reg = await bookmarks_.loadRegister(bookmarksPorts($))
       const isPerma = (href: string) => {
         const a = parseAnchor(href)
         const r = a && findRecord(reg, a.uuid)
@@ -1303,13 +1296,8 @@ export const register: Register = (on, options) => {
       }
       const [first] = marksHere
       const colored = first && colorSplit(e.props.text, first[0], first[1].snippet)
-      // A mark whose words don't sit on one line: the bold «a» form.
-      let text = e.props.text
-      for (const [letter, m] of marksHere) {
-        const s = m.snippet
-        if (s && !/[*`_]/.test(s) && text.includes(s)) text = text.replace(s, `**«${letter}» ${s}**`)
-        else text = `> **«${letter}» ${s ?? m.head}**\n\n${text}`
-      }
+      // A mark whose words don't sit on one line: the bold «a» form (core/marks/highlight.ts).
+      const text = tagMarksMarkdown(e.props.text, marksHere)
       return anchoredReply(
         $.ui.resolve(e),
         {
@@ -1484,7 +1472,15 @@ export const register: Register = (on, options) => {
     return bandView(
       elements,
       theirs,
-      { mode, shown: last, help, marks, letters: LETTERS, readingLetter: READING, typed: await read($, bandNum), count, groupTitle, listKeys, bar, cmdRev: await read($, cmdRev) },
+      // `typed` is drawn only in the list modes and `cmdRev` (the field's key) only in idle:
+      // each is read, and so redraws the band, only where it is drawn (a mode change
+      // redraws through bandMode). Move audit F4.
+      {
+        mode, shown: last, help, marks, letters: LETTERS, readingLetter: READING,
+        typed: mode === 'list' || bookmarks ? await read($, bandNum) : '',
+        count, groupTitle, listKeys, bar,
+        cmdRev: mode === 'idle' ? await read($, cmdRev) : 0,
+      },
       {
         endBandMode: () => endBandMode($),
         readingToggle: async () => { await readingToggle($); await done('band-command') },

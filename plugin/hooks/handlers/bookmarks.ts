@@ -12,7 +12,8 @@ import {
   addOrRelabel, claim, emptyRegister, exportMarkdown, exportNotesOf, findRecord, listOf, parseRegister, prune, remove, serializeRegister, share,
   type Mint, type Register as BookmarkRegister, type Retention,
 } from '../core/bookmarks/register-file.ts'
-import { headOf } from '../core/bookmarks/transcript-lines.ts'
+import { rowPlace } from '../core/bookmarks/transcript-lines.ts'
+import { forwardSlashes } from '../core/kit/paths.ts'
 import { short } from '../core/kit/message-id.ts'
 import { answer as toolAnswer, brief as briefRow, describe as describeRecord, listActedOn, listName, parseToolInput, tierFor } from '../core/bookmarks/bookmark-tool.ts'
 import type { BookmarksPorts } from '../engine/ports.ts'
@@ -61,11 +62,10 @@ export async function loadRegister(ports: BookmarksPorts): Promise<BookmarkRegis
     }
   }
   if (!reg) {
-    const home = (await ports.userProfile()) ?? (await ports.home())
-    const configDir = (await ports.claudeConfigDir()) ?? (home ? `${home.replace(/\\/g, '/')}/.claude` : undefined)
+    const configDir = await ports.configDir()
     reg = emptyRegister(await ports.sessionId(), `${ports.pluginName} ${await ports.pluginVersion()}`, await ports.now(), {
       ...(configDir ? { configDir } : {}),
-      cwd: (await ports.cwd()).replace(/\\/g, '/'),
+      cwd: forwardSlashes(await ports.cwd()),
     })
   }
   registerCache = { session, register: reg }
@@ -79,6 +79,13 @@ export async function saveRegister(ports: BookmarksPorts, reg: BookmarkRegister)
   if (await ports.fsExists(path)) await ports.fsWrite(`${path}.bak`, await ports.fsRead(path))
   await ports.fsWrite(path, serializeRegister({ ...reg, writer: `${ports.pluginName} ${await ports.pluginVersion()}` }))
   registerCache = { session: await ports.sessionId(), register: reg }
+}
+
+/** One of Claude's records becomes the person's (#21): same message, id and link, saved. The band's `c` and the model's tool both claim here. */
+export async function claimBookmark(ports: BookmarksPorts, uuid: string): Promise<ReturnType<typeof claim>> {
+  const r = claim(await loadRegister(ports), uuid, await ports.now())
+  if (!('error' in r)) await saveRegister(ports, r.register)
+  return r
 }
 
 // How long a `temporary` bookmark is kept before it is pruned (to a tombstone). A
@@ -164,18 +171,12 @@ export function queueProseAnchors(ports: BookmarksPorts, anchors: ReturnType<typ
         await mintBookmark(
           ports,
           {
-            uuid: row.uuid,
+            ...rowPlace(row, await ports.transcriptPath()),
             label: l.label.replace(/^(⚓|▤|\[bm\]|\[file\])\s*/, '') || `bookmark ${a.uuid8}`,
             ...(a.words && row.text.includes(a.words) ? { words: a.words } : {}),
-            line: row.line,
-            bytes: [row.byteStart, row.byteEnd],
-            head: headOf(row.text),
             owner: 'claude',
             by: 'prose',
             source: 'prose',
-            transcript: (await ports.transcriptPath())?.replace(/\\/g, '/'),
-            role: row.role,
-            ...(row.timestamp ? { timestamp: row.timestamp } : {}),
           },
           row.text,
         )
@@ -217,11 +218,10 @@ export async function bookmarkList(ports: BookmarksPorts) {
   return [...(await loadRegister(ports)).perma].filter(r => tierOf(r) !== 'perma').sort((a, b) => a.createdAt - b.createdAt)
 }
 
-// Highlight `words` on a message, as a letter's jump does, through a transient entry in
-// the mark cache (reloaded from the store on the next mark write).
+// Highlight `words` on a message, as a letter's jump does (the marks cluster's
+// handlers/marks.ts showWords), under the anchor's own letter.
 async function highlightWords(ports: BookmarksPorts, uuid: string, words: string) {
-  ports.markCache.showTransient(ANCHOR_MARK, { uuid, head: words, markedAt: await ports.now(), source: 'selection', snippet: words })
-  await ports.showMark(ANCHOR_MARK, words)
+  await ports.highlightWords(ANCHOR_MARK, uuid, words)
 }
 
 // Jump to a bookmark and highlight its words. Returns the scroll's refusal, if any.
@@ -257,18 +257,12 @@ export async function promoteLetter(ports: BookmarksPorts, letter: string) {
   const minted = await mintBookmark(
     ports,
     {
-      uuid: row.uuid,
+      ...rowPlace(row, await ports.transcriptPath()),
       label: (words ?? mark.head).slice(0, 80),
       ...(words ? { words } : {}),
-      line: row.line,
-      bytes: [row.byteStart, row.byteEnd],
-      head: headOf(row.text),
       owner: 'user',
       by: 'user',
       source: 'promote',
-      transcript: (await ports.transcriptPath())?.replace(/\\/g, '/'),
-      role: row.role,
-      ...(row.timestamp ? { timestamp: row.timestamp } : {}),
     },
     row.text,
   )
@@ -309,9 +303,8 @@ export async function bookmarkTool(ports: BookmarksPorts, e: unknown) {
     if (!target) return answer({ error: `no bookmark for that on ${listName(from)} list`, hint: 'action: "list" shows both lists with their uuids' })
     const now = await ports.now()
     if (action === 'claim') {
-      const r = claim(reg, target.uuid, now)
+      const r = await claimBookmark(ports, target.uuid)
       if ('error' in r) return answer(r)
-      await saveRegister(ports, r.register)
       ports.log(`[bm] bookmark claimed by the person: ${short(target.uuid)} "${r.record.label}"`, true)
       return answer({ ok: true, claimed: describe(r.record), note: "now on the person's list; same message, id and link" })
     }
@@ -369,21 +362,15 @@ export async function bookmarkTool(ports: BookmarksPorts, e: unknown) {
   const minted = await mintBookmark(
     ports,
     {
-      uuid: row.uuid,
+      ...rowPlace(row, await ports.transcriptPath()),
       owner,
       label,
       ...(why ? { why } : {}),
       ...(words && row.text.includes(words) ? { words } : {}),
       ...(temporary ? { temporary: true } : {}),
       tier: tierFor(tierAsked, owner),
-      line: row.line,
-      bytes: [row.byteStart, row.byteEnd],
-      head: headOf(row.text),
       by: 'claude',
       source: 'tool',
-      transcript: (await ports.transcriptPath())?.replace(/\\/g, '/'),
-      role: row.role,
-      ...(row.timestamp ? { timestamp: row.timestamp } : {}),
     },
     row.text,
   )

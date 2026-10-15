@@ -10,7 +10,6 @@ import { ownerOf } from '../core/bookmarks/anchor.ts'
 import { promptNumberComplete, stepNumber } from '../core/band/band-entry.ts'
 import { parseListNumber, type Operation, type Pane } from '../core/band/keys.ts'
 import { short } from '../core/kit/message-id.ts'
-import { claim } from '../core/bookmarks/register-file.ts'
 import type { BandPorts } from '../engine/ports.ts'
 
 // How long the band waits for the next key before going back to its buttons.
@@ -98,9 +97,8 @@ export async function bandClaim(ports: BandPorts) {
     ports.toast('That one is already on your list')
     return
   }
-  const r = claim(await ports.loadRegister(), target.uuid, await ports.now())
+  const r = await ports.claimBookmark(target.uuid)
   if ('error' in r) return void ports.toast(r.error)
-  await ports.saveRegister(r.register)
   ports.log(`[bm] bookmark claimed from the pane: ${short(target.uuid)}`)
   ports.toast(`#${typed} is yours now`)
   keepBandWaiting(ports)

@@ -7,7 +7,7 @@
 import { sameMessage, findByMessage, short } from '../core/kit/message-id.ts'
 import { plainMarkdown, snippetOf } from '../core/marks/highlight.ts'
 import { headOf } from '../core/bookmarks/transcript-lines.ts'
-import { deleteMarks, type Mark } from '../core/marks/marks.ts'
+import { deleteMarks, type Mark, type Marks } from '../core/marks/marks.ts'
 import type { SelectionLike } from '../core/marks/mark-state.ts'
 import type { MarksPorts } from '../engine/ports.ts'
 
@@ -26,6 +26,14 @@ export async function showMark(ports: MarksPorts, letter: string, text: string) 
     }),
   )
   ports.note(`show mark ${letter} for ${HIGHLIGHT_MS / 1000}s`)
+}
+
+// Highlight `words` on a message, as a letter's jump does, through a transient entry in
+// the mark cache (reloaded from the store on the next mark write). A bookmark's arrival
+// shows its words this way (handlers/bookmarks.ts highlightWords).
+export async function showWords(ports: MarksPorts, letter: string, uuid: string, words: string) {
+  ports.markCache.showTransient(letter, { uuid, head: words, markedAt: await ports.now(), source: 'selection', snippet: words })
+  await showMark(ports, letter, words)
 }
 
 export async function clearShown(ports: MarksPorts) {
@@ -47,6 +55,13 @@ async function resolveSelectionRow(ports: MarksPorts, id: string, text: string) 
     : saved.text === undefined ? 'row saved before text capture'
     : saved.text.includes(needle) ? 'text verified' : 'TEXT NOT IN ROW'
   return { uuid: saved?.uuid ?? id, check }
+}
+
+// Every write of the marks goes to the store and to the in-memory cache together, so a
+// render hook never reads a mark the store no longer holds, or misses one it does.
+async function writeMarks(ports: MarksPorts, next: Marks) {
+  await ports.saveMarks(next)
+  ports.markCache.replace(next)
 }
 
 async function highlightInPlace(ports: MarksPorts, letter: string, text: string, paneAction = true) {
@@ -133,8 +148,7 @@ export async function setMark(ports: MarksPorts, letter: string) {
       snippet: snippetOf(sel.text),
     }
     ports.note(`store.set mark ${letter} -> ${uuid} (selection, drawn ${sel.requestId}, ${check})`)
-    await ports.saveMarks({ ...fresh, [letter]: mark })
-    ports.markCache.replace({ ...fresh, [letter]: mark })
+    await writeMarks(ports, { ...fresh, [letter]: mark })
     // Writing `shown` redraws the rows and the band that read it.
     await highlightInPlace(ports, letter, snippetOf(sel.text))
     ports.log(`[bm] SEL: mark ${letter} -> ${uuid} (drawn as ${sel.requestId}; ${check}) | "${headOf(sel.text)}"`, true)
@@ -153,8 +167,7 @@ export async function setMark(ports: MarksPorts, letter: string) {
   // Read again right before the write: the store is shared and not atomic.
   const fresh = await ports.loadMarks()
   ports.note(`store.set mark ${letter} -> ${mark.uuid} (top of screen)`)
-  await ports.saveMarks({ ...fresh, [letter]: mark })
-  ports.markCache.replace({ ...fresh, [letter]: mark })
+  await writeMarks(ports, { ...fresh, [letter]: mark })
   if (mark.snippet) await highlightInPlace(ports, letter, mark.snippet)
   ports.log(`[bm] mark ${letter} -> ${short(mark.uuid)} (top of screen) | "${mark.head}"`, true)
   ports.toast(`mark ${letter} [top of screen] -> ${mark.head.slice(0, 40)}`)
@@ -227,8 +240,7 @@ export async function readingToggle(ports: MarksPorts) {
   if (sel?.requestId && picked && !inReadingMessage) {
     const { uuid, check } = await resolveSelectionRow(ports, sel.requestId, sel.text)
     const mark: Mark = { uuid, head: headOf(sel.text), markedAt: await ports.now(), source: 'selection', snippet: picked }
-    await ports.saveMarks({ ...marks, [ports.readingLetter]: mark })
-    ports.markCache.replace({ ...marks, [ports.readingLetter]: mark })
+    await writeMarks(ports, { ...marks, [ports.readingLetter]: mark })
     // Next press goes there (from wherever the person has scrolled to by then).
     await setReadingState(ports, { at: false, back: null })
     await highlightInPlace(ports, ports.readingLetter, picked, false)
@@ -299,8 +311,7 @@ export async function delmarksCommand(ports: MarksPorts, args: string) {
     ports.toast('Usage: /bm-delmarks a b   (or /bm-delmarks all)')
     return
   }
-  await ports.saveMarks(kept)
-  ports.markCache.replace(kept)
+  await writeMarks(ports, kept)
   const showing = await ports.shown()
   if (showing && gone.includes(showing.letter)) await clearShown(ports)
   ports.log(`[bm] deleted marks ${gone.join(' ') || '(none)'}${missing.length ? `; not set: ${missing.join(' ')}` : ''}`)
