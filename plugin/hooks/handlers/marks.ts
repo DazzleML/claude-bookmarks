@@ -49,8 +49,8 @@ async function resolveSelectionRow(ports: MarksPorts, id: string, text: string) 
   return { uuid: saved?.uuid ?? id, check }
 }
 
-export async function highlightInPlace(ports: MarksPorts, letter: string, text: string) {
-  ports.noteRestore(ports.paneAnchor() ?? (await ports.topOnScreen()))
+export async function highlightInPlace(ports: MarksPorts, letter: string, text: string, paneAction = true) {
+  ports.noteRestore(paneAction ? ports.paneAnchor() ?? (await ports.topOnScreen()) : await ports.topOnScreen(), paneAction)
   await showMark(ports, letter, text)
 }
 
@@ -231,7 +231,7 @@ export async function readingToggle(ports: MarksPorts) {
     ports.markCache.replace({ ...marks, [ports.readingLetter]: mark })
     // Next press goes there (from wherever the person has scrolled to by then).
     await setReadingState(ports, { at: false, back: null })
-    await highlightInPlace(ports, ports.readingLetter, picked)
+    await highlightInPlace(ports, ports.readingLetter, picked, false)
     await ports.restoreView()
     ports.log(`[bm] reading position set -> ${short(uuid)} (${check}) | "${headOf(sel.text)}"`, true)
     ports.toast(`reading position set: ${headOf(sel.text).slice(0, 40)}`)

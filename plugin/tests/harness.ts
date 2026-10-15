@@ -24,6 +24,8 @@ export type WorldOptions = {
   panes?: { id: string; isFocused?: boolean }[]
   // What $.process.run answers, by argv; by default no program runs in tests.
   process?: (argv: readonly string[]) => { exitCode: number; stdout: string; stderr?: string; isStdoutTruncated?: boolean }
+  // What $.ui.selection answers, read at each call (so a test can change it mid-test).
+  selection?: () => { requestId: string; text: string } | undefined
 }
 
 export type World = {
@@ -87,7 +89,7 @@ export function world(on: unknown, options: WorldOptions = {}): World {
   answerRaw('ui.focus', () => ({}))
   answerRaw('ui.scroll', () => ({}))
   answer('ui.panes', () => (options.panes ?? []).map(p => ({ id: p.id, title: p.id, isShown: true, isFocused: !!p.isFocused, isPlaced: true })))
-  answer('ui.selection', () => undefined)
+  answer('ui.selection', () => options.selection?.())
   answer('prompt.read', () => ({ text: options.prompt ?? '', cursor: (options.prompt ?? '').length }))
   answer('session.id', () => options.session ?? '00000000-0000-4000-8000-000000000000')
   answer('session.cwd', () => 'C:/test-project')

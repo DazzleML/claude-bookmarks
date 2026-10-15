@@ -35,6 +35,18 @@ test('a highlight with no pane remembers the top; with a pane up, the pane ancho
   assert.deepEqual(p.takeRestore(), { here: 'anchor', block: 'start', fromPane: true })
 })
 
+// Q261015-01: an action that opens and closes no pane (the reading position set from the
+// band) restores to where the highlight found the view, even with a list pane open, and
+// leaves the pane's anchor for the pane's own close.
+test('a highlight that is not a pane moment ignores the pane anchor and keeps it for the close', () => {
+  const p = new PanePosition()
+  p.opened('anchor', { uuid: 'view', block: 'end' })
+  p.noteRestore('top', false)
+  assert.deepEqual(p.takeRestore(), { here: 'top', block: 'start', fromPane: false })
+  assert.equal(p.anchor, 'anchor')
+  assert.deepEqual(p.takeRestore(), { here: 'view', block: 'end', fromPane: true })
+})
+
 // A new conversation (/clear, /resume) forgets the old one's places (test-scenarios
 // 2026-10-14__02-07-49, S3): a mark set with no selection would otherwise land on the
 // anchor, a message of the conversation that ended.

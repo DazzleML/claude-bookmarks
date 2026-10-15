@@ -238,7 +238,7 @@ export type MarksPorts = {
   screenEntries: () => readonly [string, import('../core/kit/screen-model.ts').MessageReport][]
   /** PanePosition's: the view before the pane opened, and where a highlight returns to. */
   paneAnchor: () => string | undefined
-  noteRestore: (top: string | undefined) => void
+  noteRestore: (top: string | undefined, paneAction?: boolean) => void
   restoreView: () => Promise<unknown>
   jumpTo: (uuid: string, via: string, label: string, words?: string, probe?: boolean, block?: 'start' | 'end') => Promise<string | undefined>
   now: () => Promise<number>

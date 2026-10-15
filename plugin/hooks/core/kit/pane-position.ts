@@ -40,9 +40,20 @@ export class PanePosition {
   }
 
   /** A highlight is about to redraw a message: remember where to put the view back (the pane's anchor when a pane is up). */
-  noteRestore(top: string | undefined): void {
-    this.restoreTo = this.paneAnchor ?? top
+  // `paneAction` false: the action opens and closes no pane (setting the reading position from
+  // the band), so the pane's anchor is not its business, however long a list pane has been
+  // open; the view goes back only to where the highlight found it, and only if it moved.
+  // djdarcy, 2026-10-15: "when we CLOSE or when we OPEN a pane then we absolutely want to
+  // maintain the position of the cursor so the screen doesn't jump around. However when a
+  // person creates a read mark there is no panel opened and no panel closed. So in that
+  // situation we should NEVER need to jump anywhere." (Q261015-01: a list pane kept open for
+  // 34 minutes sent a reading set back to where the pane had opened.)
+  noteRestore(top: string | undefined, paneAction = true): void {
+    this.restoreTo = paneAction ? this.paneAnchor ?? top : top
+    this.restoreIsPane = paneAction
   }
+  // Whether the restore noted last is a pane's moment (noteRestore's `paneAction`).
+  private restoreIsPane = true
 
   /** The message at the top of the screen before the pane opened, if a pane is up. */
   get anchor(): string | undefined {
@@ -59,6 +70,14 @@ export class PanePosition {
    * shift is certain); else where a highlight left it. `fromPane` says which.
    */
   takeRestore(): { here: string | undefined; block: 'start' | 'end'; fromPane: boolean } {
+    // Not a pane's moment: back to where the highlight found the view (restoreView checks it
+    // moved); the pane's own anchor and view are kept for the pane's close.
+    if (!this.restoreIsPane) {
+      const here = this.restoreTo
+      this.restoreTo = undefined
+      this.restoreIsPane = true
+      return { here, block: 'start', fromPane: false }
+    }
     // A pane opened and closed: the view was shifted for certain, so go back to where it
     // was before the pane, whether or not that message is still on screen somewhere.
     const fromPane = !!this.paneAnchor

@@ -165,7 +165,7 @@ function marksPorts($: EngineInterface): MarksPorts {
     freshOnScreen,
     screenEntries: () => screen.entries(),
     paneAnchor: () => panePosition.anchor,
-    noteRestore: top => panePosition.noteRestore(top),
+    noteRestore: (top, paneAction) => panePosition.noteRestore(top, paneAction),
     restoreView: () => restoreView($),
     jumpTo: (uuid, via, label, words, probe, block) => jumpTo($, uuid, via, label, words, probe, block),
     now: () => $.clock.now(),
