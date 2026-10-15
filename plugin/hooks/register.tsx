@@ -25,7 +25,6 @@ import { bandButtons, helpLines, helpShort, listHint, listKeysFor, route, type C
 import type { Cause } from './core/band/after-action'
 import { debugTextMode, installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
 import { resolvePalette, type Palette, type Role, type Style } from './core/palette'
-import { shard, withinBudget, type PromptText } from './core/prompts/text-store'
 import { pruneStore, type Seen } from './core/store-prune'
 import { footnoteOf, looksLikePrompt, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
 import { short } from './core/kit/message-id'
@@ -42,12 +41,13 @@ import { bookmarksPaneView } from './views/bookmarks-pane'
 import { marksPaneView } from './views/marks-pane'
 import { promptsPaneView } from './views/prompts-pane'
 import { configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
-import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, MarksPorts, NavigationPorts, ResolveOutcome, ViewPorts } from './engine/ports'
+import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, MarksPorts, NavigationPorts, PromptsPorts, ResolveOutcome, ViewPorts } from './engine/ports'
 import { closeAll as bandCloseAll, closePane as bandClosePane, endBandMode as bandEnd, paneFocused as bandPaneFocused, settle as bandSettle, BAND_MODE_MS, BAND_WATCH_MS, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
 import * as commandLine from './handlers/command-line'
 import * as marks_ from './handlers/marks'
 import * as bookmarks_ from './handlers/bookmarks'
+import * as prompts_ from './handlers/prompts'
 import { MarkState } from './core/marks/mark-state'
 import { Navigation } from './handlers/navigation'
 import { ViewTracker } from './handlers/view-tracker'
@@ -55,7 +55,7 @@ import { PanePosition } from './core/kit/pane-position'
 import { BandState } from './core/band/band-state'
 import { BOOKMARK_TOOL } from './core/bookmarks/bookmark-tool'
 import { COMMANDS } from './core/band/commands'
-import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptList, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, transcriptGuess, type PromptRef } from './core/prompts/prompt-store'
+import { PROMPTS_KEPT, backfillLine, backfilledKey, mergeBackfill, parseBackfill, promptList, transcriptGuess, type PromptRef } from './core/prompts/prompt-store'
 
 
 // The plugin's settings as they stand: the person's /config values (the `userConfig` in
@@ -477,104 +477,49 @@ async function allRows($: EngineInterface): Promise<Row[]> {
   return (await read($, rows)) as Row[]
 }
 
-// The session's prompts in the order they were sent, #1 first. `rows` ($.state) starts
-// empty when the session restarts, so every prompt is also kept in $.store under the
-// session id (djdarcy, 2026-10-04: number prompts from the first message). Prompts sent
-// before the mod was loaded are not known: reading them needs the transcript (#6).
-// The keys, the merge and the list's filter: core/prompts/prompt-store.ts.
+// The prompt store (the session's prompts and footnotes, the prompts' text for the filter)
+// is handlers/prompts.ts, over promptsPorts($); these keep the old signatures.
+function promptsPorts($: EngineInterface): PromptsPorts {
+  return {
+    sessionId: () => $.session.id(),
+    storeGet: key => $.store.get(key),
+    storeSet: (key, value) => $.store.set(key, value),
+    storeKeys: () => $.store.keys(),
+    storeDelete: key => $.store.delete(key),
+    dataRoot: () => dataRoot($),
+    fsExists: path => $.fs.exists(path),
+    fsRead: path => $.fs.read(path),
+    fsWrite: (path, text) => $.fs.write(path, text),
+    after: (ms, fn) => $.clock.after(ms, fn),
+    settings: currentSettings,
+  }
+}
 async function promptsKey($: EngineInterface): Promise<string> {
-  return promptsKeyOf(await $.session.id())
+  return prompts_.promptsKey(promptsPorts($))
 }
 async function keptPrompts($: EngineInterface): Promise<PromptRef[]> {
-  return ((await $.store.get(await promptsKey($))) as PromptRef[] | undefined) ?? []
+  return prompts_.keptPrompts(promptsPorts($))
 }
-// Footnotes (#33): the person's slash commands, `!` shell commands and interruptions,
-// each kept with the prompt it follows (core/prompts/prompt-rows.ts footnoteOf); numbered N.k at
-// draw time from the prompts' order.
 async function footnotesKey($: EngineInterface): Promise<string> {
-  return footnotesKeyOf(await $.session.id())
+  return prompts_.footnotesKey(promptsPorts($))
 }
 async function keptFootnotes($: EngineInterface): Promise<FootnoteRef[]> {
-  return ((await $.store.get(await footnotesKey($))) as FootnoteRef[] | undefined) ?? []
-}
-
-// The prompts' text for the filter (#28): held in memory while the plugin runs, kept as
-// much as the `promptTextBudget` setting allows (0 = unlimited; core/prompts/text-store.ts) in
-// files under the data root, <dataRoot>/bookmarks/prompttext/<sid>.json (the piece
-// count) and <sid>.<i>.json (pieces under the 4 MiB that $.fs.read takes). Not in the
-// plugin store: its 4 MiB is for the whole store, every conversation's marks and pins
-// included, and a store over it refuses every write (typings, `store.set`; measured
-// 2026-10-12: 620 KB live, 216 KB of it this text from one day's dev build).
-// djdarcy, 2026-10-12: free memory where appropriate, keep a cache where there is room;
-// search (#20) reuses it.
-const TEXT_PIECE_BYTES = 3_500_000
-// The cache carries its conversation: after /clear or /resume the plugin stays loaded,
-// and a save from the old conversation's cache would overwrite the new one's pieces.
-let promptTextCache: { sid: string; texts: Map<string, string> } | undefined
-let promptTextSave: Timer | undefined
-async function promptTextBase($: EngineInterface, sid: string): Promise<string | undefined> {
-  const root = await dataRoot($)
-  return root ? promptTextBaseOf(root, sid) : undefined
-}
-async function readJson($: EngineInterface, path: string): Promise<unknown> {
-  try {
-    return (await $.fs.exists(path)) ? JSON.parse(await $.fs.read(path)) : undefined
-  } catch {
-    return undefined // a piece cut short by a write that did not finish: that text is lost, the rest stands
-  }
+  return prompts_.keptFootnotes(promptsPorts($))
 }
 async function promptTexts($: EngineInterface): Promise<Map<string, string>> {
-  const sid = await $.session.id()
-  if (promptTextCache?.sid === sid) return promptTextCache.texts
-  await dropStoredPromptText($)
-  const cache = new Map<string, string>()
-  const base = await promptTextBase($, sid)
-  const count = base ? Number(((await readJson($, `${base}.json`)) as { pieces?: number } | undefined)?.pieces ?? 0) : 0
-  for (let i = 0; i < count; i++) {
-    const piece = await readJson($, `${base}.${i}.json`)
-    if (Array.isArray(piece)) for (const t of piece as PromptText[]) cache.set(t.uuid, t.text)
-  }
-  promptTextCache = { sid, texts: cache }
-  return cache
+  return prompts_.promptTexts(promptsPorts($))
 }
 async function savePromptTexts($: EngineInterface) {
-  const sid = await $.session.id()
-  const cache = await promptTexts($)
-  const order = (await keptPrompts($)).map(p => p.uuid).reverse() // newest first
-  const kept = withinBudget(order.filter(u => cache.has(u)).map(u => ({ uuid: u, text: cache.get(u)! })), currentSettings().promptTextBudget)
-  // Drop what fell outside the budget from memory too.
-  promptTextCache = { sid, texts: new Map(kept.map(t => [t.uuid, t.text])) }
-  const base = await promptTextBase($, sid)
-  if (!base) return // no data root: the text lives in memory until the plugin unloads
-  const before = Number(((await readJson($, `${base}.json`)) as { pieces?: number } | undefined)?.pieces ?? 0)
-  const pieces = shard(kept, TEXT_PIECE_BYTES)
-  for (let i = 0; i < pieces.length; i++) await $.fs.write(`${base}.${i}.json`, JSON.stringify(pieces[i]))
-  await $.fs.write(`${base}.json`, JSON.stringify({ pieces: pieces.length }))
-  // $.fs has no delete: a piece no longer counted is emptied, so a smaller budget frees the disk too.
-  for (let i = pieces.length; i < before; i++) await $.fs.write(`${base}.${i}.json`, '[]')
+  await prompts_.savePromptTexts(promptsPorts($))
 }
-// 0.4.23 development builds kept this text in the plugin store as `prompttext:` keys;
-// they are removed once per load. One machine ran that build (the maintainer's, never
-// released; counted 2026-10-12); take this out at 0.5.0.
-let storedPromptTextDropped = false
-async function dropStoredPromptText($: EngineInterface) {
-  if (storedPromptTextDropped) return
-  storedPromptTextDropped = true
-  for (const key of await $.store.keys()) if (key.startsWith('prompttext:')) await $.store.delete(key)
-}
-// A prompt's text joins the cache; the files are written a moment later, once per burst.
 async function keepPromptText($: EngineInterface, uuid: string, text: string) {
-  ;(await promptTexts($)).set(uuid, text)
-  promptTextSave?.cancel()
-  promptTextSave = $.clock.after(2000, () => void savePromptTexts($))
+  await prompts_.keepPromptText(promptsPorts($), uuid, text)
 }
 async function keepFootnote($: EngineInterface, f: FootnoteRef) {
-  const next = appendOnce(await keptFootnotes($), f)
-  if (next) await $.store.set(await footnotesKey($), next)
+  await prompts_.keepFootnote(promptsPorts($), f)
 }
 async function keepPrompt($: EngineInterface, p: PromptRef) {
-  const next = appendOnce(await keptPrompts($), p)
-  if (next) await $.store.set(await promptsKey($), next)
+  await prompts_.keepPrompt(promptsPorts($), p)
 }
 
 // --- Back-fill: the prompts sent before the mod was loaded ------------------------

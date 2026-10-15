@@ -138,6 +138,21 @@ export type BandPorts = {
   cut: (text: string, n: number) => string
 }
 
+/** What the prompt store (handlers/prompts.ts) needs: the session's id, the plugin store, the data root and its files, a timer, and the settings (the text budget). */
+export type PromptsPorts = {
+  sessionId: () => Promise<string>
+  storeGet: (key: string) => Promise<unknown>
+  storeSet: (key: string, value: unknown) => Promise<unknown>
+  storeKeys: () => Promise<readonly string[]>
+  storeDelete: (key: string) => Promise<unknown>
+  dataRoot: () => Promise<string | undefined>
+  fsExists: (path: string) => Promise<boolean>
+  fsRead: (path: string) => Promise<string>
+  fsWrite: (path: string, text: string) => Promise<unknown>
+  after: (ms: number, fn: () => void) => { cancel: () => void }
+  settings: () => import('../core/settings.ts').Settings
+}
+
 /** Finding a message in the transcript by uuid or by a verbatim fragment (register.tsx's resolveTarget). */
 export type ResolveOutcome =
   | { kind: 'one'; row: import('../core/bookmarks/transcript-lines.ts').TranscriptRow; via: string; ms: number }
@@ -241,6 +256,8 @@ export type CommandLinePorts = BandPorts & {
 //     Esc reminder                                                         prompt.edit (oweReminder), session.start
 //   cmdBusy (one command at a time)         handlers/command-line.ts      --
 //   registerCache, proseQueued              handlers/bookmarks.ts         --
+//   promptTextCache, promptTextSave,        handlers/prompts.ts           --
+//     storedPromptTextDropped
 //   logLines, screenLines, timeline (Ring)  register.tsx log cluster       diagnostics (timeline, read-only)
 //   rendered (drawn ids)                    register.tsx render hooks     diagnostics, list model (read-only)
 //   highlight clear timer, selection at     core/marks/mark-state.ts MarkState  band (setAtChord, via its port),
