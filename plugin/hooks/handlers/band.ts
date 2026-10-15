@@ -227,6 +227,12 @@ export async function bandOnly(ports: BandPorts, mode: string) {
 }
 
 export async function openFor(ports: BandPorts, mode: string, action: string) {
+  // A new pane replaces the one before, so the Esc watcher of that pane stops here: it
+  // captured that pane's mode, and a pane that takes the keyboard (below) starts no new
+  // watcher to replace it, so the old one would later settle the wrong pane kind (0.4.82;
+  // test-scenarios 2026-10-14__02-07-49, S6). A pane that cannot take the keyboard starts
+  // its own watcher further down.
+  ports.band.stopWatching()
   ports.expectRedraw('the pane opening')
   ports.log(`[bm] ${action.startsWith('command:') ? `leader ran ${action}` : `chord for ${action} pressed the band Button`}`)
   await ports.diagState(`${mode} (before open)`)
