@@ -41,7 +41,7 @@ export function parseBackfill(stdout: string): Backfill {
     try {
       o = JSON.parse(line)
     } catch {
-      continue
+      continue // a line cut off at the 4 MiB output limit
     }
     if (typeof o.uuid !== 'string') continue
     const text = promptTextOf(o)

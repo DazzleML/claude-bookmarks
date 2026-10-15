@@ -14,7 +14,7 @@ export type MarkStyles = { band: Style; mark: Style }
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
 
 // The marked line as drawn on a prompt or a reply: the soft band, then the mark's letter
-// and words bold in WORDS_FG.
+// and words bold in the palette's `mark` role (styles.mark; WORDS_FG until 0.4.19).
 export function markedLine(Text: ElementConstructor<TextProps>, c: ColorSplit, styles: MarkStyles) {
   return (
     <Text {...styles.band}>

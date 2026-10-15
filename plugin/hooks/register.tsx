@@ -40,7 +40,7 @@ import { bandView } from './views/band'
 import { bookmarksPaneView } from './views/bookmarks-pane'
 import { marksPaneView } from './views/marks-pane'
 import { promptsPaneView } from './views/prompts-pane'
-import { configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
+import { VERIFIED_CLIENTS, configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
 import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LogFilesPorts, MarksPorts, NavigationPorts, PromptsPorts, ResolveOutcome, ViewPorts } from './engine/ports'
 import { closeAll as bandCloseAll, closePane as bandClosePane, endBandMode as bandEnd, paneFocused as bandPaneFocused, settle as bandSettle, BAND_MODE_MS, BAND_WATCH_MS, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
@@ -71,10 +71,9 @@ function currentSettings(): Settings {
 // The plugin's one pane id (prompts, bookmarks, mark and jump panes all open under it).
 const PANE = 'bm-pane'
 
-// Claude Code builds the borrowed-action chords (below) were verified on. The
-// start-up tripwire toasts on any other build, because a new build could give a
-// borrowed action a handler of its own. Add a build here after re-verifying.
-const VERIFIED_CLIENTS = ['2.1.288', '2.1.289', '2.1.290']
+// Claude Code builds the borrowed-action chords (below) were verified on:
+// handlers/diagnostics-commands.ts VERIFIED_CLIENTS, the one list the start-up tripwire
+// and /bm-env both read.
 
 // Engine keybinding actions the chords borrow (docs/engine-quirks.md, "A plugin can't
 // define its own keyboard shortcut"). None should have a handler mounted while the built-in diff mod

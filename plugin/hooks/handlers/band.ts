@@ -16,8 +16,6 @@ import type { BandPorts } from '../engine/ports.ts'
 // How long the band waits for the next key before going back to its buttons.
 export const BAND_MODE_MS = 15_000
 
-// A digit of a prompt number, pressed as a band Button: jumps on the digit that makes
-// the number complete (with 25 prompts, `3` at once, `2` waits), or on `go`.
 // The list the band's number entry works on: the prompts, or the bookmarks.
 export async function listCount(ports: BandPorts): Promise<number> {
   return (await ports.paneMode()) === 'bookmarks' ? (await ports.bookmarkList()).length : (await ports.prompts()).length
@@ -35,6 +33,8 @@ export async function bandDot(ports: BandPorts) {
   keepBandWaiting(ports)
 }
 
+// A digit of a prompt number, pressed as a band Button: jumps on the digit that makes
+// the number complete (with 25 prompts, `3` at once, `2` waits), or on `go`.
 export async function bandDigit(ports: BandPorts, digit: string) {
   const typed = (await ports.bandNum()) + digit
   const count = await listCount(ports)
@@ -58,10 +58,8 @@ export async function showInPane(ports: BandPorts, n: number) {
   if (r.deny) ports.log(`[bm] pane scroll to #${n} -> DENY: ${r.deny}`)
 }
 
-// Browse the prompts one by one from the band, vim's j and k: the band holds the keyboard,
-// so the pane can't take the arrows (djdarcy, 2026-10-07: "the nice thing about the panel
-// is that you can scroll through the prompts 1 by 1"). The list is newest first: j moves
-// the ▶ down (older), k up (newer); the first press lands on the newest. Enter jumps.
+// Browse the prompts one by one from the band, vim's j and k. Why, and which way each key
+// moves: core/band/band-entry.ts stepNumber, the rule this applies (one copy of the reason).
 // j and k are the key table's defaults (core/band/keys.ts): `dir` arrives as 1 for next (j),
 // -1 for previous (k), so a rebound key steps the same way.
 export async function bandStep(ports: BandPorts, dir: -1 | 1) {
