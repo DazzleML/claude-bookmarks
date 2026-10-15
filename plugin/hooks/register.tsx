@@ -154,7 +154,7 @@ function marksPorts($: EngineInterface): MarksPorts {
     expectRedraw,
     note,
     log: (line, text) => log($, line, text ? { text: true } : undefined),
-    toast: (text, timeoutMs) => $.ui.toast(text, timeoutMs ? { timeoutMs } : undefined),
+    toast: (text, timeoutMs) => (timeoutMs ? $.ui.toast(text, { timeoutMs }) : $.ui.toast(text)),
     cut,
     selection: () => $.ui.selection(),
     allRows: () => allRows($),
@@ -793,7 +793,7 @@ function bookmarksPorts($: EngineInterface): BookmarksPorts {
   return {
     log: (line, text) => log($, line, text ? { text: true } : undefined),
     logAlways: line => log($, line, { always: true }),
-    toast: (text, timeoutMs) => $.ui.toast(text, timeoutMs ? { timeoutMs } : undefined),
+    toast: (text, timeoutMs) => (timeoutMs ? $.ui.toast(text, { timeoutMs }) : $.ui.toast(text)),
     cut,
     expectRedraw,
     dataRoot: () => dataRoot($),
@@ -1151,7 +1151,7 @@ function bandPorts($: EngineInterface): BandPorts {
     jumpToPromptNumber: (typed, via) => jumpToPromptNumber($, typed, via),
     jumpToBookmarkNumber: (typed, via) => jumpToBookmarkNumber($, typed, via),
     scrollPaneCentre: key => $.ui.scroll({ in: PANE, to: { key }, block: 'center' }),
-    toast: (text, timeoutMs) => $.ui.toast(text, timeoutMs ? { timeoutMs } : undefined),
+    toast: (text, timeoutMs) => (timeoutMs ? $.ui.toast(text, { timeoutMs }) : $.ui.toast(text)),
     togglePin: typed => togglePin($, typed),
     groupStep: dir => bandGroupStep($, dir),
     loadRegister: () => loadRegister($),
@@ -1761,6 +1761,12 @@ export const register: Register = (on, options) => {
     sameConversationSoon($)
     const elements = $.ui.resolve(e)
     const mode = (await read($, paneMode)) as PaneMode
+    // What the surface actually gave the pane, logged at close: says whether the
+    // narrow request held or the engine has a minimum width.
+    // For every pane kind since 0.4.81: it was written only below the list and bookmarks
+    // branches, so closing a list logged the last mark pane's size (test-scenarios
+    // 2026-10-14__02-07-49, S13).
+    paneGeometry = `${e.props.placement}, ${e.props.bodyColumns} body columns`
     // The panes are drawn by views/prompts-pane.tsx, views/bookmarks-pane.tsx and
     // views/marks-pane.tsx; what they read, and what touches the engine, is here.
     const styles = { text: style, button: buttonStyle }
@@ -1849,10 +1855,6 @@ export const register: Register = (on, options) => {
         styles,
       )
     }
-
-    // What the surface actually gave the pane, logged at close: says whether the
-    // narrow request held or the engine has a minimum width.
-    paneGeometry = `${e.props.placement}, ${e.props.bodyColumns} body columns`
 
     const marks = await loadMarks($)
     return marksPaneView(
