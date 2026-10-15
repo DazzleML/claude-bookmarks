@@ -11,6 +11,8 @@ Two kinds of thing live here:
 
 ## The groups
 
+Each folder has its own README listing its files.
+
 | Folder | What it is about |
 |---|---|
 | `band/` | The band (the strip above the prompt): its key table (`keys.ts`, the one place keys are defined), what happens after an action (`after-action.ts`), the number and footnote entry, the band's state, and the typed commands' names and descriptions (`commands.ts`) |
