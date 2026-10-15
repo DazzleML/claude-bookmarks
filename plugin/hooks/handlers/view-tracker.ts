@@ -30,7 +30,12 @@ export class ViewTracker {
   private lastHere: string | undefined
   private viewTimer: { cancel: () => void } | undefined
 
-  constructor(private readonly screen: Pick<ScreenModel, 'fresh' | 'report' | 'recentSelfRedraw' | 'sinceSelfRedraw' | 'selfRedrawWhy'>) {}
+  // A field assigned below rather than a parameter property, so `node --test` can load
+  // this file (its type stripping refuses parameter properties).
+  private readonly screen: Pick<ScreenModel, 'fresh' | 'report' | 'recentSelfRedraw' | 'sinceSelfRedraw' | 'selfRedrawWhy'>
+  constructor(screen: Pick<ScreenModel, 'fresh' | 'report' | 'recentSelfRedraw' | 'sinceSelfRedraw' | 'selfRedrawWhy'>) {
+    this.screen = screen
+  }
 
   /** A new conversation (/clear, /resume): the old screen, the held rule and the yellow row
    * belonged to messages that are gone; a pending view update is cancelled. */

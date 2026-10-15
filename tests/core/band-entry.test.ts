@@ -32,6 +32,7 @@ test('a list position: in range, whole, trimmed; empty names the newest only whe
   assert.equal(listPosition('x', 5), undefined)
   assert.equal(listPosition('', 5), undefined)
   assert.equal(listPosition('', 5, true), 5)
+  assert.equal(listPosition('  ', 5, true), 5) // blank after the trim is empty
 })
 
 test('what an entry in the prompts list means', () => {
