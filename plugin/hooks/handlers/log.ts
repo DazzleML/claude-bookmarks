@@ -4,7 +4,7 @@
 // debug channels follow (open loop, "what is still in register.tsx").
 
 import { describeEcho, echoEnabled, echoPolicyOf, type EchoPolicy } from '../core/log/log-ring.ts'
-import { formatDebugEnv, parseDebugEnv } from '../core/log/debug.ts'
+import { formatDebugEnv, parseDebugEnv, type Channel } from '../core/log/debug.ts'
 import type { EchoPorts } from '../engine/ports.ts'
 
 // Whether log lines are also echoed into the transcript as dim rows. Off by default: the
@@ -41,6 +41,34 @@ export async function setSessionEcho(ports: EchoPorts, enabled: boolean | undefi
 }
 export async function uiEchoEnabled(ports: EchoPorts): Promise<boolean> {
   return echoEnabled(await echoPolicy(ports), await sessionEchoChoice(ports))
+}
+// Debug channels (#35, core/log/debug.ts): this conversation's choice, read from its
+// environment once and kept here so a check is synchronous (a render hook and note()
+// cannot await). Until it is read, every channel is off, the safe side.
+// (0.4.86: one owned class with named methods; register.tsx keeps the one instance.)
+export class DebugChannels {
+  readonly #on = new Set<Channel>()
+  #read = false
+  has(c: Channel): boolean {
+    return this.#on.has(c)
+  }
+  get on(): ReadonlySet<Channel> {
+    return this.#on
+  }
+  read(ports: Pick<EchoPorts, 'debugEnv'>) {
+    if (this.#read) return
+    this.#read = true
+    void ports.debugEnv().then(v => {
+      for (const c of parseDebugEnv(v).channels) this.#on.add(c)
+    }).catch(() => {})
+  }
+  // The channels share CONVO_BOOKMARKS_DEBUG with the echo's choice, which is kept.
+  async set(ports: EchoPorts, on: Set<Channel>) {
+    this.#on.clear()
+    for (const c of on) this.#on.add(c)
+    const { echo } = parseDebugEnv(await ports.debugEnv())
+    await ports.setDebugEnv(formatDebugEnv(echo, on))
+  }
 }
 /** The state in one line, for `/bm-debug status` and `/bm-env`. */
 export async function echoStateLine(ports: EchoPorts): Promise<string> {

@@ -231,7 +231,7 @@ let screenFlushPending = false
 let screenLoaded = false
 function rawScreen($: EngineInterface, component: string, requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
   readChannels($)
-  if (!channelsOn.has('screen')) return
+  if (!channels.has('screen')) return
   const range = onScreen ? `${onScreen.first}-${onScreen.last}/${onScreen.of}` : onScreen === null ? 'null' : 'absent'
   screenLines.push(`${clock(Date.now())} ${component} ${requestId} ${range}`)
   if (screenFlushPending) return
@@ -314,24 +314,13 @@ async function echoStateLine($: EngineInterface): Promise<string> {
   return log_.echoStateLine(echoPorts($))
 }
 
-// Debug channels (#35, core/log/debug.ts): this conversation's choice, read from its
-// environment once and kept here so a check is synchronous (a render hook and note()
-// cannot await). Until it is read, every channel is off, the safe side.
-const channelsOn = new Set<Channel>()
-let channelsRead = false
+// The debug channels are handlers/log.ts DebugChannels; this is the one instance.
+const channels = new log_.DebugChannels()
 function readChannels($: EngineInterface) {
-  if (channelsRead) return
-  channelsRead = true
-  void $.env.get('CONVO_BOOKMARKS_DEBUG').then(v => {
-    for (const c of parseDebugEnv(v).channels) channelsOn.add(c)
-  }).catch(() => {})
+  channels.read(echoPorts($))
 }
-// The channels share CONVO_BOOKMARKS_DEBUG with the echo's choice, which is kept.
 async function setChannels($: EngineInterface, on: Set<Channel>) {
-  channelsOn.clear()
-  for (const c of on) channelsOn.add(c)
-  const { echo } = parseDebugEnv(await $.env.get('CONVO_BOOKMARKS_DEBUG'))
-  await $.env.set('CONVO_BOOKMARKS_DEBUG', formatDebugEnv(echo, on))
+  await channels.set(echoPorts($), on)
 }
 
 // `text`: the line quotes the conversation (a selection, a message's head, a label,
@@ -344,7 +333,7 @@ function log($: EngineInterface, line: string, opts?: { always?: boolean; text?:
   if (opts?.text) {
     const mode = debugTextMode(currentSettings().debugText, !installedFromCache($.plugin.root))
     void uiEchoEnabled($).then(debugging => {
-      if (!quotesText(mode, channelsOn.has('text'), debugging)) return
+      if (!quotesText(mode, channels.has('text'), debugging)) return
       if (opts.always || debugging) $.ui.log(line)
       keepLine($, line)
     }).catch(() => {})
@@ -360,7 +349,7 @@ const cut = (text: string, n: number) => excerpt(text, n, currentSettings().debu
 
 function keepLine($: EngineInterface, line: string) {
   logLines.push(stamped(line, Date.now()))
-  const mirrored = channelsOn.has('screen') ? screenMirror(line) : undefined
+  const mirrored = channels.has('screen') ? screenMirror(line) : undefined
   if (mirrored) screenLines.push(`${clock(Date.now())} >>> ${mirrored}`)
   flushing = flushing.then(() => flushLog($)).catch(() => {})
 }
@@ -828,7 +817,7 @@ function viewPorts($: EngineInterface): ViewPorts {
     closeShare: () => currentSettings().closeShare,
     after: (ms, fn) => $.clock.after(ms, fn),
     listPaneOpen: async () => (await read($, paneMode)) === 'list' && (await $.ui.panes()).some(p => p.id === PANE),
-    heldChannel: () => channelsOn.has('held'),
+    heldChannel: () => channels.has('held'),
     bumpView: () => update($, viewRev, v => v + 1),
     followHere: () => currentSettings().followHere,
     bandNumEmpty: async () => (await read($, bandNum)) === '',
@@ -1620,7 +1609,7 @@ export const register: Register = (on, options) => {
       log: (line, always) => log($, line, always ? { always: true } : undefined),
       channelsOn: () => {
         readChannels($)
-        return channelsOn
+        return channels.on
       },
       setChannels: next => setChannels($, next as Set<Channel>),
       setSessionEcho: choice => setSessionEcho($, choice),

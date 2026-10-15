@@ -267,6 +267,9 @@ export type CommandLinePorts = BandPorts & {
 //     Esc reminder                                                         prompt.edit (oweReminder), session.start
 //   cmdBusy (one command at a time)         handlers/command-line.ts      --
 //   registerCache, proseQueued              handlers/bookmarks.ts         --
+//   debug channels (DebugChannels)          handlers/log.ts (writers:     log, the screen channel, the view
+//                                             read, set); instance in     tracker (held), /bm-debug (on)
+//                                             register.tsx
 //   promptTextCache, promptTextSave,        handlers/prompts.ts           --
 //     storedPromptTextDropped
 //   logLines, screenLines, timeline (Ring)  register.tsx log cluster       diagnostics (timeline, read-only)
