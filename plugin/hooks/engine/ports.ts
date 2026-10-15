@@ -138,6 +138,17 @@ export type BandPorts = {
   cut: (text: string, n: number) => string
 }
 
+/** What the debug echo (handlers/log.ts) needs: the plugin store, the settings, and this conversation's debug variable, read and written by literal name in register.tsx (one port each, as the validator wants). */
+export type EchoPorts = {
+  storeGet: (key: string) => Promise<unknown>
+  storeSet: (key: string, value: unknown) => Promise<unknown>
+  settings: () => import('../core/settings.ts').Settings
+  /** `CONVO_BOOKMARKS_DEBUG`, this conversation's echo choice and debug channels. */
+  debugEnv: () => Promise<string | undefined>
+  /** `undefined` clears the variable. */
+  setDebugEnv: (value: string | undefined) => Promise<unknown>
+}
+
 /** What the prompt store (handlers/prompts.ts) needs: the session's id, the plugin store, the data root and its files, a timer, and the settings (the text budget). */
 export type PromptsPorts = {
   sessionId: () => Promise<string>

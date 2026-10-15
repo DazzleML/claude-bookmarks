@@ -28,7 +28,7 @@ import { resolvePalette, type Palette, type Role, type Style } from './core/pale
 import { pruneStore, type Seen } from './core/store-prune'
 import { footnoteOf, looksLikePrompt, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
 import { short } from './core/kit/message-id'
-import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFile, stamped, type EchoPolicy } from './core/log/log-ring'
+import { Ring, clock, logFile, screenFile, stamped, type EchoPolicy } from './core/log/log-ring'
 import { configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, selectionKind, settingsRows } from './core/log/diagnostics'
 import { colorSplit, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/marks/highlight'
 import { ScreenModel } from './core/kit/screen-model'
@@ -41,13 +41,14 @@ import { bookmarksPaneView } from './views/bookmarks-pane'
 import { marksPaneView } from './views/marks-pane'
 import { promptsPaneView } from './views/prompts-pane'
 import { configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
-import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, MarksPorts, NavigationPorts, PromptsPorts, ResolveOutcome, ViewPorts } from './engine/ports'
+import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, MarksPorts, NavigationPorts, PromptsPorts, ResolveOutcome, ViewPorts } from './engine/ports'
 import { closeAll as bandCloseAll, closePane as bandClosePane, endBandMode as bandEnd, paneFocused as bandPaneFocused, settle as bandSettle, BAND_MODE_MS, BAND_WATCH_MS, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
 import * as commandLine from './handlers/command-line'
 import * as marks_ from './handlers/marks'
 import * as bookmarks_ from './handlers/bookmarks'
 import * as prompts_ from './handlers/prompts'
+import * as log_ from './handlers/log'
 import { MarkState } from './core/marks/mark-state'
 import { Navigation } from './handlers/navigation'
 import { ViewTracker } from './handlers/view-tracker'
@@ -283,44 +284,34 @@ const logLines = new Ring<string>(400)
 let logPath: string | null | undefined // undefined: not looked up yet; null: no usable place
 let flushing: Promise<void> = Promise.resolve()
 
-// Whether log lines are also echoed into the transcript as dim rows. Off by default: the
-// file log is always written; the echo is for the person debugging one conversation, and
-// a single global switch was spamming every session the plugin loads in (djdarcy,
-// 2026-10-09). Two things are kept, one volatile and one persisted (the 14-17-44 DWP):
-// - this conversation's choice lives in its own process environment, CONVO_BOOKMARKS_DEBUG.
-//   `/bm-debug on|off` sets it with $.env.set, so it survives a hot reload, reaches the
-//   processes this session starts, and dies with the session: a resumed session forgets.
-//   `CONVO_BOOKMARKS_DEBUG=1 claude` is the same signal given from the shell.
-// - the machine-wide policy, one store key: the default every conversation without a
-//   choice follows, and whether a conversation may choose at all (`forced`), so "on
-//   everywhere" and "off everywhere" can be guaranteed from any one session (djdarcy's
-//   six states: forced on, forced off, and a session's on/off/unset over an overridable
-//   default). Nothing is cached: a force typed in one session must reach the others on
-//   their very next log line.
-const ECHO_POLICY_ENTRY = 'debug:echo'
+// The debug echo (the machine-wide policy and this conversation's choice) is
+// handlers/log.ts, over echoPorts($); these keep the old signatures.
+function echoPorts($: EngineInterface): EchoPorts {
+  return {
+    storeGet: key => $.store.get(key),
+    storeSet: (key, value) => $.store.set(key, value),
+    settings: currentSettings,
+    debugEnv: () => $.env.get('CONVO_BOOKMARKS_DEBUG'),
+    setDebugEnv: value => $.env.set('CONVO_BOOKMARKS_DEBUG', value),
+  }
+}
 async function echoPolicy($: EngineInterface): Promise<EchoPolicy> {
-  // A default typed with `/bm-debug default` wins; without one, the `debugDefault` setting.
-  return echoPolicyOf(await $.store.get(ECHO_POLICY_ENTRY), currentSettings().debugDefault === 'on')
+  return log_.echoPolicy(echoPorts($))
 }
 async function setEchoPolicy($: EngineInterface, policy: EchoPolicy) {
-  await $.store.set(ECHO_POLICY_ENTRY, policy)
+  await log_.setEchoPolicy(echoPorts($), policy)
 }
-/** This conversation's own choice, from its environment; undefined when it made none. */
 async function sessionEchoChoice($: EngineInterface): Promise<boolean | undefined> {
-  return parseDebugEnv(await $.env.get('CONVO_BOOKMARKS_DEBUG')).echo
+  return log_.sessionEchoChoice(echoPorts($))
 }
-/** Sets this conversation's choice; `undefined` drops it, so the default applies again. The debug channels sharing the variable are kept. */
 async function setSessionEcho($: EngineInterface, enabled: boolean | undefined) {
-  // Not named `on`: the directory's reader treats that name as the hook registrar everywhere in the file.
-  const { channels } = parseDebugEnv(await $.env.get('CONVO_BOOKMARKS_DEBUG'))
-  await $.env.set('CONVO_BOOKMARKS_DEBUG', formatDebugEnv(enabled, channels))
+  await log_.setSessionEcho(echoPorts($), enabled)
 }
 async function uiEchoEnabled($: EngineInterface): Promise<boolean> {
-  return echoEnabled(await echoPolicy($), await sessionEchoChoice($))
+  return log_.uiEchoEnabled(echoPorts($))
 }
-/** The state in one line, for `/bm-debug status` and `/bm-env`. */
 async function echoStateLine($: EngineInterface): Promise<string> {
-  return describeEcho(await echoPolicy($), await sessionEchoChoice($))
+  return log_.echoStateLine(echoPorts($))
 }
 
 // Debug channels (#35, core/log/debug.ts): this conversation's choice, read from its
