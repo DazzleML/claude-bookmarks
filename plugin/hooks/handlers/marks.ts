@@ -7,7 +7,7 @@
 import { sameMessage, findByMessage, short } from '../core/kit/message-id.ts'
 import { plainMarkdown, snippetOf } from '../core/marks/highlight.ts'
 import { headOf } from '../core/bookmarks/transcript-lines.ts'
-import type { Mark } from '../core/marks/marks.ts'
+import { deleteMarks, type Mark } from '../core/marks/marks.ts'
 import type { SelectionLike } from '../core/marks/mark-state.ts'
 import type { MarksPorts } from '../engine/ports.ts'
 
@@ -289,4 +289,20 @@ export async function jumpToMark(ports: MarksPorts, letter: string, probe = fals
   const deny = await ports.jumpTo(mark.uuid, 'chord jump', `mark ${letter}`, undefined, probe)
   if (!deny) await showMark(ports, letter, mark.snippet ?? mark.head)
   return deny
+}
+
+// /bm-delmarks: what it deletes is core/marks/marks.ts deleteMarks (vim's :delmarks).
+// (Moved from register.tsx's registration, 0.4.94.)
+export async function delmarksCommand(ports: MarksPorts, args: string) {
+  const { letters, gone, missing, kept } = deleteMarks(await ports.loadMarks(), args, ports.letters)
+  if (letters.length === 0) {
+    ports.toast('Usage: /bm-delmarks a b   (or /bm-delmarks all)')
+    return
+  }
+  await ports.saveMarks(kept)
+  ports.markCache.replace(kept)
+  const showing = await ports.shown()
+  if (showing && gone.includes(showing.letter)) await clearShown(ports)
+  ports.log(`[bm] deleted marks ${gone.join(' ') || '(none)'}${missing.length ? `; not set: ${missing.join(' ')}` : ''}`)
+  ports.toast(gone.length ? `deleted mark${gone.length > 1 ? 's' : ''} ${gone.join(' ')}` : `not set: ${missing.join(' ')}`)
 }

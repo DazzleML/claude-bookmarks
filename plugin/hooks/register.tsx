@@ -29,10 +29,10 @@ import { pruneStore, type Seen } from './core/store-prune'
 import { footnoteOf, looksLikePrompt, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
 import { short } from './core/kit/message-id'
 import { type EchoPolicy } from './core/log/log-ring'
-import { configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, selectionKind, settingsRows } from './core/log/diagnostics'
+import { configListedLine, dccLine, diagLine, idsReport, keyLabel, notAppliedLine, selectionKind, settingsRows } from './core/log/diagnostics'
 import { colorSplit, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/marks/highlight'
 import { ScreenModel } from './core/kit/screen-model'
-import { MarkCache, deleteMarks, marksShowing, type Mark, type Marks } from './core/marks/marks'
+import { MarkCache, marksShowing, type Mark, type Marks } from './core/marks/marks'
 import { footnoteAt, listPosition, nextGroup, promptEntry } from './core/band/band-entry'
 import { debugCommand } from './handlers/debug-command'
 import { anchoredReply, markedColumn, markedReply, type MarkStyles } from './views/marked-message'
@@ -40,7 +40,7 @@ import { bandView } from './views/band'
 import { bookmarksPaneView } from './views/bookmarks-pane'
 import { marksPaneView } from './views/marks-pane'
 import { promptsPaneView } from './views/prompts-pane'
-import { VERIFIED_CLIENTS, configCommand, envCommand, idsCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
+import { VERIFIED_CLIENTS, configCommand, envCommand, idsCommand, jumpCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
 import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LogFilesPorts, MarksPorts, NavigationPorts, PromptsPorts, ResolveOutcome, ViewPorts } from './engine/ports'
 import { closeAll as bandCloseAll, closePane as bandClosePane, endBandMode as bandEnd, paneFocused as bandPaneFocused, settle as bandSettle, BAND_MODE_MS, BAND_WATCH_MS, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
@@ -173,6 +173,7 @@ function marksPorts($: EngineInterface): MarksPorts {
     sessionId: () => $.session.id(),
     storeGet: key => $.store.get(key),
     storeSet: (key, value) => $.store.set(key, value),
+    letters: LETTERS,
     readingLetter: READING,
   }
 }
@@ -1054,6 +1055,8 @@ function bandPorts($: EngineInterface): BandPorts {
     openPane: async title =>
       (await $.ui.open({ id: PANE, title, focus: true, closeOnEscape: true, columns: 16, rows: 4 })) as
         { isPlaced?: boolean; reason?: string } | undefined,
+    openPaneFocused: title => $.ui.open({ id: PANE, title, focus: true, closeOnEscape: true }),
+    setBandGroup: index => update($, bandGroup, () => index),
     scroll: (uuid, block) => $.ui.scroll({ to: { requestId: uuid }, block }),
     setPendingCentre: uuid => {
       pendingCentre = uuid
@@ -1096,6 +1099,7 @@ function diagnosticsPorts($: EngineInterface): DiagnosticsPorts {
     prompts: () => prompts($),
     rows: () => allRows($),
     marks: () => loadMarks($),
+    jumpTo: (uuid, via, label) => jumpTo($, uuid, via, label),
     rendered: () => rendered,
     timeline: () => timeline.items,
     note,
@@ -1468,11 +1472,7 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'bm-jump' }, async ($, e) => {
-    const arg = e.args.trim()
-    const target = jumpTarget(arg, await allRows($))
-    if (target.kind === 'row') await jumpTo($, target.uuid, '/bm-jump', target.label)
-    else if (target.kind === 'raw') await jumpTo($, target.uuid, '/bm-jump (raw uuid)', 'raw')
-    else log($, `[bm] nothing captured for "${arg}" (${target.prompts} prompts captured since load)`)
+    await jumpCommand(diagnosticsPorts($), e.args)
     return {}
   })
 
@@ -1493,18 +1493,11 @@ export const register: Register = (on, options) => {
     return {}
   })
   on('command.run', { command: 'bm-bookmarks' }, async $ => {
-    await update($, bandNum, () => '')
-    await update($, bandGroup, () => 0)
-    await openFor($, 'bookmarks', 'command:bm-bookmarks')
+    await band_.bookmarksCommand(bandPorts($))
     return {}
   })
   on('command.run', { command: 'bm-promote' }, async ($, e) => {
-    const letter = (e.args ?? '').trim()
-    if (!/^[a-z`]$/.test(letter)) {
-      $.ui.toast('/bm-promote <letter>: promote that mark into a bookmark')
-      return {}
-    }
-    await promoteLetter($, letter)
+    await bookmarks_.promoteCommand(bookmarksPorts($), e.args)
     return {}
   })
   on('command.run', { command: 'bm-read' }, async $ => {
@@ -1512,28 +1505,15 @@ export const register: Register = (on, options) => {
     return {}
   })
 
+  // /bm-pane: handlers/band.ts paneCommand.
   on('command.run', { command: 'bm-pane' }, async $ => {
-    await update($, paneMode, () => 'list')
-    await $.ui.open({ id: PANE, title: 'prompts: type #', focus: true, closeOnEscape: true })
-    // The slash-command route to a focused pane (typed, or a `command:bm-pane`
-    // keybinding, 2.1.290): record whether the pane actually got the keyboard.
-    log($, `[bm] /bm-pane opened; pane has the keyboard: ${(await paneFocused($)) ? 'yes' : 'NO'}`)
+    await band_.paneCommand(bandPorts($))
     return {}
   })
 
-  // /bm-delmarks: what it deletes is core/marks/marks.ts deleteMarks (vim's :delmarks).
+  // /bm-delmarks: handlers/marks.ts delmarksCommand.
   on('command.run', { command: 'bm-delmarks' }, async ($, e) => {
-    const { letters, gone, missing, kept } = deleteMarks(await loadMarks($), e.args, LETTERS)
-    if (letters.length === 0) {
-      $.ui.toast('Usage: /bm-delmarks a b   (or /bm-delmarks all)')
-      return {}
-    }
-    await $.store.set(await marksKey($), kept)
-    markCache.replace(kept)
-    const showing = await read($, shown)
-    if (showing && gone.includes(showing.letter)) await clearShown($)
-    log($, `[bm] deleted marks ${gone.join(' ') || '(none)'}${missing.length ? `; not set: ${missing.join(' ')}` : ''}`)
-    $.ui.toast(gone.length ? `deleted mark${gone.length > 1 ? 's' : ''} ${gone.join(' ')}` : `not set: ${missing.join(' ')}`)
+    await marks_.delmarksCommand(marksPorts($), e.args)
     return {}
   })
 

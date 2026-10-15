@@ -4,7 +4,7 @@
 // as they were; `ports.x(...)` where a handler called `$` or a register.tsx function. Their
 // decisions and formats are core/log/diagnostics.ts. Location provisional (Q261012-11);
 // settled here by the layout pass (0.4.77).
-import { configListedLine, dccLine, idsReport, notAppliedLine, selectionKind, settingsRows } from '../core/log/diagnostics.ts'
+import { configListedLine, dccLine, idsReport, jumpTarget, notAppliedLine, selectionKind, settingsRows } from '../core/log/diagnostics.ts'
 import { clock } from '../core/log/log-ring.ts'
 import { short } from '../core/kit/message-id.ts'
 import { debugTextMode } from '../core/settings.ts'
@@ -83,4 +83,13 @@ export async function envCommand(ports: DiagnosticsPorts): Promise<void> {
   )
   // dcc-patcher's build signal (core/log/diagnostics.ts, dccLine).
   ports.log(dccLine(await ports.dccPatcher(), await ports.dccPatchH(), await ports.dccPatches(), await ports.echoState()), true)
+}
+
+// /bm-jump first | last | N | r<N> | uuid (moved from register.tsx's registration, 0.4.94).
+export async function jumpCommand(ports: DiagnosticsPorts, args: string) {
+  const arg = args.trim()
+  const target = jumpTarget(arg, await ports.rows())
+  if (target.kind === 'row') await ports.jumpTo(target.uuid, '/bm-jump', target.label)
+  else if (target.kind === 'raw') await ports.jumpTo(target.uuid, '/bm-jump (raw uuid)', 'raw')
+  else ports.log(`[bm] nothing captured for "${arg}" (${target.prompts} prompts captured since load)`)
 }

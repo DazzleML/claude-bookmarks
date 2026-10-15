@@ -22,6 +22,8 @@ export type DiagnosticsPorts = LogPorts & {
   prompts: () => Promise<{ uuid: string; head: string }[]>
   rows: () => Promise<{ uuid: string; door: 'prompt' | 'response'; head: string }[]>
   marks: () => Promise<Record<string, { uuid: string; head: string }>>
+  /** /bm-jump's: the navigation cluster's jump. */
+  jumpTo: (uuid: string, via: string, label: string) => Promise<unknown>
   rendered: () => ReadonlyMap<string, string>
   timeline: () => readonly { t: number; what: string }[]
   note: (what: string) => void
@@ -129,6 +131,10 @@ export type BandPorts = {
   paneOpened: (anchor: string | undefined, view: { uuid: string; block: 'start' | 'end' } | undefined) => void
   paneView: () => { uuid: string; block: 'start' | 'end' } | undefined
   openPane: (title: string) => Promise<{ isPlaced?: boolean; reason?: string } | undefined>
+  /** /bm-pane's: the pane opened with the keyboard and no size request (openPane asks 16x4). */
+  openPaneFocused: (title: string) => Promise<unknown>
+  /** /bm-bookmarks': which bookmarks group the list shows (0, the first). */
+  setBandGroup: (index: number) => Promise<unknown>
   scroll: (uuid: string, block: 'start' | 'end') => Promise<{ deny?: string }>
   setPendingCentre: (uuid: string) => void
   selection: () => Promise<{ requestId?: string; text: string } | undefined>
@@ -247,6 +253,8 @@ export type MarksPorts = {
   sessionId: () => Promise<string>
   storeGet: (key: string) => Promise<unknown>
   storeSet: (key: string, value: unknown) => Promise<unknown>
+  /** The mark letters (a-z), for /bm-delmarks' `all`. */
+  letters: readonly string[]
   readingLetter: string
 }
 

@@ -231,6 +231,16 @@ export async function arriveAtBookmark(ports: BookmarksPorts, record: { uuid: st
   return deny
 }
 
+// /bm-promote <letter> (moved from register.tsx's registration, 0.4.94).
+export async function promoteCommand(ports: BookmarksPorts, args: string | undefined) {
+  const letter = (args ?? '').trim()
+  if (!/^[a-z`]$/.test(letter)) {
+    ports.toast('/bm-promote <letter>: promote that mark into a bookmark')
+    return
+  }
+  await promoteLetter(ports, letter)
+}
+
 // Promote one of the person's marks (a letter, or ` for the reading position) into a
 // bookmark: same message, the mark's words, `by: 'user'`. The letter is left as it is.
 // The markdown link goes to the clipboard, ready to paste into a note.

@@ -361,6 +361,23 @@ export async function paneFocused(ports: BandPorts): Promise<boolean> {
   return (await ports.panes()).some(p => p.id === ports.paneId && p.isFocused)
 }
 
+// /bm-bookmarks (moved from register.tsx's registration, 0.4.94): no number typed, the
+// first group, then the pane.
+export async function bookmarksCommand(ports: BandPorts) {
+  await ports.setBandNum('')
+  await ports.setBandGroup(0)
+  await openFor(ports, 'bookmarks', 'command:bm-bookmarks')
+}
+
+// /bm-pane (moved from register.tsx's registration, 0.4.94): the prompts pane without the band.
+export async function paneCommand(ports: BandPorts) {
+  await ports.setPaneMode('list')
+  await ports.openPaneFocused('prompts: type #')
+  // The slash-command route to a focused pane (typed, or a `command:bm-pane`
+  // keybinding, 2.1.290): record whether the pane actually got the keyboard.
+  ports.log(`[bm] /bm-pane opened; pane has the keyboard: ${(await paneFocused(ports)) ? 'yes' : 'NO'}`)
+}
+
 export async function closePane(ports: BandPorts) {
   ports.expectRedraw('the pane closing')
   ports.note('pane close')
