@@ -7,14 +7,34 @@ const SID = '11111111-2222-4333-8444-555555555555'
 const UUID = 'cccccccc-0000-4000-8000-000000000001'
 const PATH = `C:/test-home/claude/bookmarks/sessions/${SID}.json`
 
-function seeded(): Record<string, string> {
+function seeded(tier: 'perma' | 'bookmark' = 'perma'): Record<string, string> {
   const r = addOrRelabel(
     emptyRegister(SID, 'test', 1),
-    { uuid: UUID, owner: 'claude', label: 'where the palette began', head: 'the message', by: 'claude', source: 'tool', tier: 'perma' },
+    { uuid: UUID, owner: 'claude', label: 'where the palette began', head: 'the message', by: 'claude', source: 'tool', tier },
     2,
   )
   return { [PATH]: serializeRegister(r.register) }
 }
+
+type Pane = { findAll: (q: object) => Promise<{ text?: string }[]> }
+const PANE = { plugin: 'bookmarks', surface: 'terminal', component: 'Pane', requestId: 'bm-pane', props: { title: 'bookmarks: type #', isFocused: false, bodyColumns: 60, placement: 'dock', scroll: { offset: 0, bodyRows: 20 } } }
+async function bookmarksPaneTexts($: { ui: { mount: (t: never) => Promise<unknown> } }) {
+  const band = (await $.ui.mount({ plugin: 'bookmarks', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS, requestId: 'band-1' } as never)) as { input: (t: object) => Promise<unknown> }
+  await band.input({ key: 'band-cmd-0', text: 'b' }).catch(() => undefined)
+  const pane = (await $.ui.mount(PANE as never)) as Pane
+  return (await pane.findAll({ type: 'Text' })).map(t => t.text ?? '').join(' | ')
+}
+
+// Q261012-07 part (1), djdarcy 2026-10-14: permalinks stay off the bookmarks pane by
+// default ("we keep BOOKMARKS as a discrete concept"); a Permas group comes later (#38).
+test('a permalink is not listed in the bookmarks pane', async ($, on) => {
+  world(on, { session: SID, files: seeded('perma') })
+  expect(await bookmarksPaneTexts($ as never)).toContain('No bookmarks yet')
+})
+test('a named bookmark of Claude\'s is listed in the bookmarks pane', async ($, on) => {
+  world(on, { session: SID, files: seeded('bookmark') })
+  expect(await bookmarksPaneTexts($ as never)).not.toContain('No bookmarks yet')
+})
 
 async function call($: { tool: { call: (i: never) => Promise<unknown> } }, input: Record<string, unknown>) {
   const out = (await $.tool.call({ tool: 'mcp__bookmarks__bookmark', tool_use_id: 'toolu_test', ...input } as never)) as { result?: string }
@@ -27,8 +47,9 @@ test('list shows each record\'s tier', async ($, on) => {
   expect((out.claudes as { tier: string }[])[0]?.tier).toBe('perma')
 })
 
+// A named bookmark: permalinks are off the pane (Q261012-07), so `c` acts on bookmarks.
 test('c in the bookmarks list claims the chosen record', async ($, on) => {
-  const w = world(on, { session: SID, files: seeded() })
+  const w = world(on, { session: SID, files: seeded('bookmark') })
   type Ui = { input: (t: object) => Promise<unknown>; press: (t: object) => Promise<unknown> }
   const band = (await $.ui.mount({ plugin: 'bookmarks', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS, requestId: 'band-1' } as never)) as unknown as Ui
   await band.input({ key: 'band-cmd-0', text: 'b' }).catch(() => undefined)

@@ -5,7 +5,7 @@
 // The register cache and the prose queue are owned here.
 
 import {
-  anchorHref, anchorMarkdown, anchorPath, markdownLinks, ownerOf, parseAnchor,
+  anchorHref, anchorMarkdown, anchorPath, markdownLinks, ownerOf, parseAnchor, tierOf,
   type AnchorOwner, type AnchorRecord,
 } from '../core/bookmarks/anchor.ts'
 import {
@@ -209,8 +209,12 @@ export async function onAnchorPress(ports: BookmarksPorts, href: string) {
 
 // --- Bookmarks in the pane and the band ---------------------------------------------------
 // Numbered in the order minted (#1 the first), so a number read off the pane stays good.
+// Bookmarks only: a permalink (tier `perma`, Claude's default way to cite a place) is not
+// listed here, so the pane holds what the person and Claude chose to keep (djdarcy,
+// 2026-10-14, Q261012-07: "we keep BOOKMARKS as a discrete concept"); a Permas group,
+// folded by the message each link belongs to, is #38.
 export async function bookmarkList(ports: BookmarksPorts) {
-  return [...(await loadRegister(ports)).perma].sort((a, b) => a.createdAt - b.createdAt)
+  return [...(await loadRegister(ports)).perma].filter(r => tierOf(r) !== 'perma').sort((a, b) => a.createdAt - b.createdAt)
 }
 
 // Highlight `words` on a message, as a letter's jump does, through a transient entry in
