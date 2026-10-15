@@ -57,7 +57,10 @@ export function markedColumn(elements: Pick<Elements, 'Box' | 'Text'>, c: ColorS
 export function markedReply(elements: Pick<Elements, 'Box' | 'Text' | 'Markdown'>, c: ColorSplit, engine: RenderChildren | null, styles: MarkStyles) {
   const { Box, Text, Markdown } = elements
   const line = markedLine(Text, c, styles)
-  if (engine) {
+  // On whether there is text before the line, as before the move (0.4.48 branched on the
+  // engine's answer instead, which differs when the engine draws nothing for that text:
+  // RenderChildren may be null; move audit F2, restored 0.4.93).
+  if (c.before) {
     return (
       <Box flexDirection="column">
         {engine}

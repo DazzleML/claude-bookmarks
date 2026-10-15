@@ -23,8 +23,8 @@ export type PromptsPaneModel = {
   footnoteMode: FootnoteMode
   /** The prompts whose footnotes the person unfolded, by number. */
   unfolded: ReadonlySet<number>
-  /** The ids the render hooks have drawn since load (drawnFourOf reads their first four groups). */
-  drawn: Iterable<string>
+  /** The ids the render hooks have drawn since load (drawnFourOf reads their first four groups). A list, so a second read sees them too (a Map's keys() iterator is spent after one). */
+  drawn: readonly string[]
   pinIds: readonly string[]
   /** Each prompt's whole text, for the filter. */
   texts: ReadonlyMap<string, string>

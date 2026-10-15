@@ -1692,7 +1692,7 @@ export const register: Register = (on, options) => {
       }
       return promptsPaneView(
         elements,
-        { all, kept, footnoteMode, unfolded: unfoldedFootnotes, drawn: rendered.keys(), pinIds, texts, paneFilter, fromBand, here },
+        { all, kept, footnoteMode, unfolded: unfoldedFootnotes, drawn: [...rendered.keys()], pinIds, texts, paneFilter, fromBand, here },
         {
           unfold: async n => { unfoldedFootnotes.add(n); await update($, viewRev, v => v + 1) },
           refold: async n => { unfoldedFootnotes.delete(n); await update($, viewRev, v => v + 1) },
@@ -1724,7 +1724,7 @@ export const register: Register = (on, options) => {
       const groupIndex = await read($, bandGroup)
       return bookmarksPaneView(
         elements,
-        { all, groups: BOOKMARK_GROUPS, groupIndex, fromBand, drawn: rendered.keys(), now: Date.now(), glyph: LINK_MARKERS === 'glyph', hint: listHint('bookmarks') },
+        { all, groups: BOOKMARK_GROUPS, groupIndex, fromBand, drawn: [...rendered.keys()], now: Date.now(), glyph: LINK_MARKERS === 'glyph', hint: listHint('bookmarks') },
         {
           arrive: async r => {
             await arriveAtBookmark($, r, 'bookmarks pane')

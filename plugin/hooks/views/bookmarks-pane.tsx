@@ -17,7 +17,8 @@ export type BookmarksPaneModel = {
   groupIndex: number
   /** The band's number while the band is in its bookmarks mode, else undefined. */
   fromBand: string | undefined
-  drawn: Iterable<string>
+  /** The ids drawn since load, as a list (readable more than once). */
+  drawn: readonly string[]
   now: number
   /** Draw ⚓ before each row (the link-marker setting is 'glyph'). */
   glyph: boolean
