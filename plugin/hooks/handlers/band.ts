@@ -14,13 +14,13 @@ import { claim } from '../core/bookmarks/register-file.ts'
 import type { BandPorts } from '../engine/ports.ts'
 
 // How long the band waits for the next key before going back to its buttons.
-export const BAND_MODE_MS = 15_000
+const BAND_MODE_MS = 15_000
 
 // The list the band's number entry works on: the prompts, or the bookmarks.
-export async function listCount(ports: BandPorts): Promise<number> {
+async function listCount(ports: BandPorts): Promise<number> {
   return (await ports.paneMode()) === 'bookmarks' ? (await ports.bookmarkList()).length : (await ports.prompts()).length
 }
-export async function jumpToListNumber(ports: BandPorts, typed: string, via: string) {
+async function jumpToListNumber(ports: BandPorts, typed: string, via: string) {
   if ((await ports.paneMode()) === 'bookmarks') await ports.jumpToBookmarkNumber(typed, via)
   else await ports.jumpToPromptNumber(typed, via)
 }
@@ -50,7 +50,7 @@ export async function bandDigit(ports: BandPorts, digit: string) {
 
 // Bring item #n into view in the pane's list, so it can be checked before Enter (its ▶
 // is drawn by the pane). Prompts are keyed `p-<uuid>`, bookmarks `b-<uuid>`.
-export async function showInPane(ports: BandPorts, n: number) {
+async function showInPane(ports: BandPorts, n: number) {
   const bookmarks = (await ports.paneMode()) === 'bookmarks'
   const target = bookmarks ? (await ports.bookmarkList())[n - 1] : (await ports.prompts())[n - 1]
   if (!target) return
@@ -176,7 +176,7 @@ export async function watchBand(ports: BandPorts, mode: string) {
   }
 }
 
-export const BAND_WATCH_MS = 400
+const BAND_WATCH_MS = 400
 
 // `?` (djdarcy, 2026-10-12): the commands the bar does not show, and the rest, in the
 // band itself so it works with lists off too. Enter or Esc, or a minute, ends it.
@@ -378,7 +378,7 @@ export async function paneCommand(ports: BandPorts) {
   ports.log(`[bm] /bm-pane opened; pane has the keyboard: ${(await paneFocused(ports)) ? 'yes' : 'NO'}`)
 }
 
-export async function closePane(ports: BandPorts) {
+async function closePane(ports: BandPorts) {
   ports.expectRedraw('the pane closing')
   ports.note('pane close')
   const geometry = ports.paneGeometry()

@@ -28,7 +28,7 @@ import type { BookmarksPorts } from '../engine/ports.ts'
 // the target row like a letter's selection, under a key no letter can take. Display
 // only; never written to the store (djdarcy, 2026-10-09: "highlighted yellow like how we
 // handle a mark when we do <leader>'<mark-key>").
-export const ANCHOR_MARK = '@'
+const ANCHOR_MARK = '@'
 
 // --- The register: <dataRoot>/bookmarks/sessions/<sessionId>.json, and one export per
 // bookmark beside it. The file is the source of truth (#6); this cache is a copy of what
@@ -39,7 +39,7 @@ export const ANCHOR_MARK = '@'
 // register of the one before (0.4.65; tool.test.ts, "a new conversation reads its own").
 let registerCache: { session: string; register: BookmarkRegister } | undefined
 
-export async function registerPath(ports: BookmarksPorts): Promise<string | undefined> {
+async function registerPath(ports: BookmarksPorts): Promise<string | undefined> {
   const root = await ports.dataRoot()
   return root ? `${root}/bookmarks/sessions/${await ports.sessionId()}.json` : undefined
 }

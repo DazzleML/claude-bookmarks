@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.96] - 2026-10-15
+
+### Changed
+
+- Internal, no visible change: the leftovers of moving the plugin's code into separate files are removed -- wrapper functions nothing called any more, wrappers with a single caller (the caller now calls the moved code directly), unused imports, and exports nothing else used. The type check now refuses an unused name, so they cannot pile up again.
+
 ## [0.4.95] - 2026-10-15
 
 ### Changed
@@ -903,7 +909,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.95...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.96...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

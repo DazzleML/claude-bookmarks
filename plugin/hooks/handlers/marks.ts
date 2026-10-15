@@ -49,7 +49,7 @@ async function resolveSelectionRow(ports: MarksPorts, id: string, text: string) 
   return { uuid: saved?.uuid ?? id, check }
 }
 
-export async function highlightInPlace(ports: MarksPorts, letter: string, text: string, paneAction = true) {
+async function highlightInPlace(ports: MarksPorts, letter: string, text: string, paneAction = true) {
   ports.noteRestore(paneAction ? ports.paneAnchor() ?? (await ports.topOnScreen()) : await ports.topOnScreen(), paneAction)
   await showMark(ports, letter, text)
 }
@@ -64,7 +64,7 @@ export async function highlightInPlace(ports: MarksPorts, letter: string, text: 
 const SELECTION_FRESH_SECONDS = 75
 const selectionKey = (s: SelectionLike) => (s?.requestId && s.text.trim() ? `${s.requestId}|${s.text}` : '')
 
-export async function pollSelection(ports: MarksPorts) {
+async function pollSelection(ports: MarksPorts) {
   const key = selectionKey(await ports.selection())
   // The first look has no history: whatever is selected then counts as old.
   if (!ports.state.seen) ports.state.see(key, 0)
@@ -87,7 +87,7 @@ export async function startMarks(ports: MarksPorts) {
 }
 
 // The selection if it was made within SELECTION_FRESH_SECONDS, else undefined.
-export async function freshSelection(ports: MarksPorts, sel: SelectionLike): Promise<SelectionLike> {
+async function freshSelection(ports: MarksPorts, sel: SelectionLike): Promise<SelectionLike> {
   const key = selectionKey(sel)
   if (!key) return undefined
   // Changed since the last poll: made within the last second.

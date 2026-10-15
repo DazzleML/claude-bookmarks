@@ -10,10 +10,9 @@
 // toast, never as command `text`, because that text becomes a row Claude reads.
 
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, Timer } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 
 import type { PaneMode, Row } from '../types'
-import { describePathOrder } from './engine/select'
 import {
   markLinks, markdownLinks, parseAnchor, tierOf,
   type AnchorOwner, type MarkerStyle,
@@ -26,10 +25,10 @@ import type { Cause } from './core/band/after-action'
 import { installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
 import { resolvePalette, type Palette, type Role, type Style } from './core/palette'
 import { pruneStore, type Seen } from './core/store-prune'
-import { footnoteOf, looksLikePrompt, promptTextOf, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
+import { footnoteOf, looksLikePrompt, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
 import { short } from './core/kit/message-id'
-import { configListedLine, dccLine, diagLine, idsReport, keyLabel, notAppliedLine, selectionKind, settingsRows } from './core/log/diagnostics'
-import { colorSplit, tagMarksMarkdown, tagMarksPlain, type ColorSplit } from './core/marks/highlight'
+import { diagLine, keyLabel } from './core/log/diagnostics'
+import { colorSplit, tagMarksMarkdown, tagMarksPlain } from './core/marks/highlight'
 import { ScreenModel } from './core/kit/screen-model'
 import { MarkCache, marksShowing, type Mark, type Marks } from './core/marks/marks'
 import { footnoteAt, listPosition, nextGroup, promptEntry } from './core/band/band-entry'
@@ -41,7 +40,7 @@ import { marksPaneView } from './views/marks-pane'
 import { promptsPaneView } from './views/prompts-pane'
 import { VERIFIED_CLIENTS, configCommand, envCommand, idsCommand, jumpCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
 import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PromptsPorts, ResolveOutcome, ViewPorts } from './engine/ports'
-import { closeAll as bandCloseAll, closePane as bandClosePane, endBandMode as bandEnd, paneFocused as bandPaneFocused, settle as bandSettle, BAND_MODE_MS, BAND_WATCH_MS, paneOf } from './handlers/band'
+import { closeAll as bandCloseAll, endBandMode as bandEnd, settle as bandSettle, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
 import * as commandLine from './handlers/command-line'
 import * as marks_ from './handlers/marks'
@@ -134,9 +133,6 @@ const markState = new MarkState()
 async function showMark($: EngineInterface, letter: string, text: string) {
   await marks_.showMark(marksPorts($), letter, text)
 }
-async function clearShown($: EngineInterface) {
-  await marks_.clearShown(marksPorts($))
-}
 
 // The session's marks, kept in memory so render hooks can read them without a store
 // call per row. Loaded at session.start and refreshed on every mark write.
@@ -222,20 +218,17 @@ function noteOnScreen(requestId: string, onScreen: { first: number; last: number
 }
 // The `screen` debug channel (#35): handlers/log.ts LogFiles.screenReport, when the channel is on.
 function rawScreen($: EngineInterface, component: string, requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
-  channels.read(echoPorts($))
-  if (!channels.has('screen')) return
-  logFiles.screenReport(logFilesPorts($), component, requestId, onScreen)
+  logger.channels.read(echoPorts($))
+  if (!logger.channels.has('screen')) return
+  logger.files.screenReport(logFilesPorts($), component, requestId, onScreen)
 }
 
-// A non-message row's report dates the latest burst (core/kit/screen-model.ts noteOther).
-function noteOtherOnScreen(requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
-  screen.noteOther(requestId, onScreen, Date.now())
-}
-// One render report from a non-message row: the screen channel's log, the news time,
+// One render report from a non-message row: the screen channel's log, the news time
+// (a non-message row's report dates the latest burst: core/kit/screen-model.ts noteOther),
 // and the pane's view check.
 function noteOtherRow($: EngineInterface, tag: string, requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
   rawScreen($, tag, requestId, onScreen)
-  noteOtherOnScreen(requestId, onScreen)
+  screen.noteOther(requestId, onScreen, Date.now())
   noteViewMoved($)
 }
 
@@ -243,17 +236,16 @@ function freshOnScreen(): string[] {
   return screen.fresh()
 }
 
-// The logger (handlers/log.ts Logger): the one instance. It owns the timeline, the file
-// log and the debug channels; the names below are its parts, for their readers here.
+// The logger (handlers/log.ts Logger): the one instance. It owns the timeline
+// (`logger.timeline`), the file log (`logger.files`) and the debug channels
+// (`logger.channels`); readers here reach each part through it.
 const logger = new log_.Logger()
-// The timeline (handlers/log.ts Timeline), and note() its one writer.
-const timeline = logger.timeline
+// The timeline's one writer.
 function note(what: string) {
-  timeline.note(what)
+  logger.timeline.note(what)
 }
 // The file log, the screen channel's file and their rings: handlers/log.ts LogFiles, the
 // logger's, over logFilesPorts($).
-const logFiles = logger.files
 function logFilesPorts($: EngineInterface): LogFilesPorts {
   return {
     sessionId: () => $.session.id(),
@@ -276,9 +268,6 @@ function echoPorts($: EngineInterface): EchoPorts {
     setDebugEnv: value => $.env.set('CONVO_BOOKMARKS_DEBUG', value),
   }
 }
-
-// The debug channels are handlers/log.ts DebugChannels; the logger's.
-const channels = logger.channels
 
 // log() is handlers/log.ts Logger.log, over these ports: the echo's, the file log's, the
 // engine's $.ui.log, and whether this build was loaded from a folder.
@@ -309,7 +298,7 @@ async function dataRoot($: EngineInterface): Promise<string | undefined> {
 
 // A new conversation writes its own log files: handlers/log.ts LogFiles.newConversation.
 async function newLogConversation() {
-  await logFiles.newConversation()
+  await logger.files.newConversation()
 }
 
 // --- Conversations (Q261014-01) ---------------------------------------------------------
@@ -382,7 +371,7 @@ async function allRows($: EngineInterface): Promise<Row[]> {
 }
 
 // The prompt store (the session's prompts and footnotes, the prompts' text for the filter)
-// is handlers/prompts.ts, over promptsPorts($); these keep the old signatures.
+// is handlers/prompts.ts, over promptsPorts($).
 function promptsPorts($: EngineInterface): PromptsPorts {
   return {
     sessionId: () => $.session.id(),
@@ -398,14 +387,8 @@ function promptsPorts($: EngineInterface): PromptsPorts {
     settings: currentSettings,
   }
 }
-async function promptsKey($: EngineInterface): Promise<string> {
-  return prompts_.promptsKey(promptsPorts($))
-}
 async function keptPrompts($: EngineInterface): Promise<PromptRef[]> {
   return prompts_.keptPrompts(promptsPorts($))
-}
-async function footnotesKey($: EngineInterface): Promise<string> {
-  return prompts_.footnotesKey(promptsPorts($))
 }
 async function keptFootnotes($: EngineInterface): Promise<FootnoteRef[]> {
   return prompts_.keptFootnotes(promptsPorts($))
@@ -415,15 +398,6 @@ async function promptTexts($: EngineInterface): Promise<Map<string, string>> {
 }
 async function savePromptTexts($: EngineInterface) {
   await prompts_.savePromptTexts(promptsPorts($))
-}
-async function keepPromptText($: EngineInterface, uuid: string, text: string) {
-  await prompts_.keepPromptText(promptsPorts($), uuid, text)
-}
-async function keepFootnote($: EngineInterface, f: FootnoteRef) {
-  await prompts_.keepFootnote(promptsPorts($), f)
-}
-async function keepPrompt($: EngineInterface, p: PromptRef) {
-  await prompts_.keepPrompt(promptsPorts($), p)
 }
 
 // --- Back-fill: the prompts sent before the mod was loaded ------------------------
@@ -607,9 +581,9 @@ async function backfillPrompts($: EngineInterface) {
   const { found, texts, footnotes } = parseBackfill(rows.stdout)
   const cache = await promptTexts($)
   for (const [uuid, text] of texts) cache.set(uuid, text)
-  await $.store.set(await footnotesKey($), footnotes.slice(-PROMPTS_KEPT))
+  await $.store.set(await prompts_.footnotesKey(promptsPorts($)), footnotes.slice(-PROMPTS_KEPT))
   const merged = mergeBackfill(found, await keptPrompts($))
-  await $.store.set(await promptsKey($), merged)
+  await $.store.set(await prompts_.promptsKey(promptsPorts($)), merged)
   await savePromptTexts($)
   // A cut-off read is left unmarked, so a later session start tries again.
   if (!rows.isStdoutTruncated) await $.store.set(doneKey, true)
@@ -684,13 +658,6 @@ const LINK_LEGEND = true
 // Replies whose links were already logged and queued (a reply is drawn many times).
 const anchorRowsLogged = new Set<string>()
 
-function queueProseAnchors($: EngineInterface, anchors: ReturnType<typeof markdownLinks>) {
-  bookmarks_.queueProseAnchors(bookmarksPorts($), anchors)
-}
-async function onAnchorPress($: EngineInterface, href: string) {
-  await bookmarks_.onAnchorPress(bookmarksPorts($), href)
-}
-
 // Every jump, the jumplist and the view's return: handlers/navigation.ts, over these ports.
 const navigation = new Navigation()
 function navPorts($: EngineInterface): NavigationPorts {
@@ -741,7 +708,7 @@ function viewPorts($: EngineInterface): ViewPorts {
     closeShare: () => currentSettings().closeShare,
     after: (ms, fn) => $.clock.after(ms, fn),
     listPaneOpen: async () => (await read($, paneMode)) === 'list' && (await $.ui.panes()).some(p => p.id === PANE),
-    heldChannel: () => channels.has('held'),
+    heldChannel: () => logger.channels.has('held'),
     bumpView: () => update($, viewRev, v => v + 1),
     followHere: () => currentSettings().followHere,
     bandNumEmpty: async () => (await read($, bandNum)) === '',
@@ -791,11 +758,6 @@ async function clearCommandLine($: EngineInterface) {
   await update($, cmdRev, v => v + 1)
 }
 
-// The pane opening (handOff, bandOnly, openFor) is handlers/band.ts.
-async function handOff($: EngineInterface, mode: PaneMode, focusKey?: string) {
-  await band_.handOff(bandPorts($), mode, focusKey)
-}
-
 // The band's own state -- its wait and watch timers, the focus ring, its requestId, the
 // Esc reminder -- is core/band/band-state.ts BandState, written only through its named methods.
 const band = new BandState()
@@ -807,43 +769,8 @@ async function perform($: EngineInterface, operation: Operation, via: 'field' | 
   await commandLine.perform(commandLinePorts($), operation, via)
 }
 
-async function showHelp($: EngineInterface) {
-  await band_.showHelp(bandPorts($))
-}
-
 async function closeAll($: EngineInterface, via: string) {
   await bandCloseAll(bandPorts($), via)
-}
-
-async function bandListKey($: EngineInterface, operation: Operation) {
-  await band_.bandListKey(bandPorts($), operation)
-}
-
-async function bandOnly($: EngineInterface, mode: PaneMode) {
-  await band_.bandOnly(bandPorts($), mode)
-}
-
-// The band's keys are handlers/band.ts; these keep the old signatures for their callers.
-async function bandDot($: EngineInterface) {
-  await band_.bandDot(bandPorts($))
-}
-async function bandDigit($: EngineInterface, digit: string) {
-  await band_.bandDigit(bandPorts($), digit)
-}
-async function bandStep($: EngineInterface, dir: -1 | 1) {
-  await band_.bandStep(bandPorts($), dir)
-}
-async function bandPin($: EngineInterface) {
-  await band_.bandPin(bandPorts($))
-}
-async function bandClaim($: EngineInterface) {
-  await band_.bandClaim(bandPorts($))
-}
-function keepBandWaiting($: EngineInterface) {
-  band_.keepBandWaiting(bandPorts($))
-}
-async function bandNumberGo($: EngineInterface) {
-  await band_.bandNumberGo(bandPorts($))
 }
 
 // DIAGNOSTIC (2026-10-07): who holds the keyboard around a key, to explain a pane that is
@@ -858,10 +785,6 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
   await band_.openFor(bandPorts($), mode, action)
 }
 
-
-async function focusBand($: EngineInterface, key: string): Promise<string | undefined> {
-  return band_.focusBand(bandPorts($), key)
-}
 
 // Jumps to prompt #n, from the prompts pane's field or the band's.
 // --- Pinned prompts ------------------------------------------------------------------
@@ -947,7 +870,7 @@ async function arriveAtBookmark($: EngineInterface, record: { uuid: string; word
 // Cycle the bookmarks pane's group from the band: yours -> Claude's -> all -> yours.
 async function bandGroupStep($: EngineInterface, step: -1 | 1) {
   await update($, bandGroup, g => nextGroup(g, step, BOOKMARK_GROUPS.length))
-  keepBandWaiting($)
+  band_.keepBandWaiting(bandPorts($))
 }
 
 async function jumpToBookmarkNumber($: EngineInterface, typed: string, via: string) {
@@ -964,11 +887,6 @@ async function jumpToBookmarkNumber($: EngineInterface, typed: string, via: stri
 
 async function promoteLetter($: EngineInterface, letter: string) {
   await bookmarks_.promoteLetter(bookmarksPorts($), letter)
-}
-
-
-async function watchBand($: EngineInterface, mode: PaneMode) {
-  await band_.watchBand(bandPorts($), mode)
 }
 
 
@@ -1051,12 +969,6 @@ async function settle($: EngineInterface, pane: Pane, cause: Cause, needsMore = 
 async function endBandMode($: EngineInterface) {
   await bandEnd(bandPorts($))
 }
-async function paneFocused($: EngineInterface): Promise<boolean> {
-  return bandPaneFocused(bandPorts($))
-}
-async function closePane($: EngineInterface) {
-  await bandClosePane(bandPorts($))
-}
 
 // The engine, as the diagnostic commands may hold it (hooks/engine/ports.ts): one closure
 // per primitive, each spelled `$.noun.event(...)` here, where the validator follows `$`.
@@ -1068,7 +980,7 @@ function diagnosticsPorts($: EngineInterface): DiagnosticsPorts {
     marks: () => loadMarks($),
     jumpTo: (uuid, via, label) => jumpTo($, uuid, via, label),
     rendered: () => rendered,
-    timeline: () => timeline.items,
+    timeline: () => logger.timeline.items,
     note,
     selection: () => $.ui.selection(),
     cut,
@@ -1171,7 +1083,7 @@ export const register: Register = (on, options) => {
   // The next prompt ends the temporary highlight.
   on('prompt.submit', async ($, e, next) => {
     await sameConversation($)
-    await clearShown($)
+    await marks_.clearShown(marksPorts($))
     await endBandMode($)
     return next(e)
   })
@@ -1217,7 +1129,7 @@ export const register: Register = (on, options) => {
     if (e.origin.kind === 'person' && band.ring === 'band-num-go' && (await read($, bandMode)) === 'list' &&
         (e.element === 'band-num-k' || e.element === 'band-num-j')) {
       log($, `[bm] band arrow -> ${e.element === 'band-num-k' ? 'k (up)' : 'j (down)'}`)
-      await bandStep($, e.element === 'band-num-k' ? -1 : 1)
+      await band_.bandStep(bandPorts($), e.element === 'band-num-k' ? -1 : 1)
       return next({ ...e, element: 'band-num-go' })
     }
     if (e.origin.kind === 'person' && e.element?.startsWith('chord-') && (await read($, bandMode)) === 'idle') {
@@ -1301,8 +1213,8 @@ export const register: Register = (on, options) => {
         note(`append ${e.door} ${e.uuid} ${row.head.slice(0, 30)}`)
         await update($, rows, list => [...(list as Row[]), row].slice(-500))
         if (row.door === 'prompt') {
-          await keepPrompt($, { uuid: row.uuid, head: row.head })
-          await keepPromptText($, row.uuid, text)
+          await prompts_.keepPrompt(promptsPorts($), { uuid: row.uuid, head: row.head })
+          await prompts_.keepPromptText(promptsPorts($), row.uuid, text)
         }
       }
     }
@@ -1310,7 +1222,7 @@ export const register: Register = (on, options) => {
     // kept with the prompt it follows, as the back-fill keeps it.
     if (!e.agentId && !queued && e.door !== 'response') {
       const fn = footnoteOf({ type: 'user', isMeta: e.message.isMeta, message: { content: e.message.content } })
-      if (fn) await keepFootnote($, { ...fn, uuid: e.uuid, after: (await keptPrompts($)).at(-1)?.uuid ?? null })
+      if (fn) await prompts_.keepFootnote(promptsPorts($), { ...fn, uuid: e.uuid, after: (await keptPrompts($)).at(-1)?.uuid ?? null })
     }
     return stored
   })
@@ -1375,7 +1287,7 @@ export const register: Register = (on, options) => {
       if (!anchorRowsLogged.has(e.requestId)) {
         anchorRowsLogged.add(e.requestId)
         log($, `[bm] reply ${short(e.requestId)}: ${anchors.length} bookmark link(s), ${links.filter(l => l.kind === 'file').length} file link(s)`)
-        queueProseAnchors($, anchors)
+        bookmarks_.queueProseAnchors(bookmarksPorts($), anchors)
       }
       // A perma record's link is drawn without the bookmark glyph (#21).
       const reg = await loadRegister($)
@@ -1403,7 +1315,7 @@ export const register: Register = (on, options) => {
           boldText: text,
           legend: LINK_LEGEND ? { glyph: LINK_MARKERS === 'glyph', hasFile: links.some(l => l.kind === 'file') } : null,
         },
-        href => onAnchorPress($, href),
+        href => bookmarks_.onAnchorPress(bookmarksPorts($), href),
         { ...markStyles(), legend: style('legend') },
       )
     }
@@ -1511,14 +1423,14 @@ export const register: Register = (on, options) => {
       toast: text => $.ui.toast(text),
       log: (line, always) => log($, line, always ? { always: true } : undefined),
       channelsOn: () => {
-        channels.read(echoPorts($))
-        return channels.on
+        logger.channels.read(echoPorts($))
+        return logger.channels.on
       },
-      setChannels: next => channels.set(echoPorts($), next as Set<Channel>),
+      setChannels: next => logger.channels.set(echoPorts($), next as Set<Channel>),
       setSessionEcho: choice => log_.setSessionEcho(echoPorts($), choice),
       setEchoPolicy: policy => log_.setEchoPolicy(echoPorts($), policy),
       echoState: () => log_.echoStateLine(echoPorts($)),
-  logPath: () => logFiles.path,
+      logPath: () => logger.files.path,
     })
     return {}
   })
@@ -1574,10 +1486,10 @@ export const register: Register = (on, options) => {
         jumpToMark: async l => { await jumpToMark($, l); await done('jump') },
         setMark: async l => { await setMark($, l); await done('mark-set'); await restoreView($) },
         cancel: () => done('esc'),
-        listKey: op => bandListKey($, op),
-        digit: d => bandDigit($, d),
-        dot: () => bandDot($),
-        go: () => bandNumberGo($),
+        listKey: op => band_.bandListKey(bandPorts($), op),
+        digit: d => band_.bandDigit(bandPorts($), d),
+        dot: () => band_.bandDot(bandPorts($)),
+        go: () => band_.bandNumberGo(bandPorts($)),
         runCommandLine: (typed, kind) => runCommandLine($, typed, kind),
         perform: (key, id, action) => perform($, route(key, { pane: 'none' }).operation, action ?? `button:${id}`),
       },

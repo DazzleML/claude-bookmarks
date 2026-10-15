@@ -24,7 +24,7 @@ import type { EchoPorts, LogFilesPorts, LoggerPorts } from '../engine/ports.ts'
 //   default). Nothing is cached: a force typed in one session must reach the others on
 //   their very next log line.
 const ECHO_POLICY_ENTRY = 'debug:echo'
-export async function echoPolicy(ports: EchoPorts): Promise<EchoPolicy> {
+async function echoPolicy(ports: EchoPorts): Promise<EchoPolicy> {
   // A default typed with `/bm-debug default` wins; without one, the `debugDefault` setting.
   return echoPolicyOf(await ports.storeGet(ECHO_POLICY_ENTRY), ports.settings().debugDefault === 'on')
 }
@@ -32,7 +32,7 @@ export async function setEchoPolicy(ports: EchoPorts, policy: EchoPolicy) {
   await ports.storeSet(ECHO_POLICY_ENTRY, policy)
 }
 /** This conversation's own choice, from its environment; undefined when it made none. */
-export async function sessionEchoChoice(ports: EchoPorts): Promise<boolean | undefined> {
+async function sessionEchoChoice(ports: EchoPorts): Promise<boolean | undefined> {
   return parseDebugEnv(await ports.debugEnv()).echo
 }
 /** Sets this conversation's choice; `undefined` drops it, so the default applies again. The debug channels sharing the variable are kept. */
@@ -41,7 +41,7 @@ export async function setSessionEcho(ports: EchoPorts, enabled: boolean | undefi
   const { channels } = parseDebugEnv(await ports.debugEnv())
   await ports.setDebugEnv(formatDebugEnv(enabled, channels))
 }
-export async function uiEchoEnabled(ports: EchoPorts): Promise<boolean> {
+async function uiEchoEnabled(ports: EchoPorts): Promise<boolean> {
   return echoEnabled(await echoPolicy(ports), await sessionEchoChoice(ports))
 }
 // Debug channels (#35, core/log/debug.ts): this conversation's choice, read from its
