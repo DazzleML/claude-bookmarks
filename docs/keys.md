@@ -29,7 +29,17 @@ The band's field takes exactly one key (two for the ones that need a letter). An
 | `P` | a letter `a`-`z`, or `` ` `` | Promotes that mark (or the reading position) into a bookmark on your list; the link goes to your clipboard |
 | `o` | | Back to where you were before the last jump |
 | `i` | | Forward again |
+| `?` | | Shows every command and list key, and how the band's switches are set, in the band; `Enter` or `Esc` closes it |
+| `q` | | Closes the plugin's pane and ends whatever the band is doing (for a list left open after a jump) |
 | `Esc` | | Leaves the band; the keyboard returns to the input box |
+
+### Why some commands have two keys
+
+`'` and `Space` are the keys the commands were designed around: `'` is vim's jump-to-mark, and `Space` is one easy press for the reading position. But the band's buttons can only be pressed from the keyboard by a single letter or digit (a limit of Claude Code's buttons), so the clickable `jump` and `read` buttons carry `j` and `r` instead. Typed after the leader, either spelling works, because the band's field takes any key; the bar shows the letter, because that is what its button answers to.
+
+The same letter can mean something else once a list is open: after `p` or `b`, `j` and `k` move through the list (vim's down and up), so `j` is "jump" at the start of a command and "next" inside a list.
+
+These keys are fixed for now. Choosing your own -- a different key for a command, or hiding a button you never use -- is planned as a keymap ([#36](https://github.com/DazzleML/claude-bookmarks/issues/36)); until then, the [Optional fast keys](usage.md#optional-fast-keys) are the only keys you bind yourself.
 
 After any of these the keyboard stays on the band for the next command; `Esc` returns it to the input box. Arrow keys never reach the band ([#23](https://github.com/DazzleML/claude-bookmarks/issues/23)); a terminal mapping can type the leader and a key for you, see [Back and forward](usage.md#back-and-forward).
 
@@ -44,6 +54,7 @@ After `p` or `b` the pane shows the list and the band takes the keys:
 | `j` / `k` | Moves the `▶` down (older) / up (newer); the first press starts at the newest |
 | `s` | Prompts only: pins or unpins the prompt under the `▶`; the band stays open to pin more |
 | `h` / `l` | Bookmarks only: previous / next group (yours, Claude's, all) |
+| `q` | Closes the pane (also typed alone in the pane's own `#` field) |
 | `Esc` | Closes the pane without jumping |
 
 ## 4. In a pane that holds the keyboard itself

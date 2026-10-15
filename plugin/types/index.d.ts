@@ -12,13 +12,16 @@ declare module 'claude-code' {
       rows: Row[]
       paneMode: PaneMode
       // When a pane opened from the band can't take the keyboard, the band itself
-      // collects the next key; 'idle' shows the usual buttons.
-      bandMode: PaneMode | 'idle'
+      // collects the next key; 'idle' shows the usual buttons; 'help' shows what `?` lists.
+      bandMode: PaneMode | 'idle' | 'help'
       // Bumped when the pinned prompts change, so the prompts pane redraws.
       pinsRev: number
       // Bumped when the prompt nearest the view changes while the prompts pane is
       // open, so its yellow row follows a scroll.
       viewRev: number
+      // Bumped when one of the plugin's /config fields changes, so what reads a setting
+      // redraws.
+      settingsRev: number
       // Bumped after the band's command line runs a command: the field is drawn
       // under a new key, so it starts empty (POC 2026-10-07).
       cmdRev: number

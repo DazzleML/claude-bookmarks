@@ -29,7 +29,7 @@ A long Claude Code conversation is hard to move around in. The answer you need i
 
 ## Quick Start
 
-One command installs it on Claude Code 2.1.275 or later, since this repository is also a marketplace:
+One command installs it on Claude Code 2.1.287 or later, since this repository is also a marketplace:
 
 ```
 /plugin install bookmarks --marketplace DazzleML/claude-bookmarks
@@ -161,6 +161,7 @@ Ctrl+] P  a                                               (mark a becomes a book
 | `/bm-pin [N]` | Pin or unpin prompt #N in the prompts pane (`*N` in its `#` field does the same) |
 | `/bm-env` | Plugin version, session id, and what it has captured |
 | `/bm-debug on\|off` | Echo the plugin's log into this conversation as dim rows (this conversation only; `default on\|off` and `force on\|off` reach every conversation) |
+| `/bm-debug enable\|disable <channel>` | Turn a heavier diagnostic on or off for this conversation (`screen`, `held`; `/bm-debug channels` lists them) |
 | `/bm-marks` | The marks set in this conversation |
 | `/bm-timeline` | The last few plugin events (draws, panes, jumps) |
 
@@ -179,11 +180,27 @@ The known limits, briefly; **[docs/troubleshooting.md](docs/troubleshooting.md)*
 
 ## Configuration
 
-Nothing to configure yet beyond the leader key. Settings are planned ([#7](https://github.com/DazzleML/claude-bookmarks/issues/7)), among them:
-- how old a selection may be before a mark uses the top of the screen instead (75 seconds now);
-- whether "back" from the bottom returns to the same text or to the newest reply;
-- whether a typed prompt number waits for `Enter` (now) or jumps as soon as it's complete;
-- how long the highlight stays, and the pane sizes.
+Open `/config` and find the plugin's settings under its name. A change takes effect at once; `/bm-config` prints every setting, its value and where the value came from.
+
+| Setting | Values (default first) | What it does |
+|---|---|---|
+| Prompts list opens at | `nearest`, `newest` | Where the prompts list opens: centred on the prompt nearest your view, or at the newest |
+| Prompts list follows the view | `when-idle`, `always`, `never` | Whether the list scrolls to keep the yellow row showing as you scroll the conversation (`when-idle`: not while you type a number) |
+| Closeness for the earlier prompt | `0.6` (0 to 1) | How much of the screen an earlier exchange must hold to count as nearest |
+| Footnotes in the prompts list | `folded`, `shown`, `hidden` | Your slash commands, `!` shell commands and interruptions, listed as `N.k` under the prompt they followed: folded behind `… N footnotes`, always listed, or never |
+| Prompt text kept for the filter (bytes) | `2000000` (0 = unlimited) | How much of your prompts the `/words` filter searches, newest first; past the budget the oldest prompts are matched only on the short excerpt the list shows |
+| Prompts or bookmarks list after you pick a row | `close`, `stay` | Whether the list closes after you click a row (or type its number and `Enter`), or stays open for the next pick |
+| A list while you type | `stay`, `close` | Whether an open list stays while you type in the input box |
+| The band | `full`, `field` | The command field with the labelled commands and `?`, or the field alone |
+| Chords on their own keybindings | `on`, `off` | Whether mark, jump, prompts and read also answer the optional chords bound to their borrowed actions |
+| Lists in a pane | `on`, `off` | Whether the prompts and bookmarks lists open in a pane, or `p`/`b` take a number in the band with no pane |
+| Keyboard after an action | `input`, `band` | Where the keyboard should go after an action (`input` waits on Claude Code allowing it) |
+| Debug echo by default | `off`, `on` | Whether the debug log is echoed into conversations that have not chosen (`/bm-debug` decides per conversation) |
+| Conversation text in the debug log | `auto`, `off`, `with-debug`, `always` | Whether debug lines quote the conversation; `auto` is off in an installed plugin, always in one loaded from a folder |
+| How much text a debug line quotes | `reference`, `full` | A short excerpt to find the place, or the whole text |
+| Colour overrides | JSON, empty by default | A role's colour, background, dim or bold, e.g. `{"here": {"color": "cyan"}}`; roles: `here`, `pinned`, `footnote`, `legend`, `mark`, `markBand`, `used`, `unused`, `unreached`, `emphasis`, `search`; a colour is a theme key (`warning`, `subtle`, ...), a terminal colour name or `#rrggbb` |
+
+Still constants, planned as settings ([#7](https://github.com/DazzleML/claude-bookmarks/issues/7)): how old a selection may be before a mark uses the top of the screen (75 seconds), where "back" from the bottom returns, whether a typed prompt number waits for `Enter`, the highlight's duration, and the pane sizes.
 
 ### Debug Logging
 
@@ -216,7 +233,7 @@ claude-bookmarks/
 │   ├── hooks/
 │   │   ├── hooks.json        # Points Claude Code at the mod
 │   │   ├── register.tsx      # The mod: the band, panes, highlight, bookmarks, back-fill
-│   │   ├── core/             # Pure modules with their node --test suites (anchor URL, transcript, register)
+│   │   ├── core/             # Pure modules: anchor URL, transcript, register file, keys, view position
 │   │   └── scripts/          # PowerShell fallbacks for reading the transcript on Windows
 │   ├── types/index.d.ts      # Declared $.state values
 │   ├── README.md, LICENSE    # What the plugin directory requires inside the plugin folder
@@ -226,6 +243,7 @@ claude-bookmarks/
 ├── docs/                     # Status, keys, tutorial, usage, troubleshooting, platform support, engine quirks
 ├── scripts/repokit-common/   # Shared repo tooling (git subtree from DazzleTools/git-repokit-common)
 ├── tests/
+│   ├── core/                 # node --test suites for the pure modules (kept out of the installed plugin)
 │   ├── checklists/           # Human test checklists
 │   └── one-offs/             # Probes and measurements
 ├── .repokit-common.toml      # Repo tooling settings (version sync into plugin/.claude-plugin/plugin.json)

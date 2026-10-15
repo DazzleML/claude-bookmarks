@@ -1,9 +1,12 @@
 {
   "name": "bookmarks",
   "displayName": "Bookmarks",
-  "version": "0.4.1",
+  "version": "0.4.90",
   "description": "Bookmarks and vim-style marks inside Claude Code conversations: mark a line, jump back, keep a reading position, browse your prompts, and let Claude cite earlier places as clickable links.",
-  "author": { "name": "DazzleML", "github": "https://github.com/DazzleML" },
+  "author": {
+    "name": "DazzleML",
+    "github": "https://github.com/DazzleML"
+  },
   "repository": "https://github.com/DazzleML/claude-bookmarks",
   "homepage": "https://github.com/DazzleML/claude-bookmarks",
   "privacyPolicyUrl": "https://github.com/DazzleML/claude-bookmarks/blob/main/PRIVACY.md",
@@ -11,6 +14,165 @@
   "documentationUrl": "https://github.com/DazzleML/claude-bookmarks/tree/main/docs",
   "termsOfServiceUrl": "https://github.com/DazzleML/claude-bookmarks/blob/main/LICENSE",
   "license": "GPL-3.0",
-  "keywords": ["bookmarks", "pins", "marks", "vim-marks", "vim", "navigation", "conversation", "jump-to-message", "tui", "claude-code"],
+  "keywords": [
+    "bookmarks",
+    "pins",
+    "marks",
+    "vim-marks",
+    "vim",
+    "navigation",
+    "conversation",
+    "jump-to-message",
+    "tui",
+    "claude-code"
+  ],
+  "userConfig": {
+    "listOpensAt": {
+      "type": "string",
+      "title": "Prompts list opens at",
+      "description": "nearest: centred on the prompt nearest your view; newest: at the newest prompt",
+      "default": "nearest",
+      "options": [
+        "nearest",
+        "newest"
+      ]
+    },
+    "followHere": {
+      "type": "string",
+      "title": "Prompts list follows the view",
+      "description": "when-idle: slides to keep the yellow row showing unless you are typing a number; always; never",
+      "default": "when-idle",
+      "options": [
+        "when-idle",
+        "always",
+        "never"
+      ]
+    },
+    "closeShare": {
+      "type": "number",
+      "title": "Closeness for the earlier prompt",
+      "description": "An earlier exchange is \"nearest\" while it holds at least this share of the screen lines the biggest one holds (0 to 1)",
+      "default": 0.6,
+      "min": 0,
+      "max": 1
+    },
+    "paneAfterJump": {
+      "type": "string",
+      "title": "Prompts or bookmarks list after you pick a row",
+      "description": "close: clicking a row (or Enter on a number) jumps there and closes the list; stay: the list stays open for the next pick",
+      "default": "close",
+      "options": [
+        "close",
+        "stay"
+      ]
+    },
+    "paneWhileTyping": {
+      "type": "string",
+      "title": "A list while you type",
+      "description": "stay: typing in the input box leaves an open list where it is; close: typing closes it",
+      "default": "stay",
+      "options": [
+        "close",
+        "stay"
+      ]
+    },
+    "afterActionFocus": {
+      "type": "string",
+      "title": "Keyboard after an action",
+      "description": "input: back to the input box once Claude Code allows a plugin to do it; band: stay in the band",
+      "default": "input",
+      "options": [
+        "input",
+        "band"
+      ]
+    },
+    "debugDefault": {
+      "type": "string",
+      "title": "Debug echo by default",
+      "description": "Whether the plugin's log lines are echoed into a conversation that has not chosen; /bm-debug decides per conversation",
+      "default": "off",
+      "options": [
+        "off",
+        "on"
+      ]
+    },
+    "debugText": {
+      "type": "string",
+      "title": "Conversation text in the debug log",
+      "description": "auto: off in an installed plugin, always in one loaded from a folder; off: log lines name places by id only; with-debug: they also quote the conversation while this conversation's debugging is on; always: they always quote it",
+      "default": "auto",
+      "options": [
+        "auto",
+        "off",
+        "with-debug",
+        "always"
+      ]
+    },
+    "debugTextLength": {
+      "type": "string",
+      "title": "How much text a debug line quotes",
+      "description": "reference: a short excerpt, enough to find the place; full: the whole text",
+      "default": "reference",
+      "options": [
+        "reference",
+        "full"
+      ]
+    },
+    "palette": {
+      "type": "string",
+      "title": "Colour overrides",
+      "description": "JSON, e.g. {\"here\": {\"color\": \"cyan\"}, \"markBand\": {\"backgroundColor\": \"#203040\"}}. Roles: here, pinned, footnote, legend, mark, markBand, used, unused, unreached, emphasis, search. A colour is a theme key (warning, subtle, ...), a terminal colour name or #rrggbb; anything else is ignored",
+      "default": ""
+    },
+    "footnotes": {
+      "type": "string",
+      "title": "Footnotes in the prompts list",
+      "description": "folded: a prompt with footnotes (your slash commands, ! shell commands, interruptions) shows an ellipsis, and . unfolds them; shown: always listed under their prompt; hidden: never listed",
+      "default": "folded",
+      "options": [
+        "folded",
+        "shown",
+        "hidden"
+      ]
+    },
+    "promptTextBudget": {
+      "type": "number",
+      "title": "Prompt text kept for the filter (bytes)",
+      "description": "How much of your prompts the filter searches, across the conversation; 0 = unlimited (for machines with room to spare). The default keeps whole prompts in most conversations",
+      "default": 2000000,
+      "min": 0,
+      "max": 1000000000
+    },
+    "band": {
+      "type": "string",
+      "title": "The band",
+      "description": "full: the command field, the labelled commands and ? for the rest; field: the command field alone, one short row (the leader still lands there; ? shows the commands)",
+      "default": "full",
+      "options": [
+        "full",
+        "field"
+      ]
+    },
+    "chords": {
+      "type": "string",
+      "title": "Chords on their own keybindings",
+      "description": "on: mark, jump, prompts and read also answer the keybindings bound to their borrowed actions (docs: Optional fast keys); off: only the leader and the band's field",
+      "default": "on",
+      "options": [
+        "on",
+        "off"
+      ]
+    },
+    "panes": {
+      "type": "string",
+      "title": "Lists in a pane",
+      "description": "on: the prompts and bookmarks lists open in a pane beside the conversation; off: p and b take a number in the band and jump, with no pane",
+      "default": "on",
+      "options": [
+        "on",
+        "off"
+      ]
+    }
+  },
   "types": "./types/index.d.ts"
 }

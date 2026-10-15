@@ -62,10 +62,22 @@ To use a key your terminal doesn't report by default, map it in the terminal to 
 When the plugin is loaded, a one-line band sits just above the prompt:
 
 ```
-bm: ' j m p ␣   m: mark  j: jump  p: prompts  r: read
+bm: _  m: mark  j: jump  p: prompts  r: read  ?
 ```
 
-The first part is a small field. When the leader puts the keyboard on the band, the field takes the next key, any key, including `'` and `Space`. The words after it are buttons you can click: `mark`, `jump` and `prompts` open their panes, and `read` goes to the reading position. A pane opened by a click stays open as a list to click in; close it with its `×`.
+The first part is a small field. When the leader puts the keyboard on the band, the field takes the next key, any key, including `'`, `Space` and `?`. The words after it are buttons you can click, and each does exactly what its key does: `mark` (`m`), `jump` (`j`), `prompts` (`p`), `read` (`r`). Jump and read also answer `'` and `Space`; why two keys, and why `j` means "next" inside a list, is in [Why some commands have two keys](keys.md#why-some-commands-have-two-keys). A pane opened by a click stays open as a list to click in; close it with its `×`.
+
+**`?` shows every command,** including the ones the bar has no room for (`b` bookmarks, `P` promote, `o` back, `i` forward), the keys of the prompts and bookmarks lists, and how the switches below are set. Type `?` after the leader, or click it. `Enter` or `Esc` closes the help.
+
+Three switches in `/config` change the band:
+
+| Setting | Values | Does |
+|---------|--------|------|
+| The band | `full`, `field` | `field` draws the command field alone, one short row; the leader still lands there, and `?` still lists the commands |
+| Chords on their own keybindings | `on`, `off` | `off`: `mark`, `jump`, `prompts` and `read` no longer answer the keybindings in [Optional fast keys](#optional-fast-keys), only the leader |
+| Lists in a pane | `on`, `off` | `off`: `p` and `b` take a number in the band and jump, and `m` and `'` take their letter there, with no pane beside the conversation |
+
+A band with nothing in it cannot take the leader, so there is no fully hidden band yet; `field` is the smallest.
 
 When a mark has just been set or jumped to, the band also shows it after a bar, as `| a ▸ the marked line`, until the highlight clears.
 
@@ -183,6 +195,32 @@ Pin the prompts you want to come back to, and they stay at the top of the pane:
 
 A pinned prompt shows a gold star inside its number, `245★) `, both in a **★ pinned** group at the top of the pane (in the order you pinned them) and in its place in the full list. Pins are kept per conversation, like marks.
 
+### Footnotes
+
+Some of what you type is not a prompt: a slash command (`/compact`, `/bm-pin 21`), a `!` shell command, an interruption (`Esc` while Claude is working). These are listed as **footnotes** under the prompt they followed, numbered `N.k`, so prompt numbers stay as they were:
+
+```
+  13) Then a recap and a what-next
+      … 2 footnotes
+  12) Our readme feels a bit weak
+```
+
+Unfolded, the ellipsis becomes the footnotes themselves, `12.1 /compact`, `12.2 !git status`. Footnotes before your first prompt are `0.k`, at the bottom of the list. Things Claude or Claude Code did on their own (compactions, task notifications) are not footnotes: the list is for what you typed.
+
+| To | Do |
+|----|----|
+| Unfold a prompt's footnotes | Click the `… N footnotes` row, or type `12.` in the pane's `#` field |
+| Fold them again | Click the `▴ fold` row under them, or type `12.` again |
+| Jump to footnote 12.1 | Type `12.1` and `Enter` in the pane's `#` field, or on the band type `1` `2`, click the band's `.` button, `1`, `Enter` (a band key is one letter or digit, so `.` is a button there) |
+
+The "Footnotes in the prompts list" setting chooses `folded` (the default), `shown` (always unfolded) or `hidden`. With `hidden` the rows are gone but the numbers still work: `12.1` jumps to that footnote, and `12.` says the footnotes are hidden. Footnotes are read from the transcript once, with the prompts, and added live after that.
+
+### Filtering the list
+
+Type `/` and some words in the pane's `#` field to list only the prompts containing all of them, in any order and any case: `/band redraw` finds "the redraw of the band". Prompts keep their numbers, and a line above the list says how many match, `/band redraw: 2 of 153 match`. Pinned prompts are filtered too. Clear the field to see the whole list again, or press `Esc`: with a filter active, the first `Esc` clears the filter and the second closes the pane. Typing in the field needs the keyboard in the pane (`/bm-prompts` from an empty input box).
+
+The filter searches the whole text of your prompts, not only the excerpt the list shows. That text is kept per conversation up to a budget, "Prompt text kept for the filter (bytes)", 2 MB by default, newest first; past it, older prompts are matched on their excerpt alone. `0` keeps everything, for a machine with room to spare. It is kept in your own folder, `~/claude/bookmarks/prompttext/` (beside the bookmarks), not in Claude Code's plugin storage, which has a small limit shared by everything the plugin keeps.
+
 ## Bookmarks
 
 A mark is a letter you can reassign in a second. A **bookmark** is permanent: a durable address of one message in this conversation, kept in a readable file under your own folder, that still resolves in a later session and that a link can point at. Claude places bookmarks while it answers, and you can promote any mark into one.
@@ -245,7 +283,9 @@ The reading position is separate and is never moved by a jump. Arrow keys can't 
 
 ### What Claude's tool does
 
-Claude has a `bookmark` tool. It gives a verbatim fragment of the message (or its uuid) and a label, and gets back the markdown link to cite with. The tool resolves the fragment against the conversation's transcript (the earliest message that contains it; if several do, it asks rather than guessing), records the bookmark, writes its file, and returns the link. Its other actions: `relabel`, `remove`, `share`, and `list` (both lists with their links).
+Claude has a `bookmark` tool. It gives a verbatim fragment of the message (or its uuid) and a label, and gets back the markdown link to cite with. The tool resolves the fragment against the conversation's transcript (the earliest message that contains it; if several do, it asks rather than guessing), records the bookmark, writes its file, and returns the link. Its other actions: `relabel`, `remove`, `share`, `claim`, and `list` (both lists with their links and tiers).
+
+A record has a tier. Claude's own references are `perma` by default: a stable link it cites in its reply, drawn without the `⚓` so its references don't look like bookmarks you made. `bookmark` is a named place you will want to find again; that is the default when Claude bookmarks something for you, and Claude can make any of its references one by passing `tier: "bookmark"`. A bookmark never drops back to perma. `claim` moves one of Claude's records onto your list, with the same message, id and link; ask Claude to claim it for you.
 
 ### Where bookmarks live
 
@@ -276,6 +316,8 @@ For one-step actions, a key can press a band button directly. It goes through on
 
 in the same `Chat` block gives one-step reading: `Ctrl+X Space` goes to the reading position and back, and works with text in the input box too.
 
+"Chords on their own keybindings" in `/config` turns them all off without editing `keybindings.json`, to try the plugin without them.
+
 These are for power users, and not part of the recommended setup:
 - **They borrow Claude Code's diff-panel actions.** While the diff panel is open, it takes them over, and a future Claude Code may remove them.
 - **Only about four exist,** so they are reserved for the most common one-step actions.
@@ -297,13 +339,22 @@ These are for power users, and not part of the recommended setup:
 
 From an empty input box, a pane opened by a command takes the keyboard, so its own keys work: the arrows, `Tab`, `Enter`. A command typed into the input box can't open a pane over other text, so for that the leader is the route.
 
+## Settings
+
+The plugin's settings are in Claude Code's `/config`, at the bottom of its list, each row ending `· bookmarks`; type `bookmarks` in its search box to see only them. The README lists them all ([Configuration](../README.md#configuration)). A change takes effect at once. `/bm-config` prints each setting, its value, and where the value came from: `default`, or `/config` when you chose it.
+
+Two of them decide what the debug log may quote from the conversation. "Conversation text in the debug log" is `auto` by default: off in a plugin installed from a marketplace, always in one loaded from a folder (a developer's build). `with-debug` quotes only while the conversation's debugging is on (`/bm-debug on`), `always` and `off` mean what they say, and the `text` debug channel turns quoting on for one conversation whatever the setting. "How much text a debug line quotes" is `reference` (a short excerpt, enough to find the place) or `full`.
+
+Every colour the plugin draws has a role, and its default is one of Claude Code's theme keys wherever one fits, so it follows your theme: `here` (the prompt nearest your view), `pinned` (the pin star, the bookmark anchor), `mark` and `markBand` (a mark's words and the band behind its line; the band is pale on a light theme and navy on a dark one), `legend` (hints and titles), `used` and `unused` (mark letters taken and free), `unreached` (a prompt not drawn since the plugin loaded), `emphasis` (what you are typing), `footnote` (the prompts list's footnotes) and `search` (for a feature to come). "Colour overrides" takes JSON naming roles: `{"here": {"color": "cyan"}, "markBand": {"backgroundColor": "#203040"}}`. A colour is a theme key (`warning`, `subtle`, `suggestion`, ...), a terminal colour name (`cyan`, `yellowBright`) or `#rrggbb`; `dimColor` and `bold` take `true` or `false`. Anything else is ignored and the default stands.
+
 ## What is kept, and where
 
 | What | Kept for | Notes |
 |------|----------|-------|
 | Marks `a`-`z` | This conversation | Survive restarting Claude Code and `claude --resume` |
 | Reading position | This conversation | The same |
-| The prompt list | This conversation | Up to 5000 prompts |
+| The prompt list | This conversation | Up to 5000 prompts, with their footnotes; set aside after 30 days unopened, and read again from the transcript when you reopen the conversation |
+| Prompt text for the filter | This conversation | Up to the budget setting, 2 MB by default, newest first; in `~/claude/bookmarks/prompttext/` |
 | Pinned prompts | This conversation | Survive restarting Claude Code and `claude --resume` |
 | Bookmarks (yours and Claude's) | Forever | In `~/claude/bookmarks/sessions/`, readable JSON and markdown; never under `~/.claude` |
 | The jumplist (back/forward) | This conversation | Up to 100 jumps |
@@ -338,3 +389,15 @@ The plugin always writes its log to a file, one per conversation (see [the debug
 | `/bm-debug status` | Which of these is in effect, and the log file's path. |
 
 The same per-conversation signal can be given from the shell: `CONVO_BOOKMARKS_DEBUG=1 claude` starts a session with the echo on (`0`, `off` or `false` for an explicit off). The default and the force are the only settings written to disk; a conversation's choice never is.
+
+### Debug channels
+
+Some diagnostics are too heavy or too narrow to run all the time, so each is a channel, off until you turn it on for one conversation:
+
+| Channel | What it adds |
+|---------|--------------|
+| `screen` | Every on-screen report Claude Code sends the plugin, written to `<session id>.screen.log` beside the debug log. Heavy: the file is rewritten every half second while the screen redraws. For a prompts pane whose highlight lands on the wrong prompt. |
+| `held` | A log line naming the rule that kept the prompts pane's yellow row where it was. |
+| `text` | Log lines quote the conversation (the selected words, a message's first line, a bookmark's label) in this conversation, whatever the "Conversation text in the debug log" setting says. |
+
+`/bm-debug channels` lists them with their state; `/bm-debug enable screen,held` and `/bm-debug disable screen` switch them. The choice is kept with the echo's, in the same variable of this session's own environment, so it ends with the session. From the shell, channel names join the echo's value: `CONVO_BOOKMARKS_DEBUG=screen claude` for the screen channel alone, `CONVO_BOOKMARKS_DEBUG=1,screen claude` for the echo as well.

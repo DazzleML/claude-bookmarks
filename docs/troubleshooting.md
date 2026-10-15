@@ -14,7 +14,7 @@ Most of what goes wrong comes from a small set of Claude Code rules about when a
 
 ## The band doesn't appear
 
-The band (`bm: ' j m p ␣   m: mark  j: jump  p: prompts  r: read`) above the prompt means the plugin is loaded. If it's missing:
+The band (`bm: _  m: mark  j: jump  p: prompts  r: read  ?`, or the field alone with "The band" set to `field`) above the prompt means the plugin is loaded. If it's missing:
 
 1. **Check the renderer.** Run `/tui fullscreen`. The classic renderer is not supported.
 2. **Check the version.** Run `claude --version`; plugins of this kind need Claude Code 2.1.287 or later.
@@ -95,4 +95,8 @@ ${CLAUDE_USER_DIR:-~/claude}/bookmarks/debug/<session id>.log
 
 `/bm-env` shows the session id. When something behaves oddly, the last lines of this file show what the plugin saw and did, and they are the most useful thing to attach to an [issue](https://github.com/DazzleML/claude-bookmarks/issues).
 
+Whether the log quotes the conversation (the selected words, a message's first line, a bookmark's label) is a setting, "Conversation text in the debug log" in `/config`: off by default in an installed plugin, and on for one conversation with `/bm-debug enable text` (see [Settings](usage.md#settings)). Those lines often explain a wrong mark or jump; when they are on, read the file before attaching it to an issue.
+
 To watch the same lines appear in the conversation as you reproduce a problem, type `/bm-debug on`; it affects this conversation only, and `/bm-debug off` ends it. The other forms (`default`, `force`) are in [usage](usage.md#the-log-echo).
+
+For a problem the plain log does not explain, a [debug channel](usage.md#debug-channels) adds more: `/bm-debug enable screen` before reproducing a wrong highlight in the prompts pane, then attach `<session id>.screen.log` from the same folder along with the log. `/bm-debug disable screen` turns it off again; it also ends with the session.

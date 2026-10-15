@@ -26,7 +26,8 @@ claude --plugin-dir ./plugin # the mod reloads live when you save a file
 claude plugin validate ./plugin    # manifest + hooks module, as Claude Code reads them
 claude plugin validate .           # the repository as a marketplace (.claude-plugin/marketplace.json)
 npx tsc -p plugin --noEmit         # type-check the mod against the engine's generated types
-node --test plugin/hooks/core/anchor.test.ts plugin/hooks/core/transcript-lines.test.ts plugin/hooks/core/register-file.test.ts
+node --test tests/core/*.test.ts   # the pure core; Node 22.18+ strips the types itself (older: add --experimental-strip-types)
+claude plugin test plugin          # the plugin in Claude Code's test kit: plugin/tests/ (the band, the panes, commands)
 python -m pytest tests/ -v         # version.py and plugin.json stay in step
 ```
 

@@ -2,7 +2,7 @@
 // Never modifies the file. Runs grep -bnF as the mod's shell pass would.
 import { execFileSync, execSync } from 'node:child_process'
 import { statSync, readFileSync } from 'node:fs'
-import { rowsFromGrep, resolveRows, jsonEscaped } from '../../../../hooks/core/transcript-lines.ts'
+import { rowsFromGrep, resolveRows, jsonEscaped } from '../../../../hooks/core/bookmarks/transcript-lines.ts'
 
 const f = process.argv[2]
 const buf = readFileSync(f)

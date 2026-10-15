@@ -1,11 +1,11 @@
 name: CI
 
 # The product is a Claude Code mod (TypeScript under .claude-plugin/, hooks/
-# and types/). This workflow runs the Python tooling checks only: version.py
-# and the plugin manifest that must match it. The mod's own checks
-# (`claude plugin validate --strict`, `tsc --strict`, core tests) run locally
-# before pushing; moving them into CI needs the Claude Code CLI and TypeScript
-# on the runner, which is still an open question.
+# and types/). This workflow runs the Python tooling checks (version.py and the
+# plugin manifest that must match it) and the pure core's tests, which need only
+# Node: it strips the types itself. `claude plugin validate` and `tsc` against
+# the engine's types run locally before pushing; moving them into CI needs the
+# Claude Code CLI on the runner, which is still an open question.
 
 on:
   push:
@@ -33,3 +33,11 @@ jobs:
 
     - name: Run tests
       run: python -m pytest tests/ -v
+
+    - name: Set up Node
+      uses: actions/setup-node@v5
+      with:
+        node-version: '24'
+
+    - name: Core tests
+      run: node --test tests/core/*.test.ts

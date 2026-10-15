@@ -115,7 +115,14 @@ Still true: a timer, a `prompt.edit` hook and anything else the person did not p
 
 **Why:** no API returns the keyboard to the composer; only the person's `Esc` does. A second `Ctrl+]` while the band holds the keyboard moves the focus along the band instead of starting fresh. Once that landed on the `mark` button, and `Space`, then `Enter`, overwrote mark `a` (2026-10-07).
 
-**What we do:** while the band is idle, a `ui.focus` hook keeps the focus on the field (a move onto a button is redirected back to it). In mark mode the default focus is a `cancel` button, so a stray `Enter` cancels. In prompt mode, a focus move off `go` onto its neighbour is read as an arrow key (`k` before it, `j` after it), which gives Up/Down browsing.
+**What we do:** while the band is idle, a `ui.focus` hook keeps the focus on the field (a move onto a button is redirected back to it). In mark mode the default focus is a `cancel` button, so a stray `Enter` cancels. In prompt mode, a focus move off `go` onto its neighbour is read as an arrow key (`k` before it, `j` after it), which gives Up/Down browsing. Since 0.4.18, after a band action that leaves the band holding the keyboard (a jump, `o`/`i`, the reading position, a promote), the first key the band does not know shows a toast saying to press `Esc`, once per action, when "Keyboard after an action" is `input` (#24).
+
+**Pathways, for when one exists** (the four of #18: ideal, workaround, patched, current):
+
+- *Ideal:* the plugin performing `abovePrompt:leave`, the documented keybinding action that "returns keyboard focus to the prompt" (default `Esc`; code.claude.com/docs/en/keybindings, "Above-prompt actions"). A plugin cannot run an action: a `Button`'s `action` works the other way (a chord bound to the action presses the button), and no `$` call performs one (typings, 2.1.296). The request to Claude Code is exactly that: a way for a plugin to perform `abovePrompt:leave`, or a `focus: 'prompt'` on `$.ui.focus`.
+- *Workaround, to measure live:* whether a band that draws nothing for a moment after an action lets the focus fall back to the composer; whether a band `Button` carrying a borrowed action that the engine maps to the composer exists at all.
+- *Patched:* the dcc-patcher session teaching the engine the return.
+- *Current:* the `Esc` reminder above.
 
 **Proper fix:** a call that returns the keyboard to the composer, and keyboard handoff between a plugin's own band and pane.
 
@@ -183,7 +190,7 @@ The latest burst must count every kind of transcript row, not only messages. Too
 
 A redraw also repeats a message's last report, even when the message is off screen. Clearing the reading position's highlight after "back" redrew it with its old lines, which made it look freshly on screen, and the next press "stayed put" (2026-10-07). Only a report whose lines changed now counts as fresh.
 
-A message redrawn off screen for the first time since load (a bookmark link minted into it, say) reports its **whole** range, `0` to `of - 1`, as if every row showed, and as the newest report it would evict the real screen set (2026-10-11 20:50: a 39-line reply from an hour earlier was the only fresh report while the person read five exchanges later, and the prompts pane's yellow row jumped to it). The typings say `onScreen` is null off screen; the observed report says otherwise. The engine gives a plugin no view event to check against (a person's scroll of the conversation is not a `ui.scroll` a plugin receives; Claude Code's own "prompt above" header is computed in `StickyTracker` and not exposed), so the shape decides: a burst in which every message reports its whole range, none was in the trusted set, and all are more than one exchange from where the person was is treated as a redraw and ignored (`core/view-position.ts`, `looksLikeRedraw`).
+A message redrawn off screen for the first time since load (a bookmark link minted into it, say) reports its **whole** range, `0` to `of - 1`, as if every row showed, and as the newest report it would evict the real screen set (2026-10-11 20:50: a 39-line reply from an hour earlier was the only fresh report while the person read five exchanges later, and the prompts pane's yellow row jumped to it). The typings say `onScreen` is null off screen; the observed report says otherwise. The engine gives a plugin no view event to check against (a person's scroll of the conversation is not a `ui.scroll` a plugin receives; Claude Code's own "prompt above" header is computed in `StickyTracker` and not exposed), so the shape decides: a burst in which every message reports its whole range, none was in the trusted set, and all are more than one exchange from where the person was is treated as a redraw and ignored (`core/prompts/view-position.ts`, `looksLikeRedraw`).
 
 **Proper fix:** a view event, or a call answering "what is at the top of the view", which the engine already computes for its header.
 
@@ -237,6 +244,12 @@ A plugin runs programs through `$.process.run` with an argument list. From Windo
 
 On Windows, `Select-String -SimpleMatch` ignores case by default, which picks up extra lines; adding `-CaseSensitive` avoids them.
 
+Even the matching lines outgrow the cap in a long session: measured 2026-10-12 on an 84 MB transcript, its user rows were 4.8 MB, and 2.9 MB of that was `"isMeta":true` rows (skill bodies and system notes Claude Code stores as user rows), so the back-fill's read was cut off, missed the newest prompts, and, never marked done, ran again at every start. The read now drops meta rows as it drops tool results: 1.5 MB, 1.0 s.
+
+### The plugin store's 4 MiB is for the whole store — Workaround
+
+`$.store.set` refuses a write that would leave the store over 4 MiB of JSON text *in all* (the typings, `store.set`), not per value. The store is one file under Claude Code's `plugins/store/`, holding every conversation's keys, so splitting a large value across keys does not help, and a store that reaches the cap refuses every later write: marks, pins, everything. Anything that grows with the conversation (the filter's prompt text) is kept in files under the data root instead, in pieces under `$.fs.read`'s 4 MiB. Measured 2026-10-12: 620 KB live, of which the prompt lists were 305 KB across conversations (#15). `$.fs` has no delete, so a file no longer needed is overwritten small; `$.store.delete` exists.
+
 ### Read the selection after opening the pane — Workaround
 
 Awaiting anything before `$.ui.open({ focus: true })` appears to cost the pane the keyboard. The mark pane, which read your selection first, was refused in 8 of 12 runs; the jump pane, which didn't, almost never was (2026-10-06/07). So the plugin opens the pane first and reads the selection after. The original reason for reading it first was an inline pane shifting the layout, which made the selection resolve one row too high. The pane is docked now, and a mark resolves by the selection's message id, not its screen position.
@@ -248,6 +261,24 @@ The selection is what you **last** selected, until you select again, dismiss it,
 Rows drawn soon after sending can carry ids that differ from the saved message id (a zero-tailed form, or a random one). Marks are keyed on the saved id, which scrolling still resolves.
 
 A command run from a key (a `command:` binding) is drawn for a moment under a `placeholder…` id. The plugin ignores those ids when it notes what is on screen; otherwise "where you were" pointed at a message that vanished a moment later.
+
+### Engine calls stay in the hooks module's own file — Limit
+
+`claude plugin validate` follows `$` only into functions declared in the same file as the hooks, never across an import, and wants every engine call spelled `$.noun.event(...)` at its call site. Moving the debug log into `engine/debug-log.ts` with `$` passed in failed validation (measured 2026-10-12, Claude Code 2.1.296): "$ is passed to "log", imported from "./engine/debug-log": $ is followed only into a function declared in this same file, never across an import". So `register.tsx` keeps every function that touches the engine; what can leave it is code that does not take `$`: pure rules (`core/`), and drawing helpers that take the resolved elements and plain data.
+
+### Testing the plugin with Claude Code's own test kit — Workaround
+
+`claude plugin test plugin` runs every `*.test.ts` under the plugin folder with `claude-code/testing`: the plugin is loaded by the engine's own host, a test mounts a component (`$.ui.mount` with `AbovePrompt`, `Pane`, ...), reads what it drew, types into an `Input`, presses a `Button`, runs a command (`$.command.run`), and passes `userConfig` values (`test(name, { options }, body)`). The plugin's kit tests live in `plugin/tests/`; the pure core's `node:test` suites live in `tests/core/`, because the kit refuses any import but the plugin's own files and `claude-code` (measured 2026-10-12, Claude Code 2.1.296: every `node:test` file failed to load).
+
+What a test has to supply, learned the same day:
+
+- Every engine call the plugin makes needs an answer beneath it, or the call fails with "no implementation for <event>". `plugin/tests/harness.ts` answers them from memory (store, env, clock through the kit's `mock`; files, processes, the prompt box, panes and the log by hand) and records each call, so a test can never reach the real disk or a process.
+- The engine's own drawing beneath a render hook (`next(e)`) is the test's to supply: an empty `Box` from `$.ui.resolve(e)` serves.
+- `session.start` does not run on its own in a kit test, but a test raises it with `$.session.start({ cwd, surface, isInteractive })`, and the plugin's start hook then runs: registration, the store prune, the back-fill. Beneath it the test must answer the base event by passing it through (`(_h, e) => e`; `{}` is refused as "returned no { cwd }") and the calls the hook makes (`session.version`, `config.list`, `command.register`, `tool.register` with a `.tool`, `fs.list`); `plugin/tests/harness.ts` answers them. Measured 2026-10-12 on 2.1.296; an earlier note here said it could not run, from a probe that left those calls unanswered. The kit's own failure report names each skipped hook and why, which is how this was found.
+- The test's `$` has no `store`; to see what the plugin wrote or deleted, a test registers its own `store.delete` / `store.set` hook ahead of `world()` and calls `next`.
+- Most answers are `{ value }`; `ui.focus` and `ui.scroll` answer the result itself (`{}` or `{ deny }`).
+- A plugin's own `$.ui.focus` (moving the band's focus ring onto a button) is not routed to the test's hooks: it fails with "no implementation for ui.focus" whatever the test registers. The plugin's state has changed by then, so a test checks what was drawn and lets that call throw. The same holds for the plugin's own `$.ui.scroll` (a jump): a test checks what happened before it, with a control that shows the path ran (measured 2026-10-12 on a footnote jump).
+- The kit has no snapshot matcher and a test cannot read files, so the goldens are written inline.
 
 ## Patched builds: trying the proper fix early
 

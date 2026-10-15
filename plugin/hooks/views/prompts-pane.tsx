@@ -1,0 +1,171 @@
+// The prompts pane, drawn (moved out of register.tsx's Pane render hook under /move-code,
+// 0.4.69, comments as they were). register.tsx reads what the list needs -- the prompts,
+// their footnotes, the pins, the texts the filter searches, the band's number, the prompt
+// nearest the view -- and hands it in with the actions (closures over `$`) and the
+// palette's two lookups; the numbering, filtering and rows are worked out here. Local
+// names follow the hook's, so the JSX reads as it did there.
+import type { EngineInterface } from 'claude-code'
+import { filterPrompts, matchLegend } from '../core/prompts/filter.ts'
+import { promptNumberComplete } from '../core/band/band-entry.ts'
+import {
+  drawnFourOf, footnoteDisplay, footnotesByPrompt, foldedLabel, numberLabel as numberLabelAt, numberNewestFirst, numberWidth,
+  pinnedRowsOf, pointerFor, unreached, type FootnoteMode,
+} from '../core/prompts/list-model.ts'
+import type { FootnoteRef } from '../core/prompts/prompt-rows.ts'
+import type { PromptRef } from '../core/prompts/prompt-store.ts'
+import type { Role, Style } from '../core/palette.ts'
+
+type Elements = ReturnType<EngineInterface['ui']['resolve']>
+
+export type PromptsPaneModel = {
+  all: readonly PromptRef[]
+  kept: readonly FootnoteRef[]
+  footnoteMode: FootnoteMode
+  /** The prompts whose footnotes the person unfolded, by number. */
+  unfolded: ReadonlySet<number>
+  /** The ids the render hooks have drawn since load (drawnFourOf reads their first four groups). */
+  drawn: Iterable<string>
+  pinIds: readonly string[]
+  /** Each prompt's whole text, for the filter. */
+  texts: ReadonlyMap<string, string>
+  paneFilter: string
+  /** The band's number while the band is in its list mode, else undefined. */
+  fromBand: string | undefined
+  /** The prompt nearest the view. */
+  here: string | undefined
+}
+
+// Each action returns its promise (see views/band.tsx); setFilter answers at once whether
+// the typed text changed the filter, since it compares with the live value.
+export type PromptsPaneActions = {
+  unfold: (n: number) => Promise<unknown>
+  refold: (n: number) => Promise<unknown>
+  footnote: (uuid: string, label: string) => Promise<unknown>
+  pressPrompt: (r: { uuid: string; n: number; head: string }) => Promise<unknown>
+  go: (typed: string) => Promise<unknown>
+  close: () => Promise<unknown>
+  setFilter: (query: string) => boolean
+}
+
+export type PaneStyles = { text: (role: Role) => Style; button: (role: Role) => { dimColor?: boolean } }
+
+export function promptsPaneView(elements: Elements, m: PromptsPaneModel, a: PromptsPaneActions, s: PaneStyles) {
+  const { Box, Button, Text } = elements
+  // Every surface draws an Input except the mobile app (no fields yet).
+  const Input = 'Input' in elements ? elements.Input : undefined
+  const style = s.text
+  const buttonStyle = s.button
+  const { all, kept, footnoteMode, pinIds, texts, paneFilter, fromBand, here } = m
+  const unfoldedFootnotes = m.unfolded
+
+  // Every prompt the mod knows, numbered in the order sent (#1 the first), listed
+  // newest first (djdarcy, 2026-10-04). The number is typed into a focused Input
+  // (djdarcy: "Ctrl-X p 21 <enter>"): it jumps on Enter, or at once when the digits
+  // typed can't become a larger prompt number (with 25 prompts, `3` jumps, `2`
+  // waits for 2x or Enter). A hotkey is one character, so it can't do this.
+  const numbered = numberNewestFirst(all)
+  // The list's model (numbering, footnotes under their prompt, the pinned group, the
+  // pointer, the dim rule): core/prompts/list-model.ts. The rows are drawn here.
+  const byPrompt = footnotesByPrompt(all.map(p => p.uuid), kept)
+  const footnoteRows = (n: number) => {
+    const list = byPrompt.get(n)
+    const display = footnoteDisplay(footnoteMode, !!list, unfoldedFootnotes.has(n))
+    if (!list || display === 'none') return []
+    if (display === 'folded') {
+      return [
+        <Button key={`fn-fold-${n}`} label={foldedLabel(list.length)} plain {...buttonStyle('footnote')}
+          onPress={() => a.unfold(n)} />,
+      ]
+    }
+    const rows = list.map(({ f, k }) => (
+      <Button key={`fn-${f.uuid}`} label={`   ${n}.${k} ${f.label}`} plain {...buttonStyle('footnote')}
+        onPress={() => a.footnote(f.uuid, `footnote ${n}.${k}`)} />
+    ))
+    // Folded by default and opened by hand: a row to fold them again (djdarcy,
+    // 2026-10-12: "a way to "recollapse" our "footnotes" ... after we open them").
+    if (display === 'open') return rows
+    return [
+      ...rows,
+      <Button key={`fn-refold-${n}`} label="      ▴ fold" plain {...buttonStyle('footnote')}
+        onPress={() => a.refold(n)} />,
+    ]
+  }
+  const width = numberWidth(all.length)
+  const numberLabel = (n: number) => numberLabelAt(n, width)
+  const go = (typed: string) => a.go(typed)
+  const drawnFour = drawnFourOf(m.drawn)
+  const byUuid = new Map(numbered.map(r => [r.uuid, r]))
+  // The filter (#28): only the prompts matching `/words` in the field; numbers kept.
+  const filtered = filterPrompts(numbered, paneFilter, r => texts.get(r.uuid) ?? r.head)
+  const listed = new Set(filtered.shown.map(r => r.uuid))
+  const matchLine = matchLegend(filtered.shown.length, filtered.of, paneFilter)
+  const pinnedRows = pinnedRowsOf(pinIds, byUuid, listed)
+  const pinSet = new Set(pinIds)
+  type NumberedPrompt = (typeof numbered)[number]
+  const targetN = fromBand ? Number(fromBand) : undefined
+  const pointer = pointerFor(fromBand, targetN)
+  const promptRow = (r: NumberedPrompt, group: string) => {
+    const isHere = r.uuid === here
+    const dim = unreached(drawnFour, r.uuid) && !isHere
+    const press = () => a.pressPrompt(r)
+    if (!pinSet.has(r.uuid) && !isHere) {
+      return <Button key={`${group}-${r.uuid}`} label={`${pointer(r.n)}${numberLabel(r.n)}${r.head}`} plain {...(dim && r.n !== targetN ? buttonStyle('unreached') : {})} onPress={press} />
+    }
+    // `245★) `: a gold star inside the number, so it reads as the row's marker, not
+    // part of the prompt (djdarcy, 2026-10-05, over a background band and a star
+    // before the number). A Button's label takes no colour at rest (2.1.289), so the
+    // number and star are Text beside the Button; flexShrink 0 keeps them from being
+    // squeezed to nothing next to a long label that wraps (seen in the look test).
+    // The nearest-to-view row uses the same shape with its number in yellow.
+    return (
+      <Box key={`${group}-row-${r.uuid}`} flexDirection="row">
+        <Box flexShrink={0}>
+          <Text {...(dim ? style('unreached') : {})} {...(isHere ? style('here') : {})}>{`${pointer(r.n)}${String(r.n).padStart(width)}`}</Text>
+          {pinSet.has(r.uuid) && <Text {...style('pinned')}>★</Text>}
+          <Text {...(dim ? style('unreached') : {})} {...(isHere ? style('here') : {})}>{') '}</Text>
+        </Box>
+        <Button key={`${group}-${r.uuid}`} label={r.head} plain {...(dim ? buttonStyle('unreached') : {})} onPress={press} />
+      </Box>
+    )
+  }
+  return (
+    <Box flexDirection="column">
+      {numbered.length === 0 && <Text {...style('legend')}>No prompts yet.</Text>}
+      {numbered.length > 0 && Input && (
+        <Input
+          key="prompt-number"
+          label="#"
+          placeholder={`1-${all.length}, or /words to filter`}
+          submitLabel="jump"
+          {...(fromBand !== undefined ? { value: fromBand } : {})}
+          autoFocus
+          onInput={(typed: string) => {
+            // `q` closes the pane, as in the band (Q261012-09).
+            if (typed === 'q') return void a.close()
+            // `/words` filters the list (#28); clearing the slash clears the filter.
+            const query = typed.startsWith('/') ? typed.slice(1) : ''
+            if (a.setFilter(query)) return
+            if (promptNumberComplete(typed, all.length)) void go(typed)
+          }}
+          onSubmit={(typed: string) => void go(typed)}
+        />
+      )}
+      {/* One by one through this list (djdarcy, 2026-10-04): the pane keeps the arrows
+          for scrolling, but Tab walks the focus ring down the Buttons below from the
+          newest, Shift+Tab back up, Enter jumps. A Select was tried: on the terminal
+          its arrows open a pop-up list of its own instead (screenshot, 2026-10-04). */}
+      {numbered.length > 0 && <Text {...style('legend')}>or Tab / Shift+Tab, Enter; *N pins</Text>}
+      {here && (
+        <Text {...style('legend')}>
+          <Text {...style('here')}>#N</Text> = nearest to your view
+        </Text>
+      )}
+      {matchLine && <Text {...style('legend')}>{`/${paneFilter}: ${matchLine}`}</Text>}
+      {pinnedRows.length > 0 && <Text {...style('legend')}>★ pinned</Text>}
+      {pinnedRows.map(r => promptRow(r, 'pin'))}
+      {pinnedRows.length > 0 && <Text {...style('legend')}>all prompts</Text>}
+      {numbered.filter(r => listed.has(r.uuid)).flatMap(r => [promptRow(r, 'p'), ...footnoteRows(r.n)])}
+      {footnoteRows(0)}
+    </Box>
+  )
+}
