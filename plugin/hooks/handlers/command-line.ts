@@ -19,7 +19,12 @@ import { bandOnly, closeAll, handOff, openFor, showHelp } from './band.ts'
 const CMD_HINT = lineHint()
 
 // Owned here: one command at a time.
-let cmdBusy = false
+// Since 0.4.83 it holds when the running command started: a command that never settles
+// (an engine call that does not answer) frees the field after CMD_STUCK_MS instead of
+// wedging it until a reload, and says so in the log (test-scenarios 2026-10-14__02-07-49,
+// S7). A late finish clears only its own start, never a newer command's.
+let cmdBusy: number | undefined
+const CMD_STUCK_MS = 10_000
 
 const ESC_REMINDER = 'Press Esc to type in the input box: the band still has the keyboard (Claude Code does not let a plugin hand it back yet).'
 function owedAfterAction(ports: CommandLinePorts) {
@@ -27,14 +32,19 @@ function owedAfterAction(ports: CommandLinePorts) {
 }
 
 export async function runCommandLine(ports: CommandLinePorts, typed: string, via: 'input' | 'submit') {
-  if (cmdBusy || typed === '') return
-  cmdBusy = true
+  if (typed === '') return
+  if (cmdBusy !== undefined) {
+    if (Date.now() - cmdBusy < CMD_STUCK_MS) return
+    ports.log(`[bm] band command line: the last command has not finished after ${Date.now() - cmdBusy} ms; taking this one`)
+  }
+  const started = Date.now()
+  cmdBusy = started
   try {
     ports.log(`[bm] band command line ${via}: "${ports.cut(typed, 40)}"`, true)
     // What the keys mean lives in the router's table (core/band/keys.ts); perform does it.
     await perform(ports, route(typed, { pane: 'none' }).operation, 'field')
   } finally {
-    cmdBusy = false
+    if (cmdBusy === started) cmdBusy = undefined
   }
 }
 
