@@ -33,8 +33,9 @@ const OWNERS: readonly Owner[] = [
     state: 'MarkCache (core/marks/marks.ts)',
     receivers: ['ports.markCache'],
     writers: ['replace', 'showTransient'],
-    // replace: the marks; showTransient: a bookmark's highlight.
-    files: ['handlers/marks.ts', 'handlers/bookmarks.ts'],
+    // replace: the marks; showTransient: a bookmark's highlight, which the bookmarks
+    // cluster asks for through its highlightWords port (0.4.100).
+    files: ['handlers/marks.ts'],
   },
 ]
 
@@ -83,14 +84,25 @@ test('no handler or view imports register.tsx (state reaches them only through p
   assert.deepEqual(wrong, [])
 })
 
+// A module-level `let`, or an owner object made with `new`, at the top of `source`. An
+// ALL_CAPS name is a constant made once (AUTOMATED_ORIGINS), not state.
+const moduleState = (source: string) =>
+  [...source.matchAll(/^(?:let (\w+)|const (\w+) = new )/gm)].map(m => m[1] ?? m[2]!).filter(name => !/^[A-Z0-9_]+$/.test(name))
+
 test('every module-level variable in a handler is named in the ownership table', () => {
   const table = readFileSync(join(HOOKS, 'engine/ports.ts'), 'utf8')
   const missing: string[] = []
   for (const { file, source } of scanned()) {
-    for (const m of source.matchAll(/^(?:let (\w+)|const (\w+) = new )/gm)) {
-      const name = m[1] ?? m[2]!
-      if (!table.includes(name)) missing.push(`${file}: ${name}`)
-    }
+    for (const name of moduleState(source)) if (!table.includes(name)) missing.push(`${file}: ${name}`)
   }
+  assert.deepEqual(missing, [])
+})
+
+// register.tsx is not scanned for writer calls (it builds the ports), but the state it
+// holds itself must be in the table too, so a new module variable there is a decision
+// about its owner, not an accident (phase-2 goal, slice 4).
+test("every module-level variable in register.tsx is named in the ownership table", () => {
+  const table = readFileSync(join(HOOKS, 'engine/ports.ts'), 'utf8')
+  const missing = moduleState(readFileSync(join(HOOKS, 'register.tsx'), 'utf8')).filter(name => !table.includes(name))
   assert.deepEqual(missing, [])
 })

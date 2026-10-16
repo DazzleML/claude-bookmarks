@@ -286,16 +286,26 @@ export type CommandLinePorts = BandPorts & {
 //   state                                   owner                         readers
 //   screen (ScreenModel)                    register.tsx render hooks     view tracker (read-only Pick)
 //   lastScreenOrder, trustedScreen,         handlers/view-tracker.ts      --
-//     heldBy, lastHere, viewTimer
+//     heldBy, lastHere, viewTimer             (viewTracker, its one instance
+//                                             in register.tsx)
 //   lastHere (the one outside write)        prompts pane, via drewHere    --
 //   paneAnchor, paneView, restoreTo         core/kit/pane-position.ts         navigation (paneJumped, takeRestore), openFor (opened)
+//                                             (panePosition, in register.tsx)
 //   jumplistCache, jumplistMoving           handlers/navigation.ts        --
 //   band wait/watch timers, ring, id,       core/band/band-state.ts BandState  band render (drawn), ui.focus (ringMoved),
 //     Esc reminder                                                         prompt.edit (oweReminder), session.start
 //   cmdBusy (one command at a time)         handlers/command-line.ts      --
 //   the prompts filter, unfolded            core/prompts/prompts-pane-    the prompts pane's render (filter,
 //     footnotes, the centre at next draw      state.ts PromptsPaneState     unfolded, takeCentre); openFor
-//                                             (in register.tsx, 0.4.102)    (centreOnNextDraw, via its port)
+//                                             (promptsPane, in register.tsx,  (centreOnNextDraw, via its port)
+//                                             0.4.102)
+//   conversationId (the conversation the    register.tsx sameConversation sameConversationSoon (read-only)
+//     plugin works for, Q261014-01)
+//   anchorRowsLogged (replies whose links   register.tsx, the reply       --
+//     were logged and queued)                 render hook
+//   settings (SettingsState: the /config    core/settings-state.ts        every reader through currentSettings(),
+//     values, theme, resolution, palette)     (register's load, the two     style(); /bm-config (resolved)
+//                                             config.set hooks; 0.4.104)
 //   registerCache, proseQueued              handlers/bookmarks.ts         --
 //   debug channels (DebugChannels)          handlers/log.ts (writers:     log, the screen channel, the view
 //                                             read, set); the Logger's    tracker (held), /bm-debug (on)
@@ -309,12 +319,13 @@ export type CommandLinePorts = BandPorts & {
 //                                           Logger's (0.4.95)
 //   timeline (handlers/log.ts Timeline)     note(); the Logger's          diagnostics (items, read-only)
 //                                             (0.4.95)
-//   Logger (handlers/log.ts)                log() (Logger.log, keepLine)  --; one instance in register.tsx
+//   Logger (handlers/log.ts)                log() (Logger.log, keepLine)  --; one instance in register.tsx (logger)
 //   drawn ids and their first four groups   core/kit/drawn-messages.ts    diagnostics (texts, read-only), the panes
 //     (DrawnMessages)                         (writer: note, from the       (firstFours), navigation and marks (texts)
 //                                             UserMessage render hook)
 //   highlight clear timer, selection at     core/marks/mark-state.ts MarkState  band (setAtChord, via its port),
-//     the chord, selection seen, its poll     (handlers/marks.ts)           session.start (stopPoll, startPoll)
+//     the chord, selection seen, its poll     (handlers/marks.ts; markState  session.start (stopPoll, startPoll)
+//                                             in register.tsx)
 //   markCache (core/marks/marks.ts MarkCache)     the marks cluster:            render hooks, band, navigation
 //                                             handlers/marks.ts only: writeMarks (readers: all, headOf)
 //                                             and startMarks (replace), showWords

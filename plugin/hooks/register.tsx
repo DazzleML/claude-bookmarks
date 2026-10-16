@@ -22,8 +22,9 @@ import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resol
 import { excerpt, type Channel } from './core/log/debug'
 import { bandButtons, helpLines, helpShort, listHint, listKeysFor, route, type Chord, type Operation, type Pane } from './core/band/keys'
 import type { Cause } from './core/band/after-action'
-import { installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
-import { resolvePalette, type Palette, type Role, type Style } from './core/palette'
+import { installedFromCache, type Settings } from './core/settings'
+import { SettingsState } from './core/settings-state'
+import type { Role, Style } from './core/palette'
 import { footnoteOf, looksLikePrompt, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
 import { short } from './core/kit/message-id'
 import { configDirOf, dataRootOf } from './core/kit/paths'
@@ -59,13 +60,12 @@ import { COMMANDS } from './core/band/commands'
 import { promptList, transcriptGuess, type PromptRef } from './core/prompts/prompt-store'
 
 
-// The plugin's settings as they stand: the person's /config values (the `userConfig` in
-// plugin.json), which Claude Code hands to `register` with every default filled in and
-// a change to which arrives as `config.set` (kept current there), over the defaults in
-// core/settings.ts.
-let machineOptions: Record<string, unknown> = {}
+// The plugin's settings as they stand, and the palette: core/settings-state.ts
+// SettingsState, kept current by `register`'s load and the config.set hooks below;
+// resolved once per change.
+const settings = new SettingsState()
 function currentSettings(): Settings {
-  return resolveSettings(machineOptions).values
+  return settings.current()
 }
 
 // The plugin's one pane id (prompts, bookmarks, mark and jump panes all open under it).
@@ -173,27 +173,8 @@ function marksPorts($: EngineInterface): MarksPorts {
 }
 
 // Every colour, background, dim and bold the plugin draws comes from the palette by role
-// (#27, core/palette.ts): theme keys first, so a role reads on dark and light themes; the
-// mark band's light or dark value from the theme's name (/config's `theme` row, kept
-// current by a config.set hook); the person's overrides from the `palette` setting.
-let themeName: string | undefined
-let paletteCache: { key: string; palette: Palette } | undefined
-function palette(): Palette {
-  const overrides = currentSettings().palette
-  const key = `${themeName ?? ''}|${overrides}`
-  if (paletteCache?.key !== key) {
-    let parsed: Record<string, unknown> = {}
-    try {
-      const v: unknown = overrides.trim() ? JSON.parse(overrides) : {}
-      if (v && typeof v === 'object') parsed = v as Record<string, unknown>
-    } catch {
-      // Not JSON: the defaults stand, as for any override that does not fit.
-    }
-    paletteCache = { key, palette: resolvePalette({ theme: themeName, overrides: parsed }).palette }
-  }
-  return paletteCache.palette
-}
-const style = (role: Role): Style => palette()[role]
+// (#27, core/palette.ts; resolved and kept by SettingsState.palette).
+const style = (role: Role): Style => settings.palette()[role]
 // A Button's label can't be coloured at rest (docs/engine-quirks.md): only its dimness.
 const buttonStyle = (role: Role): { dimColor?: boolean } => (style(role).dimColor ? { dimColor: true } : {})
 
@@ -302,11 +283,6 @@ async function dataRoot($: EngineInterface): Promise<string | undefined> {
   return dataRootOf(fromEnv, fromEnv ? undefined : await homeDir($))
 }
 
-// A new conversation writes its own log files: handlers/log.ts LogFiles.newConversation.
-async function newLogConversation() {
-  await logger.files.newConversation()
-}
-
 // --- Conversations (Q261014-01) ---------------------------------------------------------
 // The process outlives a conversation: /clear starts a new one under a new session id, and
 // a resume puts another in its place, its own transcript drawn instead (the source's
@@ -348,15 +324,16 @@ function sameConversationSoon($: EngineInterface) {
     if (conversationId !== undefined && id !== conversationId) $.clock.after(0, () => void sameConversation($).catch(() => {}))
   }).catch(() => {})
 }
-// What a conversation leaves in memory: its log files' place and rings (0.4.74), the
-// prompts filter and unfolded footnotes, the band's state, the pane position and the view
-// tracker (0.4.73). The register and the marks reset through their own start parts.
+// What a conversation leaves in memory: one list of its owners, each forgetting its own
+// part (newConversation): the log files' place and rings (0.4.74), the prompts pane's
+// filter, folds and pending centre, the band's state, the pane position and the view
+// tracker (0.4.73). Left out on purpose, so adding an owner is a decision made here:
+// the register and the marks reset through their own start parts (startRegister,
+// startMarks); the settings are the person's, not a conversation's; the drawn ids
+// (DrawnMessages) are "drawn since load", and whether a resumed conversation's messages
+// are drawn before or after this reset is not known; paneGeometry is the pane's.
 async function resetConversationMemory() {
-  await newLogConversation()
-  promptsPane.newConversation()
-  band.newConversation()
-  panePosition.newConversation()
-  viewTracker.newConversation()
+  for (const owner of [logger.files, promptsPane, band, panePosition, viewTracker]) await owner.newConversation()
 }
 
 // Mark and Marks: core/marks/marks.ts.
@@ -913,7 +890,7 @@ function diagnosticsPorts($: EngineInterface): DiagnosticsPorts {
     note,
     selection: () => $.ui.selection(),
     cut,
-    settings: () => resolveSettings(machineOptions),
+    settings: () => settings.resolved(),
     folderBuild: !installedFromCache($.plugin.root),
     pluginName: $.plugin.name,
     configKeys: async () => (await $.config.list().catch(() => [])).map(row => row.key),
@@ -928,14 +905,14 @@ function diagnosticsPorts($: EngineInterface): DiagnosticsPorts {
 }
 
 export const register: Register = (on, options) => {
-  machineOptions = { ...options }
+  settings.loaded(options)
 
   // A change in /config to one of this plugin's fields: keep the values current and
   // redraw what reads them (settingsRev), whether or not Claude Code also reloads us.
   on('config.set', { key: /^bookmarks\./ }, async ($, e, next) => {
     const result = await next(e)
     if (!result.deny) {
-      machineOptions = { ...machineOptions, [e.key.slice('bookmarks.'.length)]: result.value }
+      settings.changed(e.key.slice('bookmarks.'.length), result.value)
       // A smaller text budget frees memory and store now, not at the next prompt.
       if (e.key === 'bookmarks.promptTextBudget') await prompts_.savePromptTexts(promptsPorts($))
       await update($, settingsRev, v => v + 1)
@@ -946,7 +923,7 @@ export const register: Register = (on, options) => {
   on('config.set', { key: 'theme' }, async ($, e, next) => {
     const result = await next(e)
     if (!result.deny) {
-      themeName = String(result.value)
+      settings.themeIs(String(result.value))
       await update($, settingsRev, v => v + 1)
     }
     return result
@@ -967,7 +944,7 @@ export const register: Register = (on, options) => {
     await resetConversationMemory()
     void $.config.list().then(rows => {
       const theme = rows.find(r => r.key === 'theme')?.value
-      if (typeof theme === 'string') themeName = theme
+      if (typeof theme === 'string') settings.themeIs(theme)
     }).catch(() => {})
     // The command table is core/band/commands.ts.
     for (const [name, description] of COMMANDS) {
