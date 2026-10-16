@@ -10,6 +10,7 @@
 // quoting it, the `last-prompt` rows); the earliest real row is where it was said.
 
 import { utf8ByteLength } from './anchor.ts'
+import { forwardSlashes } from '../kit/paths.ts'
 
 export type TranscriptRow = {
   /** 1-based line in the file, as `grep -n` counts. */
@@ -128,3 +129,16 @@ export function uuidPattern(uuid: string): string {
 
 /** A short head of a message: one line, 60 characters. */
 export const headOf = (text: string): string => text.replace(/\s+/g, ' ').trim().slice(0, 60)
+
+/** What a bookmark takes from the transcript row it points at: where the row is, its head, the transcript's path (forward slashes) and who wrote it. Each mint from a row (a prose link, a promoted mark, the model's tool) starts from this. */
+export function rowPlace(row: TranscriptRow, transcript: string | undefined) {
+  return {
+    uuid: row.uuid,
+    line: row.line,
+    bytes: [row.byteStart, row.byteEnd] as [number, number],
+    head: headOf(row.text),
+    transcript: transcript === undefined ? undefined : forwardSlashes(transcript),
+    role: row.role,
+    ...(row.timestamp ? { timestamp: row.timestamp } : {}),
+  }
+}

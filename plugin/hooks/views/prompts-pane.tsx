@@ -8,7 +8,7 @@ import type { EngineInterface } from 'claude-code'
 import { filterPrompts, matchLegend } from '../core/prompts/filter.ts'
 import { promptNumberComplete } from '../core/band/band-entry.ts'
 import {
-  drawnFourOf, footnoteDisplay, footnotesByPrompt, foldedLabel, numberLabel as numberLabelAt, numberNewestFirst, numberWidth,
+  footnoteDisplay, footnotesByPrompt, foldedLabel, numberLabel as numberLabelAt, numberNewestFirst, numberWidth,
   pinnedRowsOf, pointerFor, unreached, type FootnoteMode,
 } from '../core/prompts/list-model.ts'
 import type { FootnoteRef } from '../core/prompts/prompt-rows.ts'
@@ -23,8 +23,8 @@ export type PromptsPaneModel = {
   footnoteMode: FootnoteMode
   /** The prompts whose footnotes the person unfolded, by number. */
   unfolded: ReadonlySet<number>
-  /** The ids the render hooks have drawn since load (drawnFourOf reads their first four groups). */
-  drawn: Iterable<string>
+  /** The first four groups of the ids the render hooks have drawn since load (core/kit/drawn-messages.ts, kept as ids arrive). */
+  drawnFour: ReadonlySet<string>
   pinIds: readonly string[]
   /** Each prompt's whole text, for the filter. */
   texts: ReadonlyMap<string, string>
@@ -93,7 +93,7 @@ export function promptsPaneView(elements: Elements, m: PromptsPaneModel, a: Prom
   const width = numberWidth(all.length)
   const numberLabel = (n: number) => numberLabelAt(n, width)
   const go = (typed: string) => a.go(typed)
-  const drawnFour = drawnFourOf(m.drawn)
+  const drawnFour = m.drawnFour
   const byUuid = new Map(numbered.map(r => [r.uuid, r]))
   // The filter (#28): only the prompts matching `/words` in the field; numbers kept.
   const filtered = filterPrompts(numbered, paneFilter, r => texts.get(r.uuid) ?? r.head)

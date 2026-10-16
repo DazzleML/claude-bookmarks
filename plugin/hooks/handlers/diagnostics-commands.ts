@@ -4,14 +4,17 @@
 // as they were; `ports.x(...)` where a handler called `$` or a register.tsx function. Their
 // decisions and formats are core/log/diagnostics.ts. Location provisional (Q261012-11);
 // settled here by the layout pass (0.4.77).
-import { configListedLine, dccLine, idsReport, notAppliedLine, selectionKind, settingsRows } from '../core/log/diagnostics.ts'
+import { configListedLine, dccLine, idsReport, jumpTarget, notAppliedLine, selectionKind, settingsRows } from '../core/log/diagnostics.ts'
 import { clock } from '../core/log/log-ring.ts'
 import { short } from '../core/kit/message-id.ts'
 import { debugTextMode } from '../core/settings.ts'
 import { describePathOrder } from '../engine/select.ts'
 import type { DiagnosticsPorts } from '../engine/ports.ts'
 
-// Claude Code builds whose chords (the borrowed keybinding actions) were verified by hand.
+// Claude Code builds the borrowed-action chords were verified on. The start-up tripwire
+// (register.tsx) toasts on any other build, because a new build could give a borrowed
+// action a handler of its own; /bm-env names them. Add a build here after re-verifying.
+// (The one definition since 0.4.91: 0.4.45 had copied it, leaving two to keep in step.)
 export const VERIFIED_CLIENTS = ['2.1.288', '2.1.289', '2.1.290']
 
 export async function idsCommand(ports: DiagnosticsPorts): Promise<void> {
@@ -80,4 +83,13 @@ export async function envCommand(ports: DiagnosticsPorts): Promise<void> {
   )
   // dcc-patcher's build signal (core/log/diagnostics.ts, dccLine).
   ports.log(dccLine(await ports.dccPatcher(), await ports.dccPatchH(), await ports.dccPatches(), await ports.echoState()), true)
+}
+
+// /bm-jump first | last | N | r<N> | uuid (moved from register.tsx's registration, 0.4.94).
+export async function jumpCommand(ports: DiagnosticsPorts, args: string) {
+  const arg = args.trim()
+  const target = jumpTarget(arg, await ports.rows())
+  if (target.kind === 'row') await ports.jumpTo(target.uuid, '/bm-jump', target.label)
+  else if (target.kind === 'raw') await ports.jumpTo(target.uuid, '/bm-jump (raw uuid)', 'raw')
+  else ports.log(`[bm] nothing captured for "${arg}" (${target.prompts} prompts captured since load)`)
 }

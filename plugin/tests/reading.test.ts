@@ -16,7 +16,7 @@ const OLD = '0bd0bd01-0000-4000-8000-000000000001' // on screen when the pane op
 const NOW = 'cafe5e1f-0000-4000-8000-000000000002' // where the person scrolled to and selected
 const STORE = {
   [`prompts:${SID}`]: [{ uuid: OLD, head: 'the old place' }, { uuid: NOW, head: 'the new place' }],
-  [`backfilled6:${SID}`]: true,
+  [`backfilled7:${SID}`]: true,
 }
 const BAND = { plugin: 'bookmarks', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS, requestId: 'band-1' }
 type Ui = { input: (t: object) => Promise<unknown> }

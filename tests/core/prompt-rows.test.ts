@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { footnoteOf, looksLikePrompt, numberFootnotes, numberRows, promptTextOf, unwrapQueued } from '../../plugin/hooks/core/prompts/prompt-rows.ts'
+import { FOOTNOTE_LABEL_MAX, footnoteOf, looksLikePrompt, numberFootnotes, numberRows, promptTextOf, unwrapQueued } from '../../plugin/hooks/core/prompts/prompt-rows.ts'
 
 test('kept footnotes number by the prompt they follow', () => {
   const f = (uuid: string, after: string | null) => ({ uuid, after, kind: 'command' as const, label: '/x' })
@@ -129,4 +129,27 @@ test('unwrapQueued strips the engine framing and keeps the words', () => {
 
 test('unwrapQueued keeps the whole text when the framing is not recognised', () => {
   assert.equal(unwrapQueued('something else entirely'), 'something else entirely')
+})
+
+// A /loop firing is a plain user row carrying the slash command it runs, stamped
+// `turnOrigin: "scheduled"` with the task's id (one conversation kept 337 of them as
+// footnotes, 2026-10-15): the schedule's, not the person's.
+const firing = (text: string) => ({ type: 'user', uuid: 'f', turnOrigin: 'scheduled', scheduledTaskId: '4e085769', message: { content: text } })
+
+test("a scheduled firing is neither the person's prompt nor their footnote", () => {
+  const cmd = '<command-message>obsidian-update</command-message> <command-name>/obsidian-update</command-name> <command-args>on the vault</command-args>'
+  assert.equal(footnoteOf(firing(cmd)), undefined)
+  assert.equal(promptTextOf(firing('check the build')), undefined)
+  assert.equal(footnoteOf({ type: 'user', scheduledTaskId: '4e085769', message: { content: cmd } }), undefined)
+  // The same command typed by the person is still a footnote.
+  assert.deepEqual(footnoteOf({ type: 'user', message: { content: cmd } }), { kind: 'command', label: '/obsidian-update on the vault' })
+})
+
+test("a footnote's label is cut to FOOTNOTE_LABEL_MAX, ending in an ellipsis", () => {
+  const args = 'x'.repeat(500)
+  const fn = footnoteOf({ type: 'user', message: { content: `<command-name>/goal</command-name> <command-args>${args}</command-args>` } })!
+  assert.equal(fn.label.length, FOOTNOTE_LABEL_MAX)
+  assert.ok(fn.label.startsWith('/goal xxx'))
+  assert.ok(fn.label.endsWith('…'))
+  assert.equal(footnoteOf({ type: 'user', message: { content: '<bash-input>ls</bash-input>' } })!.label, '!ls')
 })

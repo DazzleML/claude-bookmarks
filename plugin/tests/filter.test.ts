@@ -10,7 +10,7 @@ const STORE = {
     { uuid: 'aaaaaaaa-0000-4000-8000-000000000002', head: 'second prompt: add a band' },
     { uuid: 'aaaaaaaa-0000-4000-8000-000000000003', head: 'third prompt: the band redraw' },
   ],
-  [`backfilled6:${SID}`]: true,
+  [`backfilled7:${SID}`]: true,
 }
 const BAND = { plugin: 'bookmarks', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS, requestId: 'band-1' }
 const PANE = {

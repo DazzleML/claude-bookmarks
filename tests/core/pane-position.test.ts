@@ -33,6 +33,12 @@ test('a highlight with no pane remembers the top; with a pane up, the pane ancho
   p.opened('anchor', undefined)
   p.noteRestore('top')
   assert.deepEqual(p.takeRestore(), { here: 'anchor', block: 'start', fromPane: true })
+  // What the highlight noted is the pane anchor itself, not the top: seen once the pane's
+  // own way back is gone.
+  p.opened('anchor', undefined)
+  p.noteRestore('top')
+  p.jumped()
+  assert.deepEqual(p.takeRestore(), { here: 'anchor', block: 'start', fromPane: false })
 })
 
 // Q261015-01: an action that opens and closes no pane (the reading position set from the

@@ -10,32 +10,31 @@ import { ownerOf } from '../core/bookmarks/anchor.ts'
 import { promptNumberComplete, stepNumber } from '../core/band/band-entry.ts'
 import { parseListNumber, type Operation, type Pane } from '../core/band/keys.ts'
 import { short } from '../core/kit/message-id.ts'
-import { claim } from '../core/bookmarks/register-file.ts'
-import type { BandPorts } from '../engine/ports.ts'
+import type { BandCorePorts, ListPorts, PanePorts } from '../engine/ports.ts'
 
 // How long the band waits for the next key before going back to its buttons.
-export const BAND_MODE_MS = 15_000
+const BAND_MODE_MS = 15_000
 
-// A digit of a prompt number, pressed as a band Button: jumps on the digit that makes
-// the number complete (with 25 prompts, `3` at once, `2` waits), or on `go`.
 // The list the band's number entry works on: the prompts, or the bookmarks.
-export async function listCount(ports: BandPorts): Promise<number> {
+async function listCount(ports: BandCorePorts & PanePorts & ListPorts): Promise<number> {
   return (await ports.paneMode()) === 'bookmarks' ? (await ports.bookmarkList()).length : (await ports.prompts()).length
 }
-export async function jumpToListNumber(ports: BandPorts, typed: string, via: string) {
+async function jumpToListNumber(ports: BandCorePorts & PanePorts & ListPorts, typed: string, via: string) {
   if ((await ports.paneMode()) === 'bookmarks') await ports.jumpToBookmarkNumber(typed, via)
   else await ports.jumpToPromptNumber(typed, via)
 }
 
 // `.` after a prompt number: the footnote part follows (#33). Enter on `3.` unfolds #3.
-export async function bandDot(ports: BandPorts) {
+export async function bandDot(ports: BandCorePorts & PanePorts & ListPorts) {
   const typed = await ports.bandNum()
   if (!typed || typed.includes('.')) return
   await ports.setBandNum(`${typed}.`)
   keepBandWaiting(ports)
 }
 
-export async function bandDigit(ports: BandPorts, digit: string) {
+// A digit of a prompt number, pressed as a band Button: jumps on the digit that makes
+// the number complete (with 25 prompts, `3` at once, `2` waits), or on `go`.
+export async function bandDigit(ports: BandCorePorts & PanePorts & ListPorts, digit: string) {
   const typed = (await ports.bandNum()) + digit
   const count = await listCount(ports)
   if (promptNumberComplete(typed, count)) {
@@ -50,7 +49,7 @@ export async function bandDigit(ports: BandPorts, digit: string) {
 
 // Bring item #n into view in the pane's list, so it can be checked before Enter (its ▶
 // is drawn by the pane). Prompts are keyed `p-<uuid>`, bookmarks `b-<uuid>`.
-export async function showInPane(ports: BandPorts, n: number) {
+async function showInPane(ports: BandCorePorts & PanePorts & ListPorts, n: number) {
   const bookmarks = (await ports.paneMode()) === 'bookmarks'
   const target = bookmarks ? (await ports.bookmarkList())[n - 1] : (await ports.prompts())[n - 1]
   if (!target) return
@@ -58,13 +57,11 @@ export async function showInPane(ports: BandPorts, n: number) {
   if (r.deny) ports.log(`[bm] pane scroll to #${n} -> DENY: ${r.deny}`)
 }
 
-// Browse the prompts one by one from the band, vim's j and k: the band holds the keyboard,
-// so the pane can't take the arrows (djdarcy, 2026-10-07: "the nice thing about the panel
-// is that you can scroll through the prompts 1 by 1"). The list is newest first: j moves
-// the ▶ down (older), k up (newer); the first press lands on the newest. Enter jumps.
+// Browse the prompts one by one from the band, vim's j and k. Why, and which way each key
+// moves: core/band/band-entry.ts stepNumber, the rule this applies (one copy of the reason).
 // j and k are the key table's defaults (core/band/keys.ts): `dir` arrives as 1 for next (j),
 // -1 for previous (k), so a rebound key steps the same way.
-export async function bandStep(ports: BandPorts, dir: -1 | 1) {
+export async function bandStep(ports: BandCorePorts & PanePorts & ListPorts, dir: -1 | 1) {
   const count = await listCount(ports)
   if (count === 0) return
   const n = stepNumber(await ports.bandNum(), count, dir)
@@ -77,7 +74,7 @@ export async function bandStep(ports: BandPorts, dir: -1 | 1) {
 // view, so the person sees which prompt it is (djdarcy, 2026-10-07: a pin by number
 // alone, with no list in sight, is not useful). `s` for star: `*` can't be a hotkey.
 // The band stays in prompt mode, to pin several.
-export async function bandPin(ports: BandPorts) {
+export async function bandPin(ports: BandCorePorts & PanePorts & ListPorts) {
   const typed = await ports.bandNum()
   if (!typed) {
     ports.toast('Pick a prompt first: j/k or the arrows (or its number), then s to pin it')
@@ -89,7 +86,7 @@ export async function bandPin(ports: BandPorts) {
 
 // `c` in the bookmarks list: the person takes the chosen one of Claude's records as
 // their own (#21): same message, id and link (core/bookmarks/register-file.ts, claim).
-export async function bandClaim(ports: BandPorts) {
+export async function bandClaim(ports: BandCorePorts & PanePorts & ListPorts) {
   const typed = await ports.bandNum()
   const target = typed ? (await ports.bookmarkList())[Number(typed) - 1] : undefined
   if (!target) {
@@ -100,19 +97,18 @@ export async function bandClaim(ports: BandPorts) {
     ports.toast('That one is already on your list')
     return
   }
-  const r = claim(await ports.loadRegister(), target.uuid, await ports.now())
+  const r = await ports.claimBookmark(target.uuid)
   if ('error' in r) return void ports.toast(r.error)
-  await ports.saveRegister(r.register)
   ports.log(`[bm] bookmark claimed from the pane: ${short(target.uuid)}`)
   ports.toast(`#${typed} is yours now`)
   keepBandWaiting(ports)
 }
 
 // Browsing takes as long as it takes: each key restarts the band's wait (BAND_MODE_MS).
-export function keepBandWaiting(ports: BandPorts) {
+export function keepBandWaiting(ports: BandCorePorts & PanePorts) {
   ports.band.restartWait(() => ports.after(BAND_MODE_MS, () => void endBandMode(ports)))
 }
-export async function bandNumberGo(ports: BandPorts) {
+export async function bandNumberGo(ports: BandCorePorts & PanePorts & ListPorts) {
   const typed = await ports.bandNum()
   await ports.setBandNum('')
   // "go" with nothing typed: the person is done with the list.
@@ -121,7 +117,7 @@ export async function bandNumberGo(ports: BandPorts) {
 }
 
 // A list key pressed on the band's number row (its buttons come from LIST_KEYS).
-export async function bandListKey(ports: BandPorts, operation: Operation) {
+export async function bandListKey(ports: BandCorePorts & PanePorts & ListPorts, operation: Operation) {
   if (operation.op === 'close') return void (await closeAll(ports, 'band list'))
   if (operation.op === 'step') await bandStep(ports, operation.dir)
   else if (operation.op === 'pin') await bandPin(ports)
@@ -130,7 +126,7 @@ export async function bandListKey(ports: BandPorts, operation: Operation) {
 }
 
 // Returns the refusal, if any.
-export async function focusBand(ports: BandPorts, key: string): Promise<string | undefined> {
+export async function focusBand(ports: BandCorePorts, key: string): Promise<string | undefined> {
   const bandId = ports.band.id
   if (!bandId) return undefined
   const r = await ports.focus(bandId, key)
@@ -141,7 +137,7 @@ export async function focusBand(ports: BandPorts, key: string): Promise<string |
 
 // An element of the band's key mode that is drawn now, to aim the focus probe at:
 // the ring's own element when it belongs to this mode, else a fixed one per mode.
-export async function bandProbeKey(ports: BandPorts, mode: string): Promise<string | undefined> {
+export async function bandProbeKey(ports: BandCorePorts & ListPorts, mode: string): Promise<string | undefined> {
   const prefix = isList(mode as Pane) ? 'band-num-' : `band-${mode}-`
   const ring = ports.band.ring
   if (ring?.startsWith(prefix)) return ring
@@ -153,7 +149,7 @@ export async function bandProbeKey(ports: BandPorts, mode: string): Promise<stri
   return first ? `band-jump-${first}` : undefined
 }
 
-export async function watchBand(ports: BandPorts, mode: string) {
+export async function watchBand(ports: BandCorePorts & PanePorts & ListPorts, mode: string) {
   const bandId = ports.band.id
   if (!bandId || (await ports.bandMode()) === 'idle') return
   const key = await bandProbeKey(ports, mode)
@@ -178,12 +174,12 @@ export async function watchBand(ports: BandPorts, mode: string) {
   }
 }
 
-export const BAND_WATCH_MS = 400
+const BAND_WATCH_MS = 400
 
 // `?` (djdarcy, 2026-10-12): the commands the bar does not show, and the rest, in the
 // band itself so it works with lists off too. Enter or Esc, or a minute, ends it.
 const HELP_MS = 60_000
-export async function showHelp(ports: BandPorts) {
+export async function showHelp(ports: BandCorePorts & PanePorts) {
   await ports.setBandMode('help')
   ports.band.restartWait(() => ports.after(HELP_MS, () => void endBandMode(ports)))
   ports.band.stopWatching()
@@ -208,7 +204,7 @@ export async function showHelp(ports: BandPorts) {
 // The band's key mode for `mode`, with the ring on `focusKey` when given (Enter presses
 // it). openFor opens the pane as the list; from the band its focus is refused, so the
 // band takes the key (see openFor).
-export async function handOff(ports: BandPorts, mode: string, focusKey?: string) {
+export async function handOff(ports: BandCorePorts & PanePorts & ListPorts, mode: string, focusKey?: string) {
   await openFor(ports, mode, 'band command line')
   if (focusKey) await focusBand(ports, focusKey)
 }
@@ -216,7 +212,7 @@ export async function handOff(ports: BandPorts, mode: string, focusKey?: string)
 // Lists off (the `panes` setting): the band's own key mode with no pane beside it --
 // digits, j/k and Enter for a list, the letters for a mark or a jump (the keys are the key
 // table's defaults, core/band/keys.ts).
-export async function bandOnly(ports: BandPorts, mode: string) {
+export async function bandOnly(ports: BandCorePorts & PanePorts & ListPorts, mode: string) {
   if (mode === 'mark') ports.setSelectionAtChord(await ports.selection())
   await ports.setPaneMode(mode)
   await ports.setBandMode(mode)
@@ -226,7 +222,7 @@ export async function bandOnly(ports: BandPorts, mode: string) {
   if (deny && /does not hold the keyboard/i.test(deny)) ports.toast('With lists off, the band takes the keys: press the leader (Ctrl+] by default) first.')
 }
 
-export async function openFor(ports: BandPorts, mode: string, action: string) {
+export async function openFor(ports: BandCorePorts & PanePorts & ListPorts, mode: string, action: string) {
   // A new pane replaces the one before, so the Esc watcher of that pane stops here: it
   // captured that pane's mode, and a pane that takes the keyboard (below) starts no new
   // watcher to replace it, so the old one would later settle the wrong pane kind (0.4.82;
@@ -346,24 +342,41 @@ export const paneOf = (mode: string): Pane => (mode === 'idle' || mode === 'help
 // policy says (core/band/after-action.ts): the operation's need, then the person's setting,
 // then the default. `focus: 'input'` is what is wanted after most actions; the engine
 // cannot hand the keyboard back yet (#24, docs/engine-quirks.md), so nothing more is done.
-export async function settle(ports: BandPorts, pane: Pane, cause: Cause, needsMore = false) {
+export async function settle(ports: BandCorePorts & PanePorts, pane: Pane, cause: Cause, needsMore = false) {
   const outcome = afterAction({ pane, cause, needsMore, settings: ports.settings() })
   if (outcome.pane === 'close') await closePane(ports)
   else if (outcome.band === 'end') await endBandMode(ports)
   return outcome
 }
 
-export async function endBandMode(ports: BandPorts) {
+export async function endBandMode(ports: BandCorePorts & PanePorts) {
   ports.band.ended()
   if ((await ports.bandNum()) !== '') await ports.setBandNum('')
   if ((await ports.bandMode()) !== 'idle') await ports.setBandMode('idle')
 }
 
-export async function paneFocused(ports: BandPorts): Promise<boolean> {
+export async function paneFocused(ports: BandCorePorts & PanePorts): Promise<boolean> {
   return (await ports.panes()).some(p => p.id === ports.paneId && p.isFocused)
 }
 
-export async function closePane(ports: BandPorts) {
+// /bm-bookmarks (moved from register.tsx's registration, 0.4.94): no number typed, the
+// first group, then the pane.
+export async function bookmarksCommand(ports: BandCorePorts & PanePorts & ListPorts) {
+  await ports.setBandNum('')
+  await ports.setBandGroup(0)
+  await openFor(ports, 'bookmarks', 'command:bm-bookmarks')
+}
+
+// /bm-pane (moved from register.tsx's registration, 0.4.94): the prompts pane without the band.
+export async function paneCommand(ports: BandCorePorts & PanePorts) {
+  await ports.setPaneMode('list')
+  await ports.openPaneFocused('prompts: type #')
+  // The slash-command route to a focused pane (typed, or a `command:bm-pane`
+  // keybinding, 2.1.290): record whether the pane actually got the keyboard.
+  ports.log(`[bm] /bm-pane opened; pane has the keyboard: ${(await paneFocused(ports)) ? 'yes' : 'NO'}`)
+}
+
+async function closePane(ports: BandCorePorts & PanePorts) {
   ports.expectRedraw('the pane closing')
   ports.note('pane close')
   const geometry = ports.paneGeometry()
@@ -379,7 +392,7 @@ export async function closePane(ports: BandPorts) {
 
 // `q` (Q261012-09): the plugin's pane closed and the band back to its bar, from the band at
 // rest, the band's list row, or a pane's own field.
-export async function closeAll(ports: BandPorts, via: string) {
+export async function closeAll(ports: BandCorePorts & PanePorts, via: string) {
   ports.log(`[bm] close (${via}): the pane and the band's mode`)
   if ((await ports.panes()).some(p => p.id === ports.paneId)) await closePane(ports)
   await endBandMode(ports)

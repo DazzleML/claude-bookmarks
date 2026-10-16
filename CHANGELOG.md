@@ -6,6 +6,128 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.110] - 2026-10-15
+
+### Fixed
+
+- Two earlier entries of this changelog said more than was true: 0.4.99's now says each conversation is re-read at its own next start (not all at the first start), and 0.4.96's now says which unused names the type check refuses.
+
+## [0.4.109] - 2026-10-15
+
+### Changed
+
+- Internal, no visible change: a test now pins how the prompts list keeps its place while a reply is streaming in. Three possible speed-ups were measured and left out because the measured costs were too small to matter.
+
+## [0.4.108] - 2026-10-15
+
+### Changed
+
+- Internal, no visible change: the debug echo's setting and the reading position's way back each reach the plugin store through their own entry only, instead of through access to the whole store.
+
+## [0.4.107] - 2026-10-15
+
+### Changed
+
+- Internal, no visible change: what a press does next -- setting a mark, jumping to one, pressing a prompt or a bookmark in a list -- is written once for each kind of press, and the band, the marks pane and the lists all use it.
+
+## [0.4.106] - 2026-10-15
+
+### Changed
+
+- Internal, no visible change: the band's code says, for each of its parts, which of three groups of plugin services it uses -- the band itself, the pane, or the lists -- instead of every part being handed all of them.
+
+## [0.4.105] - 2026-10-15
+
+### Changed
+
+- Internal, no visible change: every kind of entry the plugin keeps in Claude Code's plugin store is named and listed in one place, and each part of the plugin builds its entry names from that list.
+
+## [0.4.104] - 2026-10-15
+
+### Changed
+
+- Internal, no visible change: the plugin's settings are worked out once each time you change one in /config, instead of on every use (which included every debug log line and every redraw of the band and the panes); what a new conversation clears is one list in one place.
+
+## [0.4.103] - 2026-10-15
+
+### Changed
+
+- Internal, no visible change: finding the prompt nearest the view reads the prompt list once instead of three times, and where the view goes back to after a highlight is decided in one place.
+
+## [0.4.102] - 2026-10-15
+
+### Changed
+
+- The prompts list's filter, unfolded footnotes and the prompt it centres on are kept together, and a new conversation (/clear, /resume) now also forgets a centring that was still waiting from the conversation before.
+- Internal, no visible change: the record of messages drawn since the plugin loaded keeps the set the lists use to dim unreachable rows as messages are drawn, instead of rebuilding it on every draw of a list.
+
+## [0.4.101] - 2026-10-15
+
+### Changed
+
+- Internal, no visible change: reading past prompts from the transcript and keeping the plugin store small now live with the rest of the prompt list's code, which is the only code that writes the stored prompt list.
+
+## [0.4.100] - 2026-10-15
+
+### Changed
+
+- Internal, no visible change: pieces the reorganisation left doing their old jobs in their new places now work as their new homes intend. A claimed bookmark, a bookmark's place in the transcript, a mark's write, a bookmark's highlight on arrival, and Claude Code's config folder are each worked out in one place instead of several; the band reads what it draws only in the modes that draw it, and pinning a prompt reads the prompt list once.
+
+## [0.4.99] - 2026-10-15
+
+### Fixed
+
+- A scheduled `/loop` firing is no longer listed as one of your footnotes in the prompts list. A loop that runs a slash command every few minutes added one footnote per firing; in the author's store they were 535 of 671 footnotes and most of the plugin store's size, which counts against Claude Code's 4 MiB limit for a plugin's store. After upgrading, each conversation reads its transcript once more the next time it starts or is resumed, and rewrites its footnotes without them.
+- A footnote's label is cut to 120 characters, ending in "…". A slash command carrying a long brief as its arguments drew as one label spanning many rows.
+
+## [0.4.98] - 2026-10-15
+
+### Changed
+
+- The plugin's README now also says which Claude Code events the plugin hooks and that each is passed on unchanged, names the selection call as Claude Code's own, and lists the prompt text kept for the prompts filter (under `~/claude/bookmarks/prompttext/`); it no longer says that nothing you type is stored.
+
+## [0.4.97] - 2026-10-15
+
+### Changed
+
+- Internal, no visible change: the code that tracks which prompt the view is nearest to now has its own tests, and the tests of the prompt-number entry, the band's state and the pane's way back were each checked to fail when the behaviour they describe is broken; two that did not are made to.
+
+## [0.4.96] - 2026-10-15
+
+### Changed
+
+- Internal, no visible change: the leftovers of moving the plugin's code into separate files are removed -- wrapper functions nothing called any more, wrappers with a single caller (the caller now calls the moved code directly), unused imports, and exports nothing else used. The type check now refuses an unused variable, function or import, so those cannot pile up again (an export nothing imports is still found only by a separate check).
+
+## [0.4.95] - 2026-10-15
+
+### Changed
+
+- Internal, no visible change: what decides whether a debug line is shown in the conversation and kept in the log file now lives with the rest of the debug log, in one logger.
+
+## [0.4.94] - 2026-10-15
+
+### Changed
+
+- Internal, no visible change: five typed commands (`/bm-jump`, `/bm-promote`, `/bm-delmarks`, `/bm-pane`, `/bm-bookmarks`) are handled in their clusters' code instead of inline where they are registered, and a test keeps the list of commands and their registrations the same.
+
+## [0.4.93] - 2026-10-15
+
+### Changed
+
+- Internal: a reply with a marked line decides how to draw the text above the line the way it did before the split (on whether there is any), not on what Claude Code's renderer returned for it; and the panes get the list of drawn messages as a list rather than a one-time iterator. No visible change in normal use.
+
+## [0.4.92] - 2026-10-15
+
+### Fixed
+
+- A mark set on a line inside a reply's table no longer breaks the table: the rows after it used to show as raw `| ... |` text while the highlight was up. The marked words now show in the bold `«a»` form inside their row, the way a mark inside a code block already did.
+
+## [0.4.91] - 2026-10-15
+
+### Changed
+
+- Internal, no visible change: the list of Claude Code builds the chords were verified on is defined once (it had two copies, one for the start-up check and one for `/bm-env`), and four comments the split left stale or misplaced are corrected.
+
 ## [0.4.90] - 2026-10-15
 
 ### Added
@@ -873,7 +995,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.90...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.110...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

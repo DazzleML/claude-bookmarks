@@ -7,7 +7,7 @@
 import { sameMessage, findByMessage, short } from '../core/kit/message-id.ts'
 import { plainMarkdown, snippetOf } from '../core/marks/highlight.ts'
 import { headOf } from '../core/bookmarks/transcript-lines.ts'
-import type { Mark } from '../core/marks/marks.ts'
+import { deleteMarks, type Mark, type Marks } from '../core/marks/marks.ts'
 import type { SelectionLike } from '../core/marks/mark-state.ts'
 import type { MarksPorts } from '../engine/ports.ts'
 
@@ -26,6 +26,14 @@ export async function showMark(ports: MarksPorts, letter: string, text: string) 
     }),
   )
   ports.note(`show mark ${letter} for ${HIGHLIGHT_MS / 1000}s`)
+}
+
+// Highlight `words` on a message, as a letter's jump does, through a transient entry in
+// the mark cache (reloaded from the store on the next mark write). A bookmark's arrival
+// shows its words this way (handlers/bookmarks.ts highlightWords).
+export async function showWords(ports: MarksPorts, letter: string, uuid: string, words: string) {
+  ports.markCache.showTransient(letter, { uuid, head: words, markedAt: await ports.now(), source: 'selection', snippet: words })
+  await showMark(ports, letter, words)
 }
 
 export async function clearShown(ports: MarksPorts) {
@@ -49,8 +57,18 @@ async function resolveSelectionRow(ports: MarksPorts, id: string, text: string) 
   return { uuid: saved?.uuid ?? id, check }
 }
 
-export async function highlightInPlace(ports: MarksPorts, letter: string, text: string, paneAction = true) {
-  ports.noteRestore(paneAction ? ports.paneAnchor() ?? (await ports.topOnScreen()) : await ports.topOnScreen(), paneAction)
+// Every write of the marks goes to the store and to the in-memory cache together, so a
+// render hook never reads a mark the store no longer holds, or misses one it does.
+async function writeMarks(ports: MarksPorts, next: Marks) {
+  await ports.saveMarks(next)
+  ports.markCache.replace(next)
+}
+
+// Where the view goes back to after the highlight: PanePosition.noteRestore decides
+// (the pane's anchor when a pane is up and this is a pane's action, else the top of the
+// screen); this hands it the top.
+async function highlightInPlace(ports: MarksPorts, letter: string, text: string, paneAction = true) {
+  ports.noteRestore(await ports.topOnScreen(), paneAction)
   await showMark(ports, letter, text)
 }
 
@@ -64,7 +82,7 @@ export async function highlightInPlace(ports: MarksPorts, letter: string, text: 
 const SELECTION_FRESH_SECONDS = 75
 const selectionKey = (s: SelectionLike) => (s?.requestId && s.text.trim() ? `${s.requestId}|${s.text}` : '')
 
-export async function pollSelection(ports: MarksPorts) {
+async function pollSelection(ports: MarksPorts) {
   const key = selectionKey(await ports.selection())
   // The first look has no history: whatever is selected then counts as old.
   if (!ports.state.seen) ports.state.see(key, 0)
@@ -87,7 +105,7 @@ export async function startMarks(ports: MarksPorts) {
 }
 
 // The selection if it was made within SELECTION_FRESH_SECONDS, else undefined.
-export async function freshSelection(ports: MarksPorts, sel: SelectionLike): Promise<SelectionLike> {
+async function freshSelection(ports: MarksPorts, sel: SelectionLike): Promise<SelectionLike> {
   const key = selectionKey(sel)
   if (!key) return undefined
   // Changed since the last poll: made within the last second.
@@ -133,8 +151,7 @@ export async function setMark(ports: MarksPorts, letter: string) {
       snippet: snippetOf(sel.text),
     }
     ports.note(`store.set mark ${letter} -> ${uuid} (selection, drawn ${sel.requestId}, ${check})`)
-    await ports.saveMarks({ ...fresh, [letter]: mark })
-    ports.markCache.replace({ ...fresh, [letter]: mark })
+    await writeMarks(ports, { ...fresh, [letter]: mark })
     // Writing `shown` redraws the rows and the band that read it.
     await highlightInPlace(ports, letter, snippetOf(sel.text))
     ports.log(`[bm] SEL: mark ${letter} -> ${uuid} (drawn as ${sel.requestId}; ${check}) | "${headOf(sel.text)}"`, true)
@@ -153,8 +170,7 @@ export async function setMark(ports: MarksPorts, letter: string) {
   // Read again right before the write: the store is shared and not atomic.
   const fresh = await ports.loadMarks()
   ports.note(`store.set mark ${letter} -> ${mark.uuid} (top of screen)`)
-  await ports.saveMarks({ ...fresh, [letter]: mark })
-  ports.markCache.replace({ ...fresh, [letter]: mark })
+  await writeMarks(ports, { ...fresh, [letter]: mark })
   if (mark.snippet) await highlightInPlace(ports, letter, mark.snippet)
   ports.log(`[bm] mark ${letter} -> ${short(mark.uuid)} (top of screen) | "${mark.head}"`, true)
   ports.toast(`mark ${letter} [top of screen] -> ${mark.head.slice(0, 40)}`)
@@ -171,14 +187,12 @@ export async function setMark(ports: MarksPorts, letter: string) {
 // position, so the next press goes `back`; false otherwise, so the next press goes there.
 // `backBlock`: which edge of the window `back` was anchored to (viewAnchor, handlers/view-tracker.ts).
 type ReadingState = { at: boolean; back: string | null; backBlock?: 'start' | 'end' }
-async function readingStateKey(ports: MarksPorts): Promise<string> {
-  return `readingState:${await ports.sessionId()}`
-}
+// Stored under core/store-keys.ts readingStateKey, through its own two ports.
 async function readingState(ports: MarksPorts): Promise<ReadingState> {
-  return ((await ports.storeGet(await readingStateKey(ports))) as ReadingState | undefined) ?? { at: false, back: null }
+  return ((await ports.readingStateStored()) as ReadingState | undefined) ?? { at: false, back: null }
 }
 async function setReadingState(ports: MarksPorts, state: ReadingState) {
-  await ports.storeSet(await readingStateKey(ports), state)
+  await ports.storeReadingState(state)
 }
 
 // Where "back" goes when you left from the bottom of the conversation (a setting, #7):
@@ -227,8 +241,7 @@ export async function readingToggle(ports: MarksPorts) {
   if (sel?.requestId && picked && !inReadingMessage) {
     const { uuid, check } = await resolveSelectionRow(ports, sel.requestId, sel.text)
     const mark: Mark = { uuid, head: headOf(sel.text), markedAt: await ports.now(), source: 'selection', snippet: picked }
-    await ports.saveMarks({ ...marks, [ports.readingLetter]: mark })
-    ports.markCache.replace({ ...marks, [ports.readingLetter]: mark })
+    await writeMarks(ports, { ...marks, [ports.readingLetter]: mark })
     // Next press goes there (from wherever the person has scrolled to by then).
     await setReadingState(ports, { at: false, back: null })
     await highlightInPlace(ports, ports.readingLetter, picked, false)
@@ -289,4 +302,19 @@ export async function jumpToMark(ports: MarksPorts, letter: string, probe = fals
   const deny = await ports.jumpTo(mark.uuid, 'chord jump', `mark ${letter}`, undefined, probe)
   if (!deny) await showMark(ports, letter, mark.snippet ?? mark.head)
   return deny
+}
+
+// /bm-delmarks: what it deletes is core/marks/marks.ts deleteMarks (vim's :delmarks).
+// (Moved from register.tsx's registration, 0.4.94.)
+export async function delmarksCommand(ports: MarksPorts, args: string) {
+  const { letters, gone, missing, kept } = deleteMarks(await ports.loadMarks(), args, ports.letters)
+  if (letters.length === 0) {
+    ports.toast('Usage: /bm-delmarks a b   (or /bm-delmarks all)')
+    return
+  }
+  await writeMarks(ports, kept)
+  const showing = await ports.shown()
+  if (showing && gone.includes(showing.letter)) await clearShown(ports)
+  ports.log(`[bm] deleted marks ${gone.join(' ') || '(none)'}${missing.length ? `; not set: ${missing.join(' ')}` : ''}`)
+  ports.toast(gone.length ? `deleted mark${gone.length > 1 ? 's' : ''} ${gone.join(' ')}` : `not set: ${missing.join(' ')}`)
 }

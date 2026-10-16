@@ -74,7 +74,6 @@ export const uuid8 = (uuid: string): string => uuid.slice(0, 8).toLowerCase()
 /** The list a record is on; older records without `owner` belong to whoever minted them. */
 export const ownerOf = (r: Pick<AnchorRecord, 'owner' | 'by'>): AnchorOwner => r.owner ?? (r.by === 'user' ? 'user' : 'claude')
 
-const UUID_FULL = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const UUID_PREFIX = /^[0-9a-f]{8}(-[0-9a-f-]{1,27})?$/i
 
 /** Forward slashes, no trailing slash. */

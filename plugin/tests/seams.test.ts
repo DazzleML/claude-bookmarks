@@ -10,7 +10,7 @@ import { BAND_PROPS, world } from './harness.ts'
 
 const SID = '11111111-2222-4333-8444-555555555555'
 const LOG = `C:/test-home/claude/bookmarks/debug/${SID}.log`
-const STORE = { [`prompts:${SID}`]: [{ uuid: 'aaaaaaaa-0000-4000-8000-000000000001', head: 'first prompt' }], [`backfilled6:${SID}`]: true }
+const STORE = { [`prompts:${SID}`]: [{ uuid: 'aaaaaaaa-0000-4000-8000-000000000001', head: 'first prompt' }], [`backfilled7:${SID}`]: true }
 const BAND = { plugin: 'bookmarks', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS, requestId: 'band-1' }
 const PANE = { plugin: 'bookmarks', surface: 'terminal', component: 'Pane', requestId: 'bm-pane', props: { title: 'prompts: type #', isFocused: false, bodyColumns: 60, placement: 'dock', scroll: { offset: 0, bodyRows: 20 } } }
 type Ui = { input: (t: object) => Promise<unknown>; press: (t: object) => Promise<unknown>; unmount?: () => Promise<void>; findAll: (q: object) => Promise<{ type: string; key?: string; text?: string }[]> }
@@ -116,6 +116,28 @@ test('7 capture: a notice queued into a running turn is not listed (text)', asyn
   world(on, { session: SID, store: STORE })
   await append($ as unknown as Engine, 'cccccccc-0000-4000-8000-000000000004', '[SYSTEM NOTIFICATION - NOT USER INPUT] done', 'engine', 'attachment', 'queued_command').catch(() => undefined)
   expect(await listed($)).toEqual([' 1) first prompt'])
+})
+
+// A /loop firing runs a slash command as a user row; it is the schedule's, not a footnote
+// of the person's (2026-10-15: 535 of 671 stored footnotes were firings).
+const CMD = '<command-name>/obsidian-update</command-name> <command-args>on the vault</command-args>'
+// The prompts pane's rows, as a person sees them after `p` (a kept footnote shows folded).
+async function paneRows($: unknown) {
+  const band = await mount($, BAND)
+  await band.input({ key: 'band-cmd-0', text: 'p' }).catch(() => undefined)
+  return (await (await mount($, PANE)).findAll({ type: 'Button' })).map(b => b.text)
+}
+
+test('7 capture: a scheduled firing is not kept as a footnote (origin)', async ($, on) => {
+  world(on, { session: SID, store: STORE })
+  await append($ as unknown as Engine, 'cccccccc-0000-4000-8000-000000000005', CMD, 'scheduled-trigger').catch(() => undefined)
+  expect(await paneRows($)).toEqual([' 1) first prompt'])
+})
+
+test('7 capture control: the same command typed by the person is kept as a footnote', async ($, on) => {
+  world(on, { session: SID, store: STORE })
+  await append($ as unknown as Engine, 'cccccccc-0000-4000-8000-000000000006', CMD, 'composer')
+  expect(await paneRows($)).toEqual([' 1) first prompt', '      … 1 footnote'])
 })
 
 // Row M: a footnote unfolded by hand stays unfolded across a re-mount of the pane (module

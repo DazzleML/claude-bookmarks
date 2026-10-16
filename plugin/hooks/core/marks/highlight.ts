@@ -9,7 +9,8 @@ export const snippetOf = (text: string) => (text.split('\n').find(l => l.trim())
 
 // Split a reply's markdown around the line holding `snippet`, for drawing that line
 // ourselves. Undefined (caller falls back to bold) when the split is risky: no match,
-// the line is inside a fenced code block, or the remainder is too long for Markdown.
+// the line is inside a fenced code block or is a table row, or the remainder is too long
+// for Markdown.
 // A selection is copied from the RENDERED reply, so `**bold**`, `code` and [links](url)
 // have lost their markup; compare against each source line with the same markup removed.
 // (Matching the raw markdown missed any line with inline formatting, 2026-10-04.)
@@ -34,6 +35,9 @@ export function colorSplit(text: string, letter: string, snippet: string | undef
   if (idx < 0) return undefined
   const fences = lines.slice(0, idx).filter(l => l.trimStart().startsWith('```')).length
   if (fences % 2 === 1) return undefined
+  // A table row: splitting it out leaves the rows below without their header, so they
+  // draw as raw `| ... |` text (djdarcy, 2026-10-15). Declined like a fenced line.
+  if ((lines[idx] ?? '').trimStart().startsWith('|')) return undefined
   const before = lines.slice(0, idx).join('\n').trimEnd()
   const after = lines.slice(idx + 1).join('\n').trim()
   if (after.length > 9000) return undefined

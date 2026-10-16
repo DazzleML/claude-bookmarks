@@ -22,6 +22,8 @@ export type DiagnosticsPorts = LogPorts & {
   prompts: () => Promise<{ uuid: string; head: string }[]>
   rows: () => Promise<{ uuid: string; door: 'prompt' | 'response'; head: string }[]>
   marks: () => Promise<Record<string, { uuid: string; head: string }>>
+  /** /bm-jump's: the navigation cluster's jump. */
+  jumpTo: (uuid: string, via: string, label: string) => Promise<unknown>
   rendered: () => ReadonlyMap<string, string>
   timeline: () => readonly { t: number; what: string }[]
   note: (what: string) => void
@@ -80,47 +82,38 @@ export type NavigationPorts = {
   freshOnScreen: () => string[]
 }
 
-/** What the band cluster (handlers/band.ts) needs: its own state, its atoms, the pane, and the after-action settings. */
-export type BandPorts = {
+/** The band itself (handlers/band.ts): its state and atoms, its timers, its focus probe, the after-action settings, and the person's feedback. Every band handler needs these. */
+export type BandCorePorts = {
   band: import('../core/band/band-state.ts').BandState
   settings: () => import('../core/settings.ts').Settings
   bandNum: () => Promise<string>
   setBandNum: (v: string) => Promise<unknown>
   bandMode: () => Promise<string>
   setBandMode: (v: string) => Promise<unknown>
+  note: (what: string) => void
+  /** `text`: the line quotes the conversation (kept per the debugText setting). */
+  log: (line: string, text?: boolean) => void
+  toast: (text: string, timeoutMs?: number) => void
+  now: () => Promise<number>
+  after: (ms: number, fn: () => void) => { cancel: () => void }
+  every: (ms: number, fn: () => unknown) => { cancel: () => void }
+  // The band's focus probe (focusBand, bandProbeKey, watchBand):
+  focus: (requestId: string, key: string) => Promise<{ deny?: unknown } | object>
+  diagState: (when: string) => Promise<unknown>
+  cut: (text: string, n: number) => string
+}
+
+/** Opening and closing the pane, and the view around it (openFor, bandOnly, handOff, settle, closePane): the pane surface, PanePosition's anchor and view, and where the view is. */
+export type PanePorts = {
   paneId: string
   panes: () => Promise<readonly { id: string; isFocused?: boolean }[]>
   closePaneUi: () => Promise<unknown>
   expectRedraw: (why: string) => void
-  note: (what: string) => void
-  /** `text`: the line quotes the conversation (kept per the debugText setting). */
-  log: (line: string, text?: boolean) => void
   /** The placement and width the pane's render recorded (its writer is the render hook). */
   paneGeometry: () => string | undefined
   paneAnchored: () => boolean
   restoreView: () => Promise<unknown>
-  // The band's keys (bandDigit, bandStep, bandPin, bandClaim, bandNumberGo, bandListKey):
   paneMode: () => Promise<string>
-  prompts: () => Promise<readonly { uuid: string }[]>
-  bookmarkList: () => Promise<readonly import('../core/bookmarks/anchor.ts').AnchorRecord[]>
-  jumpToPromptNumber: (typed: string, via: string) => Promise<unknown>
-  jumpToBookmarkNumber: (typed: string, via: string) => Promise<unknown>
-  scrollPaneCentre: (key: string) => Promise<{ deny?: string }>
-  toast: (text: string, timeoutMs?: number) => void
-  togglePin: (typed: string) => Promise<unknown>
-  groupStep: (dir: -1 | 1) => Promise<unknown>
-  loadRegister: () => Promise<import('../core/bookmarks/register-file.ts').Register>
-  saveRegister: (reg: import('../core/bookmarks/register-file.ts').Register) => Promise<unknown>
-  now: () => Promise<number>
-  after: (ms: number, fn: () => void) => { cancel: () => void }
-  // The band's focus probe (focusBand, bandProbeKey, watchBand):
-  focus: (requestId: string, key: string) => Promise<{ deny?: unknown } | object>
-  loadMarks: () => Promise<Readonly<Record<string, unknown>>>
-  letters: readonly string[]
-  readingLetter: string
-  every: (ms: number, fn: () => unknown) => { cancel: () => void }
-  // The pane opening (openFor, bandOnly, handOff):
-  diagState: (when: string) => Promise<unknown>
   setPaneMode: (mode: string) => Promise<unknown>
   topOnScreen: () => Promise<string | undefined>
   viewAnchor: () => Promise<{ uuid: string; block: 'start' | 'end' } | undefined>
@@ -129,19 +122,42 @@ export type BandPorts = {
   paneOpened: (anchor: string | undefined, view: { uuid: string; block: 'start' | 'end' } | undefined) => void
   paneView: () => { uuid: string; block: 'start' | 'end' } | undefined
   openPane: (title: string) => Promise<{ isPlaced?: boolean; reason?: string } | undefined>
+  /** /bm-pane's: the pane opened with the keyboard and no size request (openPane asks 16x4). */
+  openPaneFocused: (title: string) => Promise<unknown>
   scroll: (uuid: string, block: 'start' | 'end') => Promise<{ deny?: string }>
+  scrollPaneCentre: (key: string) => Promise<{ deny?: string }>
   setPendingCentre: (uuid: string) => void
+}
+
+/** The lists the band browses and acts on (bandDigit, bandStep, bandPin, bandClaim, bandNumberGo, bandListKey, the jump and mark modes): prompts, bookmarks, marks, pins, the selection and the draft. */
+export type ListPorts = {
+  prompts: () => Promise<readonly { uuid: string }[]>
+  bookmarkList: () => Promise<readonly import('../core/bookmarks/anchor.ts').AnchorRecord[]>
+  jumpToPromptNumber: (typed: string, via: string) => Promise<unknown>
+  jumpToBookmarkNumber: (typed: string, via: string) => Promise<unknown>
+  togglePin: (typed: string) => Promise<unknown>
+  groupStep: (dir: -1 | 1) => Promise<unknown>
+  /** /bm-bookmarks': which bookmarks group the list shows (0, the first). */
+  setBandGroup: (index: number) => Promise<unknown>
+  /** `c`: one of Claude's bookmarks becomes the person's (handlers/bookmarks.ts claimBookmark). */
+  claimBookmark: (uuid: string) => Promise<ReturnType<typeof import('../core/bookmarks/register-file.ts').claim>>
+  loadMarks: () => Promise<Readonly<Record<string, unknown>>>
+  letters: readonly string[]
+  readingLetter: string
   selection: () => Promise<{ requestId?: string; text: string } | undefined>
   /** The marks cluster's: the selection as it stood when the mark chord fired. */
   setSelectionAtChord: (sel: { requestId?: string; text: string } | undefined) => void
   draftText: () => Promise<string>
-  cut: (text: string, n: number) => string
 }
+
+/** What the band cluster (handlers/band.ts) is handed: the three groups. Each handler names the groups it uses, so one that needs a digit is not given the register's writer. */
+export type BandPorts = BandCorePorts & PanePorts & ListPorts
 
 /** What the debug echo (handlers/log.ts) needs: the plugin store, the settings, and this conversation's debug variable, read and written by literal name in register.tsx (one port each, as the validator wants). */
 export type EchoPorts = {
-  storeGet: (key: string) => Promise<unknown>
-  storeSet: (key: string, value: unknown) => Promise<unknown>
+  /** The machine-wide echo policy, its one store entry (core/store-keys.ts ECHO_POLICY_KEY). */
+  echoPolicyStored: () => Promise<unknown>
+  storeEchoPolicy: (policy: unknown) => Promise<unknown>
   settings: () => import('../core/settings.ts').Settings
   /** `CONVO_BOOKMARKS_DEBUG`, this conversation's echo choice and debug channels. */
   debugEnv: () => Promise<string | undefined>
@@ -159,6 +175,12 @@ export type LogFilesPorts = {
   after: (ms: number, fn: () => void) => { cancel: () => void }
 }
 
+/** What the Logger (handlers/log.ts) needs: the echo's and the file log's ports, the engine's $.ui.log, and whether this build was loaded from a folder (for `debugText`'s `auto`). */
+export type LoggerPorts = EchoPorts & LogFilesPorts & {
+  uiLog: (line: string) => void
+  folderBuild: boolean
+}
+
 /** What the prompt store (handlers/prompts.ts) needs: the session's id, the plugin store, the data root and its files, a timer, and the settings (the text budget). */
 export type PromptsPorts = {
   sessionId: () => Promise<string>
@@ -172,6 +194,12 @@ export type PromptsPorts = {
   fsWrite: (path: string, text: string) => Promise<unknown>
   after: (ms: number, fn: () => void) => { cancel: () => void }
   settings: () => import('../core/settings.ts').Settings
+  /** The store's prune and the back-fill (0.4.101): */
+  now: () => Promise<number>
+  log: (line: string) => void
+  transcriptPath: () => Promise<string | undefined>
+  /** The transcript's user rows, by the program run in register.tsx userRows (its commands literal there for the validator). */
+  userRows: (path: string) => Promise<{ via: 'powershell' | 'sh'; ms: number; stdout: string; isStdoutTruncated?: boolean } | undefined>
 }
 
 /** Finding a message in the transcript by uuid or by a verbatim fragment (register.tsx's resolveTarget). */
@@ -194,10 +222,8 @@ export type BookmarksPorts = {
   cwd: () => Promise<string>
   pluginName: string
   pluginVersion: () => Promise<string>
-  // One port per variable: the validator wants $.env.get's name literal.
-  userProfile: () => Promise<string | undefined>
-  home: () => Promise<string | undefined>
-  claudeConfigDir: () => Promise<string | undefined>
+  /** Claude Code's config folder, forward slashes (register.tsx configDir; the env names stay literal there for the validator). */
+  configDir: () => Promise<string | undefined>
   now: () => Promise<number>
   after: (ms: number, fn: () => void) => { cancel: () => void }
   fsExists: (path: string) => Promise<boolean>
@@ -209,9 +235,8 @@ export type BookmarksPorts = {
   jumpTo: (uuid: string, via: string, label: string, words?: string) => Promise<string | undefined>
   loadMarks: () => Promise<import('../core/marks/marks.ts').Marks>
   copy: (text: string) => Promise<{ isCopied: boolean }>
-  /** The marks cluster's: a transient highlight entry, and showing it. */
-  markCache: import('../core/marks/marks.ts').MarkCache
-  showMark: (letter: string, text: string) => Promise<unknown>
+  /** The marks cluster's: highlight `words` on a message under `letter` (handlers/marks.ts showWords). */
+  highlightWords: (letter: string, uuid: string, words: string) => Promise<unknown>
 }
 
 /** What the marks cluster (handlers/marks.ts) needs: its state, the mark cache, the `shown` atom, the view, the store, the jump, and the person's feedback. */
@@ -244,9 +269,11 @@ export type MarksPorts = {
   now: () => Promise<number>
   loadMarks: () => Promise<import('../core/marks/marks.ts').Marks>
   saveMarks: (marks: import('../core/marks/marks.ts').Marks) => Promise<unknown>
-  sessionId: () => Promise<string>
-  storeGet: (key: string) => Promise<unknown>
-  storeSet: (key: string, value: unknown) => Promise<unknown>
+  /** The reading position's way back, this conversation's (core/store-keys.ts readingStateKey). */
+  readingStateStored: () => Promise<unknown>
+  storeReadingState: (state: unknown) => Promise<unknown>
+  /** The mark letters (a-z), for /bm-delmarks' `all`. */
+  letters: readonly string[]
   readingLetter: string
 }
 
@@ -269,34 +296,51 @@ export type CommandLinePorts = BandPorts & {
 //   state                                   owner                         readers
 //   screen (ScreenModel)                    register.tsx render hooks     view tracker (read-only Pick)
 //   lastScreenOrder, trustedScreen,         handlers/view-tracker.ts      --
-//     heldBy, lastHere, viewTimer
+//     heldBy, lastHere, viewTimer             (viewTracker, its one instance
+//                                             in register.tsx)
 //   lastHere (the one outside write)        prompts pane, via drewHere    --
 //   paneAnchor, paneView, restoreTo         core/kit/pane-position.ts         navigation (paneJumped, takeRestore), openFor (opened)
+//                                             (panePosition, in register.tsx)
 //   jumplistCache, jumplistMoving           handlers/navigation.ts        --
 //   band wait/watch timers, ring, id,       core/band/band-state.ts BandState  band render (drawn), ui.focus (ringMoved),
 //     Esc reminder                                                         prompt.edit (oweReminder), session.start
 //   cmdBusy (one command at a time)         handlers/command-line.ts      --
+//   the prompts filter, unfolded            core/prompts/prompts-pane-    the prompts pane's render (filter,
+//     footnotes, the centre at next draw      state.ts PromptsPaneState     unfolded, takeCentre); openFor
+//                                             (promptsPane, in register.tsx,  (centreOnNextDraw, via its port)
+//                                             0.4.102)
+//   conversationId (the conversation the    register.tsx sameConversation sameConversationSoon (read-only)
+//     plugin works for, Q261014-01)
+//   anchorRowsLogged (replies whose links   register.tsx, the reply       --
+//     were logged and queued)                 render hook
+//   settings (SettingsState: the /config    core/settings-state.ts        every reader through currentSettings(),
+//     values, theme, resolution, palette)     (register's load, the two     style(); /bm-config (resolved)
+//                                             config.set hooks; 0.4.104)
 //   registerCache, proseQueued              handlers/bookmarks.ts         --
 //   debug channels (DebugChannels)          handlers/log.ts (writers:     log, the screen channel, the view
-//                                             read, set); instance in     tracker (held), /bm-debug (on)
-//                                             register.tsx
-//   promptTextCache, promptTextSave,        handlers/prompts.ts           --
-//     storedPromptTextDropped
+//                                             read, set); the Logger's    tracker (held), /bm-debug (on)
+//                                             (0.4.95), one in register.tsx
+//   promptTextCache, promptTextSave,        handlers/prompts.ts (the      --
+//     storedPromptTextDropped                 back-fill fills it there too,
+//                                             since 0.4.101)
 //   logLines, screenLines, logPath, the     handlers/log.ts LogFiles      /bm-debug (path, read-only)
 //     write chain, the screen file's        (writers: keep, screenReport,
-//     flush and load flags                  newConversation); instance
-//                                           in register.tsx
-//   timeline (handlers/log.ts Timeline)     note(); instance in           diagnostics (items, read-only)
-//                                             register.tsx
-//   rendered (drawn ids)                    register.tsx render hooks     diagnostics, list model (read-only)
+//     flush and load flags                  newConversation); the
+//                                           Logger's (0.4.95)
+//   timeline (handlers/log.ts Timeline)     note(); the Logger's          diagnostics (items, read-only)
+//                                             (0.4.95)
+//   Logger (handlers/log.ts)                log() (Logger.log, keepLine)  --; one instance in register.tsx (logger)
+//   drawn ids and their first four groups   core/kit/drawn-messages.ts    diagnostics (texts, read-only), the panes
+//     (DrawnMessages)                         (writer: note, from the       (firstFours), navigation and marks (texts)
+//                                             UserMessage render hook)
 //   highlight clear timer, selection at     core/marks/mark-state.ts MarkState  band (setAtChord, via its port),
-//     the chord, selection seen, its poll     (handlers/marks.ts)           session.start (stopPoll, startPoll)
+//     the chord, selection seen, its poll     (handlers/marks.ts; markState  session.start (stopPoll, startPoll)
+//                                             in register.tsx)
 //   markCache (core/marks/marks.ts MarkCache)     the marks cluster:            render hooks, band, navigation
-//                                             handlers/marks.ts (replace), (readers: all, headOf)
-//                                             and in register.tsx the start
-//                                             hook and /bm-delmarks (replace),
-//                                             highlightWords (showTransient,
-//                                             moves with the bookmarks)
+//                                             handlers/marks.ts only: writeMarks (readers: all, headOf)
+//                                             and startMarks (replace), showWords
+//                                             (showTransient, for a bookmark's
+//                                             arrival through its port)
 
 /** What `/bm-debug` needs: the debug channels this conversation has on and how to change them, the echo's choice and policy, and where the file log is. */
 export type DebugPorts = ToastPorts &

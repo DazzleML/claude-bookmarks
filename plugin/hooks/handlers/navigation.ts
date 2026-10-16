@@ -6,6 +6,7 @@
 // PanePosition class's, reached through two ports.
 import { searchPhrase } from '../core/marks/marks.ts'
 import { sameMessage, short } from '../core/kit/message-id.ts'
+import { jumplistKey } from '../core/store-keys.ts'
 import type { NavigationPorts } from '../engine/ports.ts'
 
 // --- Jumplist: back and forward over every jump (vim's Ctrl+O / Ctrl+I) ------------------
@@ -27,7 +28,7 @@ export class Navigation {
   private jumplistMoving = false
 
   private async jumplistKey(ports: NavigationPorts): Promise<string> {
-    return `jumplist:${await ports.sessionId()}`
+    return jumplistKey(await ports.sessionId())
   }
   private async loadJumplist(ports: NavigationPorts): Promise<Jumplist> {
     const key = await this.jumplistKey(ports)

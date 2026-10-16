@@ -14,7 +14,7 @@ export type MarkStyles = { band: Style; mark: Style }
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
 
 // The marked line as drawn on a prompt or a reply: the soft band, then the mark's letter
-// and words bold in WORDS_FG.
+// and words bold in the palette's `mark` role (styles.mark; WORDS_FG until 0.4.19).
 export function markedLine(Text: ElementConstructor<TextProps>, c: ColorSplit, styles: MarkStyles) {
   return (
     <Text {...styles.band}>
@@ -57,7 +57,10 @@ export function markedColumn(elements: Pick<Elements, 'Box' | 'Text'>, c: ColorS
 export function markedReply(elements: Pick<Elements, 'Box' | 'Text' | 'Markdown'>, c: ColorSplit, engine: RenderChildren | null, styles: MarkStyles) {
   const { Box, Text, Markdown } = elements
   const line = markedLine(Text, c, styles)
-  if (engine) {
+  // On whether there is text before the line, as before the move (0.4.48 branched on the
+  // engine's answer instead, which differs when the engine draws nothing for that text:
+  // RenderChildren may be null; move audit F2, restored 0.4.93).
+  if (c.before) {
     return (
       <Box flexDirection="column">
         {engine}

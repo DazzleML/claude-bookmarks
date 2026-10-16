@@ -8,9 +8,21 @@ import {
   messageTextOf,
   parseGrepLine,
   resolveRows,
+  rowPlace,
   rowsFromGrep,
   uuidPattern,
 } from '../../plugin/hooks/core/bookmarks/transcript-lines.ts'
+
+test("a bookmark's place from its transcript row: line, bytes, head, path with forward slashes, role, timestamp when known", () => {
+  const row = { line: 7, byteStart: 100, byteEnd: 180, uuid: 'u1', role: 'assistant' as const, text: 'the   answer\nin two lines', timestamp: '2026-10-15T20:00:00Z' }
+  assert.deepEqual(rowPlace(row, 'C:\\Users\\x\\.claude\\projects\\p\\s.jsonl'), {
+    uuid: 'u1', line: 7, bytes: [100, 180], head: 'the answer in two lines',
+    transcript: 'C:/Users/x/.claude/projects/p/s.jsonl', role: 'assistant', timestamp: '2026-10-15T20:00:00Z',
+  })
+  const { timestamp: _t, ...untimed } = row
+  assert.equal('timestamp' in rowPlace(untimed, undefined), false)
+  assert.equal(rowPlace(untimed, undefined).transcript, undefined)
+})
 
 // A small transcript: the shapes Claude Code writes, in file order.
 const lines = [

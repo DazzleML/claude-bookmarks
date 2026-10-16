@@ -42,6 +42,17 @@ test('colorSplit declines: no snippet, no match, inside a code fence, remainder 
   assert.equal(colorSplit(`marked\n${'x'.repeat(9001)}`, 'a', 'marked'), undefined)
 })
 
+// A table row split out on its own leaves the rows after it without their header, so they
+// draw as raw `| ... |` text (djdarcy, 2026-10-15, a mark on row 2 of a reply's table).
+// The row is declined, as a fenced line is: the reply falls back to the bold «a» form.
+test('colorSplit declines a table row; a line after the table still splits', () => {
+  const table = 'Intro\n\n| # | Criterion |\n|---|---|\n| 1 | core has no $ |\n| 2 | a fake $ drives the flows |\n\nAfter the table'
+  assert.equal(colorSplit(table, 'g', 'a fake $ drives the flows'), undefined)
+  assert.equal(colorSplit(table, 'g', 'Criterion'), undefined)
+  assert.notEqual(colorSplit(table, 'g', 'After the table'), undefined)
+  assert.notEqual(colorSplit(table, 'g', 'Intro'), undefined)
+})
+
 test('a prompt row: the «a» tag in front of the words; untouched when nothing matches', () => {
   const marks = [['a', { snippet: 'two', head: 'h' }], ['b', { snippet: 'nine', head: 'h' }]] as const
   assert.equal(tagMarksPlain('one two three', marks), 'one «a» two three')
