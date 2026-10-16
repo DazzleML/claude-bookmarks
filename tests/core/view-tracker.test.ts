@@ -81,6 +81,18 @@ test('the prompt here is the exchange that fills the screen, by rows shown, not 
   assert.equal(await t.promptHere(ports), P2)
 })
 
+test('the prompt here reads the prompt list and the rows once each', async () => {
+  const s = new ScreenModel()
+  s.noteMessage(R2, lines(0, 9, 10), 1000)
+  const reads = { prompts: 0, rows: 0 }
+  const { ports } = fakePorts({
+    prompts: async () => (reads.prompts++, PROMPTS),
+    rows: async () => (reads.rows++, ROWS),
+  })
+  assert.equal(await new ViewTracker(s).promptHere(ports), P2)
+  assert.deepEqual(reads, { prompts: 1, rows: 1 })
+})
+
 test('a reply streaming in alone holds the row last drawn yellow, until a new conversation forgets it', async () => {
   const s = new ScreenModel()
   const t = new ViewTracker(s)

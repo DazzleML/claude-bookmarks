@@ -63,8 +63,12 @@ export class ViewTracker {
   // conversation. Order is known for every prompt (back-filled) and for the replies
   // captured since load (each placed after the prompt before it).
   async conversationOrder(ports: ViewPorts): Promise<Map<string, number>> {
+    return this.orderOf(await ports.prompts(), await ports.rows())
+  }
+  // The order from a prompt list and the captured rows already read (promptHere reads
+  // each once and shares them).
+  private orderOf(promptList: readonly { uuid: string }[], rows: readonly { uuid: string; door: string }[]): Map<string, number> {
     const order = new Map<string, number>()
-    const promptList = await ports.prompts()
     promptList.forEach((p, i) => order.set(p.uuid, i * 1000))
     let base = 0
     let k = 0
@@ -72,7 +76,7 @@ export class ViewTracker {
     // before 0.4.1 was kept under the `attachment` door, and its reply-like order overwrote
     // its place as a prompt (2026-10-11, #341 inside #340's exchange).
     const promptSet = new Set(promptList.map(p => p.uuid))
-    for (const r of await ports.rows()) {
+    for (const r of rows) {
       if (r.door === 'prompt' || promptSet.has(r.uuid)) {
         base = order.get(r.uuid) ?? base
         k = 0
@@ -82,7 +86,9 @@ export class ViewTracker {
   }
 
   async topOnScreen(ports: ViewPorts): Promise<string | undefined> {
-    const order = await this.conversationOrder(ports)
+    return this.topOf(await this.conversationOrder(ports))
+  }
+  private topOf(order: Map<string, number>): string | undefined {
     // Only the latest burst of reports: what is on screen now, not what was before a jump.
     const visible = this.screen.fresh()
     const known = visible.filter(id => order.has(id)).sort((a, b) => order.get(a)! - order.get(b)!)
@@ -96,9 +102,12 @@ export class ViewTracker {
   // between two prompts, the higher one, "so the person has more context"). The rule is
   // core/prompts/view-position.ts; this gathers its inputs.
   async promptHere(ports: ViewPorts): Promise<string | undefined> {
-    const top = await this.topOnScreen(ports)
-    const order = await this.conversationOrder(ports)
-    const ids = (await ports.prompts()).map(p => p.uuid)
+    // The prompt list and the rows are read once here (they were read three times: by the
+    // top of the screen, the order and the ids; advisor row R5).
+    const promptList = await ports.prompts()
+    const order = this.orderOf(promptList, await ports.rows())
+    const top = this.topOf(order)
+    const ids = promptList.map(p => p.uuid)
     // A message drawn on screen reports a requestId that shares its uuid's first four
     // groups and differs in the last (measured 2026-10-11: 5 on screen, 0 placed by exact
     // id), the same relation marksOnRow() and sameEntry() already allow for. Compare by

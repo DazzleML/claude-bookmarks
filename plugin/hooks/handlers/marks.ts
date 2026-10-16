@@ -64,8 +64,11 @@ async function writeMarks(ports: MarksPorts, next: Marks) {
   ports.markCache.replace(next)
 }
 
+// Where the view goes back to after the highlight: PanePosition.noteRestore decides
+// (the pane's anchor when a pane is up and this is a pane's action, else the top of the
+// screen); this hands it the top.
 async function highlightInPlace(ports: MarksPorts, letter: string, text: string, paneAction = true) {
-  ports.noteRestore(paneAction ? ports.paneAnchor() ?? (await ports.topOnScreen()) : await ports.topOnScreen(), paneAction)
+  ports.noteRestore(await ports.topOnScreen(), paneAction)
   await showMark(ports, letter, text)
 }
 
