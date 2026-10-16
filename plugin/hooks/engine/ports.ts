@@ -184,6 +184,12 @@ export type PromptsPorts = {
   fsWrite: (path: string, text: string) => Promise<unknown>
   after: (ms: number, fn: () => void) => { cancel: () => void }
   settings: () => import('../core/settings.ts').Settings
+  /** The store's prune and the back-fill (0.4.101): */
+  now: () => Promise<number>
+  log: (line: string) => void
+  transcriptPath: () => Promise<string | undefined>
+  /** The transcript's user rows, by the program run in register.tsx userRows (its commands literal there for the validator). */
+  userRows: (path: string) => Promise<{ via: 'powershell' | 'sh'; ms: number; stdout: string; isStdoutTruncated?: boolean } | undefined>
 }
 
 /** Finding a message in the transcript by uuid or by a verbatim fragment (register.tsx's resolveTarget). */
@@ -291,8 +297,9 @@ export type CommandLinePorts = BandPorts & {
 //   debug channels (DebugChannels)          handlers/log.ts (writers:     log, the screen channel, the view
 //                                             read, set); the Logger's    tracker (held), /bm-debug (on)
 //                                             (0.4.95), one in register.tsx
-//   promptTextCache, promptTextSave,        handlers/prompts.ts           --
-//     storedPromptTextDropped
+//   promptTextCache, promptTextSave,        handlers/prompts.ts (the      --
+//     storedPromptTextDropped                 back-fill fills it there too,
+//                                             since 0.4.101)
 //   logLines, screenLines, logPath, the     handlers/log.ts LogFiles      /bm-debug (path, read-only)
 //     write chain, the screen file's        (writers: keep, screenReport,
 //     flush and load flags                  newConversation); the

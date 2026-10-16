@@ -24,7 +24,6 @@ import { bandButtons, helpLines, helpShort, listHint, listKeysFor, route, type C
 import type { Cause } from './core/band/after-action'
 import { installedFromCache, resolve as resolveSettings, type Settings } from './core/settings'
 import { resolvePalette, type Palette, type Role, type Style } from './core/palette'
-import { pruneStore, type Seen } from './core/store-prune'
 import { footnoteOf, looksLikePrompt, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
 import { short } from './core/kit/message-id'
 import { configDirOf, dataRootOf } from './core/kit/paths'
@@ -55,7 +54,7 @@ import { PanePosition } from './core/kit/pane-position'
 import { BandState } from './core/band/band-state'
 import { BOOKMARK_TOOL } from './core/bookmarks/bookmark-tool'
 import { COMMANDS } from './core/band/commands'
-import { PROMPTS_KEPT, backfillLine, backfilledKey, mergeBackfill, parseBackfill, promptList, transcriptGuess, type PromptRef } from './core/prompts/prompt-store'
+import { promptList, transcriptGuess, type PromptRef } from './core/prompts/prompt-store'
 
 
 // The plugin's settings as they stand: the person's /config values (the `userConfig` in
@@ -334,9 +333,9 @@ async function sameConversation($: EngineInterface): Promise<void> {
 // acceptance check 2026-10-14__16-55-20, #15: a resumed conversation was never back-filled
 // until the next process start). Not awaited, by either.
 function pruneThenBackfill($: EngineInterface) {
-  void pruneStoreNow($)
+  void prompts_.pruneStoreNow(promptsPorts($))
     .catch(err => log($, `[bm] store prune failed: ${String(err)}`))
-    .then(() => backfillPrompts($))
+    .then(() => prompts_.backfillPrompts(promptsPorts($)))
     .catch(err => log($, `[bm] backfill failed: ${String(err)}`))
 }
 // From a render hook, which may not write state (the reset clears the highlight): notice
@@ -389,6 +388,10 @@ function promptsPorts($: EngineInterface): PromptsPorts {
     fsWrite: (path, text) => $.fs.write(path, text),
     after: (ms, fn) => $.clock.after(ms, fn),
     settings: currentSettings,
+    now: () => $.clock.now(),
+    log: line => log($, line),
+    transcriptPath: () => transcriptPath($),
+    userRows: path => userRows($, path),
   }
 }
 async function keptPrompts($: EngineInterface): Promise<PromptRef[]> {
@@ -396,12 +399,6 @@ async function keptPrompts($: EngineInterface): Promise<PromptRef[]> {
 }
 async function keptFootnotes($: EngineInterface): Promise<FootnoteRef[]> {
   return prompts_.keptFootnotes(promptsPorts($))
-}
-async function promptTexts($: EngineInterface): Promise<Map<string, string>> {
-  return prompts_.promptTexts(promptsPorts($))
-}
-async function savePromptTexts($: EngineInterface) {
-  await prompts_.savePromptTexts(promptsPorts($))
 }
 
 // --- Back-fill: the prompts sent before the mod was loaded ------------------------
@@ -534,67 +531,8 @@ async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment
   return { ...r, via: g.via, ms: g.ms }
 }
 
-// The back-fill's version; the done flag is `backfilled<N>:<sessionId>`.
-const BACKFILL_VERSION = 7
-// A conversation not opened for this long gives up what its transcript rebuilds (#15).
-const PRUNE_AFTER_MS = 30 * 86_400_000
-
-// Keep the plugin store small: it is one file for every conversation, refused past 4 MiB
-// in all (core/store-prune.ts). Once per conversation opened, before its back-fill.
-async function pruneStoreNow($: EngineInterface) {
-  const { drop, seen } = pruneStore(
-    await $.store.keys(),
-    ((await $.store.get('seen')) as Seen | undefined) ?? {},
-    await $.clock.now(),
-    PRUNE_AFTER_MS,
-    await $.session.id(),
-    BACKFILL_VERSION,
-  )
-  for (const key of drop) await $.store.delete(key)
-  await $.store.set('seen', seen)
-  if (drop.length) log($, `[bm] store: pruned ${drop.length} keys (${[...new Set(drop.map(k => k.split(':')[0]))].join(', ')})`)
-}
-
-async function backfillPrompts($: EngineInterface) {
-  // The key's number marks what the back-fill knows: `2` learnt queued prompts
-  // (attachment rows); `3` drops rows the live capture kept before it had the prompt
-  // filter ("[Request interrupted…]", command echoes), which the merge had appended
-  // after the file's prompts, so from there the list's numbering ran eight too high and
-  // the yellow row sat on the wrong prompt (djdarcy, 2026-10-11: "the screen is
-  // currently at prompt #307 but the list is showing #297"). A conversation marked done
-  // under an older key is read once more.
-  // `4`: queued messages the live capture had dropped, and `<task-notification>` rows it
-  // had kept (2026-10-11, djdarcy: two of his mid-turn messages missing above #316).
-  // `5`: footnotes -- the person's slash commands, `!` shell commands and interruptions,
-  // kept with the prompt each follows (#33).
-  // `6`: the prompts' whole text for the filter (#28), which a conversation read under
-  // `5` never collected.
-  // `7`: /loop firings are no longer footnotes and a footnote's label is cut to
-  // FOOTNOTE_LABEL_MAX; the re-read rewrites the stored footnotes without them
-  // (2026-10-15: 535 of 671 stored footnotes were firings, 848 KB of a 1.34 MB store).
-  const doneKey = backfilledKey(BACKFILL_VERSION, await $.session.id())
-  if (await $.store.get(doneKey)) return
-  const path = await transcriptPath($)
-  if (!path) {
-    log($, '[bm] backfill: transcript not found; prompts list starts when the mod loaded')
-    return
-  }
-  const rows = await userRows($, path)
-  if (!rows) {
-    log($, '[bm] backfill: neither PowerShell nor sh + grep ran; prompts list starts when the mod loaded')
-    return
-  }
-  const { found, texts, footnotes } = parseBackfill(rows.stdout)
-  const cache = await promptTexts($)
-  for (const [uuid, text] of texts) cache.set(uuid, text)
-  await $.store.set(await prompts_.footnotesKey(promptsPorts($)), footnotes.slice(-PROMPTS_KEPT))
-  const merged = mergeBackfill(found, await keptPrompts($))
-  await $.store.set(await prompts_.promptsKey(promptsPorts($)), merged)
-  await savePromptTexts($)
-  // A cut-off read is left unmarked, so a later session start tries again.
-  if (!rows.isStdoutTruncated) await $.store.set(doneKey, true)
-  log($, backfillLine(found.length, rows.via, rows.ms, rows.stdout.length, !!rows.isStdoutTruncated, merged.length))
-}
+// The store's prune and the back-fill are handlers/prompts.ts (pruneStoreNow,
+// backfillPrompts), over promptsPorts($); userRows above is their program run.
 
 // Who-caused-the-row stamps (session.append's `origin.kind`) that are never the person.
 const AUTOMATED_ORIGINS = new Set(['task-notification', 'scheduled-trigger', 'peer-send-message', 'coordinator', 'observer', 'observer-activity', 'auto-continuation', 'projects-relay', 'channel'])
@@ -1004,7 +942,7 @@ export const register: Register = (on, options) => {
     if (!result.deny) {
       machineOptions = { ...machineOptions, [e.key.slice('bookmarks.'.length)]: result.value }
       // A smaller text budget frees memory and store now, not at the next prompt.
-      if (e.key === 'bookmarks.promptTextBudget') await savePromptTexts($)
+      if (e.key === 'bookmarks.promptTextBudget') await prompts_.savePromptTexts(promptsPorts($))
       await update($, settingsRev, v => v + 1)
     }
     return result
@@ -1521,7 +1459,7 @@ export const register: Register = (on, options) => {
       await read($, pinsRev) // read so a pin toggle redraws the pane
       await read($, viewRev) // and so a scroll that moves the nearest prompt redraws it
       const pinIds = await loadPins($)
-      const texts = await promptTexts($)
+      const texts = await prompts_.promptTexts(promptsPorts($))
       const fromBand = (await read($, bandMode)) === 'list' ? await read($, bandNum) : undefined
       // The prompt nearest the view, drawn with its number in yellow (djdarcy, 2026-10-11:
       // "so the user knows roughly where they are" and can read what they were thinking

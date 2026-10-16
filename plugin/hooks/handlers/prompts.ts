@@ -2,9 +2,12 @@
 // they were; `ports.x()` where the code called `$`): the session's prompts and footnotes in
 // the plugin store, and the prompts' text for the filter in files under the data root.
 // The prompt-text cache, its save timer and the one-time drop of old store keys are owned
-// here. The back-fill that fills the store, and the only program runs, stay in register.tsx.
+// here, and so (0.4.101) are the store's prune and the back-fill that fills the store from
+// the transcript. The program runs that read the transcript stay in register.tsx, where
+// the validator reads their commands, and reach the back-fill as a port (userRows).
 
-import { appendOnce, footnotesKey as footnotesKeyOf, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, type PromptRef } from '../core/prompts/prompt-store.ts'
+import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, type PromptRef } from '../core/prompts/prompt-store.ts'
+import { pruneStore, type Seen } from '../core/store-prune.ts'
 import { shard, withinBudget, type PromptText } from '../core/prompts/text-store.ts'
 import type { FootnoteRef } from '../core/prompts/prompt-rows.ts'
 import type { PromptsPorts } from '../engine/ports.ts'
@@ -107,4 +110,66 @@ export async function keepFootnote(ports: PromptsPorts, f: FootnoteRef) {
 export async function keepPrompt(ports: PromptsPorts, p: PromptRef) {
   const next = appendOnce(await keptPrompts(ports), p)
   if (next) await ports.storeSet(await promptsKey(ports), next)
+}
+
+// The back-fill's version; the done flag is `backfilled<N>:<sessionId>`.
+const BACKFILL_VERSION = 7
+// A conversation not opened for this long gives up what its transcript rebuilds (#15).
+const PRUNE_AFTER_MS = 30 * 86_400_000
+
+// Keep the plugin store small: it is one file for every conversation, refused past 4 MiB
+// in all (core/store-prune.ts). Once per conversation opened, before its back-fill.
+export async function pruneStoreNow(ports: PromptsPorts) {
+  const { drop, seen } = pruneStore(
+    await ports.storeKeys(),
+    ((await ports.storeGet('seen')) as Seen | undefined) ?? {},
+    await ports.now(),
+    PRUNE_AFTER_MS,
+    await ports.sessionId(),
+    BACKFILL_VERSION,
+  )
+  for (const key of drop) await ports.storeDelete(key)
+  await ports.storeSet('seen', seen)
+  if (drop.length) ports.log(`[bm] store: pruned ${drop.length} keys (${[...new Set(drop.map(k => k.split(':')[0]))].join(', ')})`)
+}
+
+export async function backfillPrompts(ports: PromptsPorts) {
+  // The key's number marks what the back-fill knows: `2` learnt queued prompts
+  // (attachment rows); `3` drops rows the live capture kept before it had the prompt
+  // filter ("[Request interrupted…]", command echoes), which the merge had appended
+  // after the file's prompts, so from there the list's numbering ran eight too high and
+  // the yellow row sat on the wrong prompt (djdarcy, 2026-10-11: "the screen is
+  // currently at prompt #307 but the list is showing #297"). A conversation marked done
+  // under an older key is read once more.
+  // `4`: queued messages the live capture had dropped, and `<task-notification>` rows it
+  // had kept (2026-10-11, djdarcy: two of his mid-turn messages missing above #316).
+  // `5`: footnotes -- the person's slash commands, `!` shell commands and interruptions,
+  // kept with the prompt each follows (#33).
+  // `6`: the prompts' whole text for the filter (#28), which a conversation read under
+  // `5` never collected.
+  // `7`: /loop firings are no longer footnotes and a footnote's label is cut to
+  // FOOTNOTE_LABEL_MAX; the re-read rewrites the stored footnotes without them
+  // (2026-10-15: 535 of 671 stored footnotes were firings, 848 KB of a 1.34 MB store).
+  const doneKey = backfilledKey(BACKFILL_VERSION, await ports.sessionId())
+  if (await ports.storeGet(doneKey)) return
+  const path = await ports.transcriptPath()
+  if (!path) {
+    ports.log('[bm] backfill: transcript not found; prompts list starts when the mod loaded')
+    return
+  }
+  const rows = await ports.userRows(path)
+  if (!rows) {
+    ports.log('[bm] backfill: neither PowerShell nor sh + grep ran; prompts list starts when the mod loaded')
+    return
+  }
+  const { found, texts, footnotes } = parseBackfill(rows.stdout)
+  const cache = await promptTexts(ports)
+  for (const [uuid, text] of texts) cache.set(uuid, text)
+  await ports.storeSet(await footnotesKey(ports), footnotes.slice(-PROMPTS_KEPT))
+  const merged = mergeBackfill(found, await keptPrompts(ports))
+  await ports.storeSet(await promptsKey(ports), merged)
+  await savePromptTexts(ports)
+  // A cut-off read is left unmarked, so a later session start tries again.
+  if (!rows.isStdoutTruncated) await ports.storeSet(doneKey, true)
+  ports.log(backfillLine(found.length, rows.via, rows.ms, rows.stdout.length, !!rows.isStdoutTruncated, merged.length))
 }
