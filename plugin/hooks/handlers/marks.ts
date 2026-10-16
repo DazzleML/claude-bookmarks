@@ -8,6 +8,7 @@ import { sameMessage, findByMessage, short } from '../core/kit/message-id.ts'
 import { plainMarkdown, snippetOf } from '../core/marks/highlight.ts'
 import { headOf } from '../core/bookmarks/transcript-lines.ts'
 import { deleteMarks, type Mark, type Marks } from '../core/marks/marks.ts'
+import { readingStateKey as readingStateKeyOf } from '../core/store-keys.ts'
 import type { SelectionLike } from '../core/marks/mark-state.ts'
 import type { MarksPorts } from '../engine/ports.ts'
 
@@ -188,7 +189,7 @@ export async function setMark(ports: MarksPorts, letter: string) {
 // `backBlock`: which edge of the window `back` was anchored to (viewAnchor, handlers/view-tracker.ts).
 type ReadingState = { at: boolean; back: string | null; backBlock?: 'start' | 'end' }
 async function readingStateKey(ports: MarksPorts): Promise<string> {
-  return `readingState:${await ports.sessionId()}`
+  return readingStateKeyOf(await ports.sessionId())
 }
 async function readingState(ports: MarksPorts): Promise<ReadingState> {
   return ((await ports.storeGet(await readingStateKey(ports))) as ReadingState | undefined) ?? { at: false, back: null }

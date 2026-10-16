@@ -28,6 +28,7 @@ import type { Role, Style } from './core/palette'
 import { footnoteOf, looksLikePrompt, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
 import { short } from './core/kit/message-id'
 import { configDirOf, dataRootOf } from './core/kit/paths'
+import { marksKey as marksKeyOf, pinsKey as pinsKeyOf } from './core/store-keys'
 import { diagLine, keyLabel } from './core/log/diagnostics'
 import { colorSplit, tagMarksMarkdown, tagMarksPlain } from './core/marks/highlight'
 import { ScreenModel } from './core/kit/screen-model'
@@ -526,7 +527,7 @@ async function prompts($: EngineInterface): Promise<PromptRef[]> {
 }
 
 async function marksKey($: EngineInterface): Promise<string> {
-  return `marks:${await $.session.id()}`
+  return marksKeyOf(await $.session.id())
 }
 
 async function loadMarks($: EngineInterface): Promise<Marks> {
@@ -702,7 +703,7 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
 // the order they were pinned. Drawn as `245★)` and listed again at the top of the
 // prompts pane. Toggled by `*21` (or `*` for the newest) in the `#` field, or /bm-pin.
 async function pinsKey($: EngineInterface): Promise<string> {
-  return `pins:${await $.session.id()}`
+  return pinsKeyOf(await $.session.id())
 }
 async function loadPins($: EngineInterface): Promise<string[]> {
   return ((await $.store.get(await pinsKey($))) as string[] | undefined) ?? []

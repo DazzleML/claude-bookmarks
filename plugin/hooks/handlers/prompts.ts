@@ -8,6 +8,7 @@
 
 import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, type PromptRef } from '../core/prompts/prompt-store.ts'
 import { pruneStore, type Seen } from '../core/store-prune.ts'
+import { SEEN_KEY } from '../core/store-keys.ts'
 import { shard, withinBudget, type PromptText } from '../core/prompts/text-store.ts'
 import type { FootnoteRef } from '../core/prompts/prompt-rows.ts'
 import type { PromptsPorts } from '../engine/ports.ts'
@@ -122,14 +123,14 @@ const PRUNE_AFTER_MS = 30 * 86_400_000
 export async function pruneStoreNow(ports: PromptsPorts) {
   const { drop, seen } = pruneStore(
     await ports.storeKeys(),
-    ((await ports.storeGet('seen')) as Seen | undefined) ?? {},
+    ((await ports.storeGet(SEEN_KEY)) as Seen | undefined) ?? {},
     await ports.now(),
     PRUNE_AFTER_MS,
     await ports.sessionId(),
     BACKFILL_VERSION,
   )
   for (const key of drop) await ports.storeDelete(key)
-  await ports.storeSet('seen', seen)
+  await ports.storeSet(SEEN_KEY, seen)
   if (drop.length) ports.log(`[bm] store: pruned ${drop.length} keys (${[...new Set(drop.map(k => k.split(':')[0]))].join(', ')})`)
 }
 
