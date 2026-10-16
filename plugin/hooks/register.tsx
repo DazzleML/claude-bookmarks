@@ -52,6 +52,8 @@ import { Navigation } from './handlers/navigation'
 import { ViewTracker } from './handlers/view-tracker'
 import { PanePosition } from './core/kit/pane-position'
 import { BandState } from './core/band/band-state'
+import { PromptsPaneState } from './core/prompts/prompts-pane-state'
+import { DrawnMessages } from './core/kit/drawn-messages'
 import { BOOKMARK_TOOL } from './core/bookmarks/bookmark-tool'
 import { COMMANDS } from './core/band/commands'
 import { promptList, transcriptGuess, type PromptRef } from './core/prompts/prompt-store'
@@ -150,7 +152,7 @@ function marksPorts($: EngineInterface): MarksPorts {
     cut,
     selection: () => $.ui.selection(),
     allRows: () => allRows($),
-    drawnText: uuid => rendered.get(uuid),
+    drawnText: uuid => drawn.texts.get(uuid),
     topOnScreen: () => topOnScreen($),
     viewAnchor: () => viewAnchor($),
     freshOnScreen,
@@ -207,7 +209,8 @@ function marksOnRow(requestId: string, showing: string | undefined): [string, Ma
 // Ids seen at UserMessage render time since this module loaded. A module variable on
 // purpose: a render hook may not write $.state, and a reload should forget these, so
 // "never drawn since load" (a jump target Claude Code may refuse) means what it says.
-const rendered = new Map<string, string>()
+// core/kit/drawn-messages.ts DrawnMessages, which also keeps the panes' first-four set.
+const drawn = new DrawnMessages()
 
 // A message's on-screen report (core/kit/screen-model.ts noteMessage: which ids count, what is news).
 function noteOnScreen(requestId: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
@@ -350,8 +353,7 @@ function sameConversationSoon($: EngineInterface) {
 // tracker (0.4.73). The register and the marks reset through their own start parts.
 async function resetConversationMemory() {
   await newLogConversation()
-  unfoldedFootnotes.clear()
-  paneFilter = ''
+  promptsPane.newConversation()
   band.newConversation()
   panePosition.newConversation()
   viewTracker.newConversation()
@@ -605,7 +607,7 @@ function navPorts($: EngineInterface): NavigationPorts {
     toast: (text, timeoutMs) => (timeoutMs ? $.ui.toast(text, { timeoutMs }) : $.ui.toast(text)),
     log: (line, text) => log($, line, text ? { text: true } : undefined),
     note,
-    drawnHead: uuid => rendered.get(uuid),
+    drawnHead: uuid => drawn.texts.get(uuid),
     markHead: uuid => markCache.headOf(uuid),
     leavingFrom: async () => panePosition.view ?? (await viewAnchor($)),
     paneJumped: () => panePosition.jumped(),
@@ -657,14 +659,10 @@ async function topOnScreen($: EngineInterface): Promise<string | undefined> {
 async function promptHere($: EngineInterface): Promise<string | undefined> {
   return viewTracker.promptHere(viewPorts($))
 }
-// The prompt the list should centre on at the pane's next draw (set when it opens).
-let pendingCentre: string | undefined
-// The prompts whose footnotes the person unfolded (`.` or a press on the ellipsis row),
-// by number; folded is the default (the `footnotes` setting).
-const unfoldedFootnotes = new Set<number>()
-// The prompts filter (#28): the words typed after `/` in the prompts pane's number field
-// (djdarcy, 2026-10-12: "Pane field only"); empty when no filter is active.
-let paneFilter = ''
+// The prompts pane's own state -- the filter, the unfolded footnotes, the prompt to centre
+// on -- is core/prompts/prompts-pane-state.ts PromptsPaneState, written only through its
+// named methods.
+const promptsPane = new PromptsPaneState()
 function noteViewMoved($: EngineInterface) {
   viewTracker.noteViewMoved(viewPorts($))
 }
@@ -761,7 +759,7 @@ async function jumpToPromptNumber($: EngineInterface, typed: string, via: string
     return
   }
   if (entry.kind === 'filter') {
-    paneFilter = entry.words
+    promptsPane.setFilter(entry.words)
     await update($, viewRev, v => v + 1)
     return
   }
@@ -769,8 +767,7 @@ async function jumpToPromptNumber($: EngineInterface, typed: string, via: string
     // Hidden footnotes: `N.k` still jumps (djdarcy, 2026-10-12: "Rows hidden, keys work"),
     // but `N.` has nothing to show, so it says why.
     if (currentSettings().footnotes === 'hidden') return void $.ui.toast('Footnotes are hidden: "Footnotes in the prompts list" in /config shows them')
-    if (unfoldedFootnotes.has(entry.n)) unfoldedFootnotes.delete(entry.n)
-    else unfoldedFootnotes.add(entry.n)
+    promptsPane.toggleFold(entry.n)
     await update($, viewRev, v => v + 1)
     return
   }
@@ -877,9 +874,7 @@ function bandPorts($: EngineInterface): BandPorts {
     openPaneFocused: title => $.ui.open({ id: PANE, title, focus: true, closeOnEscape: true }),
     setBandGroup: index => update($, bandGroup, () => index),
     scroll: (uuid, block) => $.ui.scroll({ to: { requestId: uuid }, block }),
-    setPendingCentre: uuid => {
-      pendingCentre = uuid
-    },
+    setPendingCentre: uuid => promptsPane.centreOnNextDraw(uuid),
     selection: () => $.ui.selection(),
     setSelectionAtChord: sel => markState.setAtChord(sel),
     draftText: async () => (await $.prompt.read()).text,
@@ -913,7 +908,7 @@ function diagnosticsPorts($: EngineInterface): DiagnosticsPorts {
     rows: () => allRows($),
     marks: () => loadMarks($),
     jumpTo: (uuid, via, label) => jumpTo($, uuid, via, label),
-    rendered: () => rendered,
+    rendered: () => drawn.texts,
     timeline: () => logger.timeline.items,
     note,
     selection: () => $.ui.selection(),
@@ -1079,9 +1074,9 @@ export const register: Register = (on, options) => {
   // The person closed the pane (its close mark, or Ctrl+X x): end the band's key mode too.
   on('ui.close', { id: PANE }, async ($, e, next) => {
     // Esc with a filter active (#28): the first clears the filter, the second closes.
-    if (e.origin.kind === 'person' && paneFilter) {
+    if (e.origin.kind === 'person' && promptsPane.filter) {
       log($, '[bm] Esc cleared the prompts filter; the pane stays')
-      paneFilter = ''
+      promptsPane.setFilter('')
       await update($, viewRev, v => v + 1)
       return { deny: 'the prompts filter was cleared; Esc again closes the list' }
     }
@@ -1177,9 +1172,9 @@ export const register: Register = (on, options) => {
     rawScreen($, 'U', e.requestId, e.props.onScreen)
     noteOnScreen(e.requestId, e.props.onScreen)
     noteViewMoved($)
-    if (!rendered.has(e.requestId)) {
+    if (!drawn.texts.has(e.requestId)) {
       const text = headOf(e.props.text ?? '')
-      rendered.set(e.requestId, text)
+      drawn.note(e.requestId, text)
       note(`draw UserMessage ${e.requestId} ${text.slice(0, 30)}`)
     }
     // The mark highlight: a prompt row is plain text, so the mark shows as a «a» tag
@@ -1470,10 +1465,9 @@ export const register: Register = (on, options) => {
       // Centre the list on the nearest prompt once the rows below exist (set by
       // openFor). A timer, since a render hook may not scroll; by then the draw is done.
       // (The rows are views/prompts-pane.tsx's; openFor is handlers/band.ts's and sets
-      // pendingCentre through its setPendingCentre port.)
-      if (pendingCentre) {
-        const target = pendingCentre
-        pendingCentre = undefined
+      // the centre through its setPendingCentre port.)
+      const target = promptsPane.takeCentre()
+      if (target) {
         // The rows are not scrollable-to the instant after the first draw (DENY "no
         // element of its own is drawn under that key" at +7 ms, 2026-10-11) but are a
         // few hundred ms later, when the follow scrolls succeed. Try at 60, 180, 420 and
@@ -1490,10 +1484,10 @@ export const register: Register = (on, options) => {
       }
       return promptsPaneView(
         elements,
-        { all, kept, footnoteMode, unfolded: unfoldedFootnotes, drawn: [...rendered.keys()], pinIds, texts, paneFilter, fromBand, here },
+        { all, kept, footnoteMode, unfolded: promptsPane.unfolded, drawnFour: drawn.firstFours, pinIds, texts, paneFilter: promptsPane.filter, fromBand, here },
         {
-          unfold: async n => { unfoldedFootnotes.add(n); await update($, viewRev, v => v + 1) },
-          refold: async n => { unfoldedFootnotes.delete(n); await update($, viewRev, v => v + 1) },
+          unfold: async n => { promptsPane.unfold(n); await update($, viewRev, v => v + 1) },
+          refold: async n => { promptsPane.refold(n); await update($, viewRev, v => v + 1) },
           footnote: async (uuid, label) => {
             await jumpTo($, uuid, 'prompts pane', label)
             await settle($, 'list', 'row-press')
@@ -1505,9 +1499,8 @@ export const register: Register = (on, options) => {
           go: typed => jumpToPromptNumber($, typed, 'prompts pane'),
           close: () => closeAll($, 'prompts pane'),
           setFilter: query => {
-            if (query === paneFilter) return false
+            if (!promptsPane.setFilter(query)) return false
             log($, `[bm] prompts filter: "${cut(query, 40)}"`, { text: true })
-            paneFilter = query
             void update($, viewRev, v => v + 1)
             return true
           },
@@ -1522,7 +1515,7 @@ export const register: Register = (on, options) => {
       const groupIndex = await read($, bandGroup)
       return bookmarksPaneView(
         elements,
-        { all, groups: BOOKMARK_GROUPS, groupIndex, fromBand, drawn: [...rendered.keys()], now: Date.now(), glyph: LINK_MARKERS === 'glyph', hint: listHint('bookmarks') },
+        { all, groups: BOOKMARK_GROUPS, groupIndex, fromBand, drawnFour: drawn.firstFours, now: Date.now(), glyph: LINK_MARKERS === 'glyph', hint: listHint('bookmarks') },
         {
           arrive: async r => {
             await arriveAtBookmark($, r, 'bookmarks pane')

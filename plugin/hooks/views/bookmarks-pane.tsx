@@ -5,7 +5,7 @@
 import type { EngineInterface } from 'claude-code'
 import { ownerOf, type AnchorOwner, type AnchorRecord } from '../core/bookmarks/anchor.ts'
 import { promptNumberComplete } from '../core/band/band-entry.ts'
-import { bookmarkWho, drawnFourOf, groupHeader, numberNewestFirst, numberWidth, pointerFor, unreached } from '../core/prompts/list-model.ts'
+import { bookmarkWho, groupHeader, numberNewestFirst, numberWidth, pointerFor, unreached } from '../core/prompts/list-model.ts'
 import type { PaneStyles } from './prompts-pane.tsx'
 
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
@@ -17,8 +17,8 @@ export type BookmarksPaneModel = {
   groupIndex: number
   /** The band's number while the band is in its bookmarks mode, else undefined. */
   fromBand: string | undefined
-  /** The ids drawn since load, as a list (readable more than once). */
-  drawn: readonly string[]
+  /** The first four groups of the ids drawn since load (core/kit/drawn-messages.ts). */
+  drawnFour: ReadonlySet<string>
   now: number
   /** Draw ⚓ before each row (the link-marker setting is 'glyph'). */
   glyph: boolean
@@ -60,7 +60,7 @@ export function bookmarksPaneView(elements: Elements, m: BookmarksPaneModel, a: 
   // Dim as the prompts pane dims: by the uuid's first four groups, since a drawn id
   // differs in its last (refactor-advisor 2026-10-12 row 17: by exact id, every
   // bookmark row was dim).
-  const drawnFour = drawnFourOf(m.drawn)
+  const drawnFour = m.drawnFour
   const row = (r: (typeof numbered)[number]) => {
     const dim = unreached(drawnFour, r.uuid) && r.n !== targetN
     return (

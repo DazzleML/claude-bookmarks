@@ -293,6 +293,9 @@ export type CommandLinePorts = BandPorts & {
 //   band wait/watch timers, ring, id,       core/band/band-state.ts BandState  band render (drawn), ui.focus (ringMoved),
 //     Esc reminder                                                         prompt.edit (oweReminder), session.start
 //   cmdBusy (one command at a time)         handlers/command-line.ts      --
+//   the prompts filter, unfolded            core/prompts/prompts-pane-    the prompts pane's render (filter,
+//     footnotes, the centre at next draw      state.ts PromptsPaneState     unfolded, takeCentre); openFor
+//                                             (in register.tsx, 0.4.102)    (centreOnNextDraw, via its port)
 //   registerCache, proseQueued              handlers/bookmarks.ts         --
 //   debug channels (DebugChannels)          handlers/log.ts (writers:     log, the screen channel, the view
 //                                             read, set); the Logger's    tracker (held), /bm-debug (on)
@@ -307,7 +310,9 @@ export type CommandLinePorts = BandPorts & {
 //   timeline (handlers/log.ts Timeline)     note(); the Logger's          diagnostics (items, read-only)
 //                                             (0.4.95)
 //   Logger (handlers/log.ts)                log() (Logger.log, keepLine)  --; one instance in register.tsx
-//   rendered (drawn ids)                    register.tsx render hooks     diagnostics, list model (read-only)
+//   drawn ids and their first four groups   core/kit/drawn-messages.ts    diagnostics (texts, read-only), the panes
+//     (DrawnMessages)                         (writer: note, from the       (firstFours), navigation and marks (texts)
+//                                             UserMessage render hook)
 //   highlight clear timer, selection at     core/marks/mark-state.ts MarkState  band (setAtChord, via its port),
 //     the chord, selection seen, its poll     (handlers/marks.ts)           session.start (stopPoll, startPoll)
 //   markCache (core/marks/marks.ts MarkCache)     the marks cluster:            render hooks, band, navigation

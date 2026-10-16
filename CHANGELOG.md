@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.102] - 2026-10-15
+
+### Changed
+
+- The prompts list's filter, unfolded footnotes and the prompt it centres on are kept together, and a new conversation (/clear, /resume) now also forgets a centring that was still waiting from the conversation before.
+- Internal, no visible change: the record of messages drawn since the plugin loaded keeps the set the lists use to dim unreachable rows as messages are drawn, instead of rebuilding it on every draw of a list.
+
 ## [0.4.101] - 2026-10-15
 
 ### Changed
@@ -940,7 +947,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.101...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.102...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
