@@ -28,7 +28,7 @@ import type { Role, Style } from './core/palette'
 import { footnoteOf, looksLikePrompt, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
 import { short } from './core/kit/message-id'
 import { configDirOf, dataRootOf } from './core/kit/paths'
-import { marksKey as marksKeyOf, pinsKey as pinsKeyOf } from './core/store-keys'
+import { ECHO_POLICY_KEY, marksKey as marksKeyOf, pinsKey as pinsKeyOf, readingStateKey } from './core/store-keys'
 import { diagLine, keyLabel } from './core/log/diagnostics'
 import { colorSplit, tagMarksMarkdown, tagMarksPlain } from './core/marks/highlight'
 import { ScreenModel } from './core/kit/screen-model'
@@ -165,9 +165,8 @@ function marksPorts($: EngineInterface): MarksPorts {
     now: () => $.clock.now(),
     loadMarks: () => loadMarks($),
     saveMarks: async m => $.store.set(await marksKey($), m),
-    sessionId: () => $.session.id(),
-    storeGet: key => $.store.get(key),
-    storeSet: (key, value) => $.store.set(key, value),
+    readingStateStored: async () => $.store.get(readingStateKey(await $.session.id())),
+    storeReadingState: async state => $.store.set(readingStateKey(await $.session.id()), state),
     letters: LETTERS,
     readingLetter: READING,
   }
@@ -243,8 +242,8 @@ function logFilesPorts($: EngineInterface): LogFilesPorts {
 // handlers/log.ts, over echoPorts($); its callers call it directly with these ports.
 function echoPorts($: EngineInterface): EchoPorts {
   return {
-    storeGet: key => $.store.get(key),
-    storeSet: (key, value) => $.store.set(key, value),
+    echoPolicyStored: () => $.store.get(ECHO_POLICY_KEY),
+    storeEchoPolicy: policy => $.store.set(ECHO_POLICY_KEY, policy),
     settings: currentSettings,
     debugEnv: () => $.env.get('CONVO_BOOKMARKS_DEBUG'),
     setDebugEnv: value => $.env.set('CONVO_BOOKMARKS_DEBUG', value),

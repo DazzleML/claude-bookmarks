@@ -7,7 +7,6 @@
 import { Ring, clock, describeEcho, echoEnabled, echoPolicyOf, logFile, screenFile, stamped, type EchoPolicy } from '../core/log/log-ring.ts'
 import { formatDebugEnv, parseDebugEnv, quotesText, screenMirror, type Channel } from '../core/log/debug.ts'
 import { debugTextMode } from '../core/settings.ts'
-import { ECHO_POLICY_KEY } from '../core/store-keys.ts'
 import type { EchoPorts, LogFilesPorts, LoggerPorts } from '../engine/ports.ts'
 
 // Whether log lines are also echoed into the transcript as dim rows. Off by default: the
@@ -24,13 +23,14 @@ import type { EchoPorts, LogFilesPorts, LoggerPorts } from '../engine/ports.ts'
 //   six states: forced on, forced off, and a session's on/off/unset over an overridable
 //   default). Nothing is cached: a force typed in one session must reach the others on
 //   their very next log line.
-// Its key is core/store-keys.ts ECHO_POLICY_KEY.
+// Its one store entry (core/store-keys.ts ECHO_POLICY_KEY) is reached through its own two
+// ports; the echo cannot write any other key.
 async function echoPolicy(ports: EchoPorts): Promise<EchoPolicy> {
   // A default typed with `/bm-debug default` wins; without one, the `debugDefault` setting.
-  return echoPolicyOf(await ports.storeGet(ECHO_POLICY_KEY), ports.settings().debugDefault === 'on')
+  return echoPolicyOf(await ports.echoPolicyStored(), ports.settings().debugDefault === 'on')
 }
 export async function setEchoPolicy(ports: EchoPorts, policy: EchoPolicy) {
-  await ports.storeSet(ECHO_POLICY_KEY, policy)
+  await ports.storeEchoPolicy(policy)
 }
 /** This conversation's own choice, from its environment; undefined when it made none. */
 async function sessionEchoChoice(ports: EchoPorts): Promise<boolean | undefined> {

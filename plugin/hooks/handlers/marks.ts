@@ -8,7 +8,6 @@ import { sameMessage, findByMessage, short } from '../core/kit/message-id.ts'
 import { plainMarkdown, snippetOf } from '../core/marks/highlight.ts'
 import { headOf } from '../core/bookmarks/transcript-lines.ts'
 import { deleteMarks, type Mark, type Marks } from '../core/marks/marks.ts'
-import { readingStateKey as readingStateKeyOf } from '../core/store-keys.ts'
 import type { SelectionLike } from '../core/marks/mark-state.ts'
 import type { MarksPorts } from '../engine/ports.ts'
 
@@ -188,14 +187,12 @@ export async function setMark(ports: MarksPorts, letter: string) {
 // position, so the next press goes `back`; false otherwise, so the next press goes there.
 // `backBlock`: which edge of the window `back` was anchored to (viewAnchor, handlers/view-tracker.ts).
 type ReadingState = { at: boolean; back: string | null; backBlock?: 'start' | 'end' }
-async function readingStateKey(ports: MarksPorts): Promise<string> {
-  return readingStateKeyOf(await ports.sessionId())
-}
+// Stored under core/store-keys.ts readingStateKey, through its own two ports.
 async function readingState(ports: MarksPorts): Promise<ReadingState> {
-  return ((await ports.storeGet(await readingStateKey(ports))) as ReadingState | undefined) ?? { at: false, back: null }
+  return ((await ports.readingStateStored()) as ReadingState | undefined) ?? { at: false, back: null }
 }
 async function setReadingState(ports: MarksPorts, state: ReadingState) {
-  await ports.storeSet(await readingStateKey(ports), state)
+  await ports.storeReadingState(state)
 }
 
 // Where "back" goes when you left from the bottom of the conversation (a setting, #7):

@@ -155,8 +155,9 @@ export type BandPorts = BandCorePorts & PanePorts & ListPorts
 
 /** What the debug echo (handlers/log.ts) needs: the plugin store, the settings, and this conversation's debug variable, read and written by literal name in register.tsx (one port each, as the validator wants). */
 export type EchoPorts = {
-  storeGet: (key: string) => Promise<unknown>
-  storeSet: (key: string, value: unknown) => Promise<unknown>
+  /** The machine-wide echo policy, its one store entry (core/store-keys.ts ECHO_POLICY_KEY). */
+  echoPolicyStored: () => Promise<unknown>
+  storeEchoPolicy: (policy: unknown) => Promise<unknown>
   settings: () => import('../core/settings.ts').Settings
   /** `CONVO_BOOKMARKS_DEBUG`, this conversation's echo choice and debug channels. */
   debugEnv: () => Promise<string | undefined>
@@ -268,9 +269,9 @@ export type MarksPorts = {
   now: () => Promise<number>
   loadMarks: () => Promise<import('../core/marks/marks.ts').Marks>
   saveMarks: (marks: import('../core/marks/marks.ts').Marks) => Promise<unknown>
-  sessionId: () => Promise<string>
-  storeGet: (key: string) => Promise<unknown>
-  storeSet: (key: string, value: unknown) => Promise<unknown>
+  /** The reading position's way back, this conversation's (core/store-keys.ts readingStateKey). */
+  readingStateStored: () => Promise<unknown>
+  storeReadingState: (state: unknown) => Promise<unknown>
   /** The mark letters (a-z), for /bm-delmarks' `all`. */
   letters: readonly string[]
   readingLetter: string
