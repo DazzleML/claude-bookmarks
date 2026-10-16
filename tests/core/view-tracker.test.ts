@@ -105,6 +105,25 @@ test('a reply streaming in alone holds the row last drawn yellow, until a new co
   assert.equal(await t.promptHere(ports), undefined)
 })
 
+// The streaming rule's own effect (VT5 in the 0.4.97 audit): holding the row is also the
+// later rule's outcome, but only this rule keeps the trusted screen through a reply
+// streaming in alone, so a message from that screen, reported whole just after the
+// plugin redrew something, still counts as a view and moves the row.
+test('a reply streaming in keeps the trusted screen: a trusted message drawn whole after a redraw still moves the row', async () => {
+  const s = new ScreenModel()
+  const t = new ViewTracker(s)
+  const { ports } = fakePorts()
+  s.noteMessage(R1, lines(2, 7, 10), 1000)
+  assert.equal(await t.promptHere(ports), P1)
+  t.drewHere(P4)
+  s.noteMessage(R4, lines(0, 4, 5), 9000)
+  s.noteMessage(R4, lines(0, 9, 10), 9010)
+  assert.equal(await t.promptHere(ports), P4)
+  s.noteMessage(R1, lines(0, 9, 10), 20000)
+  s.expectRedraw('a highlight cleared', Date.now())
+  assert.equal(await t.promptHere(ports), P1)
+})
+
 test('nothing placeable on screen holds the row last drawn yellow', async () => {
   const s = new ScreenModel()
   const t = new ViewTracker(s)
