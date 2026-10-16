@@ -1,7 +1,7 @@
 # claude-bookmarks
 
 [![Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FDazzleML%2Fclaude-bookmarks%2Fmain%2Fplugin%2F.claude-plugin%2Fplugin.json&query=%24.version&label=version&color=brightgreen)](CHANGELOG.md)
-[![Claude Code 2.1.287+](https://img.shields.io/badge/Claude%20Code-2.1.287%2B-d97757.svg)](https://code.claude.com/docs)
+[![Claude Code 2.1.288+](https://img.shields.io/badge/Claude%20Code-2.1.288%2B-d97757.svg)](https://code.claude.com/docs)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](docs/platform-support.md)
 
@@ -29,7 +29,7 @@ A long Claude Code conversation is hard to move around in. The answer you need i
 
 ## Quick Start
 
-One command installs it on Claude Code 2.1.287 or later, since this repository is also a marketplace:
+One command installs it on Claude Code 2.1.288 or later, since this repository is also a marketplace:
 
 ```
 /plugin install bookmarks --marketplace DazzleML/claude-bookmarks

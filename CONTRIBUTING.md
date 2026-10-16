@@ -6,7 +6,7 @@ Thank you for considering contributing to claude-bookmarks!
 
 ### Prerequisites
 
-- **Claude Code 2.1.287+**, fullscreen renderer (`/tui fullscreen`)
+- **Claude Code 2.1.288+**, fullscreen renderer (`/tui fullscreen`)
 - **Git**
 - **Python 3.10+** (repo tooling and its checks only; the plugin itself has no Python)
 - **Node 22.6+** (optional: runs the TypeScript core tests directly, and lets you step through them in a debugger)

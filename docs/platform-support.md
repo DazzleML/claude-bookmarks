@@ -13,4 +13,4 @@ The plugin runs inside Claude Code, so it goes wherever Claude Code's terminal a
 | Claude Code Desktop app | Out of scope for now | |
 | Screen-reader mode | Not supported | Uses the classic renderer |
 
-Requires Claude Code **2.1.287 or later**.
+Requires Claude Code **2.1.288 or later**.
