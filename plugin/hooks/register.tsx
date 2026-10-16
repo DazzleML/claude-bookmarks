@@ -873,6 +873,33 @@ function commandLinePorts($: EngineInterface): CommandLinePorts {
 async function settle($: EngineInterface, pane: Pane, cause: Cause, needsMore = false) {
   return bandSettle(bandPorts($), pane, cause, needsMore)
 }
+
+// An action and what it leaves behind, named once, so a render hook gathers what it draws
+// and hands the press here rather than deciding the sequence itself (advisor row R18).
+// A mark set from the band or the marks pane: then the after-action rule, then the view
+// back to where the highlight found it.
+async function markThenSettle($: EngineInterface, pane: Pane, letter: string) {
+  await setMark($, letter)
+  await settle($, pane, 'mark-set')
+  await restoreView($)
+}
+// A jump to a mark: the marks pane also puts the view back (`restoreAfter`); the band's
+// jump does not. The difference is the one the two had before this was named.
+async function jumpToMarkThenSettle($: EngineInterface, pane: Pane, letter: string, restoreAfter: boolean) {
+  await jumpToMark($, letter)
+  await settle($, pane, 'jump')
+  if (restoreAfter) await restoreView($)
+}
+// A press on a row of the prompts list (a prompt or a footnote).
+async function pressPromptRow($: EngineInterface, uuid: string, label: string, words?: string) {
+  await jumpTo($, uuid, 'prompts pane', label, words)
+  await settle($, 'list', 'row-press')
+}
+// A press on a row of the bookmarks list.
+async function pressBookmarkRow($: EngineInterface, record: { uuid: string; words?: string; label: string }) {
+  await arriveAtBookmark($, record, 'bookmarks pane')
+  await settle($, 'bookmarks', 'row-press')
+}
 async function endBandMode($: EngineInterface) {
   await bandEnd(bandPorts($))
 }
@@ -1395,8 +1422,8 @@ export const register: Register = (on, options) => {
       {
         endBandMode: () => endBandMode($),
         readingToggle: async () => { await readingToggle($); await done('band-command') },
-        jumpToMark: async l => { await jumpToMark($, l); await done('jump') },
-        setMark: async l => { await setMark($, l); await done('mark-set'); await restoreView($) },
+        jumpToMark: l => jumpToMarkThenSettle($, paneOf(mode), l, false),
+        setMark: l => markThenSettle($, paneOf(mode), l),
         cancel: () => done('esc'),
         listKey: op => band_.bandListKey(bandPorts($), op),
         digit: d => band_.bandDigit(bandPorts($), d),
@@ -1466,14 +1493,8 @@ export const register: Register = (on, options) => {
         {
           unfold: async n => { promptsPane.unfold(n); await update($, viewRev, v => v + 1) },
           refold: async n => { promptsPane.refold(n); await update($, viewRev, v => v + 1) },
-          footnote: async (uuid, label) => {
-            await jumpTo($, uuid, 'prompts pane', label)
-            await settle($, 'list', 'row-press')
-          },
-          pressPrompt: async r => {
-            await jumpTo($, r.uuid, 'prompts pane', `prompt #${r.n}`, r.head)
-            await settle($, 'list', 'row-press')
-          },
+          footnote: (uuid, label) => pressPromptRow($, uuid, label),
+          pressPrompt: r => pressPromptRow($, r.uuid, `prompt #${r.n}`, r.head),
           go: typed => jumpToPromptNumber($, typed, 'prompts pane'),
           close: () => closeAll($, 'prompts pane'),
           setFilter: query => {
@@ -1495,10 +1516,7 @@ export const register: Register = (on, options) => {
         elements,
         { all, groups: BOOKMARK_GROUPS, groupIndex, fromBand, drawnFour: drawn.firstFours, now: Date.now(), glyph: LINK_MARKERS === 'glyph', hint: listHint('bookmarks') },
         {
-          arrive: async r => {
-            await arriveAtBookmark($, r, 'bookmarks pane')
-            await settle($, 'bookmarks', 'row-press')
-          },
+          arrive: r => pressBookmarkRow($, r),
           go: typed => jumpToBookmarkNumber($, typed, 'bookmarks pane'),
           close: () => closeAll($, 'bookmarks pane'),
         },
@@ -1511,12 +1529,7 @@ export const register: Register = (on, options) => {
       elements,
       { mode, marks, letters: LETTERS, readingLetter: READING },
       {
-        press: async l => {
-          if (mode === 'mark') await setMark($, l)
-          else await jumpToMark($, l)
-          await settle($, mode, mode === 'mark' ? 'mark-set' : 'jump')
-          await restoreView($)
-        },
+        press: l => (mode === 'mark' ? markThenSettle($, mode, l) : jumpToMarkThenSettle($, mode, l, true)),
         goToReading: async reading => {
           await goToReading($, reading, 'jump pane reading')
           await settle($, mode, 'band-command')
