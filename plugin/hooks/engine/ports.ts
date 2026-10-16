@@ -82,47 +82,38 @@ export type NavigationPorts = {
   freshOnScreen: () => string[]
 }
 
-/** What the band cluster (handlers/band.ts) needs: its own state, its atoms, the pane, and the after-action settings. */
-export type BandPorts = {
+/** The band itself (handlers/band.ts): its state and atoms, its timers, its focus probe, the after-action settings, and the person's feedback. Every band handler needs these. */
+export type BandCorePorts = {
   band: import('../core/band/band-state.ts').BandState
   settings: () => import('../core/settings.ts').Settings
   bandNum: () => Promise<string>
   setBandNum: (v: string) => Promise<unknown>
   bandMode: () => Promise<string>
   setBandMode: (v: string) => Promise<unknown>
+  note: (what: string) => void
+  /** `text`: the line quotes the conversation (kept per the debugText setting). */
+  log: (line: string, text?: boolean) => void
+  toast: (text: string, timeoutMs?: number) => void
+  now: () => Promise<number>
+  after: (ms: number, fn: () => void) => { cancel: () => void }
+  every: (ms: number, fn: () => unknown) => { cancel: () => void }
+  // The band's focus probe (focusBand, bandProbeKey, watchBand):
+  focus: (requestId: string, key: string) => Promise<{ deny?: unknown } | object>
+  diagState: (when: string) => Promise<unknown>
+  cut: (text: string, n: number) => string
+}
+
+/** Opening and closing the pane, and the view around it (openFor, bandOnly, handOff, settle, closePane): the pane surface, PanePosition's anchor and view, and where the view is. */
+export type PanePorts = {
   paneId: string
   panes: () => Promise<readonly { id: string; isFocused?: boolean }[]>
   closePaneUi: () => Promise<unknown>
   expectRedraw: (why: string) => void
-  note: (what: string) => void
-  /** `text`: the line quotes the conversation (kept per the debugText setting). */
-  log: (line: string, text?: boolean) => void
   /** The placement and width the pane's render recorded (its writer is the render hook). */
   paneGeometry: () => string | undefined
   paneAnchored: () => boolean
   restoreView: () => Promise<unknown>
-  // The band's keys (bandDigit, bandStep, bandPin, bandClaim, bandNumberGo, bandListKey):
   paneMode: () => Promise<string>
-  prompts: () => Promise<readonly { uuid: string }[]>
-  bookmarkList: () => Promise<readonly import('../core/bookmarks/anchor.ts').AnchorRecord[]>
-  jumpToPromptNumber: (typed: string, via: string) => Promise<unknown>
-  jumpToBookmarkNumber: (typed: string, via: string) => Promise<unknown>
-  scrollPaneCentre: (key: string) => Promise<{ deny?: string }>
-  toast: (text: string, timeoutMs?: number) => void
-  togglePin: (typed: string) => Promise<unknown>
-  groupStep: (dir: -1 | 1) => Promise<unknown>
-  /** `c`: one of Claude's bookmarks becomes the person's (handlers/bookmarks.ts claimBookmark). */
-  claimBookmark: (uuid: string) => Promise<ReturnType<typeof import('../core/bookmarks/register-file.ts').claim>>
-  now: () => Promise<number>
-  after: (ms: number, fn: () => void) => { cancel: () => void }
-  // The band's focus probe (focusBand, bandProbeKey, watchBand):
-  focus: (requestId: string, key: string) => Promise<{ deny?: unknown } | object>
-  loadMarks: () => Promise<Readonly<Record<string, unknown>>>
-  letters: readonly string[]
-  readingLetter: string
-  every: (ms: number, fn: () => unknown) => { cancel: () => void }
-  // The pane opening (openFor, bandOnly, handOff):
-  diagState: (when: string) => Promise<unknown>
   setPaneMode: (mode: string) => Promise<unknown>
   topOnScreen: () => Promise<string | undefined>
   viewAnchor: () => Promise<{ uuid: string; block: 'start' | 'end' } | undefined>
@@ -133,16 +124,34 @@ export type BandPorts = {
   openPane: (title: string) => Promise<{ isPlaced?: boolean; reason?: string } | undefined>
   /** /bm-pane's: the pane opened with the keyboard and no size request (openPane asks 16x4). */
   openPaneFocused: (title: string) => Promise<unknown>
+  scroll: (uuid: string, block: 'start' | 'end') => Promise<{ deny?: string }>
+  scrollPaneCentre: (key: string) => Promise<{ deny?: string }>
+  setPendingCentre: (uuid: string) => void
+}
+
+/** The lists the band browses and acts on (bandDigit, bandStep, bandPin, bandClaim, bandNumberGo, bandListKey, the jump and mark modes): prompts, bookmarks, marks, pins, the selection and the draft. */
+export type ListPorts = {
+  prompts: () => Promise<readonly { uuid: string }[]>
+  bookmarkList: () => Promise<readonly import('../core/bookmarks/anchor.ts').AnchorRecord[]>
+  jumpToPromptNumber: (typed: string, via: string) => Promise<unknown>
+  jumpToBookmarkNumber: (typed: string, via: string) => Promise<unknown>
+  togglePin: (typed: string) => Promise<unknown>
+  groupStep: (dir: -1 | 1) => Promise<unknown>
   /** /bm-bookmarks': which bookmarks group the list shows (0, the first). */
   setBandGroup: (index: number) => Promise<unknown>
-  scroll: (uuid: string, block: 'start' | 'end') => Promise<{ deny?: string }>
-  setPendingCentre: (uuid: string) => void
+  /** `c`: one of Claude's bookmarks becomes the person's (handlers/bookmarks.ts claimBookmark). */
+  claimBookmark: (uuid: string) => Promise<ReturnType<typeof import('../core/bookmarks/register-file.ts').claim>>
+  loadMarks: () => Promise<Readonly<Record<string, unknown>>>
+  letters: readonly string[]
+  readingLetter: string
   selection: () => Promise<{ requestId?: string; text: string } | undefined>
   /** The marks cluster's: the selection as it stood when the mark chord fired. */
   setSelectionAtChord: (sel: { requestId?: string; text: string } | undefined) => void
   draftText: () => Promise<string>
-  cut: (text: string, n: number) => string
 }
+
+/** What the band cluster (handlers/band.ts) is handed: the three groups. Each handler names the groups it uses, so one that needs a digit is not given the register's writer. */
+export type BandPorts = BandCorePorts & PanePorts & ListPorts
 
 /** What the debug echo (handlers/log.ts) needs: the plugin store, the settings, and this conversation's debug variable, read and written by literal name in register.tsx (one port each, as the validator wants). */
 export type EchoPorts = {
