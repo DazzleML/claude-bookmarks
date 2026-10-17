@@ -1,0 +1,74 @@
+{
+ "mutations": [
+  {
+   "id": "M1",
+   "file": "plugin/hooks/core/bookmarks/bookmark-tool.ts",
+   "original": "filter((t): t is string => typeof t === 'string').map(t => t.trim()).filter(Boolean)",
+   "mutated": "filter((t): t is string => typeof t === 'string').map(t => t.trim())",
+   "note": "empty tags kept"
+  },
+  {
+   "id": "M2",
+   "file": "plugin/hooks/core/bookmarks/bookmark-tool.ts",
+   "original": "filter(([, v]) => v && typeof v === 'object' && !Array.isArray(v))",
+   "mutated": "filter(([, v]) => v && typeof v === 'object' && Array.isArray(v))",
+   "note": "namespace filter inverted"
+  },
+  {
+   "id": "M3",
+   "file": "plugin/hooks/core/bookmarks/bookmark-tool.ts",
+   "original": "...(tags && tags.length > 0 ? { tags } : {}), ...(x && Object.keys(x).length > 0 ? { x } : {}) }",
+   "mutated": "...(tags ? { tags } : {}), ...(x && Object.keys(x).length > 0 ? { x } : {}) }",
+   "note": "empty tags returned"
+  },
+  {
+   "id": "M4",
+   "file": "plugin/hooks/core/bookmarks/bookmark-tool.ts",
+   "original": "...(root && linked ? { anchor: anchorHref(r, root), markdown: anchorMarkdown(r, root) } : {}),",
+   "mutated": "...(root ? { anchor: anchorHref(r, root), markdown: anchorMarkdown(r, root) } : {}),",
+   "note": "linked ignored"
+  },
+  {
+   "id": "M5",
+   "file": "plugin/hooks/core/bookmarks/register-file.ts",
+   "original": "      tags: mint.tags ?? existing.tags,",
+   "mutated": "      tags: existing.tags ?? mint.tags,",
+   "note": "given tags do not replace"
+  },
+  {
+   "id": "M6",
+   "file": "plugin/hooks/core/bookmarks/register-file.ts",
+   "original": "      x: mint.x ? { ...(existing.x ?? {}), ...mint.x } : existing.x,",
+   "mutated": "      x: mint.x ? { ...mint.x } : existing.x,",
+   "note": "merge becomes replace"
+  },
+  {
+   "id": "M7",
+   "file": "plugin/hooks/core/bookmarks/register-file.ts",
+   "original": "    ...(mint.x && Object.keys(mint.x).length > 0 ? { x: mint.x } : {}),",
+   "mutated": "    ...(mint.x ? { x: mint.x } : {}),",
+   "note": "empty x stored"
+  },
+  {
+   "id": "M8",
+   "file": "plugin/hooks/handlers/bookmarks.ts",
+   "original": "const linked = !!root && (await ports.fsExists(anchorPath(root, r.sessionId, r.uuid)))",
+   "mutated": "const linked = !!root",
+   "note": "existence check dropped"
+  },
+  {
+   "id": "M9",
+   "file": "plugin/hooks/handlers/bookmarks.ts",
+   "original": "return answer({ yours: await listed('user'), claudes: await listed('claude'), tombstones: reg.tombstones.length })",
+   "mutated": "return answer({ yours: await listed('claude'), claudes: await listed('user'), tombstones: reg.tombstones.length })",
+   "note": "lists swapped"
+  },
+  {
+   "id": "M10",
+   "file": "plugin/hooks/handlers/bookmarks.ts",
+   "original": "if (!label && why === undefined && typeof input.words !== 'string' && !tags && !x) return",
+   "mutated": "if (!label && why === undefined && typeof input.words !== 'string' && !tags) return",
+   "note": "x-only relabel rejected"
+  }
+ ]
+}

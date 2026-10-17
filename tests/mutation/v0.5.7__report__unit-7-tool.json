@@ -1,0 +1,148 @@
+{
+  "mutations": [
+    {
+      "id": "M1",
+      "file": "plugin/hooks/core/bookmarks/bookmark-tool.ts",
+      "original": "filter((t): t is string => typeof t === 'string').map(t => t.trim()).filter(Boolean)",
+      "mutated": "filter((t): t is string => typeof t === 'string').map(t => t.trim())",
+      "note": "empty tags kept",
+      "verdict": "killed",
+      "core_red": [
+        "the one meta parameter: tags trimmed and kept as strings, x as an object of namespaces, anything else ignored"
+      ],
+      "kit_red": [],
+      "kit_pass": "94"
+    },
+    {
+      "id": "M2",
+      "file": "plugin/hooks/core/bookmarks/bookmark-tool.ts",
+      "original": "filter(([, v]) => v && typeof v === 'object' && !Array.isArray(v))",
+      "mutated": "filter(([, v]) => v && typeof v === 'object' && Array.isArray(v))",
+      "note": "namespace filter inverted",
+      "verdict": "killed",
+      "core_red": [
+        "the one meta parameter: tags trimmed and kept as strings, x as an object of namespaces, anything else ignored"
+      ],
+      "kit_red": [
+        "relabel with meta sets tags on the record and answers with them"
+      ],
+      "kit_pass": "93"
+    },
+    {
+      "id": "M3",
+      "file": "plugin/hooks/core/bookmarks/bookmark-tool.ts",
+      "original": "...(tags && tags.length > 0 ? { tags } : {}), ...(x && Object.keys(x).length > 0 ? { x } : {}) }",
+      "mutated": "...(tags ? { tags } : {}), ...(x && Object.keys(x).length > 0 ? { x } : {}) }",
+      "note": "empty tags returned",
+      "verdict": "killed",
+      "core_red": [
+        "the one meta parameter: tags trimmed and kept as strings, x as an object of namespaces, anything else ignored"
+      ],
+      "kit_red": [],
+      "kit_pass": "94"
+    },
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/bookmarks/bookmark-tool.ts",
+      "original": "...(root && linked ? { anchor: anchorHref(r, root), markdown: anchorMarkdown(r, root) } : {}),",
+      "mutated": "...(root ? { anchor: anchorHref(r, root), markdown: anchorMarkdown(r, root) } : {}),",
+      "note": "linked ignored",
+      "verdict": "killed",
+      "core_red": [
+        "answers are strings; a record and a row are described with their link and head"
+      ],
+      "kit_red": [
+        "list gives n for every record and a link only where the export exists"
+      ],
+      "kit_pass": "93"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "      tags: mint.tags ?? existing.tags,",
+      "mutated": "      tags: existing.tags ?? mint.tags,",
+      "note": "given tags do not replace",
+      "verdict": "killed",
+      "core_red": [
+        "a mint with tags and x sets them; a relabel replaces the tags and merges x by namespace (the tool's meta, unit 7)"
+      ],
+      "kit_red": [],
+      "kit_pass": "94"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "      x: mint.x ? { ...(existing.x ?? {}), ...mint.x } : existing.x,",
+      "mutated": "      x: mint.x ? { ...mint.x } : existing.x,",
+      "note": "merge becomes replace",
+      "verdict": "killed",
+      "core_red": [
+        "a mint with tags and x sets them; a relabel replaces the tags and merges x by namespace (the tool's meta, unit 7)"
+      ],
+      "kit_red": [],
+      "kit_pass": "94"
+    },
+    {
+      "id": "M7",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "    ...(mint.x && Object.keys(mint.x).length > 0 ? { x: mint.x } : {}),",
+      "mutated": "    ...(mint.x ? { x: mint.x } : {}),",
+      "note": "empty x stored",
+      "verdict": "killed",
+      "core_red": [
+        "a mint with tags and x sets them; a relabel replaces the tags and merges x by namespace (the tool's meta, unit 7)"
+      ],
+      "kit_red": [],
+      "kit_pass": "94"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "const linked = !!root && (await ports.fsExists(anchorPath(root, r.sessionId, r.uuid)))",
+      "mutated": "const linked = !!root",
+      "note": "existence check dropped",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "list gives n for every record and a link only where the export exists"
+      ],
+      "kit_pass": "93"
+    },
+    {
+      "id": "M9",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "return answer({ yours: await listed('user'), claudes: await listed('claude'), tombstones: reg.tombstones.length })",
+      "mutated": "return answer({ yours: await listed('claude'), claudes: await listed('user'), tombstones: reg.tombstones.length })",
+      "note": "lists swapped",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "a register from a newer build is read in full and never written; the tool says so",
+        ".bak is the previous file when that file parses",
+        "a v1 register is migrated at the start: snapshot first, a run folder with its manifest, the file at v2, the pins moved out of the store",
+        "list shows each record's tier",
+        "list gives n for every record and a link only where the export exists",
+        "a new conversation reads its own register, not the one before it"
+      ],
+      "kit_pass": "88"
+    },
+    {
+      "id": "M10",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "if (!label && why === undefined && typeof input.words !== 'string' && !tags && !x) return",
+      "mutated": "if (!label && why === undefined && typeof input.words !== 'string' && !tags) return",
+      "note": "x-only relabel rejected",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "94"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "94"
+    }
+  ]
+}

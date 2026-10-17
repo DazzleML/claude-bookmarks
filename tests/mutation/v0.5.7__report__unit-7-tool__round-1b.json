@@ -1,0 +1,24 @@
+{
+  "mutations": [
+    {
+      "id": "M10",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "if (!label && why === undefined && typeof input.words !== 'string' && !tags && !x) return",
+      "mutated": "if (!label && why === undefined && typeof input.words !== 'string' && !tags) return",
+      "note": "x-only relabel rejected",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "relabel with meta sets tags on the record and answers with them"
+      ],
+      "kit_pass": "93"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "94"
+    }
+  ]
+}

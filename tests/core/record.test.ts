@@ -52,6 +52,22 @@ test('a record\'s open fields -- tags, axes, rel, x -- round-trip through the fi
   assert.equal(relabelled.label, 'renamed')
 })
 
+test('a mint with tags and x sets them; a relabel replaces the tags and merges x by namespace (the tool\'s meta, unit 7)', () => {
+  const reg = emptyRegister(SESSION, 'w', T0)
+  const a = addOrRelabel(reg, { ...mint, tags: ['a/b', 'c'], x: { claude: { why: 'first' } } }, T0).register
+  assert.deepEqual(a.perma[0]?.tags, ['a/b', 'c'])
+  assert.deepEqual(a.perma[0]?.x, { claude: { why: 'first' } })
+  const b = addOrRelabel(a, { ...mint, tags: ['d'], x: { 'agent:oracle': { seen: true } } }, T0 + 1).register
+  assert.deepEqual(b.perma[0]?.tags, ['d'], 'tags given replace')
+  assert.deepEqual(b.perma[0]?.x, { claude: { why: 'first' }, 'agent:oracle': { seen: true } }, 'namespaces merge, each whole')
+  const c = addOrRelabel(b, { ...mint, x: { claude: { why: 'second' } } }, T0 + 2).register
+  assert.deepEqual(c.perma[0]?.x?.claude, { why: 'second' }, 'a namespace given replaces that namespace')
+  assert.deepEqual(c.perma[0]?.tags, ['d'], 'tags not given stay')
+  const none = addOrRelabel(reg, { ...mint, tags: [], x: {} }, T0).register
+  assert.equal(none.perma[0]?.tags, undefined, 'empty means absent')
+  assert.equal(none.perma[0]?.x, undefined)
+})
+
 test('an owner is an open name: the two known ones and agent:/person: forms', () => {
   const owners: AnchorOwner[] = ['user', 'claude', 'agent:oracle', 'person:djdarcy']
   const reg = emptyRegister(SESSION, 'w', T0)

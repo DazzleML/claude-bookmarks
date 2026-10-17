@@ -173,6 +173,8 @@ export async function claimBookmark(ports: BookmarksPorts, uuid: string): Promis
   if (!src) return { error: `no bookmark ${short(uuid)} on Claude's list` }
   const r = await commitOp(ports, { op: 'claim', id: idOf(src) })
   if ('error' in r) return r
+  // A link is handed out (the band's toast, the tool's answer), so the record's file is written (unit 7).
+  if (r.saved) await writeExport(ports, r.register, { uuid: r.record!.uuid, sessionId: r.register.sessionId }, '', await ports.now())
   return { register: r.register, record: r.record!, added: r.added ?? false }
 }
 
@@ -582,15 +584,24 @@ export async function bookmarkTool(ports: BookmarksPorts, e: unknown) {
   void requestMeta
   ports.log(`[bm] ${String(tool)} called (${String(tool_use_id).slice(0, 12)}) with ${ports.cut(JSON.stringify(input), 160)}`, true)
   const answer = toolAnswer
-  const { query, uuid, label, action, tierAsked, owner, why, words: wordsAsked, temporary } = parseToolInput(input)
+  const { query, uuid, label, action, tierAsked, owner, why, words: wordsAsked, temporary, tags, x } = parseToolInput(input)
   if (action !== 'list' && !query && !uuid) return answer({ error: 'give `query` (a short verbatim fragment of the message) or `uuid`' })
   const root = await ports.dataRoot()
   const describe = (r: AnchorRecord) => describeRecord(r, root)
   const brief = briefRow
 
   if (action === 'list') {
+    // Every record with its number; a link only where the record's file exists, so nothing unresolvable is handed out (unit 7).
     const reg = await loadRegister(ports)
-    return answer({ yours: listOf(reg, 'user').map(describe), claudes: listOf(reg, 'claude').map(describe), tombstones: reg.tombstones.length })
+    const listed = async (owner: AnchorOwner) => {
+      const out = []
+      for (const r of listOf(reg, owner)) {
+        const linked = !!root && (await ports.fsExists(anchorPath(root, r.sessionId, r.uuid)))
+        out.push(describeRecord(r, root, linked))
+      }
+      return out
+    }
+    return answer({ yours: await listed('user'), claudes: await listed('claude'), tombstones: reg.tombstones.length })
   }
 
   if (action === 'relabel' || action === 'remove' || action === 'share' || action === 'claim') {
@@ -627,7 +638,7 @@ export async function bookmarkTool(ports: BookmarksPorts, e: unknown) {
       return answer({ ok: true, added: r.added, shared: describe(r.record!), note: `now on ${listName(to)} list too; the original stays` })
     }
     // relabel
-    if (!label && why === undefined && typeof input.words !== 'string') return answer({ error: 'relabel needs `label`, `why` or `words`' })
+    if (!label && why === undefined && typeof input.words !== 'string' && !tags && !x) return answer({ error: 'relabel needs `label`, `why`, `words` or `meta`' })
     const minted = await mintBookmark(
       ports,
       {
@@ -639,6 +650,8 @@ export async function bookmarkTool(ports: BookmarksPorts, e: unknown) {
           ...(wordsAsked ? { words: wordsAsked } : {}),
           ...(temporary ? { temporary: true } : {}),
           ...(tierAsked ? { tier: tierAsked } : {}),
+          ...(tags ? { tags } : {}),
+          ...(x ? { x } : {}),
         },
         by: 'claude',
       },
@@ -674,6 +687,8 @@ export async function bookmarkTool(ports: BookmarksPorts, e: unknown) {
         ...(why ? { why } : {}),
         ...(words && row.text.includes(words) ? { words } : {}),
         ...(temporary ? { temporary: true } : {}),
+        ...(tags ? { tags } : {}),
+        ...(x ? { x } : {}),
         tier: tierFor(tierAsked, owner),
         by: 'claude',
         source: 'tool',
@@ -682,10 +697,11 @@ export async function bookmarkTool(ports: BookmarksPorts, e: unknown) {
     row.text,
   )
   if ('error' in minted) return answer(minted)
-  if (!minted.saved) return answer({ ok: true, added: minted.added, owner, ...brief(row), note: 'held in memory: no data root to write to, so no link' })
+  if (!minted.saved) return answer({ ok: true, added: minted.added, n: minted.record.n, owner, ...brief(row), note: 'held in memory: no data root to write to, so no link' })
   return answer({
     ok: true,
     added: minted.added,
+    n: minted.record.n,
     owner,
     anchor: minted.href,
     markdown: minted.markdown,

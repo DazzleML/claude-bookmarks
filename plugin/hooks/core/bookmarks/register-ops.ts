@@ -37,7 +37,7 @@ export type MarkPlace = {
 }
 
 /** What a relabel may change on a record it names. */
-export type Relabel = Partial<Pick<Mint, 'label' | 'why' | 'words' | 'temporary' | 'tier' | 'line' | 'bytes' | 'transcript'>>
+export type Relabel = Partial<Pick<Mint, 'label' | 'why' | 'words' | 'temporary' | 'tier' | 'line' | 'bytes' | 'transcript' | 'tags' | 'x'>>
 
 export type Op =
   | { op: 'mint'; mint: Mint }
@@ -96,6 +96,8 @@ export function applyOp(reg: Register, op: Op, now: number): OpResult {
         ...(op.changes.line !== undefined ? { line: op.changes.line } : {}),
         ...(op.changes.bytes !== undefined ? { bytes: op.changes.bytes } : {}),
         ...(op.changes.transcript !== undefined ? { transcript: op.changes.transcript } : {}),
+        ...(op.changes.tags !== undefined ? { tags: op.changes.tags } : {}),
+        ...(op.changes.x !== undefined ? { x: op.changes.x } : {}),
       }
       return addOrRelabel(reg, mint, now)
     }

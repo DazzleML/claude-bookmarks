@@ -47,6 +47,43 @@ test('list shows each record\'s tier', async ($, on) => {
   expect((out.claudes as { tier: string }[])[0]?.tier).toBe('perma')
 })
 
+// Unit 7: every answer carries n; a listing links only a record whose file exists; a claim writes the file.
+test('list gives n for every record and a link only where the export exists', async ($, on) => {
+  const two = addOrRelabel(
+    addOrRelabel(emptyRegister(SID, 'test', 1), { uuid: UUID, owner: 'claude', label: 'exported', head: 'h', by: 'claude', source: 'tool' }, 2).register,
+    { uuid: 'dddddddd-0000-4000-8000-000000000002', owner: 'claude', label: 'not exported', head: 'h', by: 'claude', source: 'tool' },
+    3,
+  ).register
+  world(on, { session: SID, files: { [PATH]: serializeRegister(two), [`C:/test-home/claude/bookmarks/sessions/${SID}/${UUID.slice(0, 8)}.md`]: '# exported\n' } })
+  const out = await call($ as never, { action: 'list' })
+  const claudes = out.claudes as { n: number; label: string; markdown?: string }[]
+  expect(claudes.map(r => r.n)).toEqual([1, 2])
+  expect(typeof claudes[0]?.markdown).toBe('string')
+  expect(claudes[1]?.markdown).toBe(undefined)
+})
+
+test('a claim writes the record\'s file, since a link is handed out', async ($, on) => {
+  const w = world(on, { session: SID, files: seeded('bookmark') })
+  const out = await call($ as never, { action: 'claim', uuid: UUID.slice(0, 8) })
+  expect(out.ok).toBe(true)
+  expect((out.claimed as { n: number }).n).toBe(1)
+  expect(w.file(`C:/test-home/claude/bookmarks/sessions/${SID}/${UUID.slice(0, 8)}.md`)).toContain('owners: user')
+})
+
+test('relabel with meta sets tags on the record and answers with them', async ($, on) => {
+  const w = world(on, { session: SID, files: seeded('bookmark') })
+  const out = await call($ as never, { action: 'relabel', uuid: UUID.slice(0, 8), owner: 'claude', meta: { tags: ['design/records'], x: { claude: { why: 'kept' } } } })
+  expect(out.ok).toBe(true)
+  expect((out.relabelled as { tags: string[]; n: number }).tags).toEqual(['design/records'])
+  expect((out.relabelled as { n: number }).n).toBe(1)
+  expect(w.file(PATH)).toContain('"tags": [')
+  expect(w.file(PATH)).toContain('"x": {')
+  // A relabel carrying only `x` is a change too (mutation sweep v0.5.7, M10).
+  const onlyX = await call($ as never, { action: 'relabel', uuid: UUID.slice(0, 8), owner: 'claude', meta: { x: { claude: { seen: 2 } } } })
+  expect(onlyX.ok).toBe(true)
+  expect(w.file(PATH)).toContain('"seen": 2')
+})
+
 // A named bookmark: permalinks are off the pane (Q261012-07), so `c` acts on bookmarks.
 test('c in the bookmarks list claims the chosen record', async ($, on) => {
   const w = world(on, { session: SID, files: seeded('bookmark') })

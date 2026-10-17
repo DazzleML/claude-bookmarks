@@ -135,6 +135,10 @@ export type Mint = {
   transcript?: string
   role?: 'user' | 'assistant'
   timestamp?: string
+  /** Tags to set (replacing the record's); nested with `/`. */
+  tags?: string[]
+  /** Open namespaces to merge onto the record's `x`, one object per namespace (`x.claude`, `x['agent:<name>']`). */
+  x?: Record<string, Record<string, unknown>>
 }
 
 export type AddResult = { register: Register; record: AnchorRecord; added: boolean }
@@ -167,6 +171,9 @@ export function addOrRelabel(reg: Register, mint: Mint, now: number): AddResult 
       tier: existing.tier === 'mark' ? 'mark' : existing.tier === 'perma' && mint.tier !== 'bookmark' ? 'perma' : undefined,
       updatedAt: now,
       transcript: mint.transcript ?? existing.transcript,
+      // Tags given replace the record's; namespaces given merge onto its `x`, each namespace whole.
+      tags: mint.tags ?? existing.tags,
+      x: mint.x ? { ...(existing.x ?? {}), ...mint.x } : existing.x,
     }
     // A record in memory is what the file reads back: no key sits there with an undefined value.
     for (const k of Object.keys(record) as (keyof AnchorRecord)[]) if (record[k] === undefined) delete record[k]
@@ -198,6 +205,8 @@ export function addOrRelabel(reg: Register, mint: Mint, now: number): AddResult 
     ...(mint.transcript ?? reg.transcript ? { transcript: mint.transcript ?? reg.transcript } : {}),
     ...(mint.role ? { role: mint.role } : {}),
     ...(mint.timestamp ? { timestamp: mint.timestamp } : {}),
+    ...(mint.tags && mint.tags.length > 0 ? { tags: mint.tags } : {}),
+    ...(mint.x && Object.keys(mint.x).length > 0 ? { x: mint.x } : {}),
   }
   const next = { ...reg, perma: [...reg.perma, record], ...(numbered ? { nextN: (reg.nextN as number) + 1 } : {}) }
   return { register: bump(next, now), record, added: true }
