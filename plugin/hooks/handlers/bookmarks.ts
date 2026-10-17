@@ -9,9 +9,10 @@ import {
   type AnchorOwner, type AnchorRecord,
 } from '../core/bookmarks/anchor.ts'
 import {
-  addOrRelabel, claim, emptyRegister, exportMarkdown, exportNotesOf, findRecord, listOf, newerThanBuild, parseRegister, prune, REGISTER_VERSION, remove, serializeRegister, share,
+  emptyRegister, exportMarkdown, exportNotesOf, findRecord, idOf, listOf, newerThanBuild, parseRegister, prune, REGISTER_VERSION, serializeRegister,
   type Mint, type Register as BookmarkRegister, type Retention,
 } from '../core/bookmarks/register-file.ts'
+import { applyOp, type Op, type OpResult } from '../core/bookmarks/register-ops.ts'
 import { rowPlace } from '../core/bookmarks/transcript-lines.ts'
 import { forwardSlashes } from '../core/kit/paths.ts'
 import { short } from '../core/kit/message-id.ts'
@@ -38,7 +39,9 @@ const ANCHOR_MARK = '@'
 // Held for the conversation it was read or written in (`session`): the process outlives a
 // conversation (/clear, /resume), and an unkeyed cache handed the next conversation the
 // register of the one before (0.4.65; tool.test.ts, "a new conversation reads its own").
-let registerCache: { session: string; register: BookmarkRegister } | undefined
+// `text` is the main file's text as last read or written, whatever it was: `commitOp`
+// compares the disk against it to know whether another writer (or a hand) got there first.
+let registerCache: { session: string; register: BookmarkRegister; text?: string } | undefined
 
 async function registerPath(ports: BookmarksPorts): Promise<string | undefined> {
   const root = await ports.dataRoot()
@@ -50,10 +53,13 @@ export async function loadRegister(ports: BookmarksPorts): Promise<BookmarkRegis
   if (registerCache?.session === session) return registerCache.register
   const path = await registerPath(ports)
   let reg: BookmarkRegister | undefined
+  let text: string | undefined
   if (path) {
     for (const p of [path, `${path}.bak`]) {
       if (!(await ports.fsExists(p))) continue
-      reg = parseRegister(await ports.fsRead(p))
+      const t = await ports.fsRead(p)
+      if (p === path) text = t
+      reg = parseRegister(t)
       if (reg) {
         if (p !== path) ports.log(`[bm] register: ${path} unreadable; loaded its .bak (rev ${reg.rev})`)
         break
@@ -73,44 +79,88 @@ export async function loadRegister(ports: BookmarksPorts): Promise<BookmarkRegis
     ports.logAlways(`[bm] register: ${path} is version ${reg.version} (written by ${reg.writer}); this build reads version ${REGISTER_VERSION} and will not write it`)
     ports.toast(`bookmarks: this conversation's bookmark file was written by a newer build (format v${reg.version}); it is read-only here until the plugin is updated`, 8000)
   }
-  registerCache = { session, register: reg }
+  registerCache = { session, register: reg, ...(text !== undefined ? { text } : {}) }
   return reg
-}
-
-/**
- * Writes the register, `.bak` first. False, with a toast, when the file is from a newer
- * build (`newerThanBuild`): the caller then reports the operation as not done and hands
- * out no link for it. `.bak` is written only from a file that parses, so a torn write can
- * never become the only backup (the data design, 2026-10-16; it was a blind copy before).
- */
-export async function saveRegister(ports: BookmarksPorts, reg: BookmarkRegister): Promise<boolean> {
-  const path = await registerPath(ports)
-  if (!path) return false
-  if (newerThanBuild(reg)) {
-    ports.logAlways(`[bm] register: not saved -- ${path} is version ${reg.version}, ahead of this build's ${REGISTER_VERSION}`)
-    ports.toast(`bookmarks: not saved -- the bookmark file is from a newer build (format v${reg.version}); update the plugin`, 8000)
-    return false
-  }
-  ports.expectRedraw('a bookmark saved')
-  if (await ports.fsExists(path)) {
-    const existing = await ports.fsRead(path)
-    if (parseRegister(existing)) await ports.fsWrite(`${path}.bak`, existing)
-    else ports.log(`[bm] register: ${path} does not parse; .bak kept as it was`)
-  }
-  await ports.fsWrite(path, serializeRegister({ ...reg, writer: `${ports.pluginName} ${await ports.pluginVersion()}` }))
-  registerCache = { session: await ports.sessionId(), register: reg }
-  return true
 }
 
 /** What the tool and the band say when a save was refused by the version guard. */
 const READ_ONLY_NOTE = 'not saved: this conversation\'s bookmark file was written by a newer build of the plugin and is read-only here; update the plugin'
 
+/**
+ * Commit by operation (the data design, 2026-10-16): applies `op` to the register this
+ * session holds, then writes -- unless the file on disk is no longer the text last seen,
+ * in which case the operation is applied again to the disk's version and that is what is
+ * written, so another window's or a hand's changes are kept. An operation that cannot be
+ * applied to the disk's version (its record is gone) is reported, never resolved silently.
+ *
+ * The write itself: `.bak` from the previous file only when that file parses (a torn
+ * write never becomes the only backup); refused with a toast when the file is from a newer
+ * build (`newerThanBuild`), so the caller reports "not saved" and hands out no link.
+ * `saved: false` without an error means there is no data root to write to; the change is
+ * held in memory for the conversation.
+ */
+export async function commitOp(ports: BookmarksPorts, op: Op): Promise<OpResult & { saved?: boolean; replayed?: boolean }> {
+  const reg = await loadRegister(ports)
+  const now = await ports.now()
+  const session = await ports.sessionId()
+  let applied = applyOp(reg, op, now)
+  if ('error' in applied) return applied
+  if (applied.unchanged) return { ...applied, saved: false }
+  const path = await registerPath(ports)
+  if (!path) {
+    registerCache = { session, register: applied.register }
+    return { ...applied, saved: false }
+  }
+  if (newerThanBuild(reg)) {
+    ports.logAlways(`[bm] register: not saved -- ${path} is version ${reg.version}, ahead of this build's ${REGISTER_VERSION}`)
+    ports.toast(`bookmarks: not saved -- the bookmark file is from a newer build (format v${reg.version}); update the plugin`, 8000)
+    return { error: READ_ONLY_NOTE }
+  }
+  let replayed = false
+  if (await ports.fsExists(path)) {
+    const disk = await ports.fsRead(path)
+    const onDisk = parseRegister(disk)
+    if (disk !== registerCache?.text && onDisk) {
+      // Someone else wrote since this session read: their file is the base, this operation is applied to it.
+      if (newerThanBuild(onDisk)) {
+        ports.logAlways(`[bm] register: not saved -- ${path} is now version ${onDisk.version}, ahead of this build's ${REGISTER_VERSION}`)
+        ports.toast(`bookmarks: not saved -- the bookmark file is from a newer build (format v${onDisk.version}); update the plugin`, 8000)
+        registerCache = { session, register: onDisk, text: disk }
+        return { error: READ_ONLY_NOTE }
+      }
+      const again = applyOp(onDisk, op, now)
+      if ('error' in again) {
+        ports.logAlways(`[bm] register: ${path} changed on disk (rev ${reg.rev} -> ${onDisk.rev}) and the operation no longer applies: ${again.error}`)
+        registerCache = { session, register: onDisk, text: disk }
+        return { error: `${again.error} (the bookmark file changed since this session read it; nothing was written)` }
+      }
+      ports.log(`[bm] register: ${path} changed on disk (rev ${reg.rev} -> ${onDisk.rev}); the operation was applied to the disk's version`)
+      applied = again
+      replayed = true
+    }
+    if (onDisk) await ports.fsWrite(`${path}.bak`, disk)
+    else ports.log(`[bm] register: ${path} does not parse; .bak kept as it was`)
+  }
+  if (applied.unchanged) {
+    registerCache = { session, register: applied.register, text: registerCache?.text }
+    return { ...applied, saved: false, replayed }
+  }
+  ports.expectRedraw('a bookmark saved')
+  const register = { ...applied.register, writer: `${ports.pluginName} ${await ports.pluginVersion()}` }
+  const text = serializeRegister(register)
+  await ports.fsWrite(path, text)
+  registerCache = { session, register, text }
+  return { ...applied, register, saved: true, replayed }
+}
+
 /** One of Claude's records becomes the person's (#21): same message, id and link, saved. The band's `c` and the model's tool both claim here. */
-export async function claimBookmark(ports: BookmarksPorts, uuid: string): Promise<ReturnType<typeof claim>> {
-  const r = claim(await loadRegister(ports), uuid, await ports.now())
+export async function claimBookmark(ports: BookmarksPorts, uuid: string): Promise<{ register: BookmarkRegister; record: AnchorRecord; added: boolean } | { error: string }> {
+  const reg = await loadRegister(ports)
+  const src = findRecord(reg, uuid, 'claude')
+  if (!src) return { error: `no bookmark ${short(uuid)} on Claude's list` }
+  const r = await commitOp(ports, { op: 'claim', id: idOf(src) })
   if ('error' in r) return r
-  if (!(await saveRegister(ports, r.register))) return { error: READ_ONLY_NOTE }
-  return r
+  return { register: r.register, record: r.record!, added: r.added ?? false }
 }
 
 // How long a `temporary` bookmark is kept before it is pruned (to a tombstone). A
@@ -124,30 +174,34 @@ export async function startRegister(ports: BookmarksPorts) {
     const reg = await loadRegister(ports)
     ports.log(`[bm] register: ${reg.perma.length} bookmark(s), rev ${reg.rev}, ${await registerPath(ports)}`)
     // Temporary bookmarks age out (a setting later, #7); each leaves a tombstone.
-    const { register: pruned, pruned: gone } = prune(reg, TEMPORARY_RETENTION, await ports.now())
+    const { pruned: gone } = prune(reg, TEMPORARY_RETENTION, await ports.now())
     if (gone.length > 0) {
-      await saveRegister(ports, pruned)
-      ports.log(`[bm] register: pruned ${gone.length} temporary bookmark(s) older than ${TEMPORARY_RETENTION}`)
+      const r = await commitOp(ports, { op: 'prune', retention: TEMPORARY_RETENTION })
+      if ('error' in r) ports.logAlways(`[bm] register: prune not saved: ${r.error}`)
+      else ports.log(`[bm] register: pruned ${r.pruned?.length ?? 0} temporary bookmark(s) older than ${TEMPORARY_RETENTION}`)
     }
   } catch (err) {
     ports.logAlways(`[bm] register failed to load: ${String(err)}`)
   }
 }
 
-// Mint a bookmark: add or relabel the record, save the register, write the export, and
-// hand back the anchor URL and the markdown link a reply writes.
-async function mintBookmark(ports: BookmarksPorts, mint: Mint, messageText: string) {
-  const reg = await loadRegister(ports)
-  const now = await ports.now()
-  const { register, record, added } = addOrRelabel(reg, mint, now)
-  // Not saved (the version guard): no export and no link, since neither would name a record on disk.
-  if (!(await saveRegister(ports, register))) return { record, added, saved: false as const, href: undefined, markdown: undefined, exportPath: undefined, rev: reg.rev }
-  const exportPath = await writeExport(ports, register, record, messageText, now)
+// Mint a bookmark: commit the operation (a mint adds or relabels by message; a relabel
+// names an existing record), write the export, and hand back the anchor URL and the
+// markdown link a reply writes.
+type Minted = { record: AnchorRecord; added: boolean; saved: boolean; href?: string; markdown?: string; exportPath?: string; rev: number }
+async function mintBookmark(ports: BookmarksPorts, op: Extract<Op, { op: 'mint' | 'relabel' }>, messageText: string): Promise<Minted | { error: string }> {
+  const r = await commitOp(ports, op)
+  if ('error' in r) return r
+  const { register, record, added } = r as { register: BookmarkRegister; record: AnchorRecord; added?: boolean }
+  // Not saved (no data root): the record lives in memory for the conversation; no export and no link,
+  // since neither would name a record on disk.
+  if (!r.saved) return { record, added: added ?? false, saved: false, rev: register.rev }
+  const exportPath = await writeExport(ports, register, record, messageText, await ports.now())
   const root = await ports.dataRoot()
   const href = root ? anchorHref(record, root) : undefined
   const markdown = root ? anchorMarkdown(record, root) : undefined
-  ports.log(`[bm] bookmark ${added ? 'added' : 'relabelled'}: ${short(record.uuid)} "${record.label}" (${ownerOf(record)}'s list; ${record.by}/${record.source}) rev ${register.rev}`, true)
-  return { record, added, saved: true as const, href, markdown, exportPath, rev: register.rev }
+  ports.log(`[bm] bookmark ${added ? 'added' : 'relabelled'}: ${short(record.uuid)} "${record.label}" (${ownerOf(record)}'s list; ${record.by}/${record.source}) rev ${register.rev}${r.replayed ? ' (replayed onto a changed file)' : ''}`, true)
+  return { record, added: added ?? false, saved: true, href, markdown, exportPath, rev: register.rev }
 }
 
 // One export per message, shared by both lists. A rewrite keeps whatever was written under
@@ -197,12 +251,15 @@ export function queueProseAnchors(ports: BookmarksPorts, anchors: ReturnType<typ
         await mintBookmark(
           ports,
           {
-            ...rowPlace(row, await ports.transcriptPath()),
-            label: l.label.replace(/^(⚓|▤|\[bm\]|\[file\])\s*/, '') || `bookmark ${a.uuid8}`,
-            ...(a.words && row.text.includes(a.words) ? { words: a.words } : {}),
-            owner: 'claude',
-            by: 'prose',
-            source: 'prose',
+            op: 'mint',
+            mint: {
+              ...rowPlace(row, await ports.transcriptPath()),
+              label: l.label.replace(/^(⚓|▤|\[bm\]|\[file\])\s*/, '') || `bookmark ${a.uuid8}`,
+              ...(a.words && row.text.includes(a.words) ? { words: a.words } : {}),
+              owner: 'claude',
+              by: 'prose',
+              source: 'prose',
+            },
           },
           row.text,
         )
@@ -283,16 +340,20 @@ export async function promoteLetter(ports: BookmarksPorts, letter: string) {
   const minted = await mintBookmark(
     ports,
     {
-      ...rowPlace(row, await ports.transcriptPath()),
-      label: (words ?? mark.head).slice(0, 80),
-      ...(words ? { words } : {}),
-      owner: 'user',
-      by: 'user',
-      source: 'promote',
+      op: 'mint',
+      mint: {
+        ...rowPlace(row, await ports.transcriptPath()),
+        label: (words ?? mark.head).slice(0, 80),
+        ...(words ? { words } : {}),
+        owner: 'user',
+        by: 'user',
+        source: 'promote',
+      },
     },
     row.text,
   )
-  if (!minted.saved) return // saveRegister has toasted why
+  if ('error' in minted) return void ports.toast(minted.error, 8000)
+  if (!minted.saved) return
   const copied = minted.markdown ? (await ports.copy(minted.markdown)).isCopied : false
   ports.toast(`${minted.added ? 'bookmarked' : 'already a bookmark, relabelled'}: ${minted.record.label.slice(0, 40)}${copied ? ' (link copied)' : ''}`, 6000)
 }
@@ -336,40 +397,39 @@ export async function bookmarkTool(ports: BookmarksPorts, e: unknown) {
       return answer({ ok: true, claimed: describe(r.record), note: "now on the person's list; same message, id and link" })
     }
     if (action === 'remove') {
-      const r = remove(reg, target.uuid, owner, `claude${owner === 'user' ? ' (on the person\'s behalf)' : ''}`, now)
+      const r = await commitOp(ports, { op: 'remove', id: idOf(target), removedBy: `claude${owner === 'user' ? ' (on the person\'s behalf)' : ''}` })
       if ('error' in r) return answer(r)
-      if (!(await saveRegister(ports, r.register))) return answer({ error: READ_ONLY_NOTE })
       ports.log(`[bm] bookmark removed from ${owner}'s list: ${short(target.uuid)} "${target.label}" (tombstoned)`, true)
-      return answer({ ok: true, removed: describe(r.removed), note: 'archived as a tombstone in the register, not deleted' })
+      return answer({ ok: true, removed: describe(r.removed!), note: 'archived as a tombstone in the register, not deleted' })
     }
     if (action === 'share') {
       const to: AnchorOwner = owner === 'claude' ? 'user' : 'claude'
-      const r = share(reg, target.uuid, owner, to, now)
+      const r = await commitOp(ports, { op: 'share', id: idOf(target), to })
       if ('error' in r) return answer(r)
-      if (!(await saveRegister(ports, r.register))) return answer({ error: READ_ONLY_NOTE })
       await writeExport(ports, r.register, { uuid: target.uuid, sessionId: r.register.sessionId }, '', now)
-      ports.log(`[bm] bookmark shared ${owner} -> ${to}: ${short(target.uuid)} "${r.record.label}"`, true)
-      return answer({ ok: true, added: r.added, shared: describe(r.record), note: `now on ${listName(to)} list too; the original stays` })
+      ports.log(`[bm] bookmark shared ${owner} -> ${to}: ${short(target.uuid)} "${r.record!.label}"`, true)
+      return answer({ ok: true, added: r.added, shared: describe(r.record!), note: `now on ${listName(to)} list too; the original stays` })
     }
     // relabel
     if (!label && why === undefined && typeof input.words !== 'string') return answer({ error: 'relabel needs `label`, `why` or `words`' })
     const minted = await mintBookmark(
       ports,
       {
-        uuid: target.uuid,
-        owner,
-        label: label ?? target.label,
-        ...(why !== undefined ? { why } : {}),
-        ...(wordsAsked ? { words: wordsAsked } : {}),
-        ...(temporary ? { temporary: true } : {}),
-        ...(tierAsked ? { tier: tierAsked } : {}),
-        head: target.head,
+        op: 'relabel',
+        id: idOf(target),
+        changes: {
+          ...(label ? { label } : {}),
+          ...(why !== undefined ? { why } : {}),
+          ...(wordsAsked ? { words: wordsAsked } : {}),
+          ...(temporary ? { temporary: true } : {}),
+          ...(tierAsked ? { tier: tierAsked } : {}),
+        },
         by: 'claude',
-        source: target.source,
       },
       '',
     )
-    if (!minted.saved) return answer({ error: READ_ONLY_NOTE })
+    if ('error' in minted) return answer(minted)
+    if (!minted.saved) return answer({ ok: true, relabelled: describe(minted.record), note: 'held in memory: no data root to write to' })
     return answer({ ok: true, relabelled: describe(minted.record) })
   }
 
@@ -390,19 +450,23 @@ export async function bookmarkTool(ports: BookmarksPorts, e: unknown) {
   const minted = await mintBookmark(
     ports,
     {
-      ...rowPlace(row, await ports.transcriptPath()),
-      owner,
-      label,
-      ...(why ? { why } : {}),
-      ...(words && row.text.includes(words) ? { words } : {}),
-      ...(temporary ? { temporary: true } : {}),
-      tier: tierFor(tierAsked, owner),
-      by: 'claude',
-      source: 'tool',
+      op: 'mint',
+      mint: {
+        ...rowPlace(row, await ports.transcriptPath()),
+        owner,
+        label,
+        ...(why ? { why } : {}),
+        ...(words && row.text.includes(words) ? { words } : {}),
+        ...(temporary ? { temporary: true } : {}),
+        tier: tierFor(tierAsked, owner),
+        by: 'claude',
+        source: 'tool',
+      },
     },
     row.text,
   )
-  if (!minted.saved) return answer({ error: READ_ONLY_NOTE })
+  if ('error' in minted) return answer(minted)
+  if (!minted.saved) return answer({ ok: true, added: minted.added, owner, ...brief(row), note: 'held in memory: no data root to write to, so no link' })
   return answer({
     ok: true,
     added: minted.added,

@@ -1,0 +1,214 @@
+{
+  "mutations": [
+    {
+      "id": "M1",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "  if (id.n !== undefined && r.n !== undefined) return r.n === id.n",
+      "mutated": "  if (id.n !== undefined && r.n !== undefined) return r.n !== id.n",
+      "note": "numbered id comparison inverted",
+      "verdict": "killed",
+      "core_red": [
+        "a v2 file numbers its records and never reuses a number; a v1 file numbers nothing",
+        "p8: two writers; A's operations replay onto B's result by identity",
+        "a relabel of a removed record fails and reports; a removal twice fails the second time",
+        "identity: n when both have one, else (uuid, createdAt) and the owner; a drawn id names the same message",
+        "a claim plus a relabel on each side union to one record",
+        "the union is by identity and idempotent; a later tombstone removes on both sides"
+      ],
+      "kit_red": [
+        "a register from a newer build is read in full and never written; the tool says so"
+      ],
+      "kit_pass": "84"
+    },
+    {
+      "id": "M2",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "  return id.createdAt === undefined || r.createdAt === id.createdAt",
+      "mutated": "  return true",
+      "note": "createdAt disambiguation dropped",
+      "verdict": "killed",
+      "core_red": [
+        "identity: n when both have one, else (uuid, createdAt) and the owner; a drawn id names the same message"
+      ],
+      "kit_red": [],
+      "kit_pass": "85"
+    },
+    {
+      "id": "M3",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "  if (id.owner !== undefined && ownerOf(r) !== id.owner) return false",
+      "mutated": "  if (id.owner !== undefined && ownerOf(r) === id.owner) return false",
+      "note": "owner check flipped",
+      "verdict": "killed",
+      "core_red": [
+        "identity: n when both have one, else (uuid, createdAt) and the owner; a drawn id names the same message"
+      ],
+      "kit_red": [
+        ".bak is written only from a file that parses: a torn file never becomes the backup",
+        "a hand edit on disk survives: the operation is applied to the disk's version, not this session's copy",
+        "an operation whose record is gone from the disk reports and writes nothing",
+        ".bak is the previous file when that file parses",
+        "c in the bookmarks list claims the chosen record",
+        "claim moves Claude's record to the person's list, same id and tier"
+      ],
+      "kit_pass": "79"
+    },
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "      uuid: existing.uuid.length >= mint.uuid.length ? existing.uuid : mint.uuid,",
+      "mutated": "      uuid: existing.uuid.length >= mint.uuid.length ? mint.uuid : existing.uuid,",
+      "note": "keeps shorter uuid prefix instead of longer",
+      "verdict": "killed",
+      "core_red": [
+        "a uuid prefix finds the record and the full uuid is kept"
+      ],
+      "kit_red": [],
+      "kit_pass": "85"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "      temporary: existing.temporary && mint.temporary ? true : undefined,",
+      "mutated": "      temporary: existing.temporary || mint.temporary ? true : undefined,",
+      "note": "temporary needs both, now either",
+      "verdict": "killed",
+      "core_red": [
+        "temporary: a permanent mark stays permanent; prune removes old temporaries and leaves tombstones"
+      ],
+      "kit_red": [],
+      "kit_pass": "85"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "      label: mint.label || existing.label,",
+      "mutated": "      label: existing.label || mint.label,",
+      "note": "relabel no longer overrides label",
+      "verdict": "killed",
+      "core_red": [
+        "a mint adds a record; a second mint for the same message relabels, never duplicates or deletes",
+        "p8: two writers; A's operations replay onto B's result by identity",
+        "a claim plus a relabel on each side union to one record"
+      ],
+      "kit_red": [
+        ".bak is written only from a file that parses: a torn file never becomes the backup",
+        ".bak is the previous file when that file parses"
+      ],
+      "kit_pass": "83"
+    },
+    {
+      "id": "M7",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "...(numbered ? { nextN: (reg.nextN as number) + 1 } : {}) }",
+      "mutated": "...(numbered ? { nextN: (reg.nextN as number) } : {}) }",
+      "note": "nextN increment dropped",
+      "verdict": "killed",
+      "core_red": [
+        "a v2 file numbers its records and never reuses a number; a v1 file numbers nothing",
+        "p8: two writers; A's operations replay onto B's result by identity",
+        "identity: n when both have one, else (uuid, createdAt) and the owner; a drawn id names the same message",
+        "a claim plus a relabel on each side union to one record",
+        "the union is by identity and idempotent; a later tombstone removes on both sides"
+      ],
+      "kit_red": [],
+      "kit_pass": "85"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "    ?? reg.perma.find(r => onList(r) && matchesPrefix(r.uuid, id))",
+      "mutated": "    ?? reg.perma.find(r => matchesPrefix(r.uuid, id))",
+      "note": "prefix lookup ignores owner",
+      "verdict": "killed",
+      "core_red": [
+        "claim moves Claude's record to the person's list with the same id and link",
+        "identity: n when both have one, else (uuid, createdAt) and the owner; a drawn id names the same message"
+      ],
+      "kit_red": [
+        "c in the bookmarks list claims the chosen record",
+        "claim moves Claude's record to the person's list, same id and tier"
+      ],
+      "kit_pass": "83"
+    },
+    {
+      "id": "M9",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "      const rec = recordById(reg, { ...op.id, owner: 'claude' })\n      if (!rec) return { error: `no bookmark ${describeId({ ...op.id, owner: 'claude' })} to claim` }",
+      "mutated": "      const rec = recordById(reg, op.id)\n      if (!rec) return { error: `no bookmark ${describeId({ ...op.id, owner: 'claude' })} to claim` }",
+      "note": "claim no longer restricted to claude-owned records",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "85"
+    },
+    {
+      "id": "M10",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "      if (has === op.on) return { register: reg, unchanged: true }",
+      "mutated": "      if (has !== op.on) return { register: reg, unchanged: true }",
+      "note": "pin no-op check inverted",
+      "verdict": "killed",
+      "core_red": [
+        "pins are a per-owner list in the register; pinning twice changes nothing"
+      ],
+      "kit_red": [],
+      "kit_pass": "85"
+    },
+    {
+      "id": "M11",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "  const base = a.rev >= b.rev ? a : b",
+      "mutated": "  const base = a.rev > b.rev ? a : b",
+      "note": "tie on rev now picks b as base",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "85"
+    },
+    {
+      "id": "M12",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "      if (lastTouched(r) > lastTouched(perma[i]!)) { perma[i] = r; changed = true }",
+      "mutated": "      if (lastTouched(r) < lastTouched(perma[i]!)) { perma[i] = r; changed = true }",
+      "note": "union keeps older record",
+      "verdict": "killed",
+      "core_red": [
+        "a claim plus a relabel on each side union to one record"
+      ],
+      "kit_red": [],
+      "kit_pass": "85"
+    },
+    {
+      "id": "M13",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "    if (tomb && tombAt(tomb) >= lastTouched(r)) continue",
+      "mutated": "    if (tomb && tombAt(tomb) > lastTouched(r)) continue",
+      "note": "tombstone boundary: equal timestamps resurrect the record",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "85"
+    },
+    {
+      "id": "M14",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "      applied = again\n      replayed = true",
+      "mutated": "      replayed = true",
+      "note": "replay result discarded; stale applied copy is written",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "a hand edit on disk survives: the operation is applied to the disk's version, not this session's copy"
+      ],
+      "kit_pass": "84"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "85"
+    }
+  ]
+}

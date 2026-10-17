@@ -1,0 +1,35 @@
+{
+  "mutations": [
+    {
+      "id": "M11",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "  const base = a.rev >= b.rev ? a : b",
+      "mutated": "  const base = a.rev > b.rev ? a : b",
+      "note": "tie on rev now picks b as base",
+      "verdict": "killed",
+      "core_red": [
+        "union: on a rev tie the left-hand copy is the base; a tombstone at the very instant of the last touch still removes (mutation sweep v0.5.3, M11 and M13)"
+      ],
+      "kit_red": [],
+      "kit_pass": "85"
+    },
+    {
+      "id": "M13",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "    if (tomb && tombAt(tomb) >= lastTouched(r)) continue",
+      "mutated": "    if (tomb && tombAt(tomb) > lastTouched(r)) continue",
+      "note": "tombstone boundary: equal timestamps resurrect the record",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "85"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "85"
+    }
+  ]
+}

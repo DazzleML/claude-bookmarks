@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-10-16
+
+### Changed
+
+- Every save of the bookmark file now carries the one change being made (a new bookmark, a relabel, a removal, a share, a claim, a prune) and applies that change to the file as it is on disk when the file has changed since this session read it: a hand edit, or another window's bookmark, is kept instead of being overwritten by this session's copy. A change whose bookmark is gone from the disk (removed elsewhere) is reported as not done, and nothing is written.
+- Internal, no visible change yet: records have an identity the file format can carry (a number per conversation, never reused, with the message and its minting time as the tie-break); a bookmark made from a drawn message id is marked as such; a merge of two whole copies of one file is defined. A file keeps its present form until the format migration in a later 0.5.x release, so none of this shows in the files on disk yet.
+
 ## [0.5.2] - 2026-10-16
 
 ### Changed
@@ -1018,7 +1025,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.3...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

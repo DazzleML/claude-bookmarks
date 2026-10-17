@@ -27,8 +27,12 @@ export type AnchorTier = 'perma' | 'bookmark'
 export const tierOf = (r: { tier?: AnchorTier }): AnchorTier => r.tier ?? 'bookmark'
 
 export type AnchorRecord = {
+  /** The record's number in its conversation (format v2): never reused; the short reference `bm:<sid8>.<n>`. Absent in a v1 file. */
+  n?: number
   sessionId: string
   uuid: string
+  /** `drawn` when the uuid is the engine's stand-in for a message (fifth group zeros), to be replaced by the real one when found. */
+  idKind?: 'drawn'
   /** Whose list this is on. Absent on records from before 2026-10-09: read it as `by`. */
   owner?: AnchorOwner
   /** Set on a copy made from the other list (`share`). */

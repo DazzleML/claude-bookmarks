@@ -16,6 +16,7 @@
 // never written (`newerThanBuild`); the handler says so once and keeps the file as it is.
 
 import { type AnchorOwner, type AnchorRecord, ownerOf, uuid8 } from './anchor.ts'
+import { isDrawnId, matchesPrefix, sameMessage } from '../kit/message-id.ts'
 
 export const REGISTER_VERSION = 1
 
@@ -24,8 +25,12 @@ export function newerThanBuild(reg: Register): boolean {
   return reg.version > REGISTER_VERSION
 }
 
-/** What is left when a record goes: pruned (temporary, aged out) or removed (on request). */
-export type Tombstone = { uuid: string; owner?: AnchorOwner; label?: string; prunedAt?: number; removedAt?: number; removedBy?: string }
+/**
+ * What is left when a record goes: pruned (temporary, aged out) or removed (on request).
+ * Carries the record's identity (`n` when it had one, `uuid`, `createdAt`) so a removal
+ * replayed onto another copy of the file finds the same record (the data design, 2026-10-16).
+ */
+export type Tombstone = { uuid: string; n?: number; createdAt?: number; owner?: AnchorOwner; label?: string; prunedAt?: number; removedAt?: number; removedBy?: string }
 
 export type Register = {
   version: number
@@ -37,13 +42,47 @@ export type Register = {
   rev: number
   updatedAt: number
   writer: string
+  /**
+   * The next record number (format v2): every record minted into a file with `nextN` gets
+   * `n = nextN`, and `nextN` moves on; a number is never reused. A v1 file has none, and
+   * its records get none until the migration (unit 4) gives the file a `nextN`.
+   */
+  nextN?: number
   perma: AnchorRecord[]
   tombstones: Tombstone[]
+  /** Pinned prompts, per owner, by message uuid (format v2; kept in the store until the migration). */
+  pins?: Partial<Record<AnchorOwner, string[]>>
 }
 
 export function emptyRegister(sessionId: string, writer: string, now: number, env?: { configDir?: string; cwd?: string }): Register {
   return { version: REGISTER_VERSION, sessionId, ...(env ?? {}), rev: 0, updatedAt: now, writer, perma: [], tombstones: [] }
 }
+
+/**
+ * What names one record for an operation: decided when the person or Claude acts, so a
+ * replay onto a changed file finds the same record and not whatever sits at its position.
+ * `n` when the record has one; `(uuid, createdAt)` breaks a tie between files that
+ * numbered independently; `owner` because the same message may be on both lists.
+ */
+export type RecordId = { n?: number; uuid: string; createdAt?: number; owner?: AnchorOwner }
+
+export const idOf = (r: AnchorRecord): RecordId => ({ ...(r.n !== undefined ? { n: r.n } : {}), uuid: r.uuid, createdAt: r.createdAt, owner: ownerOf(r) })
+
+/**
+ * Whether a record is the one an id names (identity, never a typed prefix). `n` decides
+ * when both sides have one -- the owner is mutable (a claim moves a record between the
+ * lists and it stays the same record). Without `n`, the message, the minting time and the
+ * list together name it.
+ */
+export function isRecord(r: AnchorRecord, id: RecordId): boolean {
+  if (id.n !== undefined && r.n !== undefined) return r.n === id.n
+  if (id.owner !== undefined && ownerOf(r) !== id.owner) return false
+  if (!sameMessage(r.uuid, id.uuid)) return false
+  return id.createdAt === undefined || r.createdAt === id.createdAt
+}
+
+/** The record an id names, or undefined when it is gone (removed, pruned, never there). */
+export const recordById = (reg: Register, id: RecordId): AnchorRecord | undefined => reg.perma.find(r => isRecord(r, id))
 
 /** What a mint supplies; the register fills the rest. */
 export type Mint = {
@@ -75,7 +114,8 @@ export type AddResult = { register: Register; record: AnchorRecord; added: boole
  * prefix of the other) within the owner's list: the two lists may hold the same message.
  */
 export function addOrRelabel(reg: Register, mint: Mint, now: number): AddResult {
-  const existing = reg.perma.find(r => ownerOf(r) === mint.owner && sameUuid(r.uuid, mint.uuid))
+  // The same message (a drawn id included), or a prefix a hand-written link carried: typed input, so matchesPrefix.
+  const existing = reg.perma.find(r => ownerOf(r) === mint.owner && (sameMessage(r.uuid, mint.uuid) || matchesPrefix(r.uuid, mint.uuid)))
   if (existing) {
     const record: AnchorRecord = {
       ...existing,
@@ -99,9 +139,15 @@ export function addOrRelabel(reg: Register, mint: Mint, now: number): AddResult 
     if (record.tier === undefined) delete record.tier
     return { register: bump({ ...reg, perma: reg.perma.map(r => (r === existing ? record : r)) }, now), record, added: false }
   }
+  // A v2 file numbers its records; a v1 file does not, until the migration gives it nextN.
+  const numbered = typeof reg.nextN === 'number'
   const record: AnchorRecord = {
     sessionId: reg.sessionId,
+    ...(numbered ? { n: reg.nextN } : {}),
     uuid: mint.uuid,
+    // A drawn id (the engine's stand-in, fifth group zeros) is kept as what it is, so the
+    // real uuid can replace it when the message is found in the transcript.
+    ...(isDrawnId(mint.uuid) ? { idKind: 'drawn' as const } : {}),
     owner: mint.owner,
     ...(mint.sharedFrom ? { sharedFrom: mint.sharedFrom } : {}),
     ...(mint.line !== undefined ? { line: mint.line } : {}),
@@ -119,20 +165,20 @@ export function addOrRelabel(reg: Register, mint: Mint, now: number): AddResult 
     ...(mint.role ? { role: mint.role } : {}),
     ...(mint.timestamp ? { timestamp: mint.timestamp } : {}),
   }
-  return { register: bump({ ...reg, perma: [...reg.perma, record] }, now), record, added: true }
+  const next = { ...reg, perma: [...reg.perma, record], ...(numbered ? { nextN: (reg.nextN as number) + 1 } : {}) }
+  return { register: bump(next, now), record, added: true }
 }
 
-export function sameUuid(a: string, b: string): boolean {
-  const x = a.toLowerCase()
-  const y = b.toLowerCase()
-  if (x === y) return true
-  const [short, long] = x.length <= y.length ? [x, y] : [y, x]
-  return short.length >= 8 && long.startsWith(short)
-}
-
-/** The record for a message on one list, or on any list when `owner` is left out. */
-export function findRecord(reg: Register, uuid: string, owner?: AnchorOwner): AnchorRecord | undefined {
-  return reg.perma.find(r => (owner === undefined || ownerOf(r) === owner) && sameUuid(r.uuid, uuid))
+/**
+ * The record for a message on one list, or on any list when `owner` is left out. `id` is
+ * what was typed or linked: a full uuid, a drawn id (the same message by its first four
+ * groups), or a prefix of 8+ characters.
+ */
+export function findRecord(reg: Register, id: string, owner?: AnchorOwner): AnchorRecord | undefined {
+  const onList = (r: AnchorRecord) => owner === undefined || ownerOf(r) === owner
+  return reg.perma.find(r => onList(r) && r.uuid.toLowerCase() === id.toLowerCase())
+    ?? reg.perma.find(r => onList(r) && matchesPrefix(r.uuid, id))
+    ?? reg.perma.find(r => onList(r) && id.length === 36 && sameMessage(r.uuid, id))
 }
 
 /** One owner's list, in minted order. */
@@ -192,7 +238,7 @@ export function claim(reg: Register, uuid: string, now: number): AddResult | { e
 export function remove(reg: Register, uuid: string, owner: AnchorOwner, removedBy: string, now: number): { register: Register; removed: AnchorRecord } | { error: string } {
   const rec = findRecord(reg, uuid, owner)
   if (!rec) return { error: `no bookmark ${uuid8(uuid)} on ${owner === 'claude' ? "Claude's" : "the person's"} list` }
-  const tomb: Tombstone = { uuid: rec.uuid, owner, label: rec.label, removedAt: now, removedBy }
+  const tomb: Tombstone = { uuid: rec.uuid, ...(rec.n !== undefined ? { n: rec.n } : {}), createdAt: rec.createdAt, owner, label: rec.label, removedAt: now, removedBy }
   return { register: bump({ ...reg, perma: reg.perma.filter(r => r !== rec), tombstones: [...reg.tombstones, tomb] }, now), removed: rec }
 }
 
@@ -208,7 +254,7 @@ export function prune(reg: Register, retention: Retention, now: number): { regis
   const pruned = reg.perma.filter(r => r.temporary && (r.updatedAt ?? r.createdAt) < cutoff)
   if (pruned.length === 0) return { register: reg, pruned }
   const keep = reg.perma.filter(r => !pruned.includes(r))
-  const tombstones = [...reg.tombstones, ...pruned.map(r => ({ uuid: r.uuid, owner: ownerOf(r), label: r.label, prunedAt: now }))]
+  const tombstones = [...reg.tombstones, ...pruned.map(r => ({ uuid: r.uuid, ...(r.n !== undefined ? { n: r.n } : {}), createdAt: r.createdAt, owner: ownerOf(r), label: r.label, prunedAt: now }))]
   return { register: bump({ ...reg, perma: keep, tombstones }, now), pruned }
 }
 
@@ -217,9 +263,9 @@ function bump(reg: Register, now: number): Register {
 }
 
 // Fixed key order, so a hand edit and a program write diff cleanly.
-const REGISTER_KEYS = ['version', 'sessionId', 'configDir', 'cwd', 'rev', 'updatedAt', 'writer', 'perma', 'tombstones'] as const
+const REGISTER_KEYS = ['version', 'sessionId', 'configDir', 'cwd', 'rev', 'updatedAt', 'writer', 'nextN', 'perma', 'tombstones', 'pins'] as const
 const RECORD_KEYS = [
-  'sessionId', 'uuid', 'owner', 'label', 'why', 'words', 'head', 'line', 'bytes', 'role', 'timestamp',
+  'n', 'sessionId', 'uuid', 'idKind', 'owner', 'label', 'why', 'words', 'head', 'line', 'bytes', 'role', 'timestamp',
   'temporary', 'tier', 'createdAt', 'updatedAt', 'by', 'source', 'sharedFrom', 'transcript',
 ] as const
 
@@ -262,9 +308,11 @@ export function parseRegister(text: string): Register | undefined {
     rev: typeof o.rev === 'number' ? o.rev : 0,
     updatedAt: typeof o.updatedAt === 'number' ? o.updatedAt : 0,
     writer: typeof o.writer === 'string' ? o.writer : '?',
+    ...(typeof o.nextN === 'number' ? { nextN: o.nextN } : {}),
     // Records and tombstones come through as they are in the file, unknown keys included.
     perma: o.perma.filter((r: any) => r && typeof r.uuid === 'string' && typeof r.label === 'string'),
     tombstones: Array.isArray(o.tombstones) ? o.tombstones : [],
+    ...(o.pins && typeof o.pins === 'object' && !Array.isArray(o.pins) ? { pins: o.pins } : {}),
   }
   // The file's own unknown keys ride along too; `serializeRegister` writes them back after the known ones.
   keepUnknown(reg as unknown as Record<string, unknown>, o, REGISTER_KEYS)

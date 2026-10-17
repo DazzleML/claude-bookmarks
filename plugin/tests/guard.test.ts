@@ -55,6 +55,39 @@ test('.bak is written only from a file that parses: a torn file never becomes th
   expect(everything(w).some(t => t.includes('loaded its .bak'))).toBe(true)
 })
 
+// Commit by operation (unit 3): the file changed on disk since this session read it.
+test('a hand edit on disk survives: the operation is applied to the disk\'s version, not this session\'s copy', async ($, on) => {
+  const good = registerText(1)
+  const w = world(on, { session: SID, files: { [PATH]: good } })
+  await call($ as never, { action: 'list' }) // the session reads the file
+  // Someone edits the label by hand (or another window writes); this session's copy is now stale.
+  w.files[fileKey(w, good)] = good.replace('"label": "where the palette began"', '"label": "edited by hand"')
+  const out = await call($ as never, { action: 'relabel', uuid: UUID.slice(0, 8), owner: 'claude', why: 'a reason added by this session' })
+  expect(out.ok).toBe(true)
+  const saved = parseRegister(w.file(PATH) ?? '')!
+  expect(saved.perma[0]?.label).toBe('edited by hand')
+  expect(saved.perma[0]?.why).toBe('a reason added by this session')
+  expect(w.file(`${PATH}.bak`)).toContain('edited by hand')
+})
+
+/** The harness's own key for a file whose text is `text` (it normalises paths its own way). */
+const fileKey = (w: { files: Record<string, string> }, text: string) => Object.keys(w.files).find(k => w.files[k] === text)!
+
+test('an operation whose record is gone from the disk reports and writes nothing', async ($, on) => {
+  const good = registerText(1)
+  const w = world(on, { session: SID, files: { [PATH]: good } })
+  await call($ as never, { action: 'list' })
+  // Another writer removed the only record.
+  const emptied = JSON.parse(good)
+  emptied.perma = []
+  emptied.rev = 9
+  const emptiedText = JSON.stringify(emptied, null, 2) + '\n'
+  w.files[fileKey(w, good)] = emptiedText
+  const out = await call($ as never, { action: 'relabel', uuid: UUID.slice(0, 8), owner: 'claude', label: 'renamed' })
+  expect(String(out.error)).toContain('changed since this session read it')
+  expect(w.file(PATH)).toBe(emptiedText)
+})
+
 /** Every line the plugin logged or wrote, wherever it went. */
 function everything(w: { logs: () => string[]; files: Record<string, string> }): string[] {
   return [...w.logs(), ...Object.values(w.files)]
