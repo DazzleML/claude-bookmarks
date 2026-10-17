@@ -13,6 +13,10 @@ import {
   type Mint, type Register as BookmarkRegister, type Retention,
 } from '../core/bookmarks/register-file.ts'
 import { applyOp, type Op, type OpResult } from '../core/bookmarks/register-ops.ts'
+import {
+  applyMigrations, CURRENT, hashText, planFor, runFolderName, SNAPSHOT_SUFFIX, snapshotFolderName,
+  type Manifest, type Migration,
+} from '../core/bookmarks/migrations.ts'
 import { rowPlace } from '../core/bookmarks/transcript-lines.ts'
 import { forwardSlashes } from '../core/kit/paths.ts'
 import { short } from '../core/kit/message-id.ts'
@@ -163,13 +167,161 @@ export async function claimBookmark(ports: BookmarksPorts, uuid: string): Promis
   return { register: r.register, record: r.record!, added: r.added ?? false }
 }
 
+// --- Pins: the person's pinned prompts, in the register since 0.5.4 ----------------------
+
+/** The pinned prompts of this conversation, by message uuid, in the order pinned. */
+export async function pinnedPrompts(ports: BookmarksPorts): Promise<string[]> {
+  return (await loadRegister(ports)).pins?.user ?? []
+}
+
+/** Pins or unpins a prompt for the person, as one committed operation. */
+export async function togglePinned(ports: BookmarksPorts, uuid: string, on: boolean): Promise<{ pinned: string[] } | { error: string }> {
+  const r = await commitOp(ports, { op: 'pin', owner: 'user', uuid, on })
+  if ('error' in r) return r
+  return { pinned: r.register.pins?.user ?? [] }
+}
+
+// --- Migrations at a conversation's start (the data design, 2026-10-16, unit 4) -----------
+// Every register under the data root that is older than this build is brought up to date,
+// the opened conversation first and the rest in the same start; a conversation with pins
+// in the store and no register gets one. Before the first migration ever runs on a data
+// root, one snapshot of `sessions/` is taken (the 14:40 addendum: "one backup copy that we
+// make for the time being"), kept until csb versions ~/claude. Each migration gets its own
+// run folder with a manifest, the original files and the store keys it consumed.
+
+const sessionsDir = (root: string) => `${root}/bookmarks/sessions`
+const backupsDir = (root: string) => `${root}/bookmarks/backups`
+
+export async function migrateAtStart(ports: BookmarksPorts): Promise<void> {
+  const root = await ports.dataRoot()
+  if (!root) return
+  const session = await ports.sessionId()
+  const dir = sessionsDir(root)
+  const entries = (await ports.fsExists(dir)) ? await ports.fsList(dir) : []
+  const registers = entries.filter(e => e.kind === 'file' && e.name.endsWith('.json')).map(e => e.name.slice(0, -'.json'.length))
+  // Store-only conversations: pins in the store with no register to move them into.
+  const storeKeys = await ports.storeKeys()
+  const pinnedOnly = storeKeys.filter(k => k.startsWith('pins:')).map(k => k.slice('pins:'.length)).filter(sid => !registers.includes(sid))
+  const order = [session, ...registers.filter(s => s !== session)]
+  let snapshot = await hasSnapshot(ports, root)
+  const ensureSnapshot = async () => {
+    if (snapshot) return
+    await takeSnapshot(ports, root)
+    snapshot = true
+  }
+  let migrated = 0
+  for (const sid of order) {
+    const path = `${dir}/${sid}.json`
+    if (!(await ports.fsExists(path))) continue
+    const text = await ports.fsRead(path)
+    const reg = parseRegister(text)
+    if (!reg) {
+      ports.log(`[bm] migrate: ${path} is not a register file; left as it is`)
+      continue
+    }
+    if (reg.version >= CURRENT) continue
+    const steps = planFor(reg.version)
+    if (steps.length === 0) {
+      ports.logAlways(`[bm] migrate: no path from version ${reg.version} to ${CURRENT} for ${path}; left as it is`)
+      continue
+    }
+    await ensureSnapshot()
+    await migrateOne(ports, root, sid, reg, text, steps)
+    migrated++
+  }
+  for (const sid of pinnedOnly) {
+    const pins = await ports.storeGet(`pins:${sid}`)
+    if (!Array.isArray(pins) || pins.length === 0) continue
+    await ensureSnapshot()
+    const fresh = emptyRegister(sid, `${ports.pluginName} ${await ports.pluginVersion()}`, await ports.now())
+    // The same v1 -> v2 step, on an empty v1 file, so the run folder and the store copy are the same shape.
+    await migrateOne(ports, root, sid, { ...fresh, version: 1, nextN: undefined }, undefined, planFor(1))
+    migrated++
+  }
+  if (migrated > 0) ports.logAlways(`[bm] migrate: ${migrated} register(s) brought to version ${CURRENT}; originals under ${backupsDir(root)}`)
+}
+
+async function hasSnapshot(ports: BookmarksPorts, root: string): Promise<boolean> {
+  const dir = backupsDir(root)
+  if (!(await ports.fsExists(dir))) return false
+  return (await ports.fsList(dir)).some(e => e.kind === 'dir' && e.name.endsWith(SNAPSHOT_SUFFIX))
+}
+
+/** Copies every file under `sessions/` (registers, their .bak, the exports) into one snapshot folder, with a manifest. */
+async function takeSnapshot(ports: BookmarksPorts, root: string): Promise<void> {
+  const now = await ports.now()
+  const target = `${backupsDir(root)}/${snapshotFolderName(now)}`
+  const copied: string[] = []
+  const walk = async (rel: string) => {
+    for (const e of await ports.fsList(`${sessionsDir(root)}${rel}`)) {
+      const sub = `${rel}/${e.name}`
+      if (e.kind === 'dir') await walk(sub)
+      else if (e.kind === 'file') {
+        await ports.fsWrite(`${target}/sessions${sub}`, await ports.fsRead(`${sessionsDir(root)}${sub}`))
+        copied.push(`sessions${sub}`)
+      }
+    }
+  }
+  if (await ports.fsExists(sessionsDir(root))) await walk('')
+  await ports.fsWrite(`${target}/manifest.json`, JSON.stringify({ kind: 'snapshot', at: new Date(now).toISOString(), why: 'the one interim copy before the first migration on this data root; kept until csb versions ~/claude', files: copied }, null, 2) + '\n')
+  ports.logAlways(`[bm] migrate: snapshot of ${copied.length} file(s) under ${target}`)
+}
+
+/**
+ * One register, one run folder: manifest `started`; the original, its .bak and the store
+ * keys the steps consume copied in; manifest `backed-up`; the migrated file written (the
+ * original becoming its .bak); the consumed store keys deleted; manifest `done`.
+ */
+async function migrateOne(ports: BookmarksPorts, root: string, sid: string, reg: BookmarkRegister, originalText: string | undefined, steps: readonly Migration[]) {
+  const now = await ports.now()
+  const writer = `${ports.pluginName} ${await ports.pluginVersion()}`
+  const from = reg.version
+  const to = steps[steps.length - 1]!.to
+  const run = `${backupsDir(root)}/${runFolderName(now, from, to, writer, sid)}`
+  const keys = [...new Set(steps.flatMap(s => s.storeKeys(sid)))]
+  const manifest: Manifest = { kind: 'migration', from, to, writer, sessionId: sid, startedAt: new Date(now).toISOString(), status: 'started', files: [], storeKeys: keys }
+  const writeManifest = () => ports.fsWrite(`${run}/manifest.json`, JSON.stringify(manifest, null, 2) + '\n')
+  await writeManifest()
+  const path = `${sessionsDir(root)}/${sid}.json`
+  const copy = async (rel: string, text: string) => {
+    await ports.fsWrite(`${run}/${rel}`, text)
+    manifest.files.push({ path: rel, ...(await hashText(text)), bytes: new TextEncoder().encode(text).length })
+  }
+  if (originalText !== undefined) await copy(`sessions/${sid}.json`, originalText)
+  if (await ports.fsExists(`${path}.bak`)) await copy(`sessions/${sid}.json.bak`, await ports.fsRead(`${path}.bak`))
+  const store: Record<string, unknown> = {}
+  for (const k of keys) {
+    const v = await ports.storeGet(k)
+    if (v !== undefined) store[k] = v
+  }
+  if (Object.keys(store).length > 0) await copy(`store/${sid}.json`, JSON.stringify(store, null, 2) + '\n')
+  manifest.status = 'backed-up'
+  await writeManifest()
+  const migrated = applyMigrations(reg, steps, store, { sessionId: sid, transcriptHint: sid === (await ports.sessionId()) ? await ports.transcriptPath() : undefined, now })
+  const text = serializeRegister({ ...migrated, writer })
+  if (originalText !== undefined) await ports.fsWrite(`${path}.bak`, originalText)
+  await ports.fsWrite(path, text)
+  for (const k of Object.keys(store)) await ports.storeDelete(k)
+  manifest.status = 'done'
+  manifest.finishedAt = new Date(await ports.now()).toISOString()
+  await writeManifest()
+  if (sid === (await ports.sessionId())) registerCache = { session: sid, register: parseRegister(text) ?? migrated, text }
+  ports.log(`[bm] migrate: ${sid.slice(0, 8)} v${from} -> v${to} (${reg.perma.length} record(s)${store[`pins:${sid}`] ? ', pins moved from the store' : ''}); run folder ${run.slice(root.length + 1)}`)
+}
+
 // How long a `temporary` bookmark is kept before it is pruned (to a tombstone). A
 // setting with the archive-retention picker (#7, #10); a constant until then.
 const TEMPORARY_RETENTION: Retention = '30d'
 
 // The register's part of a session start (moved out of register.tsx's session.start hook,
-// 0.4.67): load it, say where it is, and age out temporary bookmarks.
+// 0.4.67): migrate what is older than this build, load it, say where it is, and age out
+// temporary bookmarks.
 export async function startRegister(ports: BookmarksPorts) {
+  try {
+    await migrateAtStart(ports)
+  } catch (err) {
+    ports.logAlways(`[bm] migrate failed: ${String(err)}`)
+  }
   try {
     const reg = await loadRegister(ports)
     ports.log(`[bm] register: ${reg.perma.length} bookmark(s), rev ${reg.rev}, ${await registerPath(ports)}`)

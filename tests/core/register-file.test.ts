@@ -20,6 +20,7 @@ import {
   share,
   claim,
   type Mint,
+  type Register,
 } from '../../plugin/hooks/core/bookmarks/register-file.ts'
 import { anchorHref, tierOf } from '../../plugin/hooks/core/bookmarks/anchor.ts'
 
@@ -124,9 +125,10 @@ test('temporary: a permanent mark stays permanent; prune removes old temporaries
 test('the file is stable-ordered JSON that reads back equal', () => {
   const r = addOrRelabel(emptyRegister(SESSION, 'w', T0, { configDir: 'C:/Users/x/.claude', cwd: 'C:/code/p' }), mint, T0).register
   const text = serializeRegister(r)
-  assert.ok(text.startsWith('{\n  "version": 1,\n  "sessionId": "' + SESSION))
+  assert.ok(text.startsWith('{\n  "version": 2,\n  "sessionId": "' + SESSION))
   const keys = Object.keys(JSON.parse(text).perma[0])
-  assert.deepEqual(keys.slice(0, 5), ['sessionId', 'uuid', 'owner', 'label', 'why'])
+  // v2: the record's number first; its sessionId is the file's and so not written (the hoist).
+  assert.deepEqual(keys.slice(0, 5), ['n', 'uuid', 'owner', 'label', 'why'])
   assert.deepEqual(parseRegister(text), r)
   assert.equal(parseRegister('not json'), undefined)
   assert.equal(parseRegister('{"perma": 3}'), undefined)
@@ -306,13 +308,36 @@ test('unknown keys survive the operations this build performs: relabel, share, c
 })
 
 test('a file from a newer build is recognised; this build\'s own and older files are not', () => {
-  assert.equal(newerThanBuild(parseRegister(newerBuildFile(2))!), true)
+  assert.equal(newerThanBuild(parseRegister(newerBuildFile(3))!), true)
+  assert.equal(newerThanBuild(parseRegister(newerBuildFile(2))!), false)
   assert.equal(newerThanBuild(parseRegister(newerBuildFile(1))!), false)
   assert.equal(newerThanBuild(emptyRegister(SESSION, 'w', T0)), false)
-  // A file with no version at all is read as this build's (the proof-of-concept files had none).
+  // A file with no version at all is read as version 1 (the proof-of-concept files had none), older than this build.
   const o = JSON.parse(newerBuildFile(1))
   delete o.version
-  assert.equal(newerThanBuild(parseRegister(JSON.stringify(o))!), false)
+  const unversioned = parseRegister(JSON.stringify(o))!
+  assert.equal(unversioned.version, 1)
+  assert.equal(newerThanBuild(unversioned), false)
+})
+
+test('the hoist (v2): a record\'s sessionId and transcript are written only when they differ from the file\'s, and read back filled in', () => {
+  const reg: Register = { ...emptyRegister(SESSION, 'w', T0), transcript: 'C:/Users/x/.claude/projects/p/s.jsonl' }
+  const a = addOrRelabel(reg, { ...mint, transcript: 'C:/Users/x/.claude/projects/p/s.jsonl' }, T0 + 1).register
+  const b = addOrRelabel(a, { ...mint, uuid: 'eeeeeeee-0000-4000-8000-000000000003', transcript: 'C:/elsewhere/other.jsonl' }, T0 + 2).register
+  const text = serializeRegister(b)
+  const own = JSON.parse(text).perma[0]
+  const other = JSON.parse(text).perma[1]
+  assert.equal(own.sessionId, undefined, 'the file\'s own record carries no sessionId')
+  assert.equal(own.transcript, undefined, 'nor the file\'s transcript')
+  assert.equal(other.transcript, 'C:/elsewhere/other.jsonl', 'a different transcript is an override and stays')
+  const back = parseRegister(text)!
+  assert.equal(back.perma[0]?.sessionId, SESSION)
+  assert.equal(back.perma[0]?.transcript, 'C:/Users/x/.claude/projects/p/s.jsonl')
+  assert.equal(back.perma[1]?.transcript, 'C:/elsewhere/other.jsonl')
+  assert.deepEqual(back, b, 'the file reads back as the register that wrote it')
+  // A v1 file is written whole: nothing hoisted, so an older reader sees every field.
+  const v1: Register = { ...a, version: 1 }
+  assert.equal(JSON.parse(serializeRegister(v1)).perma[0].sessionId, SESSION)
 })
 
 test('parse normalises what it keeps: a record without a label is dropped, a missing rev is 0, a version that is not a number is this build\'s (mutation sweep v0.5.1, M4-M6)', () => {

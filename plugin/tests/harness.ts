@@ -93,14 +93,30 @@ export function world(on: unknown, options: WorldOptions = {}): World {
   answer('prompt.read', () => ({ text: options.prompt ?? '', cursor: (options.prompt ?? '').length }))
   answer('session.id', () => options.session ?? '00000000-0000-4000-8000-000000000000')
   answer('session.cwd', () => 'C:/test-project')
-  answer('fs.exists', e => norm(e.path) in files)
+  // A file by its key, or a folder: anything in the map lies under it.
+  answer('fs.exists', e => {
+    const p = norm(e.path).replace(/\\+$/, '')
+    return p in files || Object.keys(files).some(k => k.startsWith(p + '\\'))
+  })
   answer('fs.read', e => files[norm(e.path)] ?? '')
   answer('fs.write', e => {
     files[norm(e.path)] = String(e.text ?? '')
     return undefined
   })
   answer('process.run', e => ({ stderr: '', isStdoutTruncated: false, ...(options.process?.(e.argv as readonly string[]) ?? { exitCode: 1, stdout: '', stderr: 'no process in tests' }) }))
-  answer('fs.list', () => [])
+  // A folder's entries from the files map: the names one level below `path`, files and folders.
+  answer('fs.list', e => {
+    const dir = norm(e.path).replace(/\\+$/, '') + '\\'
+    const seen = new Map<string, { name: string; kind: 'file' | 'dir'; size: number; mtimeMs: number; isLink: boolean }>()
+    for (const [p, text] of Object.entries(files)) {
+      if (!p.startsWith(dir)) continue
+      const rest = p.slice(dir.length)
+      const slash = rest.indexOf('\\')
+      const name = slash < 0 ? rest : rest.slice(0, slash)
+      if (!seen.has(name)) seen.set(name, { name, kind: slash < 0 ? 'file' : 'dir', size: slash < 0 ? text.length : 0, mtimeMs: 0, isLink: false })
+    }
+    return [...seen.values()]
+  })
   // The start path (a test's $.session.start, measured 2026-10-12): the base event passes
   // through with its fields, and the calls the plugin's start hook makes are answered.
   answerRaw('session.start', e => e)

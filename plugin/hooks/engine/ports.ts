@@ -229,6 +229,12 @@ export type BookmarksPorts = {
   fsExists: (path: string) => Promise<boolean>
   fsRead: (path: string) => Promise<string>
   fsWrite: (path: string, text: string) => Promise<unknown>
+  /** A folder's entries by name (`$.fs.list`): the migrations list the registers and the backups. */
+  fsList: (path: string) => Promise<readonly { name: string; kind: string }[]>
+  /** The store, for what the migrations move out of it (pins) and the keys that name store-only conversations. */
+  storeGet: (key: string) => Promise<unknown>
+  storeDelete: (key: string) => Promise<unknown>
+  storeKeys: () => Promise<readonly string[]>
   resolveTarget: (want: { uuid?: string; fragment?: string }) => Promise<ResolveOutcome>
   transcriptPath: () => Promise<string | undefined>
   allRows: () => Promise<readonly { uuid: string }[]>

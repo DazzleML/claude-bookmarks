@@ -14,7 +14,7 @@ const mintOf = (k: string, label: string, owner: Mint['owner'] = 'user'): Mint =
 
 /** A v2 register (numbered) with records one, two and twelve, as p8 had it. */
 function diskRegister(): Register {
-  let reg: Register = { ...emptyRegister(SESSION, 'w', T0), nextN: 1 }
+  let reg: Register = emptyRegister(SESSION, 'w', T0) // v2: numbered from 1
   reg = addOrRelabel(reg, mintOf('a', 'one'), T0 + 100).register // n 1
   reg = addOrRelabel(reg, mintOf('b', 'two'), T0 + 200).register // n 2
   reg = { ...reg, nextN: 12 }
@@ -39,7 +39,8 @@ test('a v2 file numbers its records and never reuses a number; a v1 file numbers
   const next = commit(removed, { op: 'mint', mint: mintOf('d', 'thirteen') }, T0 + 2100)
   assert.equal(next.perma.at(-1)?.n, 13, 'the removed 2 is not reused')
   assert.equal(next.nextN, 14)
-  const v1 = addOrRelabel(emptyRegister(SESSION, 'w', T0), mintOf('a', 'one'), T0).register
+  const { nextN: _n, ...v1base } = emptyRegister(SESSION, 'w', T0)
+  const v1 = addOrRelabel({ ...v1base, version: 1 }, mintOf('a', 'one'), T0).register
   assert.equal(v1.perma[0]?.n, undefined)
   assert.equal(v1.nextN, undefined)
 })

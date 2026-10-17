@@ -1,0 +1,24 @@
+{
+  "mutations": [
+    {
+      "id": "M13",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "    if (snapshot) return\n",
+      "mutated": "",
+      "note": "snapshot taken every time",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "a conversation with pins in the store and no register gets one, at v2"
+      ],
+      "kit_pass": "88"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "89"
+    }
+  ]
+}

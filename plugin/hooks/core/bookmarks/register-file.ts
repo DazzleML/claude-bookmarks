@@ -18,7 +18,12 @@
 import { type AnchorOwner, type AnchorRecord, ownerOf, uuid8 } from './anchor.ts'
 import { isDrawnId, matchesPrefix, sameMessage } from '../kit/message-id.ts'
 
-export const REGISTER_VERSION = 1
+/**
+ * The format this build writes. 1: the proof of concept's file. 2 (0.5.4): `sessionId` and
+ * `transcript` once at the top with per-record overrides, `n`/`nextN`, pins in the file.
+ * An older file is migrated at its conversation's start (core/bookmarks/migrations.ts).
+ */
+export const REGISTER_VERSION = 2
 
 /** True when the file was written by a build whose format is ahead of this one: read it, never write it. */
 export function newerThanBuild(reg: Register): boolean {
@@ -35,6 +40,13 @@ export type Tombstone = { uuid: string; n?: number; createdAt?: number; owner?: 
 export type Register = {
   version: number
   sessionId: string
+  /**
+   * The conversation's transcript path, forward slashes, once for the file (v2). A record
+   * carries its own `transcript` or `sessionId` only when it differs (a record copied from
+   * another conversation); `parseRegister` fills the file's into every record, and
+   * `serializeRegister` writes a record's only when it differs.
+   */
+  transcript?: string
   /** Where Claude Code kept its config when the file was written (never used to find anything). */
   configDir?: string
   cwd?: string
@@ -54,8 +66,9 @@ export type Register = {
   pins?: Partial<Record<AnchorOwner, string[]>>
 }
 
-export function emptyRegister(sessionId: string, writer: string, now: number, env?: { configDir?: string; cwd?: string }): Register {
-  return { version: REGISTER_VERSION, sessionId, ...(env ?? {}), rev: 0, updatedAt: now, writer, perma: [], tombstones: [] }
+export function emptyRegister(sessionId: string, writer: string, now: number, env?: { configDir?: string; cwd?: string; transcript?: string }): Register {
+  const { transcript, ...rest } = env ?? {}
+  return { version: REGISTER_VERSION, sessionId, ...(transcript ? { transcript } : {}), ...rest, rev: 0, updatedAt: now, writer, nextN: 1, perma: [], tombstones: [] }
 }
 
 /**
@@ -263,7 +276,7 @@ function bump(reg: Register, now: number): Register {
 }
 
 // Fixed key order, so a hand edit and a program write diff cleanly.
-const REGISTER_KEYS = ['version', 'sessionId', 'configDir', 'cwd', 'rev', 'updatedAt', 'writer', 'nextN', 'perma', 'tombstones', 'pins'] as const
+const REGISTER_KEYS = ['version', 'sessionId', 'transcript', 'configDir', 'cwd', 'rev', 'updatedAt', 'writer', 'nextN', 'perma', 'tombstones', 'pins'] as const
 const RECORD_KEYS = [
   'n', 'sessionId', 'uuid', 'idKind', 'owner', 'label', 'why', 'words', 'head', 'line', 'bytes', 'role', 'timestamp',
   'temporary', 'tier', 'createdAt', 'updatedAt', 'by', 'source', 'sharedFrom', 'transcript',
@@ -272,16 +285,25 @@ const RECORD_KEYS = [
 export function serializeRegister(reg: Register): string {
   const ordered: Record<string, unknown> = {}
   for (const k of REGISTER_KEYS) {
-    if (k === 'perma') ordered.perma = reg.perma.map(orderRecord)
+    if (k === 'perma') ordered.perma = reg.perma.map(r => orderRecord(r, reg))
     else if ((reg as Record<string, unknown>)[k] !== undefined) ordered[k] = (reg as Record<string, unknown>)[k]
   }
   keepUnknown(ordered, reg, REGISTER_KEYS)
   return JSON.stringify(ordered, null, 2) + '\n'
 }
 
-function orderRecord(r: AnchorRecord): Record<string, unknown> {
+// The hoist (v2): a record's `sessionId` and `transcript` are written only when they differ
+// from the file's -- an override, as djdarcy put it -- and read back filled in (parseRegister).
+function orderRecord(r: AnchorRecord, reg: Register): Record<string, unknown> {
   const o: Record<string, unknown> = {}
-  for (const k of RECORD_KEYS) if ((r as Record<string, unknown>)[k] !== undefined) o[k] = (r as Record<string, unknown>)[k]
+  const hoisted = reg.version >= 2
+  for (const k of RECORD_KEYS) {
+    const v = (r as Record<string, unknown>)[k]
+    if (v === undefined) continue
+    if (hoisted && k === 'sessionId' && v === reg.sessionId) continue
+    if (hoisted && k === 'transcript' && reg.transcript !== undefined && v === reg.transcript) continue
+    o[k] = v
+  }
   keepUnknown(o, r, RECORD_KEYS)
   return o
 }
@@ -300,9 +322,18 @@ export function parseRegister(text: string): Register | undefined {
     return undefined
   }
   if (!o || typeof o !== 'object' || typeof o.sessionId !== 'string' || !Array.isArray(o.perma)) return undefined
+  const version = typeof o.version === 'number' ? o.version : 1
+  const transcript = typeof o.transcript === 'string' ? o.transcript : undefined
+  // A record without its own sessionId or transcript takes the file's (the hoist, v2).
+  const fill = (r: any) => ({
+    ...r,
+    ...(typeof r.sessionId === 'string' ? {} : { sessionId: o.sessionId }),
+    ...(r.transcript === undefined && transcript !== undefined ? { transcript } : {}),
+  })
   const reg: Register = {
-    version: typeof o.version === 'number' ? o.version : REGISTER_VERSION,
+    version,
     sessionId: o.sessionId,
+    ...(transcript !== undefined ? { transcript } : {}),
     ...(typeof o.configDir === 'string' ? { configDir: o.configDir } : {}),
     ...(typeof o.cwd === 'string' ? { cwd: o.cwd } : {}),
     rev: typeof o.rev === 'number' ? o.rev : 0,
@@ -310,7 +341,7 @@ export function parseRegister(text: string): Register | undefined {
     writer: typeof o.writer === 'string' ? o.writer : '?',
     ...(typeof o.nextN === 'number' ? { nextN: o.nextN } : {}),
     // Records and tombstones come through as they are in the file, unknown keys included.
-    perma: o.perma.filter((r: any) => r && typeof r.uuid === 'string' && typeof r.label === 'string'),
+    perma: o.perma.filter((r: any) => r && typeof r.uuid === 'string' && typeof r.label === 'string').map(fill),
     tombstones: Array.isArray(o.tombstones) ? o.tombstones : [],
     ...(o.pins && typeof o.pins === 'object' && !Array.isArray(o.pins) ? { pins: o.pins } : {}),
   }
@@ -326,6 +357,9 @@ export function newer(a: Register, b: Register): Register {
 }
 
 // --- The export: one markdown file per bookmark ------------------------------------
+
+/** The export's own format version, independent of the register's (the note did not change in register v2; unit 9 revises it). */
+export const EXPORT_VERSION = 1
 
 export function exportFileName(uuid: string): string {
   return `${uuid8(uuid)}.md`
@@ -364,7 +398,7 @@ export function exportMarkdown(
   const owners = opts?.owners && opts.owners.length > 0 ? opts.owners : [ownerOf(record)]
   const fm: [string, unknown][] = [
     ['kind', 'bookmark-anchor'],
-    ['version', REGISTER_VERSION],
+    ['version', EXPORT_VERSION],
     ['session', record.sessionId],
     ['uuid', record.uuid],
     ['owners', owners.join(', ')],

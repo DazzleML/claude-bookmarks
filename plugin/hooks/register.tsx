@@ -28,7 +28,7 @@ import type { Role, Style } from './core/palette'
 import { footnoteOf, looksLikePrompt, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
 import { short } from './core/kit/message-id'
 import { configDirOf, dataRootOf } from './core/kit/paths'
-import { ECHO_POLICY_KEY, marksKey as marksKeyOf, pinsKey as pinsKeyOf, readingStateKey } from './core/store-keys'
+import { ECHO_POLICY_KEY, marksKey as marksKeyOf, readingStateKey } from './core/store-keys'
 import { diagLine, keyLabel } from './core/log/diagnostics'
 import { colorSplit, tagMarksMarkdown, tagMarksPlain } from './core/marks/highlight'
 import { ScreenModel } from './core/kit/screen-model'
@@ -553,6 +553,10 @@ function bookmarksPorts($: EngineInterface): BookmarksPorts {
     fsExists: path => $.fs.exists(path),
     fsRead: path => $.fs.read(path),
     fsWrite: (path, text) => $.fs.write(path, text),
+    fsList: path => $.fs.list(path),
+    storeGet: key => $.store.get(key),
+    storeDelete: key => $.store.delete(key),
+    storeKeys: () => $.store.keys(),
     resolveTarget: want => resolveTarget($, want),
     transcriptPath: () => transcriptPath($),
     allRows: () => allRows($),
@@ -701,11 +705,12 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
 // Favourite prompts to come back to (djdarcy, 2026-10-05), per conversation, kept in
 // the order they were pinned. Drawn as `245★)` and listed again at the top of the
 // prompts pane. Toggled by `*21` (or `*` for the newest) in the `#` field, or /bm-pin.
-async function pinsKey($: EngineInterface): Promise<string> {
-  return pinsKeyOf(await $.session.id())
-}
+// Since 0.5.4 the pins live in the register file (the data design, 2026-10-16: pins are
+// authored, so they are the person's and not Claude Code's housekeeping); the v1 -> v2
+// migration moves them out of the store (`pins:<sid>`, core/store-keys.ts) at the
+// conversation's start. handlers/bookmarks.ts owns the read and the toggle.
 async function loadPins($: EngineInterface): Promise<string[]> {
-  return ((await $.store.get(await pinsKey($))) as string[] | undefined) ?? []
+  return bookmarks_.pinnedPrompts(bookmarksPorts($))
 }
 
 // Toggles the pin on prompt #n (the newest when `typed` names none). Returns false when
@@ -720,7 +725,11 @@ async function togglePin($: EngineInterface, typed: string, known?: PromptRef[])
   }
   const pins = await loadPins($)
   const pinned = pins.includes(target.uuid)
-  await $.store.set(await pinsKey($), pinned ? pins.filter(u => u !== target.uuid) : [...pins, target.uuid])
+  const r = await bookmarks_.togglePinned(bookmarksPorts($), target.uuid, !pinned)
+  if ('error' in r) {
+    $.ui.toast(r.error, { timeoutMs: 8000 })
+    return false
+  }
   await update($, pinsRev, v => v + 1)
   $.ui.toast(`${pinned ? 'unpinned' : 'pinned'} #${n}: ${target.head.slice(0, 40)}`)
   log($, `[bm] ${pinned ? 'unpinned' : 'pinned'} prompt #${n} ${short(target.uuid)}`)

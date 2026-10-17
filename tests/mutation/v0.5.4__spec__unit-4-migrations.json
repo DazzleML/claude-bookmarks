@@ -1,0 +1,109 @@
+{
+ "mutations": [
+  {
+   "id": "M1",
+   "file": "plugin/hooks/core/bookmarks/migrations.ts",
+   "original": "k + 1]))",
+   "mutated": "k]))",
+   "note": "Numbering starts at 0 instead of 1"
+  },
+  {
+   "id": "M2",
+   "file": "plugin/hooks/core/bookmarks/migrations.ts",
+   "original": "nextN: reg.perma.length + 1,",
+   "mutated": "nextN: reg.perma.length,",
+   "note": "nextN reuses the last number"
+  },
+  {
+   "id": "M3",
+   "file": "plugin/hooks/core/bookmarks/migrations.ts",
+   "original": ".sort((a, b) => a.r.createdAt - b.r.createdAt || a.i - b.i)",
+   "mutated": ".sort((a, b) => b.r.createdAt - a.r.createdAt || a.i - b.i)",
+   "note": "minting order reversed"
+  },
+  {
+   "id": "M4",
+   "file": "plugin/hooks/core/bookmarks/migrations.ts",
+   "original": ".sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))",
+   "mutated": ".sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))",
+   "note": "least common transcript spelling picked"
+  },
+  {
+   "id": "M5",
+   "file": "plugin/hooks/core/bookmarks/migrations.ts",
+   "original": "...(r.transcript ? { transcript: forwardSlashes(r.transcript) } : {}),",
+   "mutated": "...(r.transcript ? { transcript: r.transcript } : {}),",
+   "note": "per-record slash normalisation dropped"
+  },
+  {
+   "id": "M6",
+   "file": "plugin/hooks/core/bookmarks/migrations.ts",
+   "original": "reg.perma.filter(r => r.sessionId === reg.sessionId && r.transcript)",
+   "mutated": "reg.perma.filter(r => r.transcript)",
+   "note": "other sessions' transcripts counted"
+  },
+  {
+   "id": "M7",
+   "file": "plugin/hooks/core/bookmarks/migrations.ts",
+   "original": "return { ...out, rev: out.rev + 1, updatedAt: ctx.now }",
+   "mutated": "return { ...out, rev: out.rev, updatedAt: ctx.now }",
+   "note": "rev not bumped"
+  },
+  {
+   "id": "M8",
+   "file": "plugin/hooks/core/bookmarks/migrations.ts",
+   "original": "while (at < CURRENT) {",
+   "mutated": "while (at < CURRENT - 1) {",
+   "note": "plan stops one short"
+  },
+  {
+   "id": "M9",
+   "file": "plugin/hooks/core/bookmarks/migrations.ts",
+   "original": ".replace(/\\.\\d{3}Z$/, 'Z').replace(/:/g, '-')",
+   "mutated": ".replace(/\\.\\d{3}Z$/, 'Z')",
+   "note": "colons left in the stamp"
+  },
+  {
+   "id": "M10",
+   "file": "plugin/hooks/core/bookmarks/register-file.ts",
+   "original": "if (hoisted && k === 'sessionId' && v === reg.sessionId) continue",
+   "mutated": "if (k === 'sessionId' && v === reg.sessionId) continue",
+   "note": "hoist applied to v1 files"
+  },
+  {
+   "id": "M11",
+   "file": "plugin/hooks/core/bookmarks/register-file.ts",
+   "original": "...(r.transcript === undefined && transcript !== undefined ? { transcript } : {}),",
+   "mutated": "...(transcript !== undefined ? { transcript } : {}),",
+   "note": "file transcript overrides a record's own on read"
+  },
+  {
+   "id": "M12",
+   "file": "plugin/hooks/handlers/bookmarks.ts",
+   "original": "const order = [session, ...registers.filter(s => s !== session)]",
+   "mutated": "const order = [...registers]",
+   "note": "current session not first"
+  },
+  {
+   "id": "M13",
+   "file": "plugin/hooks/handlers/bookmarks.ts",
+   "original": "    if (snapshot) return\n",
+   "mutated": "",
+   "note": "snapshot taken every time"
+  },
+  {
+   "id": "M14",
+   "file": "plugin/hooks/handlers/bookmarks.ts",
+   "original": "  manifest.status = 'backed-up'\n  await writeManifest()\n",
+   "mutated": "  manifest.status = 'backed-up'\n",
+   "note": "backed-up status never persisted"
+  },
+  {
+   "id": "M15",
+   "file": "plugin/hooks/handlers/bookmarks.ts",
+   "original": "if (originalText !== undefined) await ports.fsWrite(`${path}.bak`, originalText)",
+   "mutated": "if (originalText === undefined) await ports.fsWrite(`${path}.bak`, text)",
+   "note": ".bak wrong or skipped"
+  }
+ ]
+}

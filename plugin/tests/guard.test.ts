@@ -16,9 +16,11 @@ function registerText(version = 1): string {
   ).register
   const o = JSON.parse(serializeRegister(r))
   o.version = version
-  if (version > 1) {
-    o.nextN = 2
-    o.perma[0].n = 1
+  if (version === 1) {
+    // A v1 file as the proof of concept wrote it: no numbers, no hoist.
+    delete o.nextN
+    delete o.perma[0].n
+    o.perma[0].sessionId = SID
   }
   return JSON.stringify(o, null, 2) + '\n'
 }
@@ -29,7 +31,7 @@ async function call($: { tool: { call: (i: never) => Promise<unknown> } }, input
 }
 
 test('a register from a newer build is read in full and never written; the tool says so', async ($, on) => {
-  const before = registerText(2)
+  const before = registerText(3)
   const w = world(on, { session: SID, files: { [PATH]: before } })
   const listed = await call($ as never, { action: 'list' })
   expect((listed.claudes as unknown[]).length).toBe(1)
