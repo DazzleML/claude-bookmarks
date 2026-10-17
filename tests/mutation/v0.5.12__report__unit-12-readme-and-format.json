@@ -1,0 +1,167 @@
+{
+  "mutations": [
+    {
+      "id": "M1",
+      "file": "plugin/hooks/core/bookmarks/data-readme.ts",
+      "original": "  if (existing === undefined) return true\n",
+      "mutated": "  if (existing === undefined) return false\n",
+      "note": "missing README no longer triggers a write",
+      "verdict": "killed",
+      "core_red": [
+        "a start rewrites the README when it is missing, foreign, or from another writer, and leaves this writer's alone"
+      ],
+      "kit_red": [
+        "a start writes bookmarks/README.md when it is missing, with the layout table and the writer"
+      ],
+      "kit_pass": "102"
+    },
+    {
+      "id": "M2",
+      "file": "plugin/hooks/core/bookmarks/data-readme.ts",
+      "original": "  if (!existing.startsWith(README_MARK)) return true\n",
+      "mutated": "  if (existing.startsWith(README_MARK)) return true\n",
+      "note": "inverted mark check: foreign files kept, own files rewritten",
+      "verdict": "killed",
+      "core_red": [
+        "a start rewrites the README when it is missing, foreign, or from another writer, and leaves this writer's alone"
+      ],
+      "kit_red": [
+        "a start leaves this version's README alone"
+      ],
+      "kit_pass": "102"
+    },
+    {
+      "id": "M3",
+      "file": "plugin/hooks/core/bookmarks/data-readme.ts",
+      "original": "  return !existing.includes(`<!-- writer: ${writer} -->`)",
+      "mutated": "  return existing.includes(`<!-- writer: ${writer} -->`)",
+      "note": "inverted writer comparison",
+      "verdict": "killed",
+      "core_red": [
+        "a start rewrites the README when it is missing, foreign, or from another writer, and leaves this writer's alone"
+      ],
+      "kit_red": [
+        "a start rewrites another version's README",
+        "a start leaves this version's README alone"
+      ],
+      "kit_pass": "101"
+    },
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "  return formatOf(reg) > REGISTER_FORMAT",
+      "mutated": "  return formatOf(reg) >= REGISTER_FORMAT",
+      "note": "boundary: current-format files flagged as newer",
+      "verdict": "killed",
+      "core_red": [
+        "a migration is deterministic, and running the plan for an already-current file is a no-op",
+        "a file from a newer build is recognised by its format, not its version; this build's own and older files are not"
+      ],
+      "kit_red": [
+        "/bm-delmarks with no letters gives the usage line and deletes nothing",
+        "/bm-delmarks a deletes a and keeps b; a second delete finds a gone",
+        "a save upserts the conversation's entry: the new label and rev in both files, the other conversation kept",
+        "a note edited in Obsidian is read back before the rewrite: the label and tags become the record's, the note is regenerated from them, the base follows",
+        "a note from a build below the floor is regenerated, its edit not adopted",
+        "/bm-promote a: the person's bookmark, with the mark's words, and its link copied",
+        "setting the reading position after scrolling away from a kept-open pane does not jump back (Q261015-01)",
+        "a claim writes the record's file, since a link is handed out",
+        "relabel with meta sets tags on the record and answers with them",
+        "c in the bookmarks list claims the chosen record",
+        "claim moves Claude's record to the person's list, same id and tier"
+      ],
+      "kit_pass": "92"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "reg.format ?? reg.version",
+      "mutated": "reg.version ?? reg.format",
+      "note": "fallback on wrong side: format ignored",
+      "verdict": "killed",
+      "core_red": [
+        "a file from a newer build is recognised by its format, not its version; this build's own and older files are not"
+      ],
+      "kit_red": [],
+      "kit_pass": "103"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "...(typeof o.format === 'number' ? { format: o.format } : {}),",
+      "mutated": "...(typeof o.format === 'number' ? {} : { format: o.format }),",
+      "note": "inverted guard: format dropped on parse",
+      "verdict": "killed",
+      "core_red": [
+        "v2 -> v3: the store's marks become mark records and slots; the reading position too; no marks gives empty slots",
+        "v1 -> v2: the hoist, the numbers in minting order, pins from the store; the result round-trips and reads back whole",
+        "the file is stable-ordered JSON that reads back equal",
+        "a file from a newer build is recognised by its format, not its version; this build's own and older files are not",
+        "the hoist (v2): a record's sessionId and transcript are written only when they differ from the file's, and read back filled in"
+      ],
+      "kit_red": [],
+      "kit_pass": "103"
+    },
+    {
+      "id": "M7",
+      "file": "plugin/hooks/core/bookmarks/migrations.ts",
+      "original": "Math.max(out.format ?? 0, ...steps.map(s => s.format))",
+      "mutated": "Math.min(out.format ?? 0, ...steps.map(s => s.format))",
+      "note": "max -> min",
+      "verdict": "killed",
+      "core_red": [
+        "v2 -> v3: the store's marks become mark records and slots; the reading position too; no marks gives empty slots"
+      ],
+      "kit_red": [],
+      "kit_pass": "103"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/core/bookmarks/migrations.ts",
+      "original": "...(format > 0 ? { format } : {}), rev: out.rev + 1,",
+      "mutated": "...(format > 0 ? { format } : {}), rev: out.rev,",
+      "note": "rev not incremented after migration",
+      "verdict": "killed",
+      "core_red": [
+        "v1 -> v2: the hoist, the numbers in minting order, pins from the store; the result round-trips and reads back whole"
+      ],
+      "kit_red": [],
+      "kit_pass": "103"
+    },
+    {
+      "id": "M9",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "    if (!readmeNeedsWrite(existing, writer)) return\n",
+      "mutated": "    if (readmeNeedsWrite(existing, writer)) return\n",
+      "note": "inverted write guard in ensureReadme",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "a start writes bookmarks/README.md when it is missing, with the layout table and the writer",
+        "a start rewrites another version's README",
+        "a start leaves this version's README alone"
+      ],
+      "kit_pass": "100"
+    },
+    {
+      "id": "M10",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "(await ports.fsExists(path)) ? await ports.fsRead(path) : undefined",
+      "mutated": "(await ports.fsExists(path)) ? undefined : await ports.fsRead(path)",
+      "note": "swapped existence branches",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "a start leaves this version's README alone"
+      ],
+      "kit_pass": "102"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "103"
+    }
+  ]
+}

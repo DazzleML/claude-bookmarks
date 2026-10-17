@@ -16,8 +16,10 @@ function registerText(version = 1): string {
   ).register
   const o = JSON.parse(serializeRegister(r))
   o.version = version
+  o.format = version // the fixture's format moves with its version: a v9 file asks for a v9 reader (0.5.12)
   if (version === 1) {
-    // A v1 file as the proof of concept wrote it: no numbers, no hoist.
+    // A v1 file as the proof of concept wrote it: no numbers, no hoist, no format field.
+    delete o.format
     delete o.nextN
     delete o.perma[0].n
     o.perma[0].sessionId = SID

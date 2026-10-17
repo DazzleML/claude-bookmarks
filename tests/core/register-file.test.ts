@@ -12,7 +12,9 @@ import {
   findRecord,
   listOf,
   newer,
+  formatOf,
   newerThanBuild,
+  REGISTER_FORMAT,
   parseFrontMatter,
   parseRegister,
   prune,
@@ -126,7 +128,7 @@ test('temporary: a permanent mark stays permanent; prune removes old temporaries
 test('the file is stable-ordered JSON that reads back equal', () => {
   const r = addOrRelabel(emptyRegister(SESSION, 'w', T0, { configDir: 'C:/Users/x/.claude', cwd: 'C:/code/p' }), mint, T0).register
   const text = serializeRegister(r)
-  assert.ok(text.startsWith('{\n  "version": 3,\n  "sessionId": "' + SESSION))
+  assert.ok(text.startsWith('{\n  "version": 3,\n  "format": 3,\n  "sessionId": "' + SESSION))
   const keys = Object.keys(JSON.parse(text).perma[0])
   // v2: the record's number first; its sessionId is the file's and so not written (the hoist).
   assert.deepEqual(keys.slice(0, 5), ['n', 'uuid', 'owner', 'label', 'why'])
@@ -250,13 +252,16 @@ test('words with $ replacement patterns are bolded literally (tester sweep, 2026
 // --- The guard (0.5.1): what this build does not know, it keeps -------------------------
 
 /** A file as a newer build would write it: fields this build has never heard of at every level. */
-function newerBuildFile(version = 2): string {
+function newerBuildFile(version = 2, format?: number): string {
   const r = addOrRelabel(emptyRegister(SESSION, 'bookmarks 0.9', T0), mint, T0).register
   const removed = remove(r, mint.uuid, 'claude', 'test', T0 + 1)
   assert.ok(!('error' in removed))
   const withNew = addOrRelabel(removed.register, { ...mint, uuid: 'dddddddd-0000-4000-8000-000000000002' }, T0 + 2).register
   const o = JSON.parse(serializeRegister(withNew))
   o.version = version
+  // A file from before 0.5.12 has no `format`; a later one names the reader it needs.
+  if (format === undefined) delete o.format
+  else o.format = format
   // Keys this build does not know (nextN and n became known in 0.5.3, so the unknowns are the slots and the rest).
   o.slots = { user: { a: [{ n: 2, at: T0 + 2 }] } }
   o.reading = null // a cleared value is a value: null rides through too (mutation sweep v0.5.1, N6)
@@ -308,12 +313,24 @@ test('unknown keys survive the operations this build performs: relabel, share, c
   assert.deepEqual((pruned as Record<string, unknown>).slots, slots, 'prune keeps the file\'s unknown keys')
 })
 
-test('a file from a newer build is recognised; this build\'s own and older files are not', () => {
+test('a file from a newer build is recognised by its format, not its version; this build\'s own and older files are not', () => {
+  // No `format` (a file from before 0.5.12): the version stands in for it.
   assert.equal(newerThanBuild(parseRegister(newerBuildFile(4))!), true)
   assert.equal(newerThanBuild(parseRegister(newerBuildFile(3))!), false)
   assert.equal(newerThanBuild(parseRegister(newerBuildFile(2))!), false)
   assert.equal(newerThanBuild(parseRegister(newerBuildFile(1))!), false)
   assert.equal(newerThanBuild(emptyRegister(SESSION, 'w', T0)), false)
+  // With `format`: a later version this build can still handle is NOT refused (djdarcy, 2026-10-17: never
+  // force an upgrade when nothing needs upgrading); a format above this build's is, whatever the version.
+  assert.equal(newerThanBuild(parseRegister(newerBuildFile(9, REGISTER_FORMAT))!), false)
+  assert.equal(newerThanBuild(parseRegister(newerBuildFile(9, REGISTER_FORMAT - 1))!), false)
+  assert.equal(newerThanBuild(parseRegister(newerBuildFile(3, REGISTER_FORMAT + 1))!), true)
+  assert.equal(formatOf(parseRegister(newerBuildFile(9, 3))!), 3)
+  assert.equal(formatOf(parseRegister(newerBuildFile(2))!), 2)
+  // The field rides through a save unchanged, after `version`.
+  const kept = serializeRegister(parseRegister(newerBuildFile(9, 3))!)
+  assert.ok(kept.startsWith('{\n  "version": 9,\n  "format": 3,\n'), kept.slice(0, 40))
+  assert.equal(emptyRegister(SESSION, 'w', T0).format, REGISTER_FORMAT)
   // A file with no version at all is read as version 1 (the proof-of-concept files had none), older than this build.
   const o = JSON.parse(newerBuildFile(1))
   delete o.version

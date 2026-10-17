@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.12] - 2026-10-17
+
+### Added
+
+- A bookmark file now carries a `format` beside its `version`. `version` counts the format migrations the file has been through and decides when a newer plugin migrates it (with a backup); `format` is the oldest plugin that can still handle the file's data, and decides when an older plugin must leave the file read-only. They have moved together so far (1, 2, 3); from here a migration an older plugin can live with leaves `format` where it is, so nobody is made to upgrade when nothing needs upgrading. A file written before this version has no `format` and reads as asking for its own `version`; adding the field is not a migration and takes no backup.
+- The plugin writes a `README.md` into its data folder (`~/claude/bookmarks/`): what each folder and file holds, which are yours (authored: back them up), which are the plugin's copies (backup), which it rebuilds (cache) and which it generates. Written when missing and rewritten when the plugin version changes; left alone otherwise.
+- `docs/usage.md`, "What to back up, and what a reinstall does": the same classification as a table, what a backup tool should take, what a reinstall under another marketplace name does and does not touch, and what the two numbers in a bookmark file mean.
+
 ## [0.5.11] - 2026-10-17
 
 ### Added
@@ -1085,7 +1093,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.11...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.12...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

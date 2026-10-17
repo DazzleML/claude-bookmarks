@@ -14,7 +14,7 @@ const mintOf = (k: string, label: string, extra: Partial<Mint> = {}): Mint => ({
 
 /** A v1 file as the proof of concept wrote it: every record with its own sessionId and transcript, two spellings of the path, one record copied from another conversation, a tombstone, no numbers. */
 function v1Text(): string {
-  const { nextN: _n, slots: _s, ...base } = emptyRegister(SESSION, 'bookmarks 0.4.110', T0)
+  const { nextN: _n, slots: _s, format: _f, ...base } = emptyRegister(SESSION, 'bookmarks 0.4.110', T0) // no format field before 0.5.12
   let reg: Register = { ...base, version: 1 }
   reg = addOrRelabel(reg, mintOf('a', 'first', { transcript: T.replace(/\//g, '\\') }), T0 + 300).register // backslashes, minted third
   reg = addOrRelabel(reg, mintOf('b', 'second'), T0 + 100).register // minted first
@@ -50,6 +50,9 @@ test('v2 -> v3: the store\'s marks become mark records and slots; the reading po
   }
   const v3 = applyMigrations(v2, planFor(2), store, { sessionId: SESSION, now: T0 + 2000 })
   assert.equal(v3.version, 3)
+  // Each step names the reader its result needs; the file asks for the highest (v2's 2, then v3's 3).
+  assert.equal(v2.format, 2)
+  assert.equal(v3.format, 3)
   const marks = v3.perma.filter(r => r.tier === 'mark')
   assert.equal(marks.length, 2, 'a and ` share a message, so one record; q is another')
   assert.deepEqual(marks.map(r => r.n), [5, 6], 'numbered after the four bookmarks, in the order marked (q first)')

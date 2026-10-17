@@ -316,7 +316,7 @@ The file's **Notes** section is yours: anything below its marker line survives w
 
 The register belongs to one conversation, and its name is that conversation's session id. `claude --resume` reopens the same conversation, so it reads the same file. A **forked** conversation (one branched from an earlier point of another) is a new conversation with a new id, and it starts with an empty register: the records of the conversation it branched from are not copied, even though the transcript it copied contains the same messages. That is the rule for the 0.5.x line; following a fork is tracked in [#39](https://github.com/DazzleML/claude-bookmarks/issues/39) and will come as its own change rather than as a side effect of how files are named.
 
-The file carries a `version`. A plugin build that finds a file written by a newer build reads it in full and refuses to write it (a toast says so once when the conversation loads, and any bookmark action that would save answers "not saved"); update the plugin to write it again. A build that finds an older file brings it up to date on load, keeping a copy of the original first (from 0.5.x; the where and how is in the CHANGELOG as each piece lands).
+The file carries a `version` (how many format migrations it has been through) and a `format` (the oldest plugin that can still handle its data). A plugin that finds a file whose `format` is newer than what it knows reads it in full and refuses to write it (a toast says so once when the conversation loads, and any bookmark action that would save answers "not saved"); update the plugin to write it again. A plugin that finds an older `version` brings the file up to date when the conversation starts, keeping a copy of the original under `backups/` first. The two numbers are explained under [What to back up, and what a reinstall does](#what-to-back-up-and-what-a-reinstall-does).
 
 Every record is addressed in two ways. The full address is the link above, which names the message's uuid and never changes. The short reference, for citations once records carry a number `n` (coming in 0.5.x), is **`bm:<sid8>.<n>`**: the first eight characters of the conversation's session id, a dot, the record's number in that conversation. Inside its own conversation `bm:<n>` is enough. A short reference is resolved by the register file whose name starts with `<sid8>`; if no file by that name exists (the file was moved or renamed), by reading every register's header for a matching `sessionId`; and if that finds two, the reference is ambiguous and the full uuid decides. Numbers are never reused within a conversation, so `bm:13` means the same record for the life of the file. Until the number lands, the plugin writes only the full link.
 
@@ -375,6 +375,23 @@ Every colour the plugin draws has a role, and its default is one of Claude Code'
 | The highlight | Two minutes, or until your next prompt | Display only |
 
 Each conversation has its own marks: `a` in one conversation is unrelated to `a` in another. Marks, the reading position, pins and bookmarks all live in the conversation's bookmark file in your own folder (see [Where bookmarks live](#where-bookmarks-live)); Claude Code's own plugin storage keeps only what the transcript rebuilds (the prompt list) and the session's UI state (the jumplist, the reading position's way back). Without a data folder, marks fall back to that storage. Nothing is written to the session file.
+
+### What to back up, and what a reinstall does
+
+Everything under `~/claude/bookmarks/` falls into four kinds, and the folder carries a `README.md` the plugin writes that says which is which:
+
+| Kind | Where | What it means |
+|------|-------|---------------|
+| **Authored** | `sessions/<session id>.json`, `sessions/<session id>/<uuid8>.md`, `sessions/<session id>.state.json` | What you and Claude made: bookmarks, marks, pins, notes. Nothing rebuilds them. Back these up |
+| **Backup** | `sessions/<session id>.json.bak`, `backups/` | Copies the plugin took: the file before its last change, the originals of each format migration with a manifest, and the one snapshot taken before the first migration on a machine. Keep them as long as you might want to go back |
+| **Cache** | `prompttext/`, `debug/` | Rebuilt or regrown when missing: the prompt text the filter searches, the log |
+| **Generated** | `sessions/index.json`, `sessions/INDEX.md`, `README.md` | Rewritten by the plugin from the authored files; edits to them are overwritten |
+
+A backup tool that versions your home folder should take `~/claude/bookmarks/sessions/` and `backups/` and may skip the caches. ([claude-session-backup](https://github.com/DazzleML/Claude-Session-Backup) is adding `~/claude` to what it versions; this table is the classification it uses.)
+
+**Reinstalling the plugin.** The bookmark folder is yours and a reinstall never touches it. Claude Code's own plugin store is another matter: it is named after the plugin's install identity, so a reinstall under another marketplace name starts an empty store -- the prompt list is read again from the transcript, the jumplist starts empty -- and your `/config` choices for the plugin reset to their defaults. Marks, pins and bookmarks are unaffected, because since 0.5.5 none of them lives in the store. If you are on a version before 0.5.5, upgrade first and open each conversation whose marks you want once, so they migrate into the bookmark file, before you reinstall.
+
+**Two numbers in a bookmark file.** `version` counts the format migrations the file has been through; a newer plugin migrates an older file at the conversation's start, after copying the original under `backups/`. `format` is the oldest plugin that can still handle the file's data; a plugin refuses to write a file whose `format` is newer than what it knows, and reads it instead. The two move together so far (1, 2, 3); they are separate so that a future migration an older plugin can live with does not force anyone to upgrade.
 
 ## Diagnostic commands
 

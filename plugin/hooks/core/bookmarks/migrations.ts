@@ -27,6 +27,8 @@ export type MigrationContext = {
 export type Migration = {
   from: number
   to: number
+  /** The format (minimum reader, register-file.ts REGISTER_FORMAT) the migrated file asks for: `to` when the new shape needs a new reader, the previous format when an older build can still handle the result. */
+  format: number
   /** The store keys this step reads for a conversation; the handler copies their values into the run folder before the step runs, and deletes them after. */
   storeKeys: (sessionId: string) => string[]
   apply: (reg: Register, store: Record<string, unknown>, ctx: MigrationContext) => Register
@@ -42,6 +44,7 @@ export type Migration = {
 export const v1to2: Migration = {
   from: 1,
   to: 2,
+  format: 2, // a v1 build would write records without n and look for the pins in the store
   storeKeys: sid => [`pins:${sid}`],
   apply(reg, store, ctx) {
     // The file's transcript: the spelling most of its own records agree on, slashes forward.
@@ -80,6 +83,7 @@ export const v1to2: Migration = {
 export const v2to3: Migration = {
   from: 2,
   to: 3,
+  format: 3, // a v2 build would keep its marks in the store, beside the file's slots
   storeKeys: sid => [`marks:${sid}`],
   apply(reg, store, ctx) {
     const marks = store[`marks:${ctx.sessionId}`]
@@ -123,7 +127,9 @@ export function planFor(version: number): Migration[] {
 export function applyMigrations(reg: Register, steps: readonly Migration[], store: Record<string, unknown>, ctx: MigrationContext): Register {
   let out = reg
   for (const s of steps) out = s.apply(out, store, ctx)
-  return { ...out, rev: out.rev + 1, updatedAt: ctx.now }
+  // The file now asks for the highest reader any step required; a compatible step leaves it where it was.
+  const format = Math.max(out.format ?? 0, ...steps.map(s => s.format))
+  return { ...out, ...(format > 0 ? { format } : {}), rev: out.rev + 1, updatedAt: ctx.now }
 }
 
 /** A time for a folder name: ISO, with the colons Windows refuses turned into dashes, no milliseconds. */

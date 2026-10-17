@@ -86,7 +86,7 @@ test('title and project sit in the header, in the fixed order, and round-trip', 
   const reg: Register = { ...emptyRegister(SESSION, 'w', T0, { cwd: 'C:/code/claude-bookmarks' }), title: ' the record format ', project: 'claude-bookmarks' }
   const text = serializeRegister(reg)
   const keys = Object.keys(JSON.parse(text))
-  assert.deepEqual(keys.slice(0, 7), ['version', 'sessionId', 'cwd', 'title', 'project', 'rev', 'updatedAt'])
+  assert.deepEqual(keys.slice(0, 8), ['version', 'format', 'sessionId', 'cwd', 'title', 'project', 'rev', 'updatedAt'])
   assert.deepEqual(parseRegister(text), reg)
   // Absent when unknown: a header with no title writes none.
   assert.ok(!serializeRegister(emptyRegister(SESSION, 'w', T0)).includes('"title"'))

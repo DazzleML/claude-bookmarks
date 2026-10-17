@@ -29,6 +29,21 @@ import { aliasesOf, noteOwners, noteTags } from './note.ts'
 export const REGISTER_VERSION = 3
 
 /**
+ * The format this build understands: the MINIMUM READER a file may ask for. `version` counts
+ * migrations (each one changed the shape, each one ran with a backup); `format` is the
+ * oldest format a build must know to operate on the file's data safely, and it moves only
+ * when a shape change leaves an older build unable to handle the data (djdarcy, 2026-10-17:
+ * "we should be tracking when the format itself changes so we can easily ensure that old
+ * versions that CAN support our format DO support our format rather than needlessly forcing
+ * people to upgrade"). A build refuses to write a file whose `format` is above this; a file
+ * with a higher `version` but a `format` it knows is read and written, unknown keys kept.
+ * 1, 2, 3 coincide with the versions: each of the first three shapes needed its own reader
+ * (v3's slots, say: a v2 build would put marks back in the store). A file without the field
+ * (written before 0.5.12) reads as `format: version`.
+ */
+export const REGISTER_FORMAT = 3
+
+/**
  * What a letter (or the reading position's key) points at: `current` is the record's `n`,
  * or null when the letter was cleared with its history kept (djdarcy, 2026-10-16: "the
  * only thing that should ever need to be saved is which is the CURRENTLY active 'a' mark or
@@ -40,8 +55,11 @@ export type Slot = { current: number | null; history: { n: number; at: number }[
 
 /** True when the file was written by a build whose format is ahead of this one: read it, never write it. */
 export function newerThanBuild(reg: Register): boolean {
-  return reg.version > REGISTER_VERSION
+  return formatOf(reg) > REGISTER_FORMAT
 }
+
+/** The format a file asks its reader for: its `format`, else (a file from before 0.5.12) its `version`. */
+export const formatOf = (reg: Pick<Register, 'version' | 'format'>): number => reg.format ?? reg.version
 
 /**
  * What is left when a record goes: pruned (temporary, aged out) or removed (on request).
@@ -51,7 +69,10 @@ export function newerThanBuild(reg: Register): boolean {
 export type Tombstone = { uuid: string; n?: number; createdAt?: number; owner?: AnchorOwner; label?: string; prunedAt?: number; removedAt?: number; removedBy?: string }
 
 export type Register = {
+  /** Counts the migrations the file has been through: the shape it was written in (REGISTER_VERSION). */
   version: number
+  /** The minimum reader the data asks for (REGISTER_FORMAT); absent in a file from before 0.5.12, read as `version`. */
+  format?: number
   sessionId: string
   /**
    * The conversation's transcript path, forward slashes, once for the file (v2). A record
@@ -87,7 +108,7 @@ export type Register = {
 
 export function emptyRegister(sessionId: string, writer: string, now: number, env?: { configDir?: string; cwd?: string; transcript?: string }): Register {
   const { transcript, ...rest } = env ?? {}
-  return { version: REGISTER_VERSION, sessionId, ...(transcript ? { transcript } : {}), ...rest, rev: 0, updatedAt: now, writer, nextN: 1, perma: [], tombstones: [], slots: {} }
+  return { version: REGISTER_VERSION, format: REGISTER_FORMAT, sessionId, ...(transcript ? { transcript } : {}), ...rest, rev: 0, updatedAt: now, writer, nextN: 1, perma: [], tombstones: [], slots: {} }
 }
 
 /**
@@ -309,7 +330,7 @@ function bump(reg: Register, now: number): Register {
 }
 
 // Fixed key order, so a hand edit and a program write diff cleanly.
-const REGISTER_KEYS = ['version', 'sessionId', 'transcript', 'configDir', 'cwd', 'title', 'project', 'rev', 'updatedAt', 'writer', 'nextN', 'perma', 'tombstones', 'pins', 'slots'] as const
+const REGISTER_KEYS = ['version', 'format', 'sessionId', 'transcript', 'configDir', 'cwd', 'title', 'project', 'rev', 'updatedAt', 'writer', 'nextN', 'perma', 'tombstones', 'pins', 'slots'] as const
 const RECORD_KEYS = [
   'n', 'sessionId', 'uuid', 'idKind', 'owner', 'label', 'why', 'words', 'head', 'line', 'bytes', 'role', 'timestamp',
   'temporary', 'tier', 'createdAt', 'updatedAt', 'by', 'source', 'sharedFrom', 'transcript', 'tags', 'axes', 'rel', 'x', 'md',
@@ -381,6 +402,8 @@ export function parseRegister(text: string): Register | undefined {
   })
   const reg: Register = {
     version,
+    // A file from before the field reads as asking for its own version: no migration, no backup, for the field itself.
+    ...(typeof o.format === 'number' ? { format: o.format } : {}),
     sessionId: o.sessionId,
     ...(transcript !== undefined ? { transcript } : {}),
     ...(typeof o.configDir === 'string' ? { configDir: o.configDir } : {}),

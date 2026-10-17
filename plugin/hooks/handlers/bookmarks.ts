@@ -20,6 +20,7 @@ import {
   type Manifest, type Migration,
 } from '../core/bookmarks/migrations.ts'
 import { checkReport, drawLine, STORE_CAP, type CheckInput } from '../core/bookmarks/check.ts'
+import { dataReadme, readmeNeedsWrite } from '../core/bookmarks/data-readme.ts'
 import type { Mark, Marks } from '../core/marks/marks.ts'
 import { rowPlace } from '../core/bookmarks/transcript-lines.ts'
 import { forwardSlashes } from '../core/kit/paths.ts'
@@ -225,6 +226,25 @@ export async function rebuildIndex(ports: BookmarksPorts): Promise<void> {
     ports.log(`[bm] index: ${index.sessions.length} conversation(s) with bookmarks, ${dir}/${INDEX_MD}`)
   } catch (err) {
     ports.logAlways(`[bm] index: not rebuilt: ${String(err)}`)
+  }
+}
+
+// --- The data folder's README (unit 12) --------------------------------------------------------
+// `bookmarks/README.md` (core/bookmarks/data-readme.ts): written at a start when it is missing
+// or was written by another version of the plugin, left alone otherwise; never fails a start.
+
+export async function ensureReadme(ports: BookmarksPorts): Promise<void> {
+  try {
+    const root = await ports.dataRoot()
+    if (!root) return
+    const path = `${root}/bookmarks/README.md`
+    const writer = `${ports.pluginName} ${await ports.pluginVersion()}`
+    const existing = (await ports.fsExists(path)) ? await ports.fsRead(path) : undefined
+    if (!readmeNeedsWrite(existing, writer)) return
+    await ports.fsWrite(path, dataReadme(writer))
+    ports.log(`[bm] data folder: README.md ${existing === undefined ? 'written' : 'rewritten'} by ${writer}`)
+  } catch (err) {
+    ports.logAlways(`[bm] data folder: README.md not written: ${String(err)}`)
   }
 }
 
@@ -506,6 +526,7 @@ export async function startRegister(ports: BookmarksPorts) {
     ports.logAlways(`[bm] migrate failed: ${String(err)}`)
   }
   await rebuildIndex(ports)
+  await ensureReadme(ports)
   try {
     const reg = await loadRegister(ports)
     ports.log(`[bm] register: ${reg.perma.length} bookmark(s), rev ${reg.rev}, ${await registerPath(ports)}`)
