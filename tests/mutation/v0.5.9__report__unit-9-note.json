@@ -1,0 +1,172 @@
+{
+  "mutations": [
+    {
+      "id": "M1",
+      "file": "plugin/hooks/core/bookmarks/note.ts",
+      "original": "if (or !== ob) return or < ob ? r : best",
+      "mutated": "if (or !== ob) return or > ob ? r : best",
+      "note": "primaryRecord prefers the coldest owner rank instead of the warmest",
+      "verdict": "killed",
+      "core_red": [
+        "the primary record is the person's warmest, else Claude's; a letter's mark is never the primary and never an alias",
+        "the note writes tags and aliases as YAML lists, version 2, only reserved names; the parser reads them back",
+        "the base: baseOf strips derived tags and an empty why; the noteBase op sets md.base by id, is unchanged when equal, round-trips after x"
+      ],
+      "kit_red": [],
+      "kit_pass": "96"
+    },
+    {
+      "id": "M2",
+      "file": "plugin/hooks/core/bookmarks/note.ts",
+      "original": "return r.createdAt < best.createdAt ? r : best",
+      "mutated": "return r.createdAt > best.createdAt ? r : best",
+      "note": "among equals pick the latest instead of the earliest",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "96"
+    },
+    {
+      "id": "M3",
+      "file": "plugin/hooks/core/bookmarks/note.ts",
+      "original": "for (let i = 0; i < 3; i++) if (v[i] !== floor[i]) return v[i]! > floor[i]!\n  return true",
+      "mutated": "for (let i = 0; i < 3; i++) if (v[i] !== floor[i]) return v[i]! > floor[i]!\n  return false",
+      "note": "a version equal to the floor is no longer at or above it",
+      "verdict": "killed",
+      "core_red": [
+        "ingest adopts a field that differs from the base, never one that is absent, never from a writer below the floor; bm/* tags are stripped"
+      ],
+      "kit_red": [
+        "a note edited in Obsidian is read back before the rewrite: the label and tags become the record's, the note is regenerated from them, the base follows"
+      ],
+      "kit_pass": "95"
+    },
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/bookmarks/note.ts",
+      "original": "return tags.filter(t => !t.startsWith(DERIVED_TAG_PREFIX))",
+      "mutated": "return tags.slice()",
+      "note": "userTags stops stripping derived bm/ tags",
+      "verdict": "killed",
+      "core_red": [
+        "ingest adopts a field that differs from the base, never one that is absent, never from a writer below the floor; bm/* tags are stripped",
+        "the base: baseOf strips derived tags and an empty why; the noteBase op sets md.base by id, is unchanged when equal, round-trips after x"
+      ],
+      "kit_red": [
+        "a note edited in Obsidian is read back before the rewrite: the label and tags become the record's, the note is regenerated from them, the base follows"
+      ],
+      "kit_pass": "95"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/core/bookmarks/note.ts",
+      "original": "if (label !== undefined && label !== '' && label !== (base.label ?? '')) changes.label = label",
+      "mutated": "if (label !== undefined && label !== (base.label ?? '')) changes.label = label",
+      "note": "an emptied label in the note is now adopted",
+      "verdict": "killed",
+      "core_red": [
+        "ingest adopts a field that differs from the base, never one that is absent, never from a writer below the floor; bm/* tags are stripped"
+      ],
+      "kit_red": [],
+      "kit_pass": "96"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/core/bookmarks/note.ts",
+      "original": "return records.filter(r => tierOf(r) !== 'mark')",
+      "mutated": "return records.slice()",
+      "note": "noteRecords no longer leaves out marks",
+      "verdict": "killed",
+      "core_red": [
+        "the primary record is the person's warmest, else Claude's; a letter's mark is never the primary and never an alias"
+      ],
+      "kit_red": [],
+      "kit_pass": "96"
+    },
+    {
+      "id": "M7",
+      "file": "plugin/hooks/core/bookmarks/note.ts",
+      "original": "const all = [primary, ...noteRecords(records).filter(r => r !== primary)]",
+      "mutated": "const all = [...noteRecords(records).filter(r => r !== primary), primary]",
+      "note": "derived tags list the primary last instead of first",
+      "verdict": "killed",
+      "core_red": [
+        "the primary record is the person's warmest, else Claude's; a letter's mark is never the primary and never an alias",
+        "the note writes tags and aliases as YAML lists, version 2, only reserved names; the parser reads them back"
+      ],
+      "kit_red": [],
+      "kit_pass": "96"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "    const k = line.slice(0, i).trim()\n    if (!k || /\\s/.test(k)) continue",
+      "mutated": "    const k = line.slice(0, i).trim()\n    if (!k) continue",
+      "note": "keys containing whitespace are no longer skipped when parsing front matter",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "96"
+    },
+    {
+      "id": "M9",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "if (v.length >= 2 && v.startsWith(\"'\") && v.endsWith(\"'\")) return v.slice(1, -1).replace(/''/g, \"'\")",
+      "mutated": "if (v.length >= 2 && v.startsWith(\"'\") && v.endsWith(\"'\")) return v.slice(1, -1)",
+      "note": "single-quoted YAML escape '' no longer unescaped",
+      "verdict": "killed",
+      "core_red": [
+        "the YAML subset: block lists, flow lists, quoted scalars, an empty property, CRLF; nothing nested is read"
+      ],
+      "kit_red": [],
+      "kit_pass": "96"
+    },
+    {
+      "id": "M10",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "out[k] = splitFlow(v.slice(1, -1)).map(yamlValue).filter(s => s !== '')",
+      "mutated": "out[k] = splitFlow(v.slice(1, -1)).map(yamlValue)",
+      "note": "empty flow-list items are no longer filtered out",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "96"
+    },
+    {
+      "id": "M11",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "if (sameBase(rec.md?.base, op.base)) return { register: reg, record: rec, unchanged: true }",
+      "mutated": "if (!sameBase(rec.md?.base, op.base)) return { register: reg, record: rec, unchanged: true }",
+      "note": "noteBase short-circuit inverted so a changed base is never stored",
+      "verdict": "killed",
+      "core_red": [
+        "the base: baseOf strips derived tags and an empty why; the noteBase op sets md.base by id, is unchanged when equal, round-trips after x"
+      ],
+      "kit_red": [
+        "a note edited in Obsidian is read back before the rewrite: the label and tags become the record's, the note is regenerated from them, the base follows"
+      ],
+      "kit_pass": "95"
+    },
+    {
+      "id": "M12",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "if (opts?.bookkeeping) { /* kept as it was */ }\n    else if (onDisk) await ports.fsWrite(`${path}.bak`, disk)",
+      "mutated": "if (onDisk) await ports.fsWrite(`${path}.bak`, disk)",
+      "note": "bookkeeping writes now overwrite .bak",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        ".bak is written only from a file that parses: a torn file never becomes the backup",
+        ".bak is the previous file when that file parses"
+      ],
+      "kit_pass": "94"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "96"
+    }
+  ]
+}

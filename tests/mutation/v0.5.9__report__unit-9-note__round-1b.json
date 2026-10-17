@@ -1,0 +1,50 @@
+{
+  "mutations": [
+    {
+      "id": "M2",
+      "file": "plugin/hooks/core/bookmarks/note.ts",
+      "original": "return r.createdAt < best.createdAt ? r : best",
+      "mutated": "return r.createdAt > best.createdAt ? r : best",
+      "note": "among equals pick the latest instead of the earliest",
+      "verdict": "killed",
+      "core_red": [
+        "the primary record is the person's warmest, else Claude's; a letter's mark is never the primary and never an alias"
+      ],
+      "kit_red": [],
+      "kit_pass": "96"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "    const k = line.slice(0, i).trim()\n    if (!k || /\\s/.test(k)) continue",
+      "mutated": "    const k = line.slice(0, i).trim()\n    if (!k) continue",
+      "note": "keys containing whitespace are no longer skipped when parsing front matter",
+      "verdict": "killed",
+      "core_red": [
+        "the YAML subset: block lists, flow lists, quoted scalars, an empty property, CRLF; nothing nested is read"
+      ],
+      "kit_red": [],
+      "kit_pass": "96"
+    },
+    {
+      "id": "M10",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "out[k] = splitFlow(v.slice(1, -1)).map(yamlValue).filter(s => s !== '')",
+      "mutated": "out[k] = splitFlow(v.slice(1, -1)).map(yamlValue)",
+      "note": "empty flow-list items are no longer filtered out",
+      "verdict": "killed",
+      "core_red": [
+        "the YAML subset: block lists, flow lists, quoted scalars, an empty property, CRLF; nothing nested is read"
+      ],
+      "kit_red": [],
+      "kit_pass": "96"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "96"
+    }
+  ]
+}

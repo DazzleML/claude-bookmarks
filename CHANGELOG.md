@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.9] - 2026-10-17
+
+### Changed
+
+- Each bookmark's Markdown file is now an Obsidian note. Its `tags` and `aliases` are lists (Obsidian's own form); the tags carry the bookmark's own tags and then one `bm/tier/...` and one `bm/owner/...` tag per record on the message, so a vault can filter by them; when the same message is on both lists, the other list's label is an alias, so Obsidian finds the note under either name. Point Obsidian at `~/claude/bookmarks` and edit a note's `label`, `why` or `tags` there: the next time the plugin touches that bookmark (a relabel, a share, a claim) it reads the edit back into the bookmark file before rewriting the note, so the edit is kept. Only those three properties are read back; a note written by a plugin older than 0.5.9 is regenerated and never read, and a property missing from a note is never treated as a deletion. The note's own version is 2.
+
+### Added
+
+- Internal: a record remembers what its note was last written from (`md.base`), which is how an edit in the note is told apart from a change made in Claude Code.
+
 ## [0.5.8] - 2026-10-17
 
 ### Added
@@ -1063,7 +1073,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.8...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.9...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

@@ -17,6 +17,7 @@
 
 import { type AnchorOwner, type AnchorRecord, ownerOf, tierOf, uuid8 } from './anchor.ts'
 import { isDrawnId, matchesPrefix, sameMessage } from '../kit/message-id.ts'
+import { aliasesOf, noteOwners, noteTags } from './note.ts'
 
 /**
  * The format this build writes. 1: the proof of concept's file. 2 (0.5.4): `sessionId` and
@@ -311,7 +312,7 @@ function bump(reg: Register, now: number): Register {
 const REGISTER_KEYS = ['version', 'sessionId', 'transcript', 'configDir', 'cwd', 'title', 'project', 'rev', 'updatedAt', 'writer', 'nextN', 'perma', 'tombstones', 'pins', 'slots'] as const
 const RECORD_KEYS = [
   'n', 'sessionId', 'uuid', 'idKind', 'owner', 'label', 'why', 'words', 'head', 'line', 'bytes', 'role', 'timestamp',
-  'temporary', 'tier', 'createdAt', 'updatedAt', 'by', 'source', 'sharedFrom', 'transcript', 'tags', 'axes', 'rel', 'x',
+  'temporary', 'tier', 'createdAt', 'updatedAt', 'by', 'source', 'sharedFrom', 'transcript', 'tags', 'axes', 'rel', 'x', 'md',
 ] as const
 
 /**
@@ -409,8 +410,13 @@ export function newer(a: Register, b: Register): Register {
 
 // --- The export: one markdown file per bookmark ------------------------------------
 
-/** The export's own format version, independent of the register's (the note did not change in register v2; unit 9 revises it). */
-export const EXPORT_VERSION = 1
+/** The export's own format version, independent of the register's: 2 since the note became an Obsidian note (lists, aliases, derived tags; unit 9). */
+export const EXPORT_VERSION = 2
+
+/** Every record on a message, on any list, a letter's (tier `mark`) left out: what the message's note describes. */
+export function recordsOn(reg: Register, uuid: string): AnchorRecord[] {
+  return reg.perma.filter(r => tierOf(r) !== 'mark' && (sameMessage(r.uuid, uuid) || matchesPrefix(r.uuid, uuid)))
+}
 
 export function exportFileName(uuid: string): string {
   return `${uuid8(uuid)}.md`
@@ -439,14 +445,19 @@ export function exportNotesOf(existing: string | undefined): string {
 /**
  * The export's text: front matter with every field, the message, a verify recipe, and a
  * notes section that a rewrite keeps (`notes`, from `exportNotesOf` of the old file).
- * One export per message; `owners` lists every list the message is on.
+ * One export per message, an Obsidian note (unit 9): `record` is the message's primary
+ * record (core/bookmarks/note.ts), `records` every record on the message, from which come
+ * `owners`, the other labels as `aliases` and the derived `bm/tier/*`, `bm/owner/*` tags.
+ * `tags` and `aliases` are written as YAML lists, the form Obsidian's properties read and write.
  */
 export function exportMarkdown(
   record: AnchorRecord,
   messageText: string,
-  opts?: { minted?: string; owners?: AnchorOwner[]; notes?: string; writer?: string; title?: string; project?: string },
+  opts?: { minted?: string; owners?: AnchorOwner[]; records?: readonly AnchorRecord[]; notes?: string; writer?: string; title?: string; project?: string },
 ): string {
-  const owners = opts?.owners && opts.owners.length > 0 ? opts.owners : [ownerOf(record)]
+  const records = opts?.records && opts.records.length > 0 ? opts.records : [record]
+  const owners = opts?.records ? noteOwners(record, records) : opts?.owners && opts.owners.length > 0 ? opts.owners : [ownerOf(record)]
+  const aliases = aliasesOf(record, records)
   // Every name here is in FRONT_MATTER_PROPERTIES (tests/core/record.test.ts holds the writer to it).
   const fm: [(typeof FRONT_MATTER_PROPERTIES)[number], unknown][] = [
     ['kind', 'bookmark-anchor'],
@@ -457,7 +468,8 @@ export function exportMarkdown(
     ['n', record.n],
     ['owners', owners.join(', ')],
     ['tier', tierOf(record)],
-    ['tags', record.tags && record.tags.length > 0 ? record.tags.join(', ') : undefined],
+    ['tags', noteTags(record, records)],
+    ['aliases', aliases.length > 0 ? aliases : undefined],
     ['title', opts?.title],
     ['project', opts?.project],
     ['role', record.role],
@@ -475,7 +487,14 @@ export function exportMarkdown(
     ['created', new Date(record.createdAt).toISOString()],
   ]
   const lines = ['---']
-  for (const [k, v] of fm) if (v !== undefined && v !== '') lines.push(`${k}: ${yamlScalar(v)}`)
+  for (const [k, v] of fm) {
+    // A list as a YAML block list (what Obsidian writes back); an empty list, like an empty scalar, is no property.
+    if (Array.isArray(v)) {
+      if (v.length === 0) continue
+      lines.push(`${k}:`)
+      for (const item of v) lines.push(`  - ${yamlScalar(item)}`)
+    } else if (v !== undefined && v !== '') lines.push(`${k}: ${yamlScalar(v)}`)
+  }
   lines.push('---', '')
   lines.push(`# ${record.label}`, '')
   if (record.why) lines.push(record.why, '')
@@ -525,24 +544,72 @@ function yamlScalar(v: unknown): string {
   return /[:#'"\n]|^[\s\-?&*!|>%@`[\]{}]|^$/.test(s) ? JSON.stringify(s) : s
 }
 
-/** The front matter of an export, as flat strings (enough to recover `words` and the position). */
-export function parseFrontMatter(text: string): Record<string, string> {
-  const m = /^---\n([\s\S]*?)\n---/.exec(text)
-  const out: Record<string, string> = {}
+/**
+ * The front matter of a note: the YAML subset the writer emits and Obsidian's properties
+ * editor writes back -- `key: scalar`, a block list (`key:` then `  - item` lines), a flow
+ * list (`key: [a, b]`), double-quoted scalars as JSON, single-quoted ones as YAML writes them.
+ * Anything else on a line is kept as written; nothing nested deeper is read (the register,
+ * not the note, is the record).
+ */
+export function parseFrontMatter(text: string): Record<string, string | string[]> {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)
+  const out: Record<string, string | string[]> = {}
   if (!m) return out
-  for (const line of m[1]!.split('\n')) {
-    const i = line.indexOf(': ')
-    if (i < 0) continue
-    const k = line.slice(0, i).trim()
-    let v = line.slice(i + 2).trim()
-    if (v.startsWith('"')) {
-      try {
-        v = JSON.parse(v)
-      } catch {
-        // keep as written
-      }
+  let list: string[] | undefined
+  for (const line of m[1]!.split(/\r?\n/)) {
+    const item = /^\s*-\s+(.*)$/.exec(line)
+    if (list && item) {
+      list.push(yamlValue(item[1]!))
+      continue
     }
-    out[k] = v
+    list = undefined
+    const i = line.indexOf(':')
+    if (i <= 0) continue
+    const k = line.slice(0, i).trim()
+    if (!k || /\s/.test(k)) continue
+    const v = line.slice(i + 1).trim()
+    if (v === '') {
+      // A block list follows (or the property is empty, which reads as an empty list).
+      list = []
+      out[k] = list
+    } else if (v.startsWith('[') && v.endsWith(']')) {
+      out[k] = splitFlow(v.slice(1, -1)).map(yamlValue).filter(s => s !== '')
+    } else out[k] = yamlValue(v)
   }
   return out
+}
+
+/** A flow list's items: split on commas outside quotes (`[one, "two, too"]` is two items). */
+function splitFlow(inner: string): string[] {
+  const items: string[] = []
+  let cur = ''
+  let quote: '"' | "'" | undefined
+  for (let i = 0; i < inner.length; i++) {
+    const c = inner[i]!
+    if (quote) {
+      cur += c
+      if (c === '\\' && quote === '"' && i + 1 < inner.length) cur += inner[++i]
+      else if (c === quote) quote = undefined
+    } else if (c === '"' || c === "'") {
+      quote = c
+      cur += c
+    } else if (c === ',') {
+      items.push(cur.trim())
+      cur = ''
+    } else cur += c
+  }
+  items.push(cur.trim())
+  return items
+}
+
+function yamlValue(v: string): string {
+  if (v.startsWith('"')) {
+    try {
+      return String(JSON.parse(v))
+    } catch {
+      return v // keep as written
+    }
+  }
+  if (v.length >= 2 && v.startsWith("'") && v.endsWith("'")) return v.slice(1, -1).replace(/''/g, "'")
+  return v
 }

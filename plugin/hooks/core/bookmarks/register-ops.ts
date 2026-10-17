@@ -12,6 +12,7 @@
 import { type AnchorOwner, type AnchorRecord, ownerOf, tierOf } from './anchor.ts'
 import { sameMessage } from '../kit/message-id.ts'
 import type { Mark, Marks } from '../marks/marks.ts'
+import { sameBase, type NoteBase } from './note.ts'
 import {
   addOrRelabel, claim, idOf, isRecord, prune, recordById, remove, share,
   type Mint, type RecordId, type Register, type Retention, type Slot, type Tombstone,
@@ -53,6 +54,8 @@ export type Op =
   | { op: 'clearMarks'; owner: AnchorOwner; letters: string[] }
   /** A letter brought back to a record in its history, by `n`, never by position. */
   | { op: 'bringBack'; owner: AnchorOwner; letter: string; n: number; at: number }
+  /** The note's base set on its primary record after the note is written: what a later read-back compares against (unit 9). */
+  | { op: 'noteBase'; id: RecordId; base: NoteBase }
   | { op: 'union'; other: Register }
 
 export type Applied = {
@@ -129,6 +132,13 @@ export function applyOp(reg: Register, op: Op, now: number): OpResult {
     }
     case 'setMark':
       return setMark(reg, op.owner, op.letter, op.place, op.at)
+    case 'noteBase': {
+      const rec = recordById(reg, op.id)
+      if (!rec) return { error: `no bookmark ${describeId(op.id)} for the note's base` }
+      if (sameBase(rec.md?.base, op.base)) return { register: reg, record: rec, unchanged: true }
+      const record: AnchorRecord = { ...rec, md: { ...(rec.md ?? {}), base: op.base } }
+      return { register: { ...reg, perma: reg.perma.map(r => (r === rec ? record : r)), rev: reg.rev + 1, updatedAt: now }, record }
+    }
     case 'clearMarks': {
       const slots = reg.slots?.[op.owner] ?? {}
       const cleared = op.letters.filter(l => slots[l]?.current !== null && slots[l]?.current !== undefined)

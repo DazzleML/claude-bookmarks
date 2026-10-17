@@ -5,6 +5,7 @@ import {
   addOrRelabel,
   emptyRegister,
   EXPORT_NOTES_MARKER,
+  EXPORT_VERSION,
   exportFileName,
   exportMarkdown,
   exportNotesOf,
@@ -189,7 +190,7 @@ test('the export carries every field in front matter and the message as a quote;
   const rec = addOrRelabel(emptyRegister(SESSION, 'w', T0), { ...mint, transcript: 'C:/x/projects/p/s.jsonl' }, T0).record
   const md = exportMarkdown(rec, 'One thing: a message\n\nwith "quotes" and a: colon', { minted: 'by the bookmark tool' })
   assert.equal(exportFileName(rec.uuid), '12d637fb.md')
-  assert.ok(md.startsWith('---\nkind: bookmark-anchor\nversion: 1\nsession: ' + SESSION))
+  assert.ok(md.startsWith(`---\nkind: bookmark-anchor\nversion: ${EXPORT_VERSION}\nsession: ` + SESSION))
   assert.ok(md.includes('\nbytes: 9763906-9765751\n'))
   assert.ok(md.includes('\n> One thing: a message\n>\n> with "quotes" and a: colon\n'))
   // The bookmarked words are bold inside the quote; a long message gets a heading and link.

@@ -304,6 +304,8 @@ file:///C:/Users/you/claude/bookmarks/sessions/<session>/12d637fb.md?u=<uuid>&l=
 
 The file's **Notes** section is yours: anything below its marker line survives when the bookmark is relabelled. Add context, links, or your own notes there.
 
+**In Obsidian:** the file is a note. Open `~/claude/bookmarks` as a vault (or add it to one) and its front matter shows as properties: `tags` (the bookmark's own, then `bm/tier/...` and `bm/owner/...` for each record on the message, which a vault search can filter by), `aliases` (the other list's label when the same message is on both), `title` and `project` of the conversation. Three properties are yours to edit there: `label`, `why` and `tags`. The next time the plugin touches that bookmark -- a relabel, a share, a claim -- it reads those three back before rewriting the note, so what you typed in Obsidian becomes the bookmark's. Everything else in the front matter is the plugin's and is rewritten; a note written by a plugin older than 0.5.9 is rewritten whole and never read back.
+
 **By hand, with no plugin:** a bookmark is only a transcript line. `grep -n` the words in the session's `.jsonl` for the line number, `head -n <line-1> | wc -c` for the byte offset, and write the link in the form above; the plugin recognises it when drawn and records it.
 
 ### One file per conversation: forks, resumes and references

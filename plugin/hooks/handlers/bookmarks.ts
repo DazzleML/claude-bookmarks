@@ -9,9 +9,10 @@ import {
   type AnchorOwner, type AnchorRecord,
 } from '../core/bookmarks/anchor.ts'
 import {
-  emptyRegister, exportMarkdown, exportNotesOf, findRecord, idOf, listOf, newerThanBuild, parseRegister, prune, REGISTER_VERSION, serializeRegister,
+  emptyRegister, exportMarkdown, exportNotesOf, findRecord, idOf, listOf, newerThanBuild, parseFrontMatter, parseRegister, prune, recordsOn, REGISTER_VERSION, serializeRegister,
   type Mint, type Register as BookmarkRegister, type Retention,
 } from '../core/bookmarks/register-file.ts'
+import { baseOf, ingest, primaryRecord, sameBase } from '../core/bookmarks/note.ts'
 import { applyOp, marksOf as marksFromRegister, type Op, type OpResult } from '../core/bookmarks/register-ops.ts'
 import {
   applyMigrations, CURRENT, hashText, planFor, runFolderName, SNAPSHOT_SUFFIX, snapshotFolderName, STORE_PREFIXES,
@@ -112,7 +113,7 @@ async function headerFields(ports: BookmarksPorts): Promise<{ title?: string; pr
  * `saved: false` without an error means there is no data root to write to; the change is
  * held in memory for the conversation.
  */
-export async function commitOp(ports: BookmarksPorts, op: Op): Promise<OpResult & { saved?: boolean; replayed?: boolean }> {
+export async function commitOp(ports: BookmarksPorts, op: Op, opts?: { bookkeeping?: boolean }): Promise<OpResult & { saved?: boolean; replayed?: boolean }> {
   const reg = await loadRegister(ports)
   const now = await ports.now()
   const session = await ports.sessionId()
@@ -151,7 +152,10 @@ export async function commitOp(ports: BookmarksPorts, op: Op): Promise<OpResult 
       applied = again
       replayed = true
     }
-    if (onDisk) await ports.fsWrite(`${path}.bak`, disk)
+    // `.bak` is the file before the person's (or Claude's) last action. A bookkeeping write
+    // (the note's base, unit 9) follows an action and is not one, so it leaves `.bak` alone.
+    if (opts?.bookkeeping) { /* kept as it was */ }
+    else if (onDisk) await ports.fsWrite(`${path}.bak`, disk)
     else ports.log(`[bm] register: ${path} does not parse; .bak kept as it was`)
   }
   if (applied.unchanged) {
@@ -171,6 +175,7 @@ export async function claimBookmark(ports: BookmarksPorts, uuid: string): Promis
   const reg = await loadRegister(ports)
   const src = findRecord(reg, uuid, 'claude')
   if (!src) return { error: `no bookmark ${short(uuid)} on Claude's list` }
+  await ingestNote(ports, src.uuid)
   const r = await commitOp(ports, { op: 'claim', id: idOf(src) })
   if ('error' in r) return r
   // A link is handed out (the band's toast, the tool's answer), so the record's file is written (unit 7).
@@ -406,6 +411,7 @@ export async function startRegister(ports: BookmarksPorts) {
 // markdown link a reply writes.
 type Minted = { record: AnchorRecord; added: boolean; saved: boolean; href?: string; markdown?: string; exportPath?: string; rev: number }
 async function mintBookmark(ports: BookmarksPorts, op: Extract<Op, { op: 'mint' | 'relabel' }>, messageText: string): Promise<Minted | { error: string }> {
+  await ingestNote(ports, op.op === 'mint' ? op.mint.uuid : op.id.uuid)
   const r = await commitOp(ports, op)
   if ('error' in r) return r
   const { register, record, added } = r as { register: BookmarkRegister; record: AnchorRecord; added?: boolean }
@@ -420,29 +426,66 @@ async function mintBookmark(ports: BookmarksPorts, op: Extract<Op, { op: 'mint' 
   return { record, added: added ?? false, saved: true, href, markdown, exportPath, rev: register.rev }
 }
 
-// One export per message, shared by both lists. A rewrite keeps whatever was written under
-// the notes marker (a person's or Claude's notes, links, context: pillar 3, #11).
+// Ingest before regenerate (unit 9, core/bookmarks/note.ts): before an action on a message
+// whose note exists, the note's writable fields are read back against the primary record's
+// base, and a label, why or tags edited in Obsidian becomes a relabel. It runs BEFORE the
+// action (a mint, a claim, a share), so the action is the later intent and wins over the
+// note where they meet; the note is then regenerated from the register by `writeExport`.
+async function ingestNote(ports: BookmarksPorts, uuid: string): Promise<void> {
+  const root = await ports.dataRoot()
+  if (!root) return
+  const register = await loadRegister(ports)
+  const main = primaryRecord(recordsOn(register, uuid))
+  if (!main) return
+  const path = anchorPath(root, register.sessionId, main.uuid)
+  if (!(await ports.fsExists(path))) return
+  const got = ingest(parseFrontMatter(await ports.fsRead(path)), main.md?.base)
+  if (!got.changes) {
+    ports.log(`[bm] note: ${short(main.uuid)}.md read back: ${got.reason}`)
+    return
+  }
+  const r = await commitOp(ports, { op: 'relabel', id: idOf(main), changes: got.changes, by: 'user' })
+  if ('error' in r) ports.logAlways(`[bm] note: ${short(main.uuid)}.md was edited but the edit could not be kept: ${r.error}`)
+  else ports.log(`[bm] note: ${short(main.uuid)}.md edited by hand; adopted ${Object.keys(got.changes).join(', ')} (rev ${r.register.rev})`, true)
+}
+
+// One export per message, shared by every list: an Obsidian note (unit 9). A rewrite keeps
+// whatever was written under the notes marker (a person's or Claude's notes, links, context:
+// pillar 3, #11). The note is written from the register's primary record and every record
+// on the message; the base it was written from is then committed to the record.
 async function writeExport(ports: BookmarksPorts, register: BookmarkRegister, record: Mint | { uuid: string; sessionId: string }, messageText: string, now: number) {
   const root = await ports.dataRoot()
   if (!root) return undefined
   const sessionId = 'sessionId' in record ? record.sessionId : register.sessionId
   const exportPath = anchorPath(root, sessionId, record.uuid)
   const existing = (await ports.fsExists(exportPath)) ? await ports.fsRead(exportPath) : undefined
+  const main = primaryRecord(recordsOn(register, record.uuid))
+  if (!main) return exportPath
+  // The base the note is (or stays) written from: a bookkeeping write, so `.bak` stays the
+  // file before the action. A note that cannot be regenerated below still holds what it
+  // holds, so the base follows the record either way.
+  const settleBase = async () => {
+    const base = baseOf(main)
+    if (sameBase(main.md?.base, base)) return
+    const r = await commitOp(ports, { op: 'noteBase', id: idOf(main), base }, { bookkeeping: true })
+    if ('error' in r) ports.logAlways(`[bm] note: the base of ${short(main.uuid)}.md was not kept: ${r.error}`)
+  }
   // A relabel or share has no message text in hand: read it from the transcript again,
   // and if that fails leave the file as it is rather than write an empty message.
   if (!messageText) {
     const found = await ports.resolveTarget({ uuid: record.uuid })
     if (found.kind === 'one') messageText = found.row.text
-    else if (existing) return exportPath
+    else if (existing) {
+      await settleBase()
+      return exportPath
+    }
   }
-  const owners = (['user', 'claude'] as AnchorOwner[]).filter(o => findRecord(register, record.uuid, o))
-  // The record to describe: the person's copy first, since the file is theirs to read.
-  const main = findRecord(register, record.uuid, 'user') ?? findRecord(register, record.uuid)
-  if (!main) return exportPath
+  const records = recordsOn(register, main.uuid)
   const minted = `${new Date(now).toISOString()} by ${main.by} (${main.source})`
   const header = await headerFields(ports)
   const writer = `${ports.pluginName} ${await ports.pluginVersion()}`
-  await ports.fsWrite(exportPath, exportMarkdown(main, messageText, { minted, owners, notes: exportNotesOf(existing), writer, ...header }))
+  await ports.fsWrite(exportPath, exportMarkdown(main, messageText, { minted, records, notes: exportNotesOf(existing), writer, ...header }))
+  await settleBase()
   return exportPath
 }
 
@@ -631,6 +674,7 @@ export async function bookmarkTool(ports: BookmarksPorts, e: unknown) {
     }
     if (action === 'share') {
       const to: AnchorOwner = owner === 'claude' ? 'user' : 'claude'
+      await ingestNote(ports, target.uuid)
       const r = await commitOp(ports, { op: 'share', id: idOf(target), to })
       if ('error' in r) return answer(r)
       await writeExport(ports, r.register, { uuid: target.uuid, sessionId: r.register.sessionId }, '', now)

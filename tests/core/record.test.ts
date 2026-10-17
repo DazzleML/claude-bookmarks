@@ -111,11 +111,12 @@ test('the export writes only names from FRONT_MATTER_PROPERTIES, and now n, tier
   for (const k of Object.keys(fm)) assert.ok((FRONT_MATTER_PROPERTIES as readonly string[]).includes(k), `${k} is not a reserved front-matter property`)
   assert.equal(fm.n, '1')
   assert.equal(fm.tier, 'perma')
-  assert.equal(fm.tags, 'a/b, c')
+  // Tags are a YAML list since the note became an Obsidian note (unit 9): the record's own, then the derived ones.
+  assert.deepEqual(fm.tags, ['a/b', 'c', 'bm/tier/perma', 'bm/owner/claude'])
   assert.equal(fm.title, 'the record format')
   assert.equal(fm.project, 'claude-bookmarks')
   assert.equal(fm['bm-writer'], 'bookmarks 0.5.6')
   // Without them, the lines are not written at all (no empty properties), and an empty string is no property either (M8).
   const bare = exportMarkdown({ ...addOrRelabel(emptyRegister(SESSION, 'w', T0), mint, T0).record, why: '' }, 'text', { title: '' })
-  assert.ok(!bare.includes('\ntitle:') && !bare.includes('\ntags:') && !bare.includes('\nbm-writer:') && !bare.includes('\nwhy:'), bare)
+  assert.ok(!bare.includes('\ntitle:') && !bare.includes('\naliases:') && !bare.includes('\nbm-writer:') && !bare.includes('\nwhy:'), bare)
 })

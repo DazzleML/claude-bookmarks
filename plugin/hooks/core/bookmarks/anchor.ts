@@ -72,6 +72,8 @@ export type AnchorRecord = {
   rel?: { kind: string; to: string }[]
   /** Open namespaces for what an owner wants to keep on a record: `x.claude`, `x.user`, `x['agent:<name>']`, `x['plugin:<name>']`. */
   x?: Record<string, Record<string, unknown>>
+  /** The Markdown note's bookkeeping (unit 9): `base`, the write-back fields as last written to the note; `path` when the note is not at the default. */
+  md?: { path?: string; base?: { label?: string; why?: string; tags?: string[] } }
 }
 
 export type ParsedAnchor = {
