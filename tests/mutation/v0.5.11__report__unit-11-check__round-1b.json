@@ -1,0 +1,24 @@
+{
+  "mutations": [
+    {
+      "id": "M8",
+      "file": "plugin/hooks/core/bookmarks/check.ts",
+      "original": "if (!m || m.kind !== 'migration' || !Array.isArray(m.files)) {",
+      "mutated": "if (!m || !Array.isArray(m.files)) {",
+      "note": "dropped manifest kind guard",
+      "verdict": "killed",
+      "core_red": [
+        "backups: a run without a manifest, one stopped before done, a copy missing, a copy whose hash differs; snapshots counted; none though runs ran"
+      ],
+      "kit_red": [],
+      "kit_pass": "100"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "100"
+    }
+  ]
+}

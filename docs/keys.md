@@ -83,6 +83,7 @@ A pane opened by a typed command from an **empty** input box takes the keyboard 
 | `/bm-pin [N]` | Pins or unpins prompt N (the newest without a number) |
 | `/bm-delmarks a b`, `/bm-delmarks all` | Deletes marks (the reading position stays) |
 | `/bm-env` | The plugin's version, the Claude Code version, the session id, what it has captured, the log echo state |
+| `/bm-check` | The bookmark files on disk checked: formats, backups, the index, the store; reports only |
 | `/bm-marks` | The marks set in this conversation |
 | `/bm-timeline` | The last few plugin events |
 | `/bm-debug on\|off\|reset`, `default on\|off`, `force on\|off`, `status` | The log echo, per conversation; see [The log echo](usage.md#the-log-echo) |

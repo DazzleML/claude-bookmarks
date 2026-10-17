@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.11] - 2026-10-17
+
+### Added
+
+- `/bm-check`: a check of the bookmark files on disk that reports and changes nothing. It names each register whose format is older than this build (it migrates at the next start) or newer (read-only here), a file that is not a register, a notes folder with no register, the index against the registers it should list, each migration's run folder with its status and whether every copy in it still matches the hash its manifest recorded, the snapshots, the store's size against the 4 MiB cap, and marks or pins left in the store for a conversation with no register. Where something is off, the line says what the next start or save will do about it.
+
 ## [0.5.10] - 2026-10-17
 
 ### Added
@@ -1079,7 +1085,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.10...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.11...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

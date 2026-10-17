@@ -1397,6 +1397,11 @@ export const register: Register = (on, options) => {
     await envCommand(diagnosticsPorts($))
     return {}
   })
+  // /bm-check: a linter over the data root (handlers/bookmarks.ts checkCommand); reads only.
+  on('command.run', { command: 'bm-check' }, async $ => {
+    await bookmarks_.checkCommand(bookmarksPorts($))
+    return {}
+  })
 
   // The band, above the prompt: its Buttons carry the borrowed engine actions, so the
   // chords bound to those actions in keybindings.json press them from the input box.

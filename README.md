@@ -160,6 +160,7 @@ Ctrl+] P  a                                               (mark a becomes a book
 | `/bm-delmarks a b`, `/bm-delmarks all` | Delete marks |
 | `/bm-pin [N]` | Pin or unpin prompt #N in the prompts pane (`*N` in its `#` field does the same) |
 | `/bm-env` | Plugin version, session id, and what it has captured |
+| `/bm-check` | A check of the bookmark files on disk: formats, backups, the index, the store; reports, changes nothing |
 | `/bm-debug on\|off` | Echo the plugin's log into this conversation as dim rows (this conversation only; `default on\|off` and `force on\|off` reach every conversation) |
 | `/bm-debug enable\|disable <channel>` | Turn a heavier diagnostic on or off for this conversation (`screen`, `held`; `/bm-debug channels` lists them) |
 | `/bm-marks` | The marks set in this conversation |

@@ -16,9 +16,10 @@ import { baseOf, ingest, primaryRecord, sameBase } from '../core/bookmarks/note.
 import { buildIndex, emptyIndex, entryOf, INDEX_JSON, INDEX_MD, parseIndex, renderIndexMarkdown, serializeIndex, upsert, type IndexEntry } from '../core/bookmarks/session-index.ts'
 import { applyOp, marksOf as marksFromRegister, type Op, type OpResult } from '../core/bookmarks/register-ops.ts'
 import {
-  applyMigrations, CURRENT, hashText, planFor, runFolderName, SNAPSHOT_SUFFIX, snapshotFolderName, STORE_PREFIXES,
+  applyMigrations, CURRENT, fnv1a64, hashText, planFor, runFolderName, SNAPSHOT_SUFFIX, snapshotFolderName, STORE_PREFIXES,
   type Manifest, type Migration,
 } from '../core/bookmarks/migrations.ts'
+import { checkReport, drawLine, STORE_CAP, type CheckInput } from '../core/bookmarks/check.ts'
 import type { Mark, Marks } from '../core/marks/marks.ts'
 import { rowPlace } from '../core/bookmarks/transcript-lines.ts'
 import { forwardSlashes } from '../core/kit/paths.ts'
@@ -225,6 +226,62 @@ export async function rebuildIndex(ports: BookmarksPorts): Promise<void> {
   } catch (err) {
     ports.logAlways(`[bm] index: not rebuilt: ${String(err)}`)
   }
+}
+
+// --- /bm-check (unit 11): a linter over the data root, never a migration path ---------------
+// Gathers what core/bookmarks/check.ts judges: the registers' texts, the note folders, the
+// index, every run folder's manifest with the current hash of each copy it lists, the
+// snapshots, and the store's keys and size. Reads only; every line is drawn whatever the echo.
+
+export async function checkCommand(ports: BookmarksPorts): Promise<void> {
+  const root = await ports.dataRoot()
+  if (!root) {
+    ports.logAlways('[bm] bm-check: no data root (no home folder found), so bookmarks live in memory for this conversation and there is nothing on disk to check')
+    return
+  }
+  const dir = sessionsDir(root)
+  const entries = (await ports.fsExists(dir)) ? await ports.fsList(dir) : []
+  const registers: CheckInput['registers'] = []
+  for (const e of entries) {
+    if (e.kind !== 'file' || !e.name.endsWith('.json') || e.name === INDEX_JSON) continue
+    registers.push({ name: e.name.slice(0, -'.json'.length), text: await ports.fsRead(`${dir}/${e.name}`) })
+  }
+  const folders = entries.filter(e => e.kind === 'dir').map(e => e.name)
+  const indexPath = `${dir}/${INDEX_JSON}`
+  const index = (await ports.fsExists(indexPath)) ? await ports.fsRead(indexPath) : undefined
+  const bdir = backupsDir(root)
+  const backups = (await ports.fsExists(bdir)) ? await ports.fsList(bdir) : []
+  const snapshots = backups.filter(e => e.kind === 'dir' && e.name.endsWith(SNAPSHOT_SUFFIX)).map(e => e.name)
+  const runs: CheckInput['runs'] = []
+  for (const e of backups) {
+    if (e.kind !== 'dir' || e.name.endsWith(SNAPSHOT_SUFFIX)) continue
+    const mpath = `${bdir}/${e.name}/manifest.json`
+    const manifest = (await ports.fsExists(mpath)) ? await ports.fsRead(mpath) : undefined
+    const hashes: Record<string, string | undefined> = {}
+    let files: { path: string; algo: string }[] = []
+    try {
+      files = manifest ? ((JSON.parse(manifest) as Manifest).files ?? []) : []
+    } catch {
+      files = []
+    }
+    for (const f of Array.isArray(files) ? files : []) {
+      const p = `${bdir}/${e.name}/${f.path}`
+      if (!(await ports.fsExists(p))) {
+        hashes[f.path] = undefined
+        continue
+      }
+      const text = await ports.fsRead(p)
+      // The manifest's own algorithm, so a copy hashed by FNV on one runtime is not judged by SHA-256 on another.
+      hashes[f.path] = f.algo === 'fnv1a64' ? fnv1a64(text) : (await hashText(text)).hash
+    }
+    runs.push({ name: e.name, manifest, hashes })
+  }
+  const storeKeys = [...(await ports.storeKeys())]
+  let storeChars = 0
+  for (const k of storeKeys) storeChars += k.length + JSON.stringify((await ports.storeGet(k)) ?? null).length
+  const lines = checkReport({ current: CURRENT, root, registers, folders, index, runs, snapshots, storeKeys, storeChars, storeCap: STORE_CAP, storePrefixes: STORE_PREFIXES })
+  // A command's answer is always drawn, whatever the echo setting (the diagnostics' rule).
+  for (const l of lines) ports.logAlways(drawLine(l))
 }
 
 /** One of Claude's records becomes the person's (#21): same message, id and link, saved. The band's `c` and the model's tool both claim here. */

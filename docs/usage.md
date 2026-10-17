@@ -383,6 +383,7 @@ The plugin adds a few commands from its proof-of-concept stage. They are useful 
 | Command | Shows |
 |---------|-------|
 | `/bm-env` | The plugin's version, the Claude Code version, the session id, and what the plugin has captured |
+| `/bm-check` | The bookmark files on disk, checked: each register's format against this build, note folders with no register, the index against the registers, each migration's run folder (its status and whether the copies still match their hashes), the snapshots, and the store's size against its cap. It reports and changes nothing; where something is off, the line says what the next start or save will do about it |
 | `/bm-marks` | The marks set in this conversation |
 | `/bm-timeline` | The last few plugin events: draws, panes, jumps, toasts |
 | `/bm-diag-keys` | Turns on (or off) logging of each key typed in the input box, to the plugin's debug log: lengths and key names, never the text |
