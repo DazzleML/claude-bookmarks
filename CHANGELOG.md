@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-16
+
+### Changed
+
+- The usage guide now says how the bookmark file relates to a conversation: one file per conversation, the same file after `claude --resume`, an empty one for a forked conversation; what a newer or older file's `version` means; and the short reference form `bm:<sid8>.<n>` with the rule that resolves it. Documentation only; the number `n` itself arrives in a later 0.5.x release.
+
 ## [0.5.1] - 2026-10-16
 
 ### Fixed
@@ -1012,7 +1018,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.2...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

@@ -306,6 +306,14 @@ The file's **Notes** section is yours: anything below its marker line survives w
 
 **By hand, with no plugin:** a bookmark is only a transcript line. `grep -n` the words in the session's `.jsonl` for the line number, `head -n <line-1> | wc -c` for the byte offset, and write the link in the form above; the plugin recognises it when drawn and records it.
 
+### One file per conversation: forks, resumes and references
+
+The register belongs to one conversation, and its name is that conversation's session id. `claude --resume` reopens the same conversation, so it reads the same file. A **forked** conversation (one branched from an earlier point of another) is a new conversation with a new id, and it starts with an empty register: the records of the conversation it branched from are not copied, even though the transcript it copied contains the same messages. That is the rule for the 0.5.x line; following a fork is tracked in [#39](https://github.com/DazzleML/claude-bookmarks/issues/39) and will come as its own change rather than as a side effect of how files are named.
+
+The file carries a `version`. A plugin build that finds a file written by a newer build reads it in full and refuses to write it (a toast says so once when the conversation loads, and any bookmark action that would save answers "not saved"); update the plugin to write it again. A build that finds an older file brings it up to date on load, keeping a copy of the original first (from 0.5.x; the where and how is in the CHANGELOG as each piece lands).
+
+Every record is addressed in two ways. The full address is the link above, which names the message's uuid and never changes. The short reference, for citations once records carry a number `n` (coming in 0.5.x), is **`bm:<sid8>.<n>`**: the first eight characters of the conversation's session id, a dot, the record's number in that conversation. Inside its own conversation `bm:<n>` is enough. A short reference is resolved by the register file whose name starts with `<sid8>`; if no file by that name exists (the file was moved or renamed), by reading every register's header for a matching `sessionId`; and if that finds two, the reference is ambiguous and the full uuid decides. Numbers are never reused within a conversation, so `bm:13` means the same record for the life of the file. Until the number lands, the plugin writes only the full link.
+
 ## Optional fast keys
 
 For one-step actions, a key can press a band button directly. It goes through one of the few actions of Claude Code's diff panel that do nothing in a conversation:
