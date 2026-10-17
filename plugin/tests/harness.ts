@@ -6,6 +6,8 @@
 // stub answers fails the test with "no implementation for <event>", which is how a new
 // dependency shows up.
 import { mock } from 'claude-code/testing'
+import { emptyRegister, serializeRegister } from '../hooks/core/bookmarks/register-file.ts'
+import { applyOp } from '../hooks/core/bookmarks/register-ops.ts'
 
 export type Call = { event: string; input: unknown }
 
@@ -44,6 +46,24 @@ export type World = {
 type On = (event: never, match: never, hook: never) => void
 
 export const BAND_PROPS = { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 40 } }
+
+/** The data root the plugin derives from this world's USERPROFILE. */
+export const DATA_ROOT = 'C:/test-home/claude/bookmarks'
+
+/**
+ * A register file (format v3) holding these letters, as `files` for `world`: since 0.5.5 the
+ * marks live in the register's slots, so a test that used to seed `marks:<sid>` in the store
+ * seeds the file instead. Each mark becomes a record of tier `mark` and a slot pointing at it.
+ */
+export function registerWithMarks(sid: string, marks: Record<string, { uuid: string; head: string; markedAt: number; snippet?: string }>): Record<string, string> {
+  let reg = emptyRegister(sid, 'bookmarks test', 0)
+  for (const [letter, m] of Object.entries(marks)) {
+    const r = applyOp(reg, { op: 'setMark', owner: 'user', letter, place: { uuid: m.uuid, head: m.head, ...(m.snippet ? { words: m.snippet } : {}) }, at: m.markedAt }, m.markedAt)
+    if ('error' in r) throw new Error(r.error)
+    reg = r.register
+  }
+  return { [`${DATA_ROOT}/sessions/${sid}.json`]: serializeRegister(reg) }
+}
 
 export function world(on: unknown, options: WorldOptions = {}): World {
   const hook = on as On

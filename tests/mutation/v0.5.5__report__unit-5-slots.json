@@ -1,0 +1,194 @@
+{
+  "mutations": [
+    {
+      "id": "M1",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "export const LETTER_HISTORY_CAP = 50",
+      "mutated": "export const LETTER_HISTORY_CAP = 49",
+      "note": "cap off by one",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "90"
+    },
+    {
+      "id": "M2",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "const cleared = op.letters.filter(l => slots[l]?.current !== null && slots[l]?.current !== undefined)",
+      "mutated": "const cleared = op.letters.filter(l => slots[l]?.current === null || slots[l]?.current === undefined)",
+      "note": "cleared filter inverted",
+      "verdict": "killed",
+      "core_red": [
+        "marksOf derives the panes' marks from the slots; a cleared letter shows nothing but keeps its history; bring back by n"
+      ],
+      "kit_red": [
+        "/bm-delmarks a deletes a and keeps b; a second delete finds a gone"
+      ],
+      "kit_pass": "89"
+    },
+    {
+      "id": "M3",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "for (const l of cleared) next[l] = { ...slots[l]!, current: null }",
+      "mutated": "for (const l of cleared) next[l] = { current: null, history: [] }",
+      "note": "clearing wipes history",
+      "verdict": "killed",
+      "core_red": [
+        "marksOf derives the panes' marks from the slots; a cleared letter shows nothing but keeps its history; bring back by n"
+      ],
+      "kit_red": [
+        "/bm-delmarks a deletes a and keeps b; a second delete finds a gone"
+      ],
+      "kit_pass": "89"
+    },
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "const entry = slot?.history.find(h => h.n === op.n)",
+      "mutated": "const entry = slot?.history.find(h => h.n !== op.n)",
+      "note": "bringBack finds the wrong entry",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "90"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "const history = [{ n: op.n, at: op.at }, ...slot.history.filter(h => h.n !== op.n)].slice(0, LETTER_HISTORY_CAP)",
+      "mutated": "const history = [...slot.history.filter(h => h.n !== op.n), { n: op.n, at: op.at }].slice(0, LETTER_HISTORY_CAP)",
+      "note": "bringBack puts the entry last",
+      "verdict": "killed",
+      "core_red": [
+        "marksOf derives the panes' marks from the slots; a cleared letter shows nothing but keeps its history; bring back by n"
+      ],
+      "kit_red": [],
+      "kit_pass": "90"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "const history = [{ n, at }, ...old.history.filter(h => h.n !== n)].slice(0, LETTER_HISTORY_CAP)",
+      "mutated": "const history = [{ n, at }, ...old.history].slice(0, LETTER_HISTORY_CAP)",
+      "note": "setMark dedupe dropped",
+      "verdict": "killed",
+      "core_red": [
+        "setMark: a letter makes a mark record and a slot; re-marking the same message reuses the record; another message pushes history"
+      ],
+      "kit_red": [],
+      "kit_pass": "90"
+    },
+    {
+      "id": "M7",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "by: owner === 'user' ? 'user' : 'claude',",
+      "mutated": "by: owner === 'user' ? 'claude' : 'user',",
+      "note": "wrong author",
+      "verdict": "killed",
+      "core_red": [
+        "setMark: a letter makes a mark record and a slot; re-marking the same message reuses the record; another message pushes history"
+      ],
+      "kit_red": [],
+      "kit_pass": "90"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "label: (place.words ?? place.head).slice(0, 80),",
+      "mutated": "label: (place.head ?? place.words).slice(0, 80),",
+      "note": "label reads head before words",
+      "verdict": "killed",
+      "core_red": [
+        "setMark: a letter makes a mark record and a slot; re-marking the same message reuses the record; another message pushes history"
+      ],
+      "kit_red": [],
+      "kit_pass": "90"
+    },
+    {
+      "id": "M9",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "const at = slot.history.find(h => h.n === slot.current)?.at ?? r.createdAt",
+      "mutated": "const at = r.createdAt",
+      "note": "markedAt ignores the history time",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "90"
+    },
+    {
+      "id": "M10",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "`${letter}_${String(slot.current === null ? i + 1 : i).padStart(3, '0')}`",
+      "mutated": "`${letter}_${String(slot.current === null ? i : i + 1).padStart(3, '0')}`",
+      "note": "history names off by one",
+      "verdict": "killed",
+      "core_red": [
+        "marksOf derives the panes' marks from the slots; a cleared letter shows nothing but keeps its history; bring back by n"
+      ],
+      "kit_red": [],
+      "kit_pass": "90"
+    },
+    {
+      "id": "M11",
+      "file": "plugin/hooks/core/bookmarks/migrations.ts",
+      "original": ".sort((a, b) => Number(a[1].markedAt ?? 0) - Number(b[1].markedAt ?? 0))",
+      "mutated": ".sort((a, b) => Number(b[1].markedAt ?? 0) - Number(a[1].markedAt ?? 0))",
+      "note": "migration sort reversed",
+      "verdict": "killed",
+      "core_red": [
+        "v2 -> v3: the store's marks become mark records and slots; the reading position too; no marks gives empty slots"
+      ],
+      "kit_red": [],
+      "kit_pass": "90"
+    },
+    {
+      "id": "M12",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "return reg.perma.filter(r => ownerOf(r) === owner && tierOf(r) !== 'mark').sort((a, b) => a.createdAt - b.createdAt)",
+      "mutated": "return reg.perma.filter(r => ownerOf(r) === owner).sort((a, b) => a.createdAt - b.createdAt)",
+      "note": "listOf lists marks",
+      "verdict": "killed",
+      "core_red": [
+        "setMark: a letter makes a mark record and a slot; re-marking the same message reuses the record; another message pushes history"
+      ],
+      "kit_red": [],
+      "kit_pass": "90"
+    },
+    {
+      "id": "M13",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "(tierOf(r) === 'mark') === isMark &&",
+      "mutated": "true &&",
+      "note": "tier separation dropped",
+      "verdict": "killed",
+      "core_red": [
+        "setMark: a letter makes a mark record and a slot; re-marking the same message reuses the record; another message pushes history",
+        "marksOf derives the panes' marks from the slots; a cleared letter shows nothing but keeps its history; bring back by n"
+      ],
+      "kit_red": [
+        "/bm-promote a: the person's bookmark, with the mark's words, and its link copied"
+      ],
+      "kit_pass": "89"
+    },
+    {
+      "id": "M14",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "const r = await commitOp(ports, { op: 'clearMarks', owner: 'user', letters })",
+      "mutated": "const r = await commitOp(ports, { op: 'clearMarks', owner: 'claude', letters })",
+      "note": "wrong owner on clear",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "/bm-delmarks a deletes a and keeps b; a second delete finds a gone"
+      ],
+      "kit_pass": "89"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "90"
+    }
+  ]
+}

@@ -4,8 +4,9 @@
 // operations land first; A's are replayed onto B's result by identity, never by position.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addOrRelabel, emptyRegister, idOf, isRecord, parseRegister, recordById, serializeRegister, type Mint, type Register } from '../../plugin/hooks/core/bookmarks/register-file.ts'
-import { applyOp, union, type Op } from '../../plugin/hooks/core/bookmarks/register-ops.ts'
+import { addOrRelabel, emptyRegister, idOf, isRecord, listOf, parseRegister, recordById, serializeRegister, type Mint, type Register } from '../../plugin/hooks/core/bookmarks/register-file.ts'
+import { applyOp, LETTER_HISTORY_CAP, letterHistory, marksOf, union, type Op } from '../../plugin/hooks/core/bookmarks/register-ops.ts'
+import { sameMessage } from '../../plugin/hooks/core/kit/message-id.ts'
 
 const SESSION = '8f0f9b27-33fc-4054-806a-22a6d569dfb5'
 const T0 = 1_760_000_000_000
@@ -39,7 +40,7 @@ test('a v2 file numbers its records and never reuses a number; a v1 file numbers
   const next = commit(removed, { op: 'mint', mint: mintOf('d', 'thirteen') }, T0 + 2100)
   assert.equal(next.perma.at(-1)?.n, 13, 'the removed 2 is not reused')
   assert.equal(next.nextN, 14)
-  const { nextN: _n, ...v1base } = emptyRegister(SESSION, 'w', T0)
+  const { nextN: _n, slots: _s, ...v1base } = emptyRegister(SESSION, 'w', T0)
   const v1 = addOrRelabel({ ...v1base, version: 1 }, mintOf('a', 'one'), T0).register
   assert.equal(v1.perma[0]?.n, undefined)
   assert.equal(v1.nextN, undefined)
@@ -159,6 +160,83 @@ test('pins are a per-owner list in the register; pinning twice changes nothing',
   const text = serializeRegister(p)
   assert.ok(text.indexOf('"pins"') > text.indexOf('"tombstones"'), 'pins after tombstones in the file')
   assert.deepEqual(parseRegister(text)?.pins, { user: [u('a')] })
+})
+
+// --- Slots (unit 5): the letters and the reading position as records pointed at by slots -----
+
+const place = (k: string, head: string, words?: string) => ({ uuid: u(k), head, ...(words ? { words } : {}) })
+
+test('setMark: a letter makes a mark record and a slot; re-marking the same message reuses the record; another message pushes history', () => {
+  const d = diskRegister()
+  const a1 = commit(d, { op: 'setMark', owner: 'user', letter: 'a', place: place('a', 'first head', 'the selected words'), at: T0 + 3000 }, T0 + 3000)
+  const rec = a1.perma.find(r => r.tier === 'mark')!
+  assert.equal(rec.n, 13)
+  assert.equal(rec.label, 'the selected words')
+  assert.equal(rec.words, 'the selected words')
+  assert.equal(rec.source, 'mark')
+  assert.equal(rec.by, 'user')
+  assert.deepEqual(a1.slots?.user?.a, { current: 13, history: [{ n: 13, at: T0 + 3000 }] })
+  // The same message again under the same letter: no new record, the time moves.
+  const a2 = commit(a1, { op: 'setMark', owner: 'user', letter: 'a', place: place('a', 'first head', 'other words'), at: T0 + 3100 }, T0 + 3100)
+  assert.equal(a2.perma.filter(r => r.tier === 'mark').length, 1)
+  assert.deepEqual(a2.slots?.user?.a, { current: 13, history: [{ n: 13, at: T0 + 3100 }] })
+  assert.equal(recordById(a2, { n: 13, uuid: u('a') })?.words, 'other words', 'the words follow the latest selection')
+  assert.equal(marksOf(a2, 'user').a?.markedAt, T0 + 3100, 'markedAt is when the letter was last set there, not when the record was made (mutation sweep v0.5.5, M9)')
+  // Another message: a new record, the old one kept as a_001.
+  const a3 = commit(a2, { op: 'setMark', owner: 'user', letter: 'a', place: place('e', 'second head'), at: T0 + 3200 }, T0 + 3200)
+  assert.deepEqual(a3.slots?.user?.a, { current: 14, history: [{ n: 14, at: T0 + 3200 }, { n: 13, at: T0 + 3100 }] })
+  assert.equal(a3.nextN, 15)
+  // The same message as a bookmark on the same list is a separate record: a mark never relabels a bookmark.
+  const withBookmark = commit(a3, { op: 'mint', mint: mintOf('e', 'a bookmark here', 'user') }, T0 + 3300)
+  assert.equal(withBookmark.perma.filter(r => sameMessage(r.uuid, u('e'))).length, 2)
+  // Marks are not bookmarks: listOf leaves them out (the three from diskRegister plus the one bookmark on e).
+  assert.ok(!listOf(withBookmark, 'user').some(r => r.tier === 'mark'))
+  assert.equal(listOf(withBookmark, 'user').length, 4)
+})
+
+test('marksOf derives the panes\' marks from the slots; a cleared letter shows nothing but keeps its history; bring back by n', () => {
+  const d = diskRegister()
+  const a1 = commit(d, { op: 'setMark', owner: 'user', letter: 'a', place: place('a', 'first head', 'words'), at: T0 + 3000 }, T0 + 3000)
+  const a2 = commit(a1, { op: 'setMark', owner: 'user', letter: 'a', place: place('e', 'second head'), at: T0 + 3200 }, T0 + 3200)
+  const b = commit(a2, { op: 'setMark', owner: 'user', letter: '`', place: place('b', 'reading here', 'the line'), at: T0 + 3300 }, T0 + 3300)
+  const marks = marksOf(b, 'user')
+  assert.deepEqual(marks.a, { uuid: u('e'), head: 'second head', markedAt: T0 + 3200, source: 'screen' })
+  assert.deepEqual(marks['`'], { uuid: u('b'), head: 'reading here', markedAt: T0 + 3300, source: 'selection', snippet: 'the line' })
+  assert.deepEqual(letterHistory(b, 'user', 'a').map(h => [h.name, h.n, h.current]), [['a', 14, true], ['a_001', 13, false]])
+  // Clear a: nothing drawn for a, the history kept, the records kept.
+  const cleared = commit(b, { op: 'clearMarks', owner: 'user', letters: ['a', 'z'] }, T0 + 3400)
+  assert.equal(marksOf(cleared, 'user').a, undefined)
+  assert.equal(cleared.slots?.user?.a?.current, null)
+  assert.equal(cleared.slots?.user?.a?.history.length, 2)
+  assert.equal(cleared.perma.filter(r => r.tier === 'mark').length, 3)
+  const r = applyOp(b, { op: 'clearMarks', owner: 'user', letters: ['a', 'z'] }, T0 + 3400)
+  assert.ok(!('error' in r) && r.cleared?.join() === 'a' && r.missing?.join() === 'z')
+  const nothing = applyOp(cleared, { op: 'clearMarks', owner: 'user', letters: ['a'] }, T0 + 3500)
+  assert.ok(!('error' in nothing) && nothing.unchanged, 'clearing a cleared letter changes nothing')
+  // Bring back the first place by its number: current again, moved to the head with the new time.
+  const back = commit(cleared, { op: 'bringBack', owner: 'user', letter: 'a', n: 13, at: T0 + 3600 }, T0 + 3600)
+  assert.deepEqual(back.slots?.user?.a, { current: 13, history: [{ n: 13, at: T0 + 3600 }, { n: 14, at: T0 + 3200 }] })
+  assert.equal(marksOf(back, 'user').a?.uuid, u('a'))
+  const wrong = applyOp(back, { op: 'bringBack', owner: 'user', letter: 'a', n: 99, at: T0 + 3700 }, T0 + 3700)
+  assert.ok('error' in wrong)
+  // A record that exists but was never under this letter is refused too (M4): bring back is within a letter's own history.
+  const elsewhere = applyOp(back, { op: 'bringBack', owner: 'user', letter: 'a', n: 12, at: T0 + 3700 }, T0 + 3700)
+  assert.ok('error' in elsewhere)
+  assert.match(elsewhere.error, /not in a's history/)
+})
+
+test('a letter\'s history is capped at LETTER_HISTORY_CAP; an unnumbered (v1) file refuses a mark', () => {
+  let reg = diskRegister()
+  for (let i = 0; i < LETTER_HISTORY_CAP + 5; i++) {
+    // Distinct messages: the first four groups differ (sameMessage compares those), so no record is reused.
+    const uuid = `${String(i).padStart(8, '0')}-0000-4000-8000-000000000000`.replace(/0000-4000-8000-000000000000$/, `${String(i).padStart(4, '0')}-4000-8000-000000000001`)
+    reg = commit(reg, { op: 'setMark', owner: 'user', letter: 'a', place: { uuid, head: `h${i}` }, at: T0 + 4000 + i }, T0 + 4000 + i)
+  }
+  assert.equal(reg.slots?.user?.a?.history.length, LETTER_HISTORY_CAP)
+  const { nextN: _n, slots: _s, ...v1 } = emptyRegister(SESSION, 'w', T0)
+  const refused = applyOp({ ...v1, version: 1 }, { op: 'setMark', owner: 'user', letter: 'a', place: place('a', 'h'), at: T0 }, T0)
+  assert.ok('error' in refused)
+  assert.match(refused.error, /not numbered/)
 })
 
 test('a prune with nothing to prune is unchanged; a hand edit survives a replayed mint', () => {

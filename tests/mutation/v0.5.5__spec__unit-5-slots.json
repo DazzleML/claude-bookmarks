@@ -1,0 +1,102 @@
+{
+ "mutations": [
+  {
+   "id": "M1",
+   "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+   "original": "export const LETTER_HISTORY_CAP = 50",
+   "mutated": "export const LETTER_HISTORY_CAP = 49",
+   "note": "cap off by one"
+  },
+  {
+   "id": "M2",
+   "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+   "original": "const cleared = op.letters.filter(l => slots[l]?.current !== null && slots[l]?.current !== undefined)",
+   "mutated": "const cleared = op.letters.filter(l => slots[l]?.current === null || slots[l]?.current === undefined)",
+   "note": "cleared filter inverted"
+  },
+  {
+   "id": "M3",
+   "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+   "original": "for (const l of cleared) next[l] = { ...slots[l]!, current: null }",
+   "mutated": "for (const l of cleared) next[l] = { current: null, history: [] }",
+   "note": "clearing wipes history"
+  },
+  {
+   "id": "M4",
+   "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+   "original": "const entry = slot?.history.find(h => h.n === op.n)",
+   "mutated": "const entry = slot?.history.find(h => h.n !== op.n)",
+   "note": "bringBack finds the wrong entry"
+  },
+  {
+   "id": "M5",
+   "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+   "original": "const history = [{ n: op.n, at: op.at }, ...slot.history.filter(h => h.n !== op.n)].slice(0, LETTER_HISTORY_CAP)",
+   "mutated": "const history = [...slot.history.filter(h => h.n !== op.n), { n: op.n, at: op.at }].slice(0, LETTER_HISTORY_CAP)",
+   "note": "bringBack puts the entry last"
+  },
+  {
+   "id": "M6",
+   "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+   "original": "const history = [{ n, at }, ...old.history.filter(h => h.n !== n)].slice(0, LETTER_HISTORY_CAP)",
+   "mutated": "const history = [{ n, at }, ...old.history].slice(0, LETTER_HISTORY_CAP)",
+   "note": "setMark dedupe dropped"
+  },
+  {
+   "id": "M7",
+   "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+   "original": "by: owner === 'user' ? 'user' : 'claude',",
+   "mutated": "by: owner === 'user' ? 'claude' : 'user',",
+   "note": "wrong author"
+  },
+  {
+   "id": "M8",
+   "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+   "original": "label: (place.words ?? place.head).slice(0, 80),",
+   "mutated": "label: (place.head ?? place.words).slice(0, 80),",
+   "note": "label reads head before words"
+  },
+  {
+   "id": "M9",
+   "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+   "original": "const at = slot.history.find(h => h.n === slot.current)?.at ?? r.createdAt",
+   "mutated": "const at = r.createdAt",
+   "note": "markedAt ignores the history time"
+  },
+  {
+   "id": "M10",
+   "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+   "original": "`${letter}_${String(slot.current === null ? i + 1 : i).padStart(3, '0')}`",
+   "mutated": "`${letter}_${String(slot.current === null ? i : i + 1).padStart(3, '0')}`",
+   "note": "history names off by one"
+  },
+  {
+   "id": "M11",
+   "file": "plugin/hooks/core/bookmarks/migrations.ts",
+   "original": ".sort((a, b) => Number(a[1].markedAt ?? 0) - Number(b[1].markedAt ?? 0))",
+   "mutated": ".sort((a, b) => Number(b[1].markedAt ?? 0) - Number(a[1].markedAt ?? 0))",
+   "note": "migration sort reversed"
+  },
+  {
+   "id": "M12",
+   "file": "plugin/hooks/core/bookmarks/register-file.ts",
+   "original": "return reg.perma.filter(r => ownerOf(r) === owner && tierOf(r) !== 'mark').sort((a, b) => a.createdAt - b.createdAt)",
+   "mutated": "return reg.perma.filter(r => ownerOf(r) === owner).sort((a, b) => a.createdAt - b.createdAt)",
+   "note": "listOf lists marks"
+  },
+  {
+   "id": "M13",
+   "file": "plugin/hooks/core/bookmarks/register-file.ts",
+   "original": "(tierOf(r) === 'mark') === isMark &&",
+   "mutated": "true &&",
+   "note": "tier separation dropped"
+  },
+  {
+   "id": "M14",
+   "file": "plugin/hooks/handlers/bookmarks.ts",
+   "original": "const r = await commitOp(ports, { op: 'clearMarks', owner: 'user', letters })",
+   "mutated": "const r = await commitOp(ports, { op: 'clearMarks', owner: 'claude', letters })",
+   "note": "wrong owner on clear"
+  }
+ ]
+}

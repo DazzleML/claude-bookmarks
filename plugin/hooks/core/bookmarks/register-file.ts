@@ -15,15 +15,27 @@
 // a save by this one. A file whose `version` is above REGISTER_VERSION is read in full and
 // never written (`newerThanBuild`); the handler says so once and keeps the file as it is.
 
-import { type AnchorOwner, type AnchorRecord, ownerOf, uuid8 } from './anchor.ts'
+import { type AnchorOwner, type AnchorRecord, ownerOf, tierOf, uuid8 } from './anchor.ts'
 import { isDrawnId, matchesPrefix, sameMessage } from '../kit/message-id.ts'
 
 /**
  * The format this build writes. 1: the proof of concept's file. 2 (0.5.4): `sessionId` and
  * `transcript` once at the top with per-record overrides, `n`/`nextN`, pins in the file.
- * An older file is migrated at its conversation's start (core/bookmarks/migrations.ts).
+ * 3 (0.5.5): the letter marks and the reading position as records of tier `mark`, pointed
+ * at by `slots`. An older file is migrated at its conversation's start
+ * (core/bookmarks/migrations.ts).
  */
-export const REGISTER_VERSION = 2
+export const REGISTER_VERSION = 3
+
+/**
+ * What a letter (or the reading position's key) points at: `current` is the record's `n`,
+ * or null when the letter was cleared with its history kept (djdarcy, 2026-10-16: "the
+ * only thing that should ever need to be saved is which is the CURRENTLY active 'a' mark or
+ * if NO 'a' mark is saved currently"); `history` is every record the letter has pointed
+ * at, newest first, the current one included -- `a_001` is the second entry, derived,
+ * never stored.
+ */
+export type Slot = { current: number | null; history: { n: number; at: number }[] }
 
 /** True when the file was written by a build whose format is ahead of this one: read it, never write it. */
 export function newerThanBuild(reg: Register): boolean {
@@ -62,13 +74,15 @@ export type Register = {
   nextN?: number
   perma: AnchorRecord[]
   tombstones: Tombstone[]
-  /** Pinned prompts, per owner, by message uuid (format v2; kept in the store until the migration). */
+  /** Pinned prompts, per owner, by message uuid (format v2). */
   pins?: Partial<Record<AnchorOwner, string[]>>
+  /** The letters and the reading position, per owner (format v3). Absent on a file not yet migrated: its marks are still in the store. */
+  slots?: Partial<Record<AnchorOwner, Record<string, Slot>>>
 }
 
 export function emptyRegister(sessionId: string, writer: string, now: number, env?: { configDir?: string; cwd?: string; transcript?: string }): Register {
   const { transcript, ...rest } = env ?? {}
-  return { version: REGISTER_VERSION, sessionId, ...(transcript ? { transcript } : {}), ...rest, rev: 0, updatedAt: now, writer, nextN: 1, perma: [], tombstones: [] }
+  return { version: REGISTER_VERSION, sessionId, ...(transcript ? { transcript } : {}), ...rest, rev: 0, updatedAt: now, writer, nextN: 1, perma: [], tombstones: [], slots: {} }
 }
 
 /**
@@ -128,7 +142,9 @@ export type AddResult = { register: Register; record: AnchorRecord; added: boole
  */
 export function addOrRelabel(reg: Register, mint: Mint, now: number): AddResult {
   // The same message (a drawn id included), or a prefix a hand-written link carried: typed input, so matchesPrefix.
-  const existing = reg.perma.find(r => ownerOf(r) === mint.owner && (sameMessage(r.uuid, mint.uuid) || matchesPrefix(r.uuid, mint.uuid)))
+  // A letter's record (tier `mark`) and a bookmark on the same message are two records: a mark never relabels a bookmark, nor the reverse.
+  const isMark = mint.tier === 'mark'
+  const existing = reg.perma.find(r => ownerOf(r) === mint.owner && (tierOf(r) === 'mark') === isMark && (sameMessage(r.uuid, mint.uuid) || matchesPrefix(r.uuid, mint.uuid)))
   if (existing) {
     const record: AnchorRecord = {
       ...existing,
@@ -143,13 +159,13 @@ export function addOrRelabel(reg: Register, mint: Mint, now: number): AddResult 
       why: mint.why ?? existing.why,
       // A permanent mark stays permanent; a temporary one can be made permanent.
       temporary: existing.temporary && mint.temporary ? true : undefined,
-      // A perma record becomes a bookmark when asked; a bookmark never drops to perma.
-      tier: existing.tier === 'perma' && mint.tier !== 'bookmark' ? 'perma' : undefined,
+      // A perma record becomes a bookmark when asked; a bookmark never drops to perma. A mark stays a mark.
+      tier: existing.tier === 'mark' ? 'mark' : existing.tier === 'perma' && mint.tier !== 'bookmark' ? 'perma' : undefined,
       updatedAt: now,
       transcript: mint.transcript ?? existing.transcript,
     }
-    if (record.temporary === undefined) delete record.temporary
-    if (record.tier === undefined) delete record.tier
+    // A record in memory is what the file reads back: no key sits there with an undefined value.
+    for (const k of Object.keys(record) as (keyof AnchorRecord)[]) if (record[k] === undefined) delete record[k]
     return { register: bump({ ...reg, perma: reg.perma.map(r => (r === existing ? record : r)) }, now), record, added: false }
   }
   // A v2 file numbers its records; a v1 file does not, until the migration gives it nextN.
@@ -170,11 +186,12 @@ export function addOrRelabel(reg: Register, mint: Mint, now: number): AddResult 
     label: mint.label,
     ...(mint.why ? { why: mint.why } : {}),
     ...(mint.temporary ? { temporary: true } : {}),
-    ...(mint.tier === 'perma' ? { tier: 'perma' as const } : {}),
+    ...(mint.tier === 'perma' || mint.tier === 'mark' ? { tier: mint.tier } : {}),
     createdAt: now,
     by: mint.by,
     source: mint.source,
-    ...(mint.transcript ? { transcript: mint.transcript } : {}),
+    // A record in memory is whole (the hoist fills it on read), so a mint without a transcript takes the file's.
+    ...(mint.transcript ?? reg.transcript ? { transcript: mint.transcript ?? reg.transcript } : {}),
     ...(mint.role ? { role: mint.role } : {}),
     ...(mint.timestamp ? { timestamp: mint.timestamp } : {}),
   }
@@ -194,9 +211,9 @@ export function findRecord(reg: Register, id: string, owner?: AnchorOwner): Anch
     ?? reg.perma.find(r => onList(r) && id.length === 36 && sameMessage(r.uuid, id))
 }
 
-/** One owner's list, in minted order. */
+/** One owner's list of bookmarks and permalinks, in minted order; a letter's record (tier `mark`) is reached through the slots, not listed. */
 export function listOf(reg: Register, owner: AnchorOwner): AnchorRecord[] {
-  return reg.perma.filter(r => ownerOf(r) === owner).sort((a, b) => a.createdAt - b.createdAt)
+  return reg.perma.filter(r => ownerOf(r) === owner && tierOf(r) !== 'mark').sort((a, b) => a.createdAt - b.createdAt)
 }
 
 /**
@@ -276,7 +293,7 @@ function bump(reg: Register, now: number): Register {
 }
 
 // Fixed key order, so a hand edit and a program write diff cleanly.
-const REGISTER_KEYS = ['version', 'sessionId', 'transcript', 'configDir', 'cwd', 'rev', 'updatedAt', 'writer', 'nextN', 'perma', 'tombstones', 'pins'] as const
+const REGISTER_KEYS = ['version', 'sessionId', 'transcript', 'configDir', 'cwd', 'rev', 'updatedAt', 'writer', 'nextN', 'perma', 'tombstones', 'pins', 'slots'] as const
 const RECORD_KEYS = [
   'n', 'sessionId', 'uuid', 'idKind', 'owner', 'label', 'why', 'words', 'head', 'line', 'bytes', 'role', 'timestamp',
   'temporary', 'tier', 'createdAt', 'updatedAt', 'by', 'source', 'sharedFrom', 'transcript',
@@ -344,6 +361,7 @@ export function parseRegister(text: string): Register | undefined {
     perma: o.perma.filter((r: any) => r && typeof r.uuid === 'string' && typeof r.label === 'string').map(fill),
     tombstones: Array.isArray(o.tombstones) ? o.tombstones : [],
     ...(o.pins && typeof o.pins === 'object' && !Array.isArray(o.pins) ? { pins: o.pins } : {}),
+    ...(o.slots && typeof o.slots === 'object' && !Array.isArray(o.slots) ? { slots: o.slots } : {}),
   }
   // The file's own unknown keys ride along too; `serializeRegister` writes them back after the known ones.
   keepUnknown(reg as unknown as Record<string, unknown>, o, REGISTER_KEYS)

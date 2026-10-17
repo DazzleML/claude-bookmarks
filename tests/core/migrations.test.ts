@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { addOrRelabel, emptyRegister, newerThanBuild, parseRegister, REGISTER_VERSION, serializeRegister, type Mint, type Register } from '../../plugin/hooks/core/bookmarks/register-file.ts'
-import { applyMigrations, CURRENT, fnv1a64, hashText, planFor, runFolderName, snapshotFolderName, stampOf, v1to2 } from '../../plugin/hooks/core/bookmarks/migrations.ts'
+import { applyMigrations, CURRENT, fnv1a64, hashText, planFor, runFolderName, snapshotFolderName, stampOf, STORE_PREFIXES, v1to2 } from '../../plugin/hooks/core/bookmarks/migrations.ts'
 
 const SESSION = 'c8d1e0ee-6f97-41cd-8e23-325984a0109a'
 const OTHER = 'b69ea1ca-ab14-4cce-8206-ebb91ebb4c44'
@@ -14,7 +14,7 @@ const mintOf = (k: string, label: string, extra: Partial<Mint> = {}): Mint => ({
 
 /** A v1 file as the proof of concept wrote it: every record with its own sessionId and transcript, two spellings of the path, one record copied from another conversation, a tombstone, no numbers. */
 function v1Text(): string {
-  const { nextN: _n, ...base } = emptyRegister(SESSION, 'bookmarks 0.4.110', T0)
+  const { nextN: _n, slots: _s, ...base } = emptyRegister(SESSION, 'bookmarks 0.4.110', T0)
   let reg: Register = { ...base, version: 1 }
   reg = addOrRelabel(reg, mintOf('a', 'first', { transcript: T.replace(/\//g, '\\') }), T0 + 300).register // backslashes, minted third
   reg = addOrRelabel(reg, mintOf('b', 'second'), T0 + 100).register // minted first
@@ -27,11 +27,46 @@ function v1Text(): string {
   return JSON.stringify(o, null, 2) + '\n'
 }
 
-test('the plan: a v1 file takes one step to CURRENT; a current or newer file takes none', () => {
+test('the plan: a v1 file takes two steps to CURRENT, a v2 file one; a current or newer file takes none', () => {
   assert.equal(CURRENT, REGISTER_VERSION)
-  assert.deepEqual(planFor(1).map(s => [s.from, s.to]), [[1, 2]])
+  assert.equal(CURRENT, 3)
+  assert.deepEqual(planFor(1).map(s => [s.from, s.to]), [[1, 2], [2, 3]])
+  assert.deepEqual(planFor(2).map(s => [s.from, s.to]), [[2, 3]])
   assert.deepEqual(planFor(CURRENT), [])
   assert.deepEqual(planFor(CURRENT + 1), [])
+  assert.deepEqual([...STORE_PREFIXES], ['pins:', 'marks:'])
+})
+
+test('v2 -> v3: the store\'s marks become mark records and slots; the reading position too; no marks gives empty slots', () => {
+  const v2 = applyMigrations(parseRegister(v1Text())!, planFor(1).slice(0, 1), {}, { sessionId: SESSION, now: T0 + 1000 })
+  assert.equal(v2.version, 2)
+  assert.equal(v2.slots, undefined)
+  const store = {
+    [`marks:${SESSION}`]: {
+      a: { uuid: '11111111-0000-4000-8000-000000000001', head: 'the a message', markedAt: T0 + 500, source: 'selection', snippet: 'selected words' },
+      q: { uuid: '22222222-0000-4000-8000-000000000002', head: 'top of screen', markedAt: T0 + 400, source: 'screen' },
+      '`': { uuid: '11111111-0000-4000-8000-000000000001', head: 'the a message', markedAt: T0 + 600, source: 'selection', snippet: 'reading here' },
+    },
+  }
+  const v3 = applyMigrations(v2, planFor(2), store, { sessionId: SESSION, now: T0 + 2000 })
+  assert.equal(v3.version, 3)
+  const marks = v3.perma.filter(r => r.tier === 'mark')
+  assert.equal(marks.length, 2, 'a and ` share a message, so one record; q is another')
+  assert.deepEqual(marks.map(r => r.n), [5, 6], 'numbered after the four bookmarks, in the order marked (q first)')
+  assert.equal(v3.nextN, 7)
+  assert.deepEqual(v3.slots?.user?.q, { current: 5, history: [{ n: 5, at: T0 + 400 }] })
+  assert.deepEqual(v3.slots?.user?.a, { current: 6, history: [{ n: 6, at: T0 + 500 }] })
+  assert.deepEqual(v3.slots?.user?.['`'], { current: 6, history: [{ n: 6, at: T0 + 600 }] })
+  assert.equal(marks[1]?.words, 'reading here', 'the latest selection on the message is its words')
+  // Straight from v1 with both store keys: the same end state as two starts would give.
+  const direct = applyMigrations(parseRegister(v1Text())!, planFor(1), { ...store, [`pins:${SESSION}`]: ['33333333-0000-4000-8000-000000000003'] }, { sessionId: SESSION, now: T0 + 2000 })
+  assert.equal(direct.version, 3)
+  assert.deepEqual(direct.pins, { user: ['33333333-0000-4000-8000-000000000003'] })
+  assert.deepEqual(direct.slots?.user?.a, v3.slots?.user?.a)
+  assert.deepEqual(parseRegister(serializeRegister(direct)), direct, 'round-trips')
+  // No marks in the store: slots exist and are empty, which is what says "migrated".
+  const bare = applyMigrations(v2, planFor(2), {}, { sessionId: SESSION, now: T0 + 2000 })
+  assert.deepEqual(bare.slots, {})
 })
 
 test('v1 -> v2: the hoist, the numbers in minting order, pins from the store; the result round-trips and reads back whole', () => {
@@ -39,7 +74,7 @@ test('v1 -> v2: the hoist, the numbers in minting order, pins from the store; th
   const reg = parseRegister(text)!
   assert.equal(reg.version, 1)
   const store = { [`pins:${SESSION}`]: ['11111111-0000-4000-8000-000000000001', '22222222-0000-4000-8000-000000000002'] }
-  const out = applyMigrations(reg, planFor(1), store, { sessionId: SESSION, now: T0 + 1000 })
+  const out = applyMigrations(reg, [v1to2], store, { sessionId: SESSION, now: T0 + 1000 })
   assert.equal(out.version, 2)
   assert.equal(out.transcript, T, 'the path most records agree on (2 of 3, one of them backslashed), slashes forward')
   assert.equal(out.perma[2]?.transcript, T_MOVED, 'the minority path stays on its record as an override')
@@ -80,8 +115,8 @@ test('a migration is deterministic, and running the plan for an already-current 
 })
 
 test('an empty v1 register (a store-only conversation) migrates to a v2 file with the pins and nothing else', () => {
-  const { nextN: _n, ...base } = emptyRegister(OTHER, 'bookmarks 0.5.4', T0)
-  const out = applyMigrations({ ...base, version: 1 }, planFor(1), { [`pins:${OTHER}`]: ['aaaaaaaa-0000-4000-8000-000000000001'] }, { sessionId: OTHER, now: T0, transcriptHint: 'C:\\x\\y.jsonl' })
+  const { nextN: _n, slots: _s, ...base } = emptyRegister(OTHER, 'bookmarks 0.5.4', T0)
+  const out = applyMigrations({ ...base, version: 1 }, [v1to2], { [`pins:${OTHER}`]: ['aaaaaaaa-0000-4000-8000-000000000001'] }, { sessionId: OTHER, now: T0, transcriptHint: 'C:\\x\\y.jsonl' })
   assert.equal(out.version, 2)
   assert.equal(out.nextN, 1)
   assert.equal(out.transcript, 'C:/x/y.jsonl', 'with no records, the hint names the transcript, slashes forward')
@@ -90,7 +125,7 @@ test('an empty v1 register (a store-only conversation) migrates to a v2 file wit
 })
 
 test('the file\'s transcript comes from its own records, never from records copied in from another conversation (mutation sweep v0.5.4, M6)', () => {
-  const { nextN: _n, ...base } = emptyRegister(SESSION, 'w', T0)
+  const { nextN: _n, slots: _s, ...base } = emptyRegister(SESSION, 'w', T0)
   let reg: Register = { ...base, version: 1 }
   reg = addOrRelabel(reg, mintOf('a', 'own'), T0 + 1).register
   const foreign = 'C:/Users/x/.claude/projects/other/' + OTHER + '.jsonl'

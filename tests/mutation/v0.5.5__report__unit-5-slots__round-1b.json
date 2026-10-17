@@ -1,0 +1,37 @@
+{
+  "mutations": [
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "const entry = slot?.history.find(h => h.n === op.n)",
+      "mutated": "const entry = slot?.history.find(h => h.n !== op.n)",
+      "note": "bringBack finds the wrong entry",
+      "verdict": "killed",
+      "core_red": [
+        "marksOf derives the panes' marks from the slots; a cleared letter shows nothing but keeps its history; bring back by n"
+      ],
+      "kit_red": [],
+      "kit_pass": "90"
+    },
+    {
+      "id": "M9",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "const at = slot.history.find(h => h.n === slot.current)?.at ?? r.createdAt",
+      "mutated": "const at = r.createdAt",
+      "note": "markedAt ignores the history time",
+      "verdict": "killed",
+      "core_red": [
+        "setMark: a letter makes a mark record and a slot; re-marking the same message reuses the record; another message pushes history"
+      ],
+      "kit_red": [],
+      "kit_pass": "90"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "90"
+    }
+  ]
+}

@@ -12,6 +12,7 @@
 
 import { forwardSlashes } from '../kit/paths.ts'
 import { REGISTER_VERSION, type Register } from './register-file.ts'
+import { setMark } from './register-ops.ts'
 
 /** The format this build writes. A file at CURRENT is loaded and never copied. */
 export const CURRENT = REGISTER_VERSION
@@ -70,7 +71,40 @@ export const v1to2: Migration = {
   },
 }
 
-export const MIGRATIONS: readonly Migration[] = [v1to2]
+/**
+ * v2 -> v3: the letter marks and the reading position move out of the store (`marks:<sid>`,
+ * a map from letter to `{uuid, head, markedAt, source, snippet}`) into the file: one record
+ * of tier `mark` per letter's place, and a slot per letter pointing at it. A file with no
+ * store marks gets empty slots, which is what says "migrated".
+ */
+export const v2to3: Migration = {
+  from: 2,
+  to: 3,
+  storeKeys: sid => [`marks:${sid}`],
+  apply(reg, store, ctx) {
+    const marks = store[`marks:${ctx.sessionId}`]
+    let out: Register = { ...reg, version: 3, slots: reg.slots ?? {} }
+    if (!marks || typeof marks !== 'object') return out
+    const letters = Object.entries(marks as Record<string, { uuid?: unknown; head?: unknown; markedAt?: unknown; snippet?: unknown }>)
+      .filter(([, m]) => m && typeof m.uuid === 'string')
+      .sort((a, b) => Number(a[1].markedAt ?? 0) - Number(b[1].markedAt ?? 0))
+    for (const [letter, m] of letters) {
+      const at = typeof m.markedAt === 'number' ? m.markedAt : ctx.now
+      const r = setMark(out, 'user', letter, {
+        uuid: m.uuid as string,
+        head: typeof m.head === 'string' ? m.head : '',
+        ...(typeof m.snippet === 'string' && m.snippet ? { words: m.snippet } : {}),
+      }, at)
+      if (!('error' in r)) out = r.register
+    }
+    return out
+  },
+}
+
+export const MIGRATIONS: readonly Migration[] = [v1to2, v2to3]
+
+/** The store key families any step consumes (`pins:`, `marks:`), for finding conversations that live only in the store. */
+export const STORE_PREFIXES: readonly string[] = MIGRATIONS.map(m => m.storeKeys('')[0]!).filter(Boolean)
 
 /** The steps that take a file at `version` to CURRENT, in order; empty when it is current or newer. */
 export function planFor(version: number): Migration[] {

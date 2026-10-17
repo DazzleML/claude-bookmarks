@@ -28,7 +28,7 @@ import type { Role, Style } from './core/palette'
 import { footnoteOf, looksLikePrompt, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
 import { short } from './core/kit/message-id'
 import { configDirOf, dataRootOf } from './core/kit/paths'
-import { ECHO_POLICY_KEY, marksKey as marksKeyOf, readingStateKey } from './core/store-keys'
+import { ECHO_POLICY_KEY, readingStateKey } from './core/store-keys'
 import { diagLine, keyLabel } from './core/log/diagnostics'
 import { colorSplit, tagMarksMarkdown, tagMarksPlain } from './core/marks/highlight'
 import { ScreenModel } from './core/kit/screen-model'
@@ -164,7 +164,8 @@ function marksPorts($: EngineInterface): MarksPorts {
     jumpTo: (uuid, via, label, words, probe, block) => jumpTo($, uuid, via, label, words, probe, block),
     now: () => $.clock.now(),
     loadMarks: () => loadMarks($),
-    saveMarks: async m => $.store.set(await marksKey($), m),
+    setMark: (letter, mark) => bookmarks_.setMarkOp(bookmarksPorts($), letter, mark),
+    clearMarks: letters => bookmarks_.clearMarksOp(bookmarksPorts($), letters),
     readingStateStored: async () => $.store.get(readingStateKey(await $.session.id())),
     storeReadingState: async state => $.store.set(readingStateKey(await $.session.id()), state),
     letters: LETTERS,
@@ -525,12 +526,12 @@ async function prompts($: EngineInterface): Promise<PromptRef[]> {
   return promptList(await keptPrompts($), await allRows($))
 }
 
-async function marksKey($: EngineInterface): Promise<string> {
-  return marksKeyOf(await $.session.id())
-}
-
+// Since 0.5.5 the marks are records in the register, pointed at by its slots (the data
+// design, 2026-10-16); the v2 -> v3 migration moves them out of the store (`marks:<sid>`,
+// core/store-keys.ts) at the conversation's start, and the store is the fallback when there
+// is no data root. handlers/bookmarks.ts derives the `Marks` the panes draw.
 async function loadMarks($: EngineInterface): Promise<Marks> {
-  return ((await $.store.get(await marksKey($))) as Marks | undefined) ?? {}
+  return bookmarks_.marksOf(bookmarksPorts($))
 }
 
 // Bookmark anchors and the register (its file, minting, exports, prose anchors, the
@@ -555,6 +556,7 @@ function bookmarksPorts($: EngineInterface): BookmarksPorts {
     fsWrite: (path, text) => $.fs.write(path, text),
     fsList: path => $.fs.list(path),
     storeGet: key => $.store.get(key),
+    storeSet: (key, value) => $.store.set(key, value),
     storeDelete: key => $.store.delete(key),
     storeKeys: () => $.store.keys(),
     resolveTarget: want => resolveTarget($, want),
@@ -1396,7 +1398,8 @@ export const register: Register = (on, options) => {
     const last = await read($, shown)
     band.drawn(e.requestId)
     const mode = await read($, bandMode)
-    const marks = mode === 'idle' ? {} : await loadMarks($)
+    // From the cache (MarkCache, replaced after every mark write and at a start): a render hook reads no file.
+    const marks = mode === 'idle' ? {} : markCache.all
     // What happens after the key: the after-action rule, by what the key did.
     const done = (cause: Cause) => settle($, paneOf(mode), cause)
     const s = currentSettings()
@@ -1532,7 +1535,7 @@ export const register: Register = (on, options) => {
       )
     }
 
-    const marks = await loadMarks($)
+    const marks = markCache.all // the cache, never a file, in a render hook
     return marksPaneView(
       elements,
       { mode, marks, letters: LETTERS, readingLetter: READING },

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-10-16
+
+### Changed
+
+- **Marks live in the bookmark file (format version 3).** Each letter, and the reading position, is now a record in the conversation's bookmark file, pointed at by the file's `slots`; a migration moves them out of Claude Code's plugin store at the conversation's start, with its own backup folder like the format-2 migration. Re-marking a letter on another message keeps the old place in the letter's history (the `a_001` stack the roadmap promised); deleting a mark clears the letter and keeps that history, so nothing a letter ever pointed at is lost. The panes read the marks from memory, never from a file while drawing.
+- Marks and bookmarks on the same message are two separate records: setting a letter on a bookmarked line never renames the bookmark, and a mark is never listed as a bookmark.
+- Without a data folder to write to, marks stay in Claude Code's plugin store as before.
+
 ## [0.5.4] - 2026-10-16
 
 ### Changed
@@ -1032,7 +1040,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.4...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.5...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

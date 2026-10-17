@@ -4,7 +4,7 @@
 // Run: claude plugin test plugin
 import { expect, test } from 'claude-code/testing'
 import { addOrRelabel, emptyRegister, parseRegister, serializeRegister } from '../hooks/core/bookmarks/register-file.ts'
-import { world } from './harness.ts'
+import { BAND_PROPS, world } from './harness.ts'
 
 type Engine = { session: { start: (e: object) => Promise<unknown> } }
 const SID = '11111111-2222-4333-8444-555555555555'
@@ -40,30 +40,31 @@ test('a v1 register is migrated at the start: snapshot first, a run folder with 
   expect(snap.some(k => k.endsWith(`${SID}.json.bak`))).toBe(true)
   expect(snap.some(k => k.endsWith('cccccccc.md'))).toBe(true)
   expect(snap.some(k => k.endsWith('manifest.json'))).toBe(true)
-  // The run folder: the original, its .bak, the store copy, and a manifest that reached `done`.
-  const run = keysUnder(w, '__v1-to-v2__')
+  // The run folder: the original, its .bak, the store copy, and a manifest that reached `done`. One run takes the file the whole way (v1 -> v3).
+  const run = keysUnder(w, '__v1-to-v3__')
   expect(run.some(k => k.endsWith(`sessions\\${SID}.json`) || k.endsWith(`sessions/${SID}.json`))).toBe(true)
   const manifestKey = run.find(k => k.endsWith('manifest.json'))!
   const manifest = JSON.parse(w.files[manifestKey]!)
   expect(manifest.status).toBe('done')
   expect(manifest.from).toBe(1)
-  expect(manifest.to).toBe(2)
-  expect(manifest.storeKeys).toEqual([`pins:${SID}`])
+  expect(manifest.to).toBe(3)
+  expect(manifest.storeKeys).toEqual([`pins:${SID}`, `marks:${SID}`])
   expect(manifest.files.map((f: { path: string }) => f.path).sort()).toEqual([`sessions/${SID}.json`, `sessions/${SID}.json.bak`, `store/${SID}.json`])
   expect(manifest.files.every((f: { hash: string; algo: string }) => f.hash.length >= 16 && f.algo)).toBe(true)
   expect(w.files[run.find(k => k.endsWith(`sessions\\${SID}.json`) || k.endsWith(`sessions/${SID}.json`))!]).toBe(v1)
   expect(w.files[run.find(k => k.endsWith(`${SID}.json.bak`))!]).toBe(olderBak)
   // The status ladder is written in order: `started`, then `backed-up` once the copies are in, before the register is touched, then `done` (M14).
   const writes = w.calls.filter(c => c.event === 'fs.write').map(c => c.input as { path: string; text: string })
-  const statusAt = (s: string) => writes.findIndex(x => x.path.replace(/\\/g, '/').endsWith('manifest.json') && x.path.includes('__v1-to-v2__') && x.text.includes(`"status": "${s}"`))
-  const registerWrite = writes.findIndex(x => x.path.replace(/\\/g, '/') === PATH && x.text.includes('"version": 2'))
+  const statusAt = (s: string) => writes.findIndex(x => x.path.replace(/\\/g, '/').endsWith('manifest.json') && x.path.includes('__v1-to-v3__') && x.text.includes(`"status": "${s}"`))
+  const registerWrite = writes.findIndex(x => x.path.replace(/\\/g, '/') === PATH && x.text.includes('"version": 3'))
   expect(statusAt('started')).toBeGreaterThanOrEqual(0)
   expect(statusAt('backed-up')).toBeGreaterThan(statusAt('started'))
   expect(registerWrite).toBeGreaterThan(statusAt('backed-up'))
   expect(statusAt('done')).toBeGreaterThan(registerWrite)
-  // The live file is v2: numbered, hoisted, with the pins; its .bak is the v1 original.
+  // The live file is current: numbered, hoisted, with the pins and empty slots; its .bak is the v1 original.
   const reg = parseRegister(w.file(PATH) ?? '')!
-  expect(reg.version).toBe(2)
+  expect(reg.version).toBe(3)
+  expect(reg.slots).toEqual({})
   expect(reg.nextN).toBe(2)
   expect(reg.perma[0]?.n).toBe(1)
   expect(reg.transcript).toBe(T)
@@ -90,21 +91,42 @@ test('a second start migrates nothing and takes no second snapshot', async ($, o
   expect(Object.keys(w.files).length).toBe(after1)
   expect(keysUnder(w, '__pre-0.5__snapshot/').filter(k => k.endsWith('manifest.json')).length).toBe(snaps1)
   expect(snaps1).toBe(1)
-  expect(keysUnder(w, '__v1-to-v2__').filter(k => k.endsWith('manifest.json')).length).toBe(1)
+  expect(keysUnder(w, '__v1-to-v3__').filter(k => k.endsWith('manifest.json')).length).toBe(1)
 })
 
-test('a conversation with pins in the store and no register gets one, at v2', async ($, on) => {
+test('a conversation with pins in the store and no register gets one, current', async ($, on) => {
   const w = world(on, { session: SID, files: { [PATH]: v1Text() }, store: { [`pins:${OTHER}`]: ['eeeeeeee-0000-4000-8000-000000000003'] } })
   await start($)
   const other = parseRegister(w.file(`${ROOT}/sessions/${OTHER}.json`) ?? '')
-  expect(other?.version).toBe(2)
+  expect(other?.version).toBe(3)
   expect(other?.pins).toEqual({ user: ['eeeeeeee-0000-4000-8000-000000000003'] })
   expect(other?.perma.length).toBe(0)
-  expect(keysUnder(w, `__v1-to-v2__`).filter(k => k.endsWith('manifest.json')).length).toBe(2)
+  expect(keysUnder(w, `__v1-to-v3__`).filter(k => k.endsWith('manifest.json')).length).toBe(2)
   // Two migrations in one start, one snapshot (M13): one snapshot manifest on disk, written once.
   expect(keysUnder(w, '__pre-0.5__snapshot/').filter(k => k.endsWith('manifest.json')).length).toBe(1)
   const snapshotWrites = w.calls.filter(c => c.event === 'fs.write' && String((c.input as { path: string }).path).includes('__pre-0.5__snapshot') && String((c.input as { path: string }).path).endsWith('manifest.json'))
   expect(snapshotWrites.length).toBe(1)
+})
+
+test('v2 -> v3 at the start: the store\'s marks become slots and records, and the marks pane draws the letter', async ($, on) => {
+  const v2 = serializeRegister({ ...emptyRegister(SID, 'bookmarks 0.5.4', 1), version: 2, slots: undefined })
+  const marks = { a: { uuid: UUID, head: 'the marked message', markedAt: 5, source: 'selection', snippet: 'marked words' } }
+  const w = world(on, { session: SID, files: { [PATH]: v2 }, store: { [`marks:${SID}`]: marks } })
+  await start($)
+  const reg = parseRegister(w.file(PATH) ?? '')!
+  expect(reg.version).toBe(3)
+  const rec = reg.perma.find(r => r.tier === 'mark')!
+  expect(rec.uuid).toBe(UUID)
+  expect(rec.words).toBe('marked words')
+  expect(reg.slots?.user?.a).toEqual({ current: rec.n, history: [{ n: rec.n, at: 5 }] })
+  const run = keysUnder(w, '__v2-to-v3__').find(k => k.endsWith('manifest.json'))!
+  expect(JSON.parse(w.files[run]!).storeKeys).toEqual([`marks:${SID}`])
+  // The letter is in use: the mark pane draws `a` as taken.
+  const band = (await ($ as { ui: { mount: (t: never) => Promise<unknown> } }).ui.mount({ plugin: 'bookmarks', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS, requestId: 'band-1' } as never)) as { input: (t: object) => Promise<unknown> }
+  await band.input({ key: 'band-cmd-0', text: 'm' }).catch(() => undefined)
+  const pane = (await ($ as { ui: { mount: (t: never) => Promise<unknown> } }).ui.mount({ plugin: 'bookmarks', surface: 'terminal', component: 'Pane', requestId: 'bm-pane', props: { title: 'mark', isFocused: false, bodyColumns: 60, placement: 'dock', scroll: { offset: 0, bodyRows: 20 } } } as never)) as { findAll: (q: object) => Promise<{ text?: string }[]> }
+  const texts = (await pane.findAll({ type: 'Text' })).map(t => t.text ?? '')
+  expect(texts.some(t => t.includes('the marked message'))).toBe(true)
 })
 
 test('a current file is loaded and never copied: no snapshot, no run folder', async ($, on) => {

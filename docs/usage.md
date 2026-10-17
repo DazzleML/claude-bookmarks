@@ -359,16 +359,16 @@ Every colour the plugin draws has a role, and its default is one of Claude Code'
 
 | What | Kept for | Notes |
 |------|----------|-------|
-| Marks `a`-`z` | This conversation | Survive restarting Claude Code and `claude --resume` |
-| Reading position | This conversation | The same |
+| Marks `a`-`z` | Forever | In the conversation's bookmark file since 0.5.5, each letter with its history: re-marking a letter keeps the old place as `a_001`, deleting a mark keeps the history too |
+| Reading position | Forever | The same file, under its own key |
 | The prompt list | This conversation | Up to 5000 prompts, with their footnotes; set aside after 30 days unopened, and read again from the transcript when you reopen the conversation |
 | Prompt text for the filter | This conversation | Up to the budget setting, 2 MB by default, newest first; in `~/claude/bookmarks/prompttext/` |
-| Pinned prompts | This conversation | Survive restarting Claude Code and `claude --resume` |
+| Pinned prompts | Forever | In the conversation's bookmark file since 0.5.4 |
 | Bookmarks (yours and Claude's) | Forever | In `~/claude/bookmarks/sessions/`, readable JSON and markdown; never under `~/.claude` |
 | The jumplist (back/forward) | This conversation | Up to 100 jumps |
 | The highlight | Two minutes, or until your next prompt | Display only |
 
-Each conversation has its own marks: `a` in one conversation is unrelated to `a` in another. Marks, pins and the reading position live in Claude Code's own plugin storage; bookmarks live in your own folder (see [Where bookmarks live](#where-bookmarks-live)). Nothing is written to the session file.
+Each conversation has its own marks: `a` in one conversation is unrelated to `a` in another. Marks, the reading position, pins and bookmarks all live in the conversation's bookmark file in your own folder (see [Where bookmarks live](#where-bookmarks-live)); Claude Code's own plugin storage keeps only what the transcript rebuilds (the prompt list) and the session's UI state (the jumplist, the reading position's way back). Without a data folder, marks fall back to that storage. Nothing is written to the session file.
 
 ## Diagnostic commands
 

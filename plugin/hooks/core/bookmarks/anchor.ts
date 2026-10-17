@@ -15,15 +15,17 @@
 export const ANCHOR_VERSION = 1
 
 export type AnchorBy = 'claude' | 'user' | 'prose'
-export type AnchorSource = 'tool' | 'promote' | 'prose'
+/** How a record came to be: the tool, a promotion, a hand-written link, or a letter set by the person (`mark`, 0.5.5). */
+export type AnchorSource = 'tool' | 'promote' | 'prose' | 'mark'
 /** Whose list a bookmark is on: the person's, or Claude's own (two separate sets). */
 export type AnchorOwner = 'user' | 'claude'
 /**
- * How stable and visible a record is (the continuum's upper rungs; #19, #21): `perma`, a
- * stable link Claude cites without a bookmark's `⚓`; `bookmark`, a named place in the
- * bookmarks pane. Absent on records from before 0.4.20: they are bookmarks.
+ * How stable and visible a record is (the continuum; #19, #21): `mark`, a place a letter
+ * points at (reached through the file's slots, never listed as a bookmark; 0.5.5);
+ * `perma`, a stable link Claude cites without a bookmark's `⚓`; `bookmark`, a named place
+ * in the bookmarks pane. Absent on records from before 0.4.20: they are bookmarks.
  */
-export type AnchorTier = 'perma' | 'bookmark'
+export type AnchorTier = 'mark' | 'perma' | 'bookmark'
 export const tierOf = (r: { tier?: AnchorTier }): AnchorTier => r.tier ?? 'bookmark'
 
 export type AnchorRecord = {

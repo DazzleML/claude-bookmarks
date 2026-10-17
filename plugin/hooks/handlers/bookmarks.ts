@@ -12,11 +12,12 @@ import {
   emptyRegister, exportMarkdown, exportNotesOf, findRecord, idOf, listOf, newerThanBuild, parseRegister, prune, REGISTER_VERSION, serializeRegister,
   type Mint, type Register as BookmarkRegister, type Retention,
 } from '../core/bookmarks/register-file.ts'
-import { applyOp, type Op, type OpResult } from '../core/bookmarks/register-ops.ts'
+import { applyOp, marksOf as marksFromRegister, type Op, type OpResult } from '../core/bookmarks/register-ops.ts'
 import {
-  applyMigrations, CURRENT, hashText, planFor, runFolderName, SNAPSHOT_SUFFIX, snapshotFolderName,
+  applyMigrations, CURRENT, hashText, planFor, runFolderName, SNAPSHOT_SUFFIX, snapshotFolderName, STORE_PREFIXES,
   type Manifest, type Migration,
 } from '../core/bookmarks/migrations.ts'
+import type { Mark, Marks } from '../core/marks/marks.ts'
 import { rowPlace } from '../core/bookmarks/transcript-lines.ts'
 import { forwardSlashes } from '../core/kit/paths.ts'
 import { short } from '../core/kit/message-id.ts'
@@ -167,6 +168,50 @@ export async function claimBookmark(ports: BookmarksPorts, uuid: string): Promis
   return { register: r.register, record: r.record!, added: r.added ?? false }
 }
 
+// --- Marks: the letters and the reading position, in the register since 0.5.5 -------------
+// A letter is a slot pointing at a record of tier `mark` (core/bookmarks/register-ops.ts
+// setMark, marksOf). The store (`marks:<sid>`) is read for a file the migration has not yet
+// reached (no `slots`), and is the home when there is no data root at all.
+
+const marksStoreKey = (sid: string) => `marks:${sid}`
+
+async function marksInStore(ports: BookmarksPorts): Promise<Marks> {
+  return ((await ports.storeGet(marksStoreKey(await ports.sessionId()))) as Marks | undefined) ?? {}
+}
+
+/** The conversation's marks as the panes draw them: from the register's slots, or the store when the file is not there yet. */
+export async function marksOf(ports: BookmarksPorts): Promise<Marks> {
+  if (!(await ports.dataRoot())) return marksInStore(ports)
+  const reg = await loadRegister(ports)
+  if (reg.slots === undefined) return marksInStore(ports)
+  return marksFromRegister(reg, 'user')
+}
+
+/** A letter (or the reading position's key) set: one committed operation on the register, or the store when there is no data root. */
+export async function setMarkOp(ports: BookmarksPorts, letter: string, mark: Mark): Promise<{ error?: string }> {
+  if (!(await ports.dataRoot())) {
+    const key = marksStoreKey(await ports.sessionId())
+    await ports.storeSet(key, { ...(await marksInStore(ports)), [letter]: mark })
+    return {}
+  }
+  const place = { uuid: mark.uuid, head: mark.head, ...(mark.snippet ? { words: mark.snippet } : {}) }
+  const r = await commitOp(ports, { op: 'setMark', owner: 'user', letter, place, at: mark.markedAt })
+  return 'error' in r ? r : {}
+}
+
+/** Letters cleared: the slot's current becomes null, its history kept, the record stays. */
+export async function clearMarksOp(ports: BookmarksPorts, letters: string[]): Promise<{ error?: string }> {
+  if (!(await ports.dataRoot())) {
+    const key = marksStoreKey(await ports.sessionId())
+    const marks = { ...(await marksInStore(ports)) }
+    for (const l of letters) delete marks[l]
+    await ports.storeSet(key, marks)
+    return {}
+  }
+  const r = await commitOp(ports, { op: 'clearMarks', owner: 'user', letters })
+  return 'error' in r ? r : {}
+}
+
 // --- Pins: the person's pinned prompts, in the register since 0.5.4 ----------------------
 
 /** The pinned prompts of this conversation, by message uuid, in the order pinned. */
@@ -199,9 +244,12 @@ export async function migrateAtStart(ports: BookmarksPorts): Promise<void> {
   const dir = sessionsDir(root)
   const entries = (await ports.fsExists(dir)) ? await ports.fsList(dir) : []
   const registers = entries.filter(e => e.kind === 'file' && e.name.endsWith('.json')).map(e => e.name.slice(0, -'.json'.length))
-  // Store-only conversations: pins in the store with no register to move them into.
+  // Store-only conversations: pins or marks in the store with no register to move them into.
   const storeKeys = await ports.storeKeys()
-  const pinnedOnly = storeKeys.filter(k => k.startsWith('pins:')).map(k => k.slice('pins:'.length)).filter(sid => !registers.includes(sid))
+  const storeOnly = [...new Set(storeKeys
+    .filter(k => STORE_PREFIXES.some(p => k.startsWith(p)))
+    .map(k => k.slice(k.indexOf(':') + 1))
+    .filter(sid => sid && !registers.includes(sid)))]
   const order = [session, ...registers.filter(s => s !== session)]
   let snapshot = await hasSnapshot(ports, root)
   const ensureSnapshot = async () => {
@@ -229,13 +277,19 @@ export async function migrateAtStart(ports: BookmarksPorts): Promise<void> {
     await migrateOne(ports, root, sid, reg, text, steps)
     migrated++
   }
-  for (const sid of pinnedOnly) {
-    const pins = await ports.storeGet(`pins:${sid}`)
-    if (!Array.isArray(pins) || pins.length === 0) continue
+  for (const sid of storeOnly) {
+    // Something to move? An empty list or map is nothing.
+    let any = false
+    for (const p of STORE_PREFIXES) {
+      const v = await ports.storeGet(`${p}${sid}`)
+      if (Array.isArray(v) ? v.length > 0 : v && typeof v === 'object' && Object.keys(v as object).length > 0) any = true
+    }
+    if (!any) continue
     await ensureSnapshot()
     const fresh = emptyRegister(sid, `${ports.pluginName} ${await ports.pluginVersion()}`, await ports.now())
-    // The same v1 -> v2 step, on an empty v1 file, so the run folder and the store copy are the same shape.
-    await migrateOne(ports, root, sid, { ...fresh, version: 1, nextN: undefined }, undefined, planFor(1))
+    // The whole plan from v1, on an empty v1 file, so the run folder and the store copy are the same shape as any other's.
+    const { nextN: _n, slots: _s, ...v1 } = fresh
+    await migrateOne(ports, root, sid, { ...v1, version: 1 }, undefined, planFor(1))
     migrated++
   }
   if (migrated > 0) ports.logAlways(`[bm] migrate: ${migrated} register(s) brought to version ${CURRENT}; originals under ${backupsDir(root)}`)
