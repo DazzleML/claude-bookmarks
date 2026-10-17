@@ -17,15 +17,21 @@ export const ANCHOR_VERSION = 1
 export type AnchorBy = 'claude' | 'user' | 'prose'
 /** How a record came to be: the tool, a promotion, a hand-written link, or a letter set by the person (`mark`, 0.5.5). */
 export type AnchorSource = 'tool' | 'promote' | 'prose' | 'mark'
-/** Whose list a bookmark is on: the person's, or Claude's own (two separate sets). */
-export type AnchorOwner = 'user' | 'claude'
 /**
- * How stable and visible a record is (the continuum; #19, #21): `mark`, a place a letter
- * points at (reached through the file's slots, never listed as a bookmark; 0.5.5);
- * `perma`, a stable link Claude cites without a bookmark's `⚓`; `bookmark`, a named place
- * in the bookmarks pane. Absent on records from before 0.4.20: they are bookmarks.
+ * Whose list a record is on: the person's or Claude's today, and an open set tomorrow
+ * (an agent by name, another person by handle: the "N-subscribers" of the 2026-10-16
+ * design). The two known names stay narrow so the code that knows only them still type-checks.
  */
-export type AnchorTier = 'mark' | 'perma' | 'bookmark'
+export type AnchorOwner = 'user' | 'claude' | `agent:${string}` | `person:${string}`
+/**
+ * How stable and visible a record is: the continuum's rungs, cold to warm (#19, #21;
+ * core/bookmarks/tiers.ts): `transient`, a place Claude mints with metadata for one reply;
+ * `mark`, a place a letter points at (reached through the file's slots, never listed as a
+ * bookmark; 0.5.5); `perma`, a stable link Claude cites without a bookmark's `⚓`;
+ * `bookmark`, a named place in the bookmarks pane. Stored by name, never by rank. Absent on
+ * records from before 0.4.20: they are bookmarks.
+ */
+export type AnchorTier = 'transient' | 'mark' | 'perma' | 'bookmark'
 export const tierOf = (r: { tier?: AnchorTier }): AnchorTier => r.tier ?? 'bookmark'
 
 export type AnchorRecord = {
@@ -58,6 +64,14 @@ export type AnchorRecord = {
   transcript?: string
   role?: 'user' | 'assistant'
   timestamp?: string
+  /** Tags, nested with `/` (`design/records`); the Markdown note's writable set includes them (unit 9). */
+  tags?: string[]
+  /** Named axes with a named position each (`{ attention: 'read' }`); the read-state layer's shape (unit 8), never a rank. */
+  axes?: Record<string, string>
+  /** Relations to other records: `{ kind, to }`, `to` a canonical reference (`bm:<sid8>.<n>`) across conversations. */
+  rel?: { kind: string; to: string }[]
+  /** Open namespaces for what an owner wants to keep on a record: `x.claude`, `x.user`, `x['agent:<name>']`, `x['plugin:<name>']`. */
+  x?: Record<string, Record<string, unknown>>
 }
 
 export type ParsedAnchor = {

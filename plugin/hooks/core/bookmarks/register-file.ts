@@ -62,6 +62,10 @@ export type Register = {
   /** Where Claude Code kept its config when the file was written (never used to find anything). */
   configDir?: string
   cwd?: string
+  /** The conversation's title (its `/rename` name, else the first prompt's head), refreshed on save, so a file is findable without renaming it (unit 6). */
+  title?: string
+  /** The project folder's name (the last segment of `cwd`), refreshed on save. */
+  project?: string
   /** Bumped on every write; the higher wins when two copies meet (#6). */
   rev: number
   updatedAt: number
@@ -205,7 +209,9 @@ export function addOrRelabel(reg: Register, mint: Mint, now: number): AddResult 
  * groups), or a prefix of 8+ characters.
  */
 export function findRecord(reg: Register, id: string, owner?: AnchorOwner): AnchorRecord | undefined {
-  const onList = (r: AnchorRecord) => owner === undefined || ownerOf(r) === owner
+  // A letter's record (tier `mark`) is reached through the slots, never by message: a bookmark and
+  // a mark on one message are two records, and this finds the bookmark (0.5.6; the promote path met the mark first).
+  const onList = (r: AnchorRecord) => (owner === undefined || ownerOf(r) === owner) && tierOf(r) !== 'mark'
   return reg.perma.find(r => onList(r) && r.uuid.toLowerCase() === id.toLowerCase())
     ?? reg.perma.find(r => onList(r) && matchesPrefix(r.uuid, id))
     ?? reg.perma.find(r => onList(r) && id.length === 36 && sameMessage(r.uuid, id))
@@ -293,10 +299,26 @@ function bump(reg: Register, now: number): Register {
 }
 
 // Fixed key order, so a hand edit and a program write diff cleanly.
-const REGISTER_KEYS = ['version', 'sessionId', 'transcript', 'configDir', 'cwd', 'rev', 'updatedAt', 'writer', 'nextN', 'perma', 'tombstones', 'pins', 'slots'] as const
+const REGISTER_KEYS = ['version', 'sessionId', 'transcript', 'configDir', 'cwd', 'title', 'project', 'rev', 'updatedAt', 'writer', 'nextN', 'perma', 'tombstones', 'pins', 'slots'] as const
 const RECORD_KEYS = [
   'n', 'sessionId', 'uuid', 'idKind', 'owner', 'label', 'why', 'words', 'head', 'line', 'bytes', 'role', 'timestamp',
-  'temporary', 'tier', 'createdAt', 'updatedAt', 'by', 'source', 'sharedFrom', 'transcript',
+  'temporary', 'tier', 'createdAt', 'updatedAt', 'by', 'source', 'sharedFrom', 'transcript', 'tags', 'axes', 'rel', 'x',
+] as const
+
+/**
+ * The reserved names of the register's two levels (unit 6): a key a build does not know is kept
+ * (`keepUnknown`), so these are the ones that mean something to this build, in the order written.
+ */
+export const RESERVED = { register: REGISTER_KEYS, record: RECORD_KEYS } as const
+
+/**
+ * The export's front-matter properties, fixed before Obsidian is pointed at the folder (unit 6;
+ * unit 9 makes the note an Obsidian note). Every property `exportMarkdown` writes is here, and
+ * a reader may rely on these names: nothing else is written into the front matter.
+ */
+export const FRONT_MATTER_PROPERTIES = [
+  'kind', 'version', 'bm-writer', 'session', 'uuid', 'n', 'owners', 'tier', 'tags', 'aliases', 'title', 'project',
+  'role', 'timestamp', 'transcript', 'line', 'bytes', 'words', 'label', 'why', 'by', 'source', 'shared-from', 'temporary', 'created',
 ] as const
 
 export function serializeRegister(reg: Register): string {
@@ -353,6 +375,8 @@ export function parseRegister(text: string): Register | undefined {
     ...(transcript !== undefined ? { transcript } : {}),
     ...(typeof o.configDir === 'string' ? { configDir: o.configDir } : {}),
     ...(typeof o.cwd === 'string' ? { cwd: o.cwd } : {}),
+    ...(typeof o.title === 'string' ? { title: o.title } : {}),
+    ...(typeof o.project === 'string' ? { project: o.project } : {}),
     rev: typeof o.rev === 'number' ? o.rev : 0,
     updatedAt: typeof o.updatedAt === 'number' ? o.updatedAt : 0,
     writer: typeof o.writer === 'string' ? o.writer : '?',
@@ -411,15 +435,22 @@ export function exportNotesOf(existing: string | undefined): string {
 export function exportMarkdown(
   record: AnchorRecord,
   messageText: string,
-  opts?: { minted?: string; owners?: AnchorOwner[]; notes?: string },
+  opts?: { minted?: string; owners?: AnchorOwner[]; notes?: string; writer?: string; title?: string; project?: string },
 ): string {
   const owners = opts?.owners && opts.owners.length > 0 ? opts.owners : [ownerOf(record)]
-  const fm: [string, unknown][] = [
+  // Every name here is in FRONT_MATTER_PROPERTIES (tests/core/record.test.ts holds the writer to it).
+  const fm: [(typeof FRONT_MATTER_PROPERTIES)[number], unknown][] = [
     ['kind', 'bookmark-anchor'],
     ['version', EXPORT_VERSION],
+    ['bm-writer', opts?.writer],
     ['session', record.sessionId],
     ['uuid', record.uuid],
+    ['n', record.n],
     ['owners', owners.join(', ')],
+    ['tier', tierOf(record)],
+    ['tags', record.tags && record.tags.length > 0 ? record.tags.join(', ') : undefined],
+    ['title', opts?.title],
+    ['project', opts?.project],
     ['role', record.role],
     ['timestamp', record.timestamp],
     ['transcript', record.transcript],

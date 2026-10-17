@@ -534,6 +534,15 @@ async function loadMarks($: EngineInterface): Promise<Marks> {
   return bookmarks_.marksOf(bookmarksPorts($))
 }
 
+// The conversation's title for the register header (unit 6): the /rename name the start
+// event carried (`session_title`, the only place the engine says it), else the head of the
+// first prompt. No engine call reads the title after the start, so it is kept here.
+let sessionTitle: string | undefined
+async function conversationTitle($: EngineInterface): Promise<string | undefined> {
+  if (sessionTitle) return sessionTitle
+  return (await prompts($))[0]?.head || undefined
+}
+
 // Bookmark anchors and the register (its file, minting, exports, prose anchors, the
 // anchor press, the model's tool): handlers/bookmarks.ts, over bookmarksPorts($).
 function bookmarksPorts($: EngineInterface): BookmarksPorts {
@@ -546,6 +555,7 @@ function bookmarksPorts($: EngineInterface): BookmarksPorts {
     dataRoot: () => dataRoot($),
     sessionId: () => $.session.id(),
     cwd: () => $.session.cwd(),
+    title: () => conversationTitle($),
     pluginName: $.plugin.name,
     pluginVersion: () => pluginVersion($),
     configDir: () => configDir($),
@@ -979,6 +989,9 @@ export const register: Register = (on, options) => {
     // id instead (sameConversation, below); these resets stay for a reload, and the
     // conversation the process starts in is noted.
     conversationId = await $.session.id()
+    // The start event's type carries no title today (only the SessionStart hook input does); read it if a build adds it.
+    const started = e as unknown as { session_title?: unknown }
+    sessionTitle = typeof started.session_title === 'string' ? started.session_title : undefined
     await resetConversationMemory()
     void $.config.list().then(rows => {
       const theme = rows.find(r => r.key === 'theme')?.value

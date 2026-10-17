@@ -90,6 +90,22 @@ test('an operation whose record is gone from the disk reports and writes nothing
   expect(w.file(PATH)).toBe(emptiedText)
 })
 
+// The header's title and project (unit 6): the first prompt's head, and the cwd's last segment whatever its trailing slash.
+test('the header takes the first prompt as the title and the folder name as the project', async ($, on) => {
+  const good = registerText(1)
+  const w = world(on, {
+    session: SID,
+    cwd: 'C:/test-project/',
+    files: { [PATH]: good },
+    store: { [`prompts:${SID}`]: [{ uuid: 'aaaaaaaa-0000-4000-8000-000000000001', head: 'first prompt' }, { uuid: 'bbbbbbbb-0000-4000-8000-000000000002', head: 'second prompt' }], [`backfilled7:${SID}`]: true },
+  })
+  const out = await call($ as never, { action: 'relabel', uuid: UUID.slice(0, 8), owner: 'claude', label: 'renamed' })
+  expect(out.ok).toBe(true)
+  const saved = parseRegister(w.file(PATH) ?? '')
+  expect(saved?.title).toBe('first prompt')
+  expect(saved?.project).toBe('test-project')
+})
+
 /** Every line the plugin logged or wrote, wherever it went. */
 function everything(w: { logs: () => string[]; files: Record<string, string> }): string[] {
   return [...w.logs(), ...Object.values(w.files)]
@@ -107,6 +123,9 @@ test('.bak is the previous file when that file parses', async ($, on) => {
   const saved = parseRegister(w.file(PATH) ?? '')
   expect(saved?.writer.startsWith('bookmarks ')).toBe(true)
   expect(saved?.writer).not.toBe('bookmarks 0.9')
+  // The header's project is the cwd's last segment, refreshed on save (unit 6); no title when the conversation has no prompts yet.
+  expect(saved?.project).toBe('test-project')
+  expect(saved?.title).toBe(undefined)
   const listed = await call($ as never, { action: 'list' })
   expect((listed.claudes as { label: string }[])[0]?.label).toBe('renamed')
   // And a file that read fine was never reported as loaded from its .bak (N10).

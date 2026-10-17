@@ -220,6 +220,8 @@ export type BookmarksPorts = {
   dataRoot: () => Promise<string | undefined>
   sessionId: () => Promise<string>
   cwd: () => Promise<string>
+  /** The conversation's title: its /rename name as the start event gave it (register.tsx's `sessionTitle`, set at session.start), else the first prompt's head; written into the register header on save (unit 6). */
+  title: () => Promise<string | undefined>
   pluginName: string
   pluginVersion: () => Promise<string>
   /** Claude Code's config folder, forward slashes (register.tsx configDir; the env names stay literal there for the validator). */

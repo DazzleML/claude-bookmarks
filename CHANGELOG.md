@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-10-16
+
+### Added
+
+- The bookmark file's header now carries the conversation's `title` (the first prompt's words, or the conversation's name where Claude Code gives one) and `project` (the folder's name), refreshed on every save, so a file can be told apart without opening it. The same two appear in each bookmark's Markdown file, with the bookmark's number, its tier, its tags and the plugin version that wrote it.
+- A record can carry `tags` (nested with `/`), named `axes`, relations to other records (`rel`) and an open `x` namespace per owner; a save keeps them and writes them in a fixed order. An owner may be a name beyond "you" and "Claude" (`agent:<name>`, `person:<handle>`).
+
+### Changed
+
+- Internal, no visible change: the tiers (transient, mark, perma, bookmark) are one ordered axis in code, and a surface that shows "bookmarks and up" is gated by that axis rather than by a comparison written out each time. The Markdown front matter's property names are fixed and listed in one place.
+
 ## [0.5.5] - 2026-10-16
 
 ### Changed
@@ -1040,7 +1051,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.5...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.6...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

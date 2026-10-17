@@ -22,6 +22,8 @@ export type WorldOptions = {
   prompt?: string
   // The session id $.session.id answers.
   session?: string
+  // The working directory $.session.cwd answers (C:/test-project by default).
+  cwd?: string
   // The plugin's open panes $.ui.panes answers (none by default), e.g. [{ id: 'bm-pane' }].
   panes?: { id: string; isFocused?: boolean }[]
   // What $.process.run answers, by argv; by default no program runs in tests.
@@ -112,7 +114,7 @@ export function world(on: unknown, options: WorldOptions = {}): World {
   answer('ui.selection', () => options.selection?.())
   answer('prompt.read', () => ({ text: options.prompt ?? '', cursor: (options.prompt ?? '').length }))
   answer('session.id', () => options.session ?? '00000000-0000-4000-8000-000000000000')
-  answer('session.cwd', () => 'C:/test-project')
+  answer('session.cwd', () => options.cwd ?? 'C:/test-project')
   // A file by its key, or a folder: anything in the map lies under it.
   answer('fs.exists', e => {
     const p = norm(e.path).replace(/\\+$/, '')

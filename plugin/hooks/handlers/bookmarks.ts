@@ -91,6 +91,14 @@ export async function loadRegister(ports: BookmarksPorts): Promise<BookmarkRegis
 /** What the tool and the band say when a save was refused by the version guard. */
 const READ_ONLY_NOTE = 'not saved: this conversation\'s bookmark file was written by a newer build of the plugin and is read-only here; update the plugin'
 
+/** The header fields refreshed on every save so a file is findable without renaming it (unit 6): the conversation's title and the project folder's name. */
+async function headerFields(ports: BookmarksPorts): Promise<{ title?: string; project?: string }> {
+  const title = await ports.title()
+  const cwd = forwardSlashes(await ports.cwd()).replace(/\/+$/, '')
+  const project = cwd.slice(cwd.lastIndexOf('/') + 1) || undefined
+  return { ...(title ? { title } : {}), ...(project ? { project } : {}) }
+}
+
 /**
  * Commit by operation (the data design, 2026-10-16): applies `op` to the register this
  * session holds, then writes -- unless the file on disk is no longer the text last seen,
@@ -151,7 +159,7 @@ export async function commitOp(ports: BookmarksPorts, op: Op): Promise<OpResult 
     return { ...applied, saved: false, replayed }
   }
   ports.expectRedraw('a bookmark saved')
-  const register = { ...applied.register, writer: `${ports.pluginName} ${await ports.pluginVersion()}` }
+  const register = { ...applied.register, writer: `${ports.pluginName} ${await ports.pluginVersion()}`, ...(await headerFields(ports)) }
   const text = serializeRegister(register)
   await ports.fsWrite(path, text)
   registerCache = { session, register, text }
@@ -430,7 +438,9 @@ async function writeExport(ports: BookmarksPorts, register: BookmarkRegister, re
   const main = findRecord(register, record.uuid, 'user') ?? findRecord(register, record.uuid)
   if (!main) return exportPath
   const minted = `${new Date(now).toISOString()} by ${main.by} (${main.source})`
-  await ports.fsWrite(exportPath, exportMarkdown(main, messageText, { minted, owners, notes: exportNotesOf(existing) }))
+  const header = await headerFields(ports)
+  const writer = `${ports.pluginName} ${await ports.pluginVersion()}`
+  await ports.fsWrite(exportPath, exportMarkdown(main, messageText, { minted, owners, notes: exportNotesOf(existing), writer, ...header }))
   return exportPath
 }
 

@@ -4,7 +4,7 @@
 // operations land first; A's are replayed onto B's result by identity, never by position.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addOrRelabel, emptyRegister, idOf, isRecord, listOf, parseRegister, recordById, serializeRegister, type Mint, type Register } from '../../plugin/hooks/core/bookmarks/register-file.ts'
+import { addOrRelabel, emptyRegister, findRecord, idOf, isRecord, listOf, parseRegister, recordById, serializeRegister, type Mint, type Register } from '../../plugin/hooks/core/bookmarks/register-file.ts'
 import { applyOp, LETTER_HISTORY_CAP, letterHistory, marksOf, union, type Op } from '../../plugin/hooks/core/bookmarks/register-ops.ts'
 import { sameMessage } from '../../plugin/hooks/core/kit/message-id.ts'
 
@@ -189,9 +189,12 @@ test('setMark: a letter makes a mark record and a slot; re-marking the same mess
   // The same message as a bookmark on the same list is a separate record: a mark never relabels a bookmark.
   const withBookmark = commit(a3, { op: 'mint', mint: mintOf('e', 'a bookmark here', 'user') }, T0 + 3300)
   assert.equal(withBookmark.perma.filter(r => sameMessage(r.uuid, u('e'))).length, 2)
-  // Marks are not bookmarks: listOf leaves them out (the three from diskRegister plus the one bookmark on e).
+  // Marks are not bookmarks: listOf leaves them out (the three from diskRegister plus the one bookmark on e),
+  // and a lookup by message finds the bookmark, never the mark (the export of a promoted mark described the mark, 0.5.6).
   assert.ok(!listOf(withBookmark, 'user').some(r => r.tier === 'mark'))
   assert.equal(listOf(withBookmark, 'user').length, 4)
+  assert.equal(findRecord(withBookmark, u('e'), 'user')?.tier, undefined, 'the bookmark (no tier field), not the mark')
+  assert.equal(findRecord(a3, u('e'), 'user'), undefined, 'a message with only a mark has no findable record')
 })
 
 test('marksOf derives the panes\' marks from the slots; a cleared letter shows nothing but keeps its history; bring back by n', () => {

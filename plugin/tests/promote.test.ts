@@ -22,6 +22,11 @@ test('/bm-promote a: the person\'s bookmark, with the mark\'s words, and its lin
   expect(reg).toContain('"owner": "user"')
   expect(reg).toContain('"source": "promote"')
   expect(reg).toContain('"words": "the palette began"')
+  // The export's front matter carries the project, the record's number and its tier (unit 6).
+  const md = w.file(`C:/test-home/claude/bookmarks/sessions/${SID}/${U.slice(0, 8)}.md`) ?? ''
+  expect(md).toContain('\nproject: test-project\n')
+  expect(md).toContain('\ntier: bookmark\n')
+  expect(md).toMatch(/\nn: \d+\n/)
   expect(w.copied().length).toBe(1)
   expect(w.copied()[0]).toContain(U.slice(0, 8))
   expect(w.toasts().at(-1)).toContain('bookmarked: the palette began')
