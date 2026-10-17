@@ -1,0 +1,79 @@
+// The version guard and the `.bak` rule (0.5.1, the data design of 2026-10-16), as the
+// handler meets them through the engine. Run: claude plugin test plugin
+import { expect, test } from 'claude-code/testing'
+import { addOrRelabel, emptyRegister, parseRegister, serializeRegister } from '../hooks/core/bookmarks/register-file.ts'
+import { world } from './harness.ts'
+
+const SID = '11111111-2222-4333-8444-555555555555'
+const UUID = 'cccccccc-0000-4000-8000-000000000001'
+const PATH = `C:/test-home/claude/bookmarks/sessions/${SID}.json`
+
+function registerText(version = 1): string {
+  const r = addOrRelabel(
+    emptyRegister(SID, 'bookmarks 0.9', 1),
+    { uuid: UUID, owner: 'claude', label: 'where the palette began', head: 'the message', by: 'claude', source: 'tool', tier: 'bookmark' },
+    2,
+  ).register
+  const o = JSON.parse(serializeRegister(r))
+  o.version = version
+  if (version > 1) {
+    o.nextN = 2
+    o.perma[0].n = 1
+  }
+  return JSON.stringify(o, null, 2) + '\n'
+}
+
+async function call($: { tool: { call: (i: never) => Promise<unknown> } }, input: Record<string, unknown>) {
+  const out = (await $.tool.call({ tool: 'mcp__bookmarks__bookmark', tool_use_id: 'toolu_test', ...input } as never)) as { result?: string }
+  return JSON.parse(String(out.result ?? '{}')) as Record<string, unknown>
+}
+
+test('a register from a newer build is read in full and never written; the tool says so', async ($, on) => {
+  const before = registerText(2)
+  const w = world(on, { session: SID, files: { [PATH]: before } })
+  const listed = await call($ as never, { action: 'list' })
+  expect((listed.claudes as unknown[]).length).toBe(1)
+  // Said once at load, before anything tries to write (mutation sweep v0.5.1, M9).
+  expect(w.toasts().filter(t => t.includes('newer build')).length).toBe(1)
+  const relabel = await call($ as never, { action: 'relabel', uuid: UUID.slice(0, 8), owner: 'claude', label: 'renamed' })
+  expect(String(relabel.error)).toContain('newer build')
+  expect(w.file(PATH)).toBe(before)
+  expect(w.file(`${PATH}.bak`)).toBe(undefined)
+  expect(w.toasts().filter(t => t.includes('newer build')).length).toBe(2)
+})
+
+test('.bak is written only from a file that parses: a torn file never becomes the backup', async ($, on) => {
+  const good = registerText(1)
+  const torn = good.slice(0, good.length / 2)
+  const w = world(on, { session: SID, files: { [PATH]: torn, [`${PATH}.bak`]: good } })
+  // The torn file falls back to .bak on load; a save keeps that .bak rather than copying the torn text over it.
+  const out = await call($ as never, { action: 'relabel', uuid: UUID.slice(0, 8), owner: 'claude', label: 'renamed' })
+  expect(out.ok).toBe(true)
+  expect(w.file(`${PATH}.bak`)).toBe(good)
+  expect(parseRegister(w.file(PATH) ?? '')?.perma[0]?.label).toBe('renamed')
+  // The log says the .bak was the copy loaded (N10); the line lands in the echo or the debug file.
+  expect(everything(w).some(t => t.includes('loaded its .bak'))).toBe(true)
+})
+
+/** Every line the plugin logged or wrote, wherever it went. */
+function everything(w: { logs: () => string[]; files: Record<string, string> }): string[] {
+  return [...w.logs(), ...Object.values(w.files)]
+}
+
+test('.bak is the previous file when that file parses', async ($, on) => {
+  const good = registerText(1)
+  const w = world(on, { session: SID, files: { [PATH]: good } })
+  const out = await call($ as never, { action: 'relabel', uuid: UUID.slice(0, 8), owner: 'claude', label: 'renamed' })
+  expect(out.ok).toBe(true)
+  expect(w.file(`${PATH}.bak`)).toBe(good)
+  // A file of this build's version never draws the newer-build warning (M9).
+  expect(w.toasts().some(t => t.includes('newer build'))).toBe(false)
+  // The save stamps this build as the writer (N8), and what was saved is what is read next (N9).
+  const saved = parseRegister(w.file(PATH) ?? '')
+  expect(saved?.writer.startsWith('bookmarks ')).toBe(true)
+  expect(saved?.writer).not.toBe('bookmarks 0.9')
+  const listed = await call($ as never, { action: 'list' })
+  expect((listed.claudes as { label: string }[])[0]?.label).toBe('renamed')
+  // And a file that read fine was never reported as loaded from its .bak (N10).
+  expect(everything(w).some(t => t.includes('loaded its .bak'))).toBe(false)
+})

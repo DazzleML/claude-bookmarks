@@ -1,0 +1,72 @@
+{
+  "mutations": [
+    {
+      "id": "N5",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "return JSON.stringify(ordered, null, 2) + '\n'",
+      "mutated": "return JSON.stringify(ordered, null, 2)",
+      "note": "trailing newline dropped",
+      "verdict": "apply-failed: original occurs 0 times"
+    },
+    {
+      "id": "N6",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "for (const [k, v] of Object.entries(from)) if (!known.includes(k) && v !== undefined) onto[k] = v",
+      "mutated": "for (const [k, v] of Object.entries(from)) if (!known.includes(k) && v !== undefined && v !== null) onto[k] = v",
+      "note": "null-valued unknown keys silently dropped",
+      "verdict": "killed",
+      "core_red": [
+        "unknown keys survive a round trip at the file, record and tombstone level, after the known keys in their own order"
+      ],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "N8",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "await ports.fsWrite(path, serializeRegister({ ...reg, writer: `${ports.pluginName} ${await ports.pluginVersion()}` }))",
+      "mutated": "await ports.fsWrite(path, serializeRegister(reg))",
+      "note": "writer stamp not applied on save",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        ".bak is the previous file when that file parses"
+      ],
+      "kit_pass": "82"
+    },
+    {
+      "id": "N9",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "registerCache = { session: await ports.sessionId(), register: reg }\n  return true",
+      "mutated": "return true",
+      "note": "cache not updated after save",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        ".bak is the previous file when that file parses"
+      ],
+      "kit_pass": "82"
+    },
+    {
+      "id": "N10",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "if (p !== path) ports.log(`[bm] register: ${path} unreadable; loaded its .bak (rev ${reg.rev})`)",
+      "mutated": "if (p === path) ports.log(`[bm] register: ${path} unreadable; loaded its .bak (rev ${reg.rev})`)",
+      "note": "bak-fallback log condition inverted",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        ".bak is written only from a file that parses: a torn file never becomes the backup",
+        ".bak is the previous file when that file parses"
+      ],
+      "kit_pass": "81"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "83"
+    }
+  ]
+}

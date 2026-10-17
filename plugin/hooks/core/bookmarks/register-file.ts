@@ -8,10 +8,21 @@
 // is hand-editable, so keys are written in a fixed order; records are append-only (a
 // re-mark adds or relabels, never deletes); only `temporary` records are pruned, and a
 // pruned one leaves a tombstone so "never marked" and "marked, then pruned" stay distinct.
+//
+// The guard (0.5.1, the data design of 2026-10-16): a key this build does not know -- at
+// the file's top level, on a record or on a tombstone -- is read and written back as it
+// was, after the known keys and in its original order, so a newer build's fields survive
+// a save by this one. A file whose `version` is above REGISTER_VERSION is read in full and
+// never written (`newerThanBuild`); the handler says so once and keeps the file as it is.
 
 import { type AnchorOwner, type AnchorRecord, ownerOf, uuid8 } from './anchor.ts'
 
 export const REGISTER_VERSION = 1
+
+/** True when the file was written by a build whose format is ahead of this one: read it, never write it. */
+export function newerThanBuild(reg: Register): boolean {
+  return reg.version > REGISTER_VERSION
+}
 
 /** What is left when a record goes: pruned (temporary, aged out) or removed (on request). */
 export type Tombstone = { uuid: string; owner?: AnchorOwner; label?: string; prunedAt?: number; removedAt?: number; removedBy?: string }
@@ -218,13 +229,20 @@ export function serializeRegister(reg: Register): string {
     if (k === 'perma') ordered.perma = reg.perma.map(orderRecord)
     else if ((reg as Record<string, unknown>)[k] !== undefined) ordered[k] = (reg as Record<string, unknown>)[k]
   }
+  keepUnknown(ordered, reg, REGISTER_KEYS)
   return JSON.stringify(ordered, null, 2) + '\n'
 }
 
 function orderRecord(r: AnchorRecord): Record<string, unknown> {
   const o: Record<string, unknown> = {}
   for (const k of RECORD_KEYS) if ((r as Record<string, unknown>)[k] !== undefined) o[k] = (r as Record<string, unknown>)[k]
+  keepUnknown(o, r, RECORD_KEYS)
   return o
+}
+
+/** Copies every key of `from` that `known` does not name onto `onto`, in `from`'s order: a newer build's fields ride through this one. */
+function keepUnknown(onto: Record<string, unknown>, from: object, known: readonly string[]) {
+  for (const [k, v] of Object.entries(from)) if (!known.includes(k) && v !== undefined) onto[k] = v
 }
 
 /** Reads a register file's text; undefined when it is not one (the caller then tries `.bak`). */
@@ -236,7 +254,7 @@ export function parseRegister(text: string): Register | undefined {
     return undefined
   }
   if (!o || typeof o !== 'object' || typeof o.sessionId !== 'string' || !Array.isArray(o.perma)) return undefined
-  return {
+  const reg: Register = {
     version: typeof o.version === 'number' ? o.version : REGISTER_VERSION,
     sessionId: o.sessionId,
     ...(typeof o.configDir === 'string' ? { configDir: o.configDir } : {}),
@@ -244,9 +262,13 @@ export function parseRegister(text: string): Register | undefined {
     rev: typeof o.rev === 'number' ? o.rev : 0,
     updatedAt: typeof o.updatedAt === 'number' ? o.updatedAt : 0,
     writer: typeof o.writer === 'string' ? o.writer : '?',
+    // Records and tombstones come through as they are in the file, unknown keys included.
     perma: o.perma.filter((r: any) => r && typeof r.uuid === 'string' && typeof r.label === 'string'),
     tombstones: Array.isArray(o.tombstones) ? o.tombstones : [],
   }
+  // The file's own unknown keys ride along too; `serializeRegister` writes them back after the known ones.
+  keepUnknown(reg as unknown as Record<string, unknown>, o, REGISTER_KEYS)
+  return reg
 }
 
 /** Of two copies of one register, the one to keep: the higher `rev`, then the newer. */

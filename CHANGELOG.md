@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-16
+
+### Fixed
+
+- A bookmark file's backup (`.bak`) is now made only from a file that reads correctly. Before, the previous file was copied blindly, so a half-written file could become the only backup.
+- Fields in a bookmark file that this version does not know are kept when the file is saved, at every level (the file, each bookmark, each tombstone), after the known fields and in their original order. Before, a save dropped them.
+
+### Added
+
+- A bookmark file written by a newer version of the plugin is read in full but never written: a toast and a log line say so once when it loads, and any bookmark action that would save it reports "not saved" instead. Update the plugin to write it again.
+
 ## [0.5.0] - 2026-10-16
 
 ### Fixed
@@ -1001,7 +1012,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.1...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

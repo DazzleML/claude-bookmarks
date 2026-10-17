@@ -1,0 +1,64 @@
+{
+  "mutations": [
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "perma: o.perma.filter((r: any) => r && typeof r.uuid === 'string' && typeof r.label === 'string'),",
+      "mutated": "perma: o.perma.filter((r: any) => r && typeof r.uuid === 'string'),",
+      "note": "Dropped condition: records without a label are no longer filtered out",
+      "verdict": "killed",
+      "core_red": [
+        "parse normalises what it keeps: a record without a label is dropped, a missing rev is 0, a version that is not a number is this build's (mutation sweep v0.5.1, M4-M6)"
+      ],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "keepUnknown(reg as unknown as Record<string, unknown>, o, REGISTER_KEYS)",
+      "mutated": "keepUnknown(reg as unknown as Record<string, unknown>, o, RECORD_KEYS)",
+      "note": "Wrong key list: register-level known keys are treated as unknown and record keys as known",
+      "verdict": "killed",
+      "core_red": [
+        "parse normalises what it keeps: a record without a label is dropped, a missing rev is 0, a version that is not a number is this build's (mutation sweep v0.5.1, M4-M6)"
+      ],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "rev: typeof o.rev === 'number' ? o.rev : 0,",
+      "mutated": "rev: typeof o.rev === 'number' ? o.rev : 1,",
+      "note": "Wrong default rev for a file lacking one",
+      "verdict": "killed",
+      "core_red": [
+        "parse normalises what it keeps: a record without a label is dropped, a missing rev is 0, a version that is not a number is this build's (mutation sweep v0.5.1, M4-M6)"
+      ],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "M9",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "} else if (newerThanBuild(reg)) {",
+      "mutated": "} else if (!newerThanBuild(reg)) {",
+      "note": "Version warning fires for normal files and not for newer ones",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "a register from a newer build is read in full and never written; the tool says so",
+        ".bak is the previous file when that file parses"
+      ],
+      "kit_pass": "81"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "83"
+    }
+  ]
+}

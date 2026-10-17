@@ -1,0 +1,181 @@
+{
+  "mutations": [
+    {
+      "id": "M1",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "return reg.version > REGISTER_VERSION",
+      "mutated": "return reg.version >= REGISTER_VERSION",
+      "note": "Boundary: a current-version file is wrongly treated as newer and becomes read-only",
+      "verdict": "killed",
+      "core_red": [
+        "a file from a newer build is recognised; this build's own and older files are not"
+      ],
+      "kit_red": [
+        ".bak is written only from a file that parses: a torn file never becomes the backup",
+        ".bak is the previous file when that file parses",
+        "/bm-promote a: the person's bookmark, with the mark's words, and its link copied",
+        "c in the bookmarks list claims the chosen record",
+        "claim moves Claude's record to the person's list, same id and tier"
+      ],
+      "kit_pass": "78"
+    },
+    {
+      "id": "M2",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "if (!known.includes(k) && v !== undefined) onto[k] = v",
+      "mutated": "if (known.includes(k) && v !== undefined) onto[k] = v",
+      "note": "Inverted filter: copies known keys again and drops unknown keys from newer builds",
+      "verdict": "killed",
+      "core_red": [
+        "the file is stable-ordered JSON that reads back equal",
+        "unknown keys survive a round trip at the file, record and tombstone level, after the known keys in their own order",
+        "unknown keys survive the operations this build performs: relabel, share, claim, remove, prune"
+      ],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "M3",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "tombstones: Array.isArray(o.tombstones) ? o.tombstones : [],",
+      "mutated": "tombstones: [],",
+      "note": "Tombstones are discarded on parse",
+      "verdict": "killed",
+      "core_red": [
+        "unknown keys survive a round trip at the file, record and tombstone level, after the known keys in their own order",
+        "unknown keys survive the operations this build performs: relabel, share, claim, remove, prune"
+      ],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "perma: o.perma.filter((r: any) => r && typeof r.uuid === 'string' && typeof r.label === 'string'),",
+      "mutated": "perma: o.perma.filter((r: any) => r && typeof r.uuid === 'string'),",
+      "note": "Dropped condition: records without a label are no longer filtered out",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "keepUnknown(reg as unknown as Record<string, unknown>, o, REGISTER_KEYS)",
+      "mutated": "keepUnknown(reg as unknown as Record<string, unknown>, o, RECORD_KEYS)",
+      "note": "Wrong key list: register-level known keys are treated as unknown and record keys as known",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "rev: typeof o.rev === 'number' ? o.rev : 0,",
+      "mutated": "rev: typeof o.rev === 'number' ? o.rev : 1,",
+      "note": "Wrong default rev for a file lacking one",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "M7",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "if (registerCache?.session === session) return registerCache.register",
+      "mutated": "if (registerCache?.session !== session) return registerCache.register",
+      "note": "Cache condition inverted: wrong-session cache served, and may throw on undefined",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "the bookmarks row draws exactly the letter keys its hint names",
+        "panes off: b takes its key in the band and opens no pane",
+        "a register from a newer build is read in full and never written; the tool says so",
+        ".bak is written only from a file that parses: a torn file never becomes the backup",
+        ".bak is the previous file when that file parses",
+        "/bm-promote a: the person's bookmark, with the mark's words, and its link copied",
+        "6a control: with nothing stale, the prune deletes nothing",
+        "a permalink is not listed in the bookmarks pane",
+        "list shows each record's tier",
+        "c in the bookmarks list claims the chosen record",
+        "claim moves Claude's record to the person's list, same id and tier",
+        "a new conversation reads its own register, not the one before it"
+      ],
+      "kit_pass": "71"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "for (const p of [path, `${path}.bak`]) {",
+      "mutated": "for (const p of [path]) {",
+      "note": "The .bak fallback is never tried",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        ".bak is written only from a file that parses: a torn file never becomes the backup"
+      ],
+      "kit_pass": "82"
+    },
+    {
+      "id": "M9",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "} else if (newerThanBuild(reg)) {",
+      "mutated": "} else if (!newerThanBuild(reg)) {",
+      "note": "Version warning fires for normal files and not for newer ones",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "M10",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "if (newerThanBuild(reg)) {\n    ports.logAlways(`[bm] register: not saved",
+      "mutated": "if (false as boolean && newerThanBuild(reg)) {\n    ports.logAlways(`[bm] register: not saved",
+      "note": "Version guard in saveRegister no longer guards; a newer-format file gets overwritten",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "a register from a newer build is read in full and never written; the tool says so"
+      ],
+      "kit_pass": "82"
+    },
+    {
+      "id": "M11",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "if (parseRegister(existing)) await ports.fsWrite(`${path}.bak`, existing)",
+      "mutated": "if (!parseRegister(existing)) await ports.fsWrite(`${path}.bak`, existing)",
+      "note": "Backup inverted: a good file is not backed up and an unparseable one overwrites the .bak",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        ".bak is written only from a file that parses: a torn file never becomes the backup",
+        ".bak is the previous file when that file parses"
+      ],
+      "kit_pass": "81"
+    },
+    {
+      "id": "M12",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "if (!(await saveRegister(ports, r.register))) return { error: READ_ONLY_NOTE }",
+      "mutated": "if (await saveRegister(ports, r.register)) return { error: READ_ONLY_NOTE }",
+      "note": "Claim reports read-only error on success and success on refusal",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "c in the bookmarks list claims the chosen record",
+        "claim moves Claude's record to the person's list, same id and tier"
+      ],
+      "kit_pass": "81"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "83"
+    }
+  ]
+}
