@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.8] - 2026-10-17
+
+### Added
+
+- The shape of the read-state file is fixed, ahead of the feature that will use it: `<session id>.state.json` beside the bookmark file, holding where each reader stands with each prompt (named axes such as "attention" and "processing", so a prompt can be both read and still being worked on), with a short history per axis. Only a prompt you typed can be a key, never a tool result or a command's record. Nothing writes or shows this file yet; the format is settled so the feature adds to it rather than inventing it.
+
 ## [0.5.7] - 2026-10-16
 
 ### Changed
@@ -1057,7 +1063,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.7...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.8...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

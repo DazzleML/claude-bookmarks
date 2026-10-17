@@ -1,0 +1,74 @@
+{
+ "mutations": [
+  {
+   "id": "M1",
+   "file": "plugin/hooks/core/bookmarks/read-state.ts",
+   "original": "const history = [{ value, at }, ...(current.history[axis] ?? [])].slice(0, AXIS_HISTORY_CAP)",
+   "mutated": "const history = [...(current.history[axis] ?? []), { value, at }].slice(0, AXIS_HISTORY_CAP)",
+   "note": "history order reversed"
+  },
+  {
+   "id": "M2",
+   "file": "plugin/hooks/core/bookmarks/read-state.ts",
+   "original": ".slice(0, AXIS_HISTORY_CAP)",
+   "mutated": ".slice(0, AXIS_HISTORY_CAP - 1)",
+   "note": "cap off by one"
+  },
+  {
+   "id": "M3",
+   "file": "plugin/hooks/core/bookmarks/read-state.ts",
+   "original": "if (current.axes[axis] === value) return { state, changed: false }",
+   "mutated": "if (current.axes[axis] !== value) return { state, changed: false }",
+   "note": "repeat check inverted"
+  },
+  {
+   "id": "M4",
+   "file": "plugin/hooks/core/bookmarks/read-state.ts",
+   "original": "      rev: state.rev + 1,\n      updatedAt: at,\n      entries: { ...state.entries, [uuid]: { ...(state.entries[uuid] ?? {}), [owner]: next } },",
+   "mutated": "      rev: state.rev,\n      updatedAt: at,\n      entries: { ...state.entries, [uuid]: { ...(state.entries[uuid] ?? {}), [owner]: next } },",
+   "note": "rev not bumped"
+  },
+  {
+   "id": "M5",
+   "file": "plugin/hooks/core/bookmarks/read-state.ts",
+   "original": "entries: { ...state.entries, [uuid]: { ...(state.entries[uuid] ?? {}), [owner]: next } },",
+   "mutated": "entries: { ...state.entries, [uuid]: { [owner]: next } },",
+   "note": "other owner's standing wiped"
+  },
+  {
+   "id": "M6",
+   "file": "plugin/hooks/core/bookmarks/read-state.ts",
+   "original": "if (!current || !(axis in current.axes)) return { state, changed: false }",
+   "mutated": "if (!current || (axis in current.axes)) return { state, changed: false }",
+   "note": "clear guard inverted"
+  },
+  {
+   "id": "M7",
+   "file": "plugin/hooks/core/bookmarks/read-state.ts",
+   "original": "[owner]: { axes, history: current.history } } } },",
+   "mutated": "[owner]: { axes, history: {} } } } },",
+   "note": "clear discards history"
+  },
+  {
+   "id": "M8",
+   "file": "plugin/hooks/core/bookmarks/read-state.ts",
+   "original": "writer: typeof o.writer === 'string' ? o.writer : '?',",
+   "mutated": "writer: typeof o.writer === 'string' ? o.writer : '',",
+   "note": "wrong default writer"
+  },
+  {
+   "id": "M9",
+   "file": "plugin/hooks/core/bookmarks/read-state.ts",
+   "original": "rev: typeof o.rev === 'number' ? o.rev : 0,",
+   "mutated": "rev: typeof o.rev === 'number' ? o.rev : 1,",
+   "note": "wrong default rev"
+  },
+  {
+   "id": "M10",
+   "file": "plugin/hooks/core/bookmarks/read-state.ts",
+   "original": ".replace(/\\/+$/, '')}/bookmarks/sessions/${sessionId}.state.json`",
+   "mutated": ".replace(/\\/+$/, '')}/sessions/${sessionId}.state.json`",
+   "note": "path drops bookmarks/"
+  }
+ ]
+}
