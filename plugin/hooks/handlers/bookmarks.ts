@@ -13,6 +13,7 @@ import {
   type Mint, type Register as BookmarkRegister, type Retention,
 } from '../core/bookmarks/register-file.ts'
 import { baseOf, ingest, primaryRecord, sameBase } from '../core/bookmarks/note.ts'
+import { buildIndex, emptyIndex, entryOf, INDEX_JSON, INDEX_MD, parseIndex, renderIndexMarkdown, serializeIndex, upsert, type IndexEntry } from '../core/bookmarks/session-index.ts'
 import { applyOp, marksOf as marksFromRegister, type Op, type OpResult } from '../core/bookmarks/register-ops.ts'
 import {
   applyMigrations, CURRENT, hashText, planFor, runFolderName, SNAPSHOT_SUFFIX, snapshotFolderName, STORE_PREFIXES,
@@ -167,7 +168,63 @@ export async function commitOp(ports: BookmarksPorts, op: Op, opts?: { bookkeepi
   const text = serializeRegister(register)
   await ports.fsWrite(path, text)
   registerCache = { session, register, text }
+  await refreshIndex(ports, register)
   return { ...applied, register, saved: true, replayed }
+}
+
+// --- The index of every conversation with bookmarks (unit 10) -----------------------------
+// `sessions/index.json` and `sessions/INDEX.md` (core/bookmarks/session-index.ts): the
+// conversation's entry is upserted after every save, and the whole index is rebuilt from
+// every register at a session's start. Neither may fail a save: an index that cannot be
+// written is logged and the next save or start writes it again.
+
+/** The uuid8 of every note in a conversation's folder, so the index links only what opens. */
+async function notesOf(ports: BookmarksPorts, root: string, sid: string): Promise<Set<string>> {
+  const dir = `${sessionsDir(root)}/${sid}`
+  if (!(await ports.fsExists(dir))) return new Set()
+  return new Set((await ports.fsList(dir)).filter(e => e.kind === 'file' && e.name.endsWith('.md')).map(e => e.name.slice(0, -'.md'.length)))
+}
+
+async function writeIndex(ports: BookmarksPorts, root: string, index: ReturnType<typeof emptyIndex>) {
+  await ports.fsWrite(`${sessionsDir(root)}/${INDEX_JSON}`, serializeIndex(index))
+  await ports.fsWrite(`${sessionsDir(root)}/${INDEX_MD}`, renderIndexMarkdown(index))
+}
+
+async function refreshIndex(ports: BookmarksPorts, register: BookmarkRegister): Promise<void> {
+  try {
+    const root = await ports.dataRoot()
+    if (!root) return
+    const path = `${sessionsDir(root)}/${INDEX_JSON}`
+    const writer = `${ports.pluginName} ${await ports.pluginVersion()}`
+    const now = await ports.now()
+    const current = ((await ports.fsExists(path)) ? parseIndex(await ports.fsRead(path)) : undefined) ?? emptyIndex(writer, now)
+    const entry = entryOf(register, await notesOf(ports, root, register.sessionId))
+    await writeIndex(ports, root, upsert(current, entry, writer, now))
+  } catch (err) {
+    ports.logAlways(`[bm] index: not written: ${String(err)}`)
+  }
+}
+
+/** The index built whole from every register under the data root (a session's start, after the migrations). */
+export async function rebuildIndex(ports: BookmarksPorts): Promise<void> {
+  try {
+    const root = await ports.dataRoot()
+    if (!root) return
+    const dir = sessionsDir(root)
+    if (!(await ports.fsExists(dir))) return
+    const entries: IndexEntry[] = []
+    for (const e of await ports.fsList(dir)) {
+      if (e.kind !== 'file' || !e.name.endsWith('.json') || e.name === INDEX_JSON) continue
+      const reg = parseRegister(await ports.fsRead(`${dir}/${e.name}`))
+      if (reg) entries.push(entryOf(reg, await notesOf(ports, root, reg.sessionId)))
+    }
+    const writer = `${ports.pluginName} ${await ports.pluginVersion()}`
+    const index = buildIndex(entries, writer, await ports.now())
+    await writeIndex(ports, root, index)
+    ports.log(`[bm] index: ${index.sessions.length} conversation(s) with bookmarks, ${dir}/${INDEX_MD}`)
+  } catch (err) {
+    ports.logAlways(`[bm] index: not rebuilt: ${String(err)}`)
+  }
 }
 
 /** One of Claude's records becomes the person's (#21): same message, id and link, saved. The band's `c` and the model's tool both claim here. */
@@ -391,6 +448,7 @@ export async function startRegister(ports: BookmarksPorts) {
   } catch (err) {
     ports.logAlways(`[bm] migrate failed: ${String(err)}`)
   }
+  await rebuildIndex(ports)
   try {
     const reg = await loadRegister(ports)
     ports.log(`[bm] register: ${reg.perma.length} bookmark(s), rev ${reg.rev}, ${await registerPath(ports)}`)

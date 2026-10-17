@@ -294,7 +294,11 @@ Under your own folder, never under `~/.claude` (Claude Code cleans that):
 ```
 ~/claude/bookmarks/sessions/<session id>.json        the register: every bookmark of the conversation, readable JSON
 ~/claude/bookmarks/sessions/<session id>/<uuid8>.md  one file per bookmarked message: the text, every field, a verify recipe, and a Notes section
+~/claude/bookmarks/sessions/index.json               every conversation with bookmarks: title, project, and each bookmark's number, label, list and tier
+~/claude/bookmarks/sessions/INDEX.md                 the same as a page: a heading per conversation, newest first, each bookmark linking its file
 ```
+
+The two index files are generated -- rebuilt when a conversation starts, the conversation's own entry refreshed after every save -- so what you write in them is overwritten. `INDEX.md` is the page to open first in Obsidian.
 
 (`CLAUDE_USER_DIR`, if set, replaces `~/claude`.) The link's address names that file, with the message's uuid, its line in the transcript and its byte range in the query string:
 

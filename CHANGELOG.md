@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.10] - 2026-10-17
+
+### Added
+
+- An index of every conversation with bookmarks, beside the bookmark files: `~/claude/bookmarks/sessions/index.json` (one entry per conversation -- its title, project, and each bookmark with its number, label, list and tier) and `sessions/INDEX.md`, the same as a page you can open in Obsidian or any Markdown viewer: a heading per conversation, newest first, and a line per bookmark linking its file where the file exists. The index is rebuilt from the bookmark files when a conversation starts and the conversation's own entry is refreshed after every save; a letter's mark is not listed, and a conversation whose bookmarks are all removed drops out. Both files are generated: what you write in them is overwritten.
+
 ## [0.5.9] - 2026-10-17
 
 ### Changed
@@ -1073,7 +1079,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.9...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.10...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

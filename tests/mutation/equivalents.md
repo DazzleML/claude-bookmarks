@@ -14,3 +14,9 @@ Guarded authority, not an allowlist: each group is keyed by the target file's co
 ## plugin/hooks/handlers/bookmarks.ts @ 66e79932a081
 
 - `const order = [session, ...registers.filter(s => s !== session)]` -> `const order = [...registers]` in `migrateAtStart` -- **don't-care**: the opened conversation migrating first matters only if the sweep is interrupted between files; within one start every register is migrated before the first load, so the order is unobservable without failure injection in the harness. The preference stays in the code for the interrupted case. 2026-10-16, mode 1 (v0.5.4 sweep, M12).
+
+## plugin/hooks/handlers/bookmarks.ts @ f002cd7a0b83
+
+(The file changed since `66e79932a081`; the entry above is stale for this hash and is re-triaged when `migrateAtStart` is next in a sweep's scope.)
+
+- `e.kind !== 'file' || !e.name.endsWith('.json') || e.name === INDEX_JSON` -> `e.kind !== 'file' || !e.name.endsWith('.json')` in `rebuildIndex` -- **equivalent**: without the skip, `index.json` is read and handed to `parseRegister`, which refuses it (no `sessionId` string, no `perma` array) and returns undefined, so no entry is made and the two files written are byte-identical. The skip stays as a statement of intent and saves one parse. 2026-10-17, mode 1 (v0.5.10 sweep, M12).

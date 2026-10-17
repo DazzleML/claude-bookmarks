@@ -1,0 +1,178 @@
+{
+  "mutations": [
+    {
+      "id": "M1",
+      "file": "plugin/hooks/core/bookmarks/session-index.ts",
+      "original": ".filter(r => tierOf(r) !== 'mark')",
+      "mutated": ".filter(r => tierOf(r) === 'mark')",
+      "note": "inverted mark filter",
+      "verdict": "killed",
+      "core_red": [
+        "an entry carries the header and every bookmark in number order, a mark left out, the note flag from the folder",
+        "upsert replaces the conversation's entry, keeps newest first, drops a conversation with no bookmark left, and stamps the write",
+        "INDEX.md is a map: a heading per conversation (title else the id's start), a line per bookmark, a link only where the note exists, brackets escaped"
+      ],
+      "kit_red": [
+        "a start rebuilds the index from every register: both files, newest conversation first, a link only where the note exists",
+        "a save upserts the conversation's entry: the new label and rev in both files, the other conversation kept"
+      ],
+      "kit_pass": "96"
+    },
+    {
+      "id": "M2",
+      "file": "plugin/hooks/core/bookmarks/session-index.ts",
+      "original": "(a.n ?? Infinity) - (b.n ?? Infinity) || a.createdAt - b.createdAt",
+      "mutated": "(b.n ?? Infinity) - (a.n ?? Infinity) || a.createdAt - b.createdAt",
+      "note": "record number order descending",
+      "verdict": "killed",
+      "core_red": [
+        "an entry carries the header and every bookmark in number order, a mark left out, the note flag from the folder"
+      ],
+      "kit_red": [],
+      "kit_pass": "98"
+    },
+    {
+      "id": "M3",
+      "file": "plugin/hooks/core/bookmarks/session-index.ts",
+      "original": "(a.n ?? Infinity) - (b.n ?? Infinity) || a.createdAt - b.createdAt",
+      "mutated": "(a.n ?? Infinity) - (b.n ?? Infinity)",
+      "note": "createdAt tie-break dropped",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "98"
+    },
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/bookmarks/session-index.ts",
+      "original": "note: notes.has(uuid8(r.uuid)),",
+      "mutated": "note: !notes.has(uuid8(r.uuid)),",
+      "note": "note flag inverted",
+      "verdict": "killed",
+      "core_red": [
+        "an entry carries the header and every bookmark in number order, a mark left out, the note flag from the folder",
+        "INDEX.md is a map: a heading per conversation (title else the id's start), a line per bookmark, a link only where the note exists, brackets escaped"
+      ],
+      "kit_red": [
+        "a start rebuilds the index from every register: both files, newest conversation first, a link only where the note exists",
+        "a save upserts the conversation's entry: the new label and rev in both files, the other conversation kept"
+      ],
+      "kit_pass": "96"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/core/bookmarks/session-index.ts",
+      "original": "const sessions = entry.records.length > 0 ? [...rest, entry] : rest",
+      "mutated": "const sessions = entry.records.length >= 0 ? [...rest, entry] : rest",
+      "note": "empty conversations no longer dropped",
+      "verdict": "killed",
+      "core_red": [
+        "upsert replaces the conversation's entry, keeps newest first, drops a conversation with no bookmark left, and stamps the write"
+      ],
+      "kit_red": [],
+      "kit_pass": "98"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/core/bookmarks/session-index.ts",
+      "original": "e => e.sessionId !== entry.sessionId)",
+      "mutated": "e => e.sessionId === entry.sessionId)",
+      "note": "old entry kept, others dropped",
+      "verdict": "killed",
+      "core_red": [
+        "upsert replaces the conversation's entry, keeps newest first, drops a conversation with no bookmark left, and stamps the write"
+      ],
+      "kit_red": [
+        "a save upserts the conversation's entry: the new label and rev in both files, the other conversation kept"
+      ],
+      "kit_pass": "97"
+    },
+    {
+      "id": "M7",
+      "file": "plugin/hooks/core/bookmarks/session-index.ts",
+      "original": "b.updatedAt - a.updatedAt ||",
+      "mutated": "a.updatedAt - b.updatedAt ||",
+      "note": "newest-first becomes oldest-first",
+      "verdict": "killed",
+      "core_red": [
+        "upsert replaces the conversation's entry, keeps newest first, drops a conversation with no bookmark left, and stamps the write",
+        "INDEX.md is a map: a heading per conversation (title else the id's start), a line per bookmark, a link only where the note exists, brackets escaped"
+      ],
+      "kit_red": [
+        "a start rebuilds the index from every register: both files, newest conversation first, a link only where the note exists",
+        "a save upserts the conversation's entry: the new label and rev in both files, the other conversation kept"
+      ],
+      "kit_pass": "96"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/core/bookmarks/session-index.ts",
+      "original": "(a.sessionId < b.sessionId ? -1 : a.sessionId > b.sessionId ? 1 : 0)",
+      "mutated": "(a.sessionId < b.sessionId ? 1 : a.sessionId > b.sessionId ? -1 : 0)",
+      "note": "id tie-break reversed",
+      "verdict": "killed",
+      "core_red": [
+        "upsert replaces the conversation's entry, keeps newest first, drops a conversation with no bookmark left, and stamps the write"
+      ],
+      "kit_red": [],
+      "kit_pass": "98"
+    },
+    {
+      "id": "M9",
+      "file": "plugin/hooks/core/bookmarks/session-index.ts",
+      "original": "sessions: sortEntries(entries.filter(e => e.records.length > 0))",
+      "mutated": "sessions: sortEntries(entries.slice())",
+      "note": "buildIndex keeps empty conversations",
+      "verdict": "killed",
+      "core_red": [
+        "upsert replaces the conversation's entry, keeps newest first, drops a conversation with no bookmark left, and stamps the write"
+      ],
+      "kit_red": [],
+      "kit_pass": "98"
+    },
+    {
+      "id": "M10",
+      "file": "plugin/hooks/core/bookmarks/session-index.ts",
+      "original": "if (!known.includes(k) && v !== undefined) onto[k] = v",
+      "mutated": "if (known.includes(k) && v !== undefined) onto[k] = v",
+      "note": "unknown-key passthrough inverted",
+      "verdict": "killed",
+      "core_red": [
+        "the file round-trips in a fixed key order with unknown keys kept at both levels; a non-index reads as undefined"
+      ],
+      "kit_red": [],
+      "kit_pass": "98"
+    },
+    {
+      "id": "M11",
+      "file": "plugin/hooks/core/bookmarks/session-index.ts",
+      "original": "writer: typeof o.writer === 'string' ? o.writer : '?',",
+      "mutated": "writer: typeof o.writer === 'string' ? '?' : o.writer,",
+      "note": "writer default swapped",
+      "verdict": "killed",
+      "core_red": [
+        "the file round-trips in a fixed key order with unknown keys kept at both levels; a non-index reads as undefined"
+      ],
+      "kit_red": [],
+      "kit_pass": "98"
+    },
+    {
+      "id": "M12",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "e.kind !== 'file' || !e.name.endsWith('.json') || e.name === INDEX_JSON",
+      "mutated": "e.kind !== 'file' || !e.name.endsWith('.json')",
+      "note": "index.json itself no longer skipped on rebuild",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "98"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "98"
+    }
+  ]
+}
