@@ -1,0 +1,63 @@
+{
+  "mutations": [
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "    ...(typeof o.title === 'string' ? { title: o.title } : {}),",
+      "mutated": "    ...(typeof o.title === 'string' ? { title: o.title.trim() } : {}),",
+      "note": "title trimmed on read",
+      "verdict": "killed",
+      "core_red": [
+        "title and project sit in the header, in the fixed order, and round-trip"
+      ],
+      "kit_red": [],
+      "kit_pass": "91"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "  for (const [k, v] of fm) if (v !== undefined && v !== '') lines.push(`${k}: ${yamlScalar(v)}`)",
+      "mutated": "  for (const [k, v] of fm) if (v !== undefined) lines.push(`${k}: ${yamlScalar(v)}`)",
+      "note": "empty strings written",
+      "verdict": "killed",
+      "core_red": [
+        "the export writes only names from FRONT_MATTER_PROPERTIES, and now n, tier, title, project and the writer"
+      ],
+      "kit_red": [],
+      "kit_pass": "91"
+    },
+    {
+      "id": "M10",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "  const cwd = forwardSlashes(await ports.cwd()).replace(/\\/+$/, '')",
+      "mutated": "  const cwd = forwardSlashes(await ports.cwd())",
+      "note": "trailing slash kept",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "the header takes the first prompt as the title and the folder name as the project"
+      ],
+      "kit_pass": "90"
+    },
+    {
+      "id": "M11",
+      "file": "plugin/hooks/register.tsx",
+      "original": "  return (await prompts($))[0]?.head || undefined",
+      "mutated": "  return (await prompts($)).at(-1)?.head || undefined",
+      "note": "title from the last prompt",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "the header takes the first prompt as the title and the folder name as the project"
+      ],
+      "kit_pass": "90"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "91"
+    }
+  ]
+}

@@ -1,0 +1,205 @@
+{
+  "mutations": [
+    {
+      "id": "M1",
+      "file": "plugin/hooks/core/bookmarks/check.ts",
+      "original": "const older = regs.filter(r => r.reg.version < i.current)",
+      "mutated": "const older = regs.filter(r => r.reg.version <= i.current)",
+      "note": "boundary: current-version registers also reported as older",
+      "verdict": "killed",
+      "core_red": [
+        "a clean data root: every line ok, nothing to report, and nothing proposed",
+        "registers: an older file says it migrates at the next start, a newer one that it is read-only, a non-register that it is left; a folder with no register is an orphan"
+      ],
+      "kit_red": [
+        "/bm-check reports an older register, an orphan note folder, a half-done run and a changed copy, and changes no file",
+        "/bm-check on a clean root says there is nothing to report"
+      ],
+      "kit_pass": "98"
+    },
+    {
+      "id": "M2",
+      "file": "plugin/hooks/core/bookmarks/check.ts",
+      "original": "const newer = regs.filter(r => r.reg.version > i.current)",
+      "mutated": "const newer = regs.filter(r => r.reg.version >= i.current)",
+      "note": "boundary: current-version registers also reported as newer",
+      "verdict": "killed",
+      "core_red": [
+        "a clean data root: every line ok, nothing to report, and nothing proposed",
+        "registers: an older file says it migrates at the next start, a newer one that it is read-only, a non-register that it is left; a folder with no register is an orphan"
+      ],
+      "kit_red": [
+        "/bm-check reports an older register, an orphan note folder, a half-done run and a changed copy, and changes no file",
+        "/bm-check on a clean root says there is nothing to report"
+      ],
+      "kit_pass": "98"
+    },
+    {
+      "id": "M3",
+      "file": "plugin/hooks/core/bookmarks/check.ts",
+      "original": "for (const r of regs) if (r.reg.sessionId !== r.name) say(",
+      "mutated": "for (const r of regs) if (r.reg.sessionId === r.name) say(",
+      "note": "inverted session-name mismatch condition",
+      "verdict": "killed",
+      "core_red": [
+        "a clean data root: every line ok, nothing to report, and nothing proposed",
+        "registers: an older file says it migrates at the next start, a newer one that it is read-only, a non-register that it is left; a folder with no register is an orphan"
+      ],
+      "kit_red": [
+        "/bm-check reports an older register, an orphan note folder, a half-done run and a changed copy, and changes no file",
+        "/bm-check on a clean root says there is nothing to report"
+      ],
+      "kit_pass": "98"
+    },
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/bookmarks/check.ts",
+      "original": "for (const f of i.folders) if (!names.has(f)) say(",
+      "mutated": "for (const f of i.folders) if (names.has(f)) say(",
+      "note": "inverted orphan-folder check",
+      "verdict": "killed",
+      "core_red": [
+        "a clean data root: every line ok, nothing to report, and nothing proposed",
+        "registers: an older file says it migrates at the next start, a newer one that it is read-only, a non-register that it is left; a folder with no register is an orphan"
+      ],
+      "kit_red": [
+        "/bm-check reports an older register, an orphan note folder, a half-done run and a changed copy, and changes no file"
+      ],
+      "kit_pass": "99"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/core/bookmarks/check.ts",
+      "original": "(p.tier ?? 'bookmark') !== 'mark'",
+      "mutated": "(p.tier ?? 'mark') !== 'mark'",
+      "note": "wrong default tier: untiered perma entries no longer count as bookmarks",
+      "verdict": "killed",
+      "core_red": [
+        "a clean data root: every line ok, nothing to report, and nothing proposed",
+        "the index: missing is a note, unparseable a warning, a count that differs from the registers with bookmarks is stale",
+        "the store: the share of the cap, a warning at the threshold, and marks or pins left for a conversation with no register"
+      ],
+      "kit_red": [],
+      "kit_pass": "100"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/core/bookmarks/check.ts",
+      "original": "else if (idx.sessions.length !== withBookmarks) say('note',",
+      "mutated": "else if (idx.sessions.length > withBookmarks) say('note',",
+      "note": "inequality weakened: index with too few entries no longer flagged stale",
+      "verdict": "killed",
+      "core_red": [
+        "the index: missing is a note, unparseable a warning, a count that differs from the registers with bookmarks is stale"
+      ],
+      "kit_red": [],
+      "kit_pass": "100"
+    },
+    {
+      "id": "M7",
+      "file": "plugin/hooks/core/bookmarks/check.ts",
+      "original": "if (i.index === undefined) say('note',",
+      "mutated": "if (i.index === undefined) say('warn',",
+      "note": "wrong level: missing index becomes a warning",
+      "verdict": "killed",
+      "core_red": [
+        "the index: missing is a note, unparseable a warning, a count that differs from the registers with bookmarks is stale"
+      ],
+      "kit_red": [
+        "/bm-check reports an older register, an orphan note folder, a half-done run and a changed copy, and changes no file",
+        "/bm-check on a clean root says there is nothing to report"
+      ],
+      "kit_pass": "98"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/core/bookmarks/check.ts",
+      "original": "if (!m || m.kind !== 'migration' || !Array.isArray(m.files)) {",
+      "mutated": "if (!m || !Array.isArray(m.files)) {",
+      "note": "dropped manifest kind guard",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "100"
+    },
+    {
+      "id": "M9",
+      "file": "plugin/hooks/core/bookmarks/check.ts",
+      "original": "} else if (actual !== f.hash) {",
+      "mutated": "} else if (actual === f.hash) {",
+      "note": "inverted hash comparison",
+      "verdict": "killed",
+      "core_red": [
+        "a clean data root: every line ok, nothing to report, and nothing proposed",
+        "registers: an older file says it migrates at the next start, a newer one that it is read-only, a non-register that it is left; a folder with no register is an orphan",
+        "backups: a run without a manifest, one stopped before done, a copy missing, a copy whose hash differs; snapshots counted; none though runs ran",
+        "the store: the share of the cap, a warning at the threshold, and marks or pins left for a conversation with no register"
+      ],
+      "kit_red": [
+        "/bm-check reports an older register, an orphan note folder, a half-done run and a changed copy, and changes no file"
+      ],
+      "kit_pass": "99"
+    },
+    {
+      "id": "M10",
+      "file": "plugin/hooks/core/bookmarks/check.ts",
+      "original": "say(share >= STORE_WARN_SHARE ? 'warn' : 'ok', `store:",
+      "mutated": "say(share > STORE_WARN_SHARE ? 'warn' : 'ok', `store:",
+      "note": "boundary: exactly at warn share no longer warns",
+      "verdict": "killed",
+      "core_red": [
+        "the store: the share of the cap, a warning at the threshold, and marks or pins left for a conversation with no register"
+      ],
+      "kit_red": [],
+      "kit_pass": "100"
+    },
+    {
+      "id": "M11",
+      "file": "plugin/hooks/core/bookmarks/check.ts",
+      "original": "if (sid && !names.has(sid)) orphans.add(sid)",
+      "mutated": "if (sid && names.has(sid)) orphans.add(sid)",
+      "note": "inverted orphan store key check",
+      "verdict": "killed",
+      "core_red": [
+        "the store: the share of the cap, a warning at the threshold, and marks or pins left for a conversation with no register"
+      ],
+      "kit_red": [
+        "/bm-check reports an older register, an orphan note folder, a half-done run and a changed copy, and changes no file"
+      ],
+      "kit_pass": "99"
+    },
+    {
+      "id": "M12",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "if (e.kind !== 'dir' || e.name.endsWith(SNAPSHOT_SUFFIX)) continue",
+      "mutated": "if (e.kind !== 'dir') continue",
+      "note": "dropped snapshot filter: snapshots treated as migration runs",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "/bm-check reports an older register, an orphan note folder, a half-done run and a changed copy, and changes no file"
+      ],
+      "kit_pass": "99"
+    },
+    {
+      "id": "M13",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "hashes[f.path] = f.algo === 'fnv1a64' ? fnv1a64(text) : (await hashText(text)).hash",
+      "mutated": "hashes[f.path] = (await hashText(text)).hash",
+      "note": "manifest algorithm ignored: always SHA-256",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "/bm-check reports an older register, an orphan note folder, a half-done run and a changed copy, and changes no file"
+      ],
+      "kit_pass": "99"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "100"
+    }
+  ]
+}

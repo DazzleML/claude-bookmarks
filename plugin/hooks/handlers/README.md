@@ -9,7 +9,7 @@ What each feature does, one file per cluster, written against ports (`../engine/
 | `marks.ts` | Setting, showing and jumping to marks; the reading position |
 | `navigation.ts` | Every jump, the jumplist (back and forward), and putting the view back after a pane or a highlight |
 | `view-tracker.ts` | Which messages are on screen, the prompt nearest the view, and the prompts pane's row following it |
-| `bookmarks.ts` | The bookmark register on disk, the `bookmark` tool Claude calls, promote and claim |
+| `bookmarks.ts` | The bookmark register on disk, the `bookmark` tool Claude calls, promote and claim, the migrations at a start, the notes and the index, `/bm-check` |
 | `prompts.ts` | The prompt store: the session's prompts and footnotes, and their kept text for the filter |
 | `log.ts` | The debug log: the echo into the conversation, the debug channels, the log files and the timeline |
 | `debug-command.ts` | `/bm-debug` |

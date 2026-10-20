@@ -1,0 +1,81 @@
+{
+ "mutations": [
+  {
+   "id": "M1",
+   "file": "plugin/hooks/core/bookmarks/tiers.ts",
+   "original": "export const TIERS: readonly AnchorTier[] = ['transient', 'mark', 'perma', 'bookmark']",
+   "mutated": "export const TIERS: readonly AnchorTier[] = ['transient', 'perma', 'mark', 'bookmark']",
+   "note": "perma below mark"
+  },
+  {
+   "id": "M2",
+   "file": "plugin/hooks/core/bookmarks/tiers.ts",
+   "original": "  return tierContinuum.passes(threshold, tier)",
+   "mutated": "  return tierContinuum.passes(tier, threshold)",
+   "note": "admits arguments swapped"
+  },
+  {
+   "id": "M3",
+   "file": "plugin/hooks/core/bookmarks/tiers.ts",
+   "original": "  return admits(a, b) ? a : b",
+   "mutated": "  return admits(a, b) ? b : a",
+   "note": "warmer returns the cooler"
+  },
+  {
+   "id": "M4",
+   "file": "plugin/hooks/core/bookmarks/register-file.ts",
+   "original": "    ...(typeof o.title === 'string' ? { title: o.title } : {}),",
+   "mutated": "    ...(typeof o.title === 'string' ? { title: o.title.trim() } : {}),",
+   "note": "title trimmed on read"
+  },
+  {
+   "id": "M5",
+   "file": "plugin/hooks/core/bookmarks/register-file.ts",
+   "original": "    ...(typeof o.project === 'string' ? { project: o.project } : {}),",
+   "mutated": "    ...(typeof o.title === 'string' ? { project: o.title } : {}),",
+   "note": "project read from title"
+  },
+  {
+   "id": "M6",
+   "file": "plugin/hooks/core/bookmarks/register-file.ts",
+   "original": "    ['owners', owners.join(', ')],",
+   "mutated": "    ['owners', owners.join(',')],",
+   "note": "owners join without the space"
+  },
+  {
+   "id": "M7",
+   "file": "plugin/hooks/core/bookmarks/register-file.ts",
+   "original": "    ['project', opts?.project],",
+   "mutated": "    ['project', opts?.title],",
+   "note": "project written from title"
+  },
+  {
+   "id": "M8",
+   "file": "plugin/hooks/core/bookmarks/register-file.ts",
+   "original": "  for (const [k, v] of fm) if (v !== undefined && v !== '') lines.push(`${k}: ${yamlScalar(v)}`)",
+   "mutated": "  for (const [k, v] of fm) if (v !== undefined) lines.push(`${k}: ${yamlScalar(v)}`)",
+   "note": "empty strings written"
+  },
+  {
+   "id": "M9",
+   "file": "plugin/hooks/handlers/bookmarks.ts",
+   "original": "  const project = cwd.slice(cwd.lastIndexOf('/') + 1) || undefined",
+   "mutated": "  const project = cwd.slice(0, cwd.lastIndexOf('/')) || undefined",
+   "note": "project is the parent path"
+  },
+  {
+   "id": "M10",
+   "file": "plugin/hooks/handlers/bookmarks.ts",
+   "original": "  const cwd = forwardSlashes(await ports.cwd()).replace(/\\/+$/, '')",
+   "mutated": "  const cwd = forwardSlashes(await ports.cwd())",
+   "note": "trailing slash kept"
+  },
+  {
+   "id": "M11",
+   "file": "plugin/hooks/register.tsx",
+   "original": "  return (await prompts($))[0]?.head || undefined",
+   "mutated": "  return (await prompts($)).at(-1)?.head || undefined",
+   "note": "title from the last prompt"
+  }
+ ]
+}

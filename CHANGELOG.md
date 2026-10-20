@@ -6,6 +6,104 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.12] - 2026-10-17
+
+### Added
+
+- A bookmark file now carries a `format` beside its `version`. `version` counts the format migrations the file has been through and decides when a newer plugin migrates it (with a backup); `format` is the oldest plugin that can still handle the file's data, and decides when an older plugin must leave the file read-only. They have moved together so far (1, 2, 3); from here a migration an older plugin can live with leaves `format` where it is, so nobody is made to upgrade when nothing needs upgrading. A file written before this version has no `format` and reads as asking for its own `version`; adding the field is not a migration and takes no backup.
+- The plugin writes a `README.md` into its data folder (`~/claude/bookmarks/`): what each folder and file holds, which are yours (authored: back them up), which are the plugin's copies (backup), which it rebuilds (cache) and which it generates. Written when missing and rewritten when the plugin version changes; left alone otherwise.
+- `docs/usage.md`, "What to back up, and what a reinstall does": the same classification as a table, what a backup tool should take, what a reinstall under another marketplace name does and does not touch, and what the two numbers in a bookmark file mean.
+
+## [0.5.11] - 2026-10-17
+
+### Added
+
+- `/bm-check`: a check of the bookmark files on disk that reports and changes nothing. It names each register whose format is older than this build (it migrates at the next start) or newer (read-only here), a file that is not a register, a notes folder with no register, the index against the registers it should list, each migration's run folder with its status and whether every copy in it still matches the hash its manifest recorded, the snapshots, the store's size against the 4 MiB cap, and marks or pins left in the store for a conversation with no register. Where something is off, the line says what the next start or save will do about it.
+
+## [0.5.10] - 2026-10-17
+
+### Added
+
+- An index of every conversation with bookmarks, beside the bookmark files: `~/claude/bookmarks/sessions/index.json` (one entry per conversation -- its title, project, and each bookmark with its number, label, list and tier) and `sessions/INDEX.md`, the same as a page you can open in Obsidian or any Markdown viewer: a heading per conversation, newest first, and a line per bookmark linking its file where the file exists. The index is rebuilt from the bookmark files when a conversation starts and the conversation's own entry is refreshed after every save; a letter's mark is not listed, and a conversation whose bookmarks are all removed drops out. Both files are generated: what you write in them is overwritten.
+
+## [0.5.9] - 2026-10-17
+
+### Changed
+
+- Each bookmark's Markdown file is now an Obsidian note. Its `tags` and `aliases` are lists (Obsidian's own form); the tags carry the bookmark's own tags and then one `bm/tier/...` and one `bm/owner/...` tag per record on the message, so a vault can filter by them; when the same message is on both lists, the other list's label is an alias, so Obsidian finds the note under either name. Point Obsidian at `~/claude/bookmarks` and edit a note's `label`, `why` or `tags` there: the next time the plugin touches that bookmark (a relabel, a share, a claim) it reads the edit back into the bookmark file before rewriting the note, so the edit is kept. Only those three properties are read back; a note written by a plugin older than 0.5.9 is regenerated and never read, and a property missing from a note is never treated as a deletion. The note's own version is 2.
+
+### Added
+
+- Internal: a record remembers what its note was last written from (`md.base`), which is how an edit in the note is told apart from a change made in Claude Code.
+
+## [0.5.8] - 2026-10-17
+
+### Added
+
+- The shape of the read-state file is fixed, ahead of the feature that will use it: `<session id>.state.json` beside the bookmark file, holding where each reader stands with each prompt (named axes such as "attention" and "processing", so a prompt can be both read and still being worked on), with a short history per axis. Only a prompt you typed can be a key, never a tool result or a command's record. Nothing writes or shows this file yet; the format is settled so the feature adds to it rather than inventing it.
+
+## [0.5.7] - 2026-10-16
+
+### Changed
+
+- Claude's `bookmark` tool: every answer carries the record's number; `list` links only a record whose Markdown file exists, so no link that cannot be followed is handed out; a claim writes the record's file, as every action that hands out a link now does. One `meta` parameter lets Claude keep tags (a list, nested with `/`) and its own notes (`x`) on a record, with a relabel replacing the tags and merging the notes. The tool's description tells Claude what `label` and `why` are for: what the place says, and what it decides or why it matters.
+
+## [0.5.6] - 2026-10-16
+
+### Added
+
+- The bookmark file's header now carries the conversation's `title` (the first prompt's words, or the conversation's name where Claude Code gives one) and `project` (the folder's name), refreshed on every save, so a file can be told apart without opening it. The same two appear in each bookmark's Markdown file, with the bookmark's number, its tier, its tags and the plugin version that wrote it.
+- A record can carry `tags` (nested with `/`), named `axes`, relations to other records (`rel`) and an open `x` namespace per owner; a save keeps them and writes them in a fixed order. An owner may be a name beyond "you" and "Claude" (`agent:<name>`, `person:<handle>`).
+
+### Changed
+
+- Internal, no visible change: the tiers (transient, mark, perma, bookmark) are one ordered axis in code, and a surface that shows "bookmarks and up" is gated by that axis rather than by a comparison written out each time. The Markdown front matter's property names are fixed and listed in one place.
+
+## [0.5.5] - 2026-10-16
+
+### Changed
+
+- **Marks live in the bookmark file (format version 3).** Each letter, and the reading position, is now a record in the conversation's bookmark file, pointed at by the file's `slots`; a migration moves them out of Claude Code's plugin store at the conversation's start, with its own backup folder like the format-2 migration. Re-marking a letter on another message keeps the old place in the letter's history (the `a_001` stack the roadmap promised); deleting a mark clears the letter and keeps that history, so nothing a letter ever pointed at is lost. The panes read the marks from memory, never from a file while drawing.
+- Marks and bookmarks on the same message are two separate records: setting a letter on a bookmarked line never renames the bookmark, and a mark is never listed as a bookmark.
+- Without a data folder to write to, marks stay in Claude Code's plugin store as before.
+
+## [0.5.4] - 2026-10-16
+
+### Changed
+
+- **The bookmark file format moves to version 2, with a migration that runs when a conversation starts.** Every bookmark file under your data folder that is at the old format is brought up to date in that start (the conversation you opened first, the rest in the same pass). Before the first migration ever runs on a machine, one snapshot of the whole `bookmarks/sessions/` folder is taken under `bookmarks/backups/<time>__pre-0.5__snapshot/`; each migration then gets its own folder under `bookmarks/backups/` with the original file, its `.bak`, the store entries it moved, and a `manifest.json` whose status reads `done` when it finished. Backups are kept. A file from a newer version of the plugin is still read and never written.
+- What version 2 changes in the file: the conversation's session id and transcript path are written once at the top instead of on every bookmark (a bookmark copied from another conversation keeps its own); every bookmark has a number, in the order made, that is never reused; pinned prompts live in the file instead of Claude Code's plugin store. The migration moves the pins and deletes the store entry; a conversation that had pins but no bookmark file gets one.
+
+## [0.5.3] - 2026-10-16
+
+### Changed
+
+- Every save of the bookmark file now carries the one change being made (a new bookmark, a relabel, a removal, a share, a claim, a prune) and applies that change to the file as it is on disk when the file has changed since this session read it: a hand edit, or another window's bookmark, is kept instead of being overwritten by this session's copy. A change whose bookmark is gone from the disk (removed elsewhere) is reported as not done, and nothing is written.
+- Internal, no visible change yet: records have an identity the file format can carry (a number per conversation, never reused, with the message and its minting time as the tie-break); a bookmark made from a drawn message id is marked as such; a merge of two whole copies of one file is defined. A file keeps its present form until the format migration in a later 0.5.x release, so none of this shows in the files on disk yet.
+
+## [0.5.2] - 2026-10-16
+
+### Changed
+
+- The usage guide now says how the bookmark file relates to a conversation: one file per conversation, the same file after `claude --resume`, an empty one for a forked conversation; what a newer or older file's `version` means; and the short reference form `bm:<sid8>.<n>` with the rule that resolves it. Documentation only; the number `n` itself arrives in a later 0.5.x release.
+
+## [0.5.1] - 2026-10-16
+
+### Fixed
+
+- A bookmark file's backup (`.bak`) is now made only from a file that reads correctly. Before, the previous file was copied blindly, so a half-written file could become the only backup.
+- Fields in a bookmark file that this version does not know are kept when the file is saved, at every level (the file, each bookmark, each tombstone), after the known fields and in their original order. Before, a save dropped them.
+
+### Added
+
+- A bookmark file written by a newer version of the plugin is read in full but never written: a toast and a log line say so once when it loads, and any bookmark action that would save it reports "not saved" instead. Update the plugin to write it again.
+
+## [0.5.0] - 2026-10-16
+
+### Fixed
+
+- The stated minimum is now Claude Code 2.1.288, the first release with the selection call that marking from a selection uses; the README, contributing guide, platform page and troubleshooting page said 2.1.287.
+
 ## [0.4.110] - 2026-10-15
 
 ### Fixed
@@ -995,7 +1093,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.110...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.12...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

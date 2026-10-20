@@ -1,0 +1,24 @@
+{
+  "mutations": [
+    {
+      "id": "N5",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "return JSON.stringify(ordered, null, 2) + '\\n'",
+      "mutated": "return JSON.stringify(ordered, null, 2)",
+      "note": "trailing newline dropped",
+      "verdict": "killed",
+      "core_red": [
+        "unknown keys survive a round trip at the file, record and tombstone level, after the known keys in their own order"
+      ],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "83"
+    }
+  ]
+}

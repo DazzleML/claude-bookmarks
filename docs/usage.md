@@ -283,7 +283,7 @@ The reading position is separate and is never moved by a jump. Arrow keys can't 
 
 ### What Claude's tool does
 
-Claude has a `bookmark` tool. It gives a verbatim fragment of the message (or its uuid) and a label, and gets back the markdown link to cite with. The tool resolves the fragment against the conversation's transcript (the earliest message that contains it; if several do, it asks rather than guessing), records the bookmark, writes its file, and returns the link. Its other actions: `relabel`, `remove`, `share`, `claim`, and `list` (both lists with their links and tiers).
+Claude has a `bookmark` tool. It gives a verbatim fragment of the message (or its uuid) and a label, and gets back the markdown link to cite with. The tool resolves the fragment against the conversation's transcript (the earliest message that contains it; if several do, it asks rather than guessing), records the bookmark, writes its file, and returns the link. Its other actions: `relabel`, `remove`, `share`, `claim`, and `list` (both lists with their tiers; a link only for a record whose file exists). Every answer carries the record's number (`n`), the one the short reference will use. A `meta` parameter lets Claude keep `tags` (a list, nested with `/`) and its own notes (`x`) on a record; a relabel replaces the tags and merges the notes. The label is what the place says; the `why` is what it decides or why it matters.
 
 A record has a tier. Claude's own references are `perma` by default: a stable link it cites in its reply, drawn without the `⚓` so its references don't look like bookmarks you made. `bookmark` is a named place you will want to find again; that is the default when Claude bookmarks something for you, and Claude can make any of its references one by passing `tier: "bookmark"`. A bookmark never drops back to perma. `claim` moves one of Claude's records onto your list, with the same message, id and link; ask Claude to claim it for you.
 
@@ -294,7 +294,11 @@ Under your own folder, never under `~/.claude` (Claude Code cleans that):
 ```
 ~/claude/bookmarks/sessions/<session id>.json        the register: every bookmark of the conversation, readable JSON
 ~/claude/bookmarks/sessions/<session id>/<uuid8>.md  one file per bookmarked message: the text, every field, a verify recipe, and a Notes section
+~/claude/bookmarks/sessions/index.json               every conversation with bookmarks: title, project, and each bookmark's number, label, list and tier
+~/claude/bookmarks/sessions/INDEX.md                 the same as a page: a heading per conversation, newest first, each bookmark linking its file
 ```
+
+The two index files are generated -- rebuilt when a conversation starts, the conversation's own entry refreshed after every save -- so what you write in them is overwritten. `INDEX.md` is the page to open first in Obsidian.
 
 (`CLAUDE_USER_DIR`, if set, replaces `~/claude`.) The link's address names that file, with the message's uuid, its line in the transcript and its byte range in the query string:
 
@@ -304,7 +308,17 @@ file:///C:/Users/you/claude/bookmarks/sessions/<session>/12d637fb.md?u=<uuid>&l=
 
 The file's **Notes** section is yours: anything below its marker line survives when the bookmark is relabelled. Add context, links, or your own notes there.
 
+**In Obsidian:** the file is a note. Open `~/claude/bookmarks` as a vault (or add it to one) and its front matter shows as properties: `tags` (the bookmark's own, then `bm/tier/...` and `bm/owner/...` for each record on the message, which a vault search can filter by), `aliases` (the other list's label when the same message is on both), `title` and `project` of the conversation. Three properties are yours to edit there: `label`, `why` and `tags`. The next time the plugin touches that bookmark -- a relabel, a share, a claim -- it reads those three back before rewriting the note, so what you typed in Obsidian becomes the bookmark's. Everything else in the front matter is the plugin's and is rewritten; a note written by a plugin older than 0.5.9 is rewritten whole and never read back.
+
 **By hand, with no plugin:** a bookmark is only a transcript line. `grep -n` the words in the session's `.jsonl` for the line number, `head -n <line-1> | wc -c` for the byte offset, and write the link in the form above; the plugin recognises it when drawn and records it.
+
+### One file per conversation: forks, resumes and references
+
+The register belongs to one conversation, and its name is that conversation's session id. `claude --resume` reopens the same conversation, so it reads the same file. A **forked** conversation (one branched from an earlier point of another) is a new conversation with a new id, and it starts with an empty register: the records of the conversation it branched from are not copied, even though the transcript it copied contains the same messages. That is the rule for the 0.5.x line; following a fork is tracked in [#39](https://github.com/DazzleML/claude-bookmarks/issues/39) and will come as its own change rather than as a side effect of how files are named.
+
+The file carries a `version` (how many format migrations it has been through) and a `format` (the oldest plugin that can still handle its data). A plugin that finds a file whose `format` is newer than what it knows reads it in full and refuses to write it (a toast says so once when the conversation loads, and any bookmark action that would save answers "not saved"); update the plugin to write it again. A plugin that finds an older `version` brings the file up to date when the conversation starts, keeping a copy of the original under `backups/` first. The two numbers are explained under [What to back up, and what a reinstall does](#what-to-back-up-and-what-a-reinstall-does).
+
+Every record is addressed in two ways. The full address is the link above, which names the message's uuid and never changes. The short reference, for citations once records carry a number `n` (coming in 0.5.x), is **`bm:<sid8>.<n>`**: the first eight characters of the conversation's session id, a dot, the record's number in that conversation. Inside its own conversation `bm:<n>` is enough. A short reference is resolved by the register file whose name starts with `<sid8>`; if no file by that name exists (the file was moved or renamed), by reading every register's header for a matching `sessionId`; and if that finds two, the reference is ambiguous and the full uuid decides. Numbers are never reused within a conversation, so `bm:13` means the same record for the life of the file. Until the number lands, the plugin writes only the full link.
 
 ## Optional fast keys
 
@@ -351,16 +365,33 @@ Every colour the plugin draws has a role, and its default is one of Claude Code'
 
 | What | Kept for | Notes |
 |------|----------|-------|
-| Marks `a`-`z` | This conversation | Survive restarting Claude Code and `claude --resume` |
-| Reading position | This conversation | The same |
+| Marks `a`-`z` | Forever | In the conversation's bookmark file since 0.5.5, each letter with its history: re-marking a letter keeps the old place as `a_001`, deleting a mark keeps the history too |
+| Reading position | Forever | The same file, under its own key |
 | The prompt list | This conversation | Up to 5000 prompts, with their footnotes; set aside after 30 days unopened, and read again from the transcript when you reopen the conversation |
 | Prompt text for the filter | This conversation | Up to the budget setting, 2 MB by default, newest first; in `~/claude/bookmarks/prompttext/` |
-| Pinned prompts | This conversation | Survive restarting Claude Code and `claude --resume` |
+| Pinned prompts | Forever | In the conversation's bookmark file since 0.5.4 |
 | Bookmarks (yours and Claude's) | Forever | In `~/claude/bookmarks/sessions/`, readable JSON and markdown; never under `~/.claude` |
 | The jumplist (back/forward) | This conversation | Up to 100 jumps |
 | The highlight | Two minutes, or until your next prompt | Display only |
 
-Each conversation has its own marks: `a` in one conversation is unrelated to `a` in another. Marks, pins and the reading position live in Claude Code's own plugin storage; bookmarks live in your own folder (see [Where bookmarks live](#where-bookmarks-live)). Nothing is written to the session file.
+Each conversation has its own marks: `a` in one conversation is unrelated to `a` in another. Marks, the reading position, pins and bookmarks all live in the conversation's bookmark file in your own folder (see [Where bookmarks live](#where-bookmarks-live)); Claude Code's own plugin storage keeps only what the transcript rebuilds (the prompt list) and the session's UI state (the jumplist, the reading position's way back). Without a data folder, marks fall back to that storage. Nothing is written to the session file.
+
+### What to back up, and what a reinstall does
+
+Everything under `~/claude/bookmarks/` falls into four kinds, and the folder carries a `README.md` the plugin writes that says which is which:
+
+| Kind | Where | What it means |
+|------|-------|---------------|
+| **Authored** | `sessions/<session id>.json`, `sessions/<session id>/<uuid8>.md`, `sessions/<session id>.state.json` | What you and Claude made: bookmarks, marks, pins, notes. Nothing rebuilds them. Back these up |
+| **Backup** | `sessions/<session id>.json.bak`, `backups/` | Copies the plugin took: the file before its last change, the originals of each format migration with a manifest, and the one snapshot taken before the first migration on a machine. Keep them as long as you might want to go back |
+| **Cache** | `prompttext/`, `debug/` | Rebuilt or regrown when missing: the prompt text the filter searches, the log |
+| **Generated** | `sessions/index.json`, `sessions/INDEX.md`, `README.md` | Rewritten by the plugin from the authored files; edits to them are overwritten |
+
+A backup tool that versions your home folder should take `~/claude/bookmarks/sessions/` and `backups/` and may skip the caches. ([claude-session-backup](https://github.com/DazzleML/Claude-Session-Backup) is adding `~/claude` to what it versions; this table is the classification it uses.)
+
+**Reinstalling the plugin.** The bookmark folder is yours and a reinstall never touches it. Claude Code's own plugin store is another matter: it is named after the plugin's install identity, so a reinstall under another marketplace name starts an empty store -- the prompt list is read again from the transcript, the jumplist starts empty -- and your `/config` choices for the plugin reset to their defaults. Marks, pins and bookmarks are unaffected, because since 0.5.5 none of them lives in the store. If you are on a version before 0.5.5, upgrade first and open each conversation whose marks you want once, so they migrate into the bookmark file, before you reinstall.
+
+**Two numbers in a bookmark file.** `version` counts the format migrations the file has been through; a newer plugin migrates an older file at the conversation's start, after copying the original under `backups/`. `format` is the oldest plugin that can still handle the file's data; a plugin refuses to write a file whose `format` is newer than what it knows, and reads it instead. The two move together so far (1, 2, 3); they are separate so that a future migration an older plugin can live with does not force anyone to upgrade.
 
 ## Diagnostic commands
 
@@ -369,6 +400,7 @@ The plugin adds a few commands from its proof-of-concept stage. They are useful 
 | Command | Shows |
 |---------|-------|
 | `/bm-env` | The plugin's version, the Claude Code version, the session id, and what the plugin has captured |
+| `/bm-check` | The bookmark files on disk, checked: each register's format against this build, note folders with no register, the index against the registers, each migration's run folder (its status and whether the copies still match their hashes), the snapshots, and the store's size against its cap. It reports and changes nothing; where something is off, the line says what the next start or save will do about it |
 | `/bm-marks` | The marks set in this conversation |
 | `/bm-timeline` | The last few plugin events: draws, panes, jumps, toasts |
 | `/bm-diag-keys` | Turns on (or off) logging of each key typed in the input box, to the plugin's debug log: lengths and key names, never the text |

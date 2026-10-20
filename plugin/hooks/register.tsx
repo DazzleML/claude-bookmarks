@@ -28,7 +28,7 @@ import type { Role, Style } from './core/palette'
 import { footnoteOf, looksLikePrompt, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
 import { short } from './core/kit/message-id'
 import { configDirOf, dataRootOf } from './core/kit/paths'
-import { ECHO_POLICY_KEY, marksKey as marksKeyOf, pinsKey as pinsKeyOf, readingStateKey } from './core/store-keys'
+import { ECHO_POLICY_KEY, readingStateKey } from './core/store-keys'
 import { diagLine, keyLabel } from './core/log/diagnostics'
 import { colorSplit, tagMarksMarkdown, tagMarksPlain } from './core/marks/highlight'
 import { ScreenModel } from './core/kit/screen-model'
@@ -164,7 +164,8 @@ function marksPorts($: EngineInterface): MarksPorts {
     jumpTo: (uuid, via, label, words, probe, block) => jumpTo($, uuid, via, label, words, probe, block),
     now: () => $.clock.now(),
     loadMarks: () => loadMarks($),
-    saveMarks: async m => $.store.set(await marksKey($), m),
+    setMark: (letter, mark) => bookmarks_.setMarkOp(bookmarksPorts($), letter, mark),
+    clearMarks: letters => bookmarks_.clearMarksOp(bookmarksPorts($), letters),
     readingStateStored: async () => $.store.get(readingStateKey(await $.session.id())),
     storeReadingState: async state => $.store.set(readingStateKey(await $.session.id()), state),
     letters: LETTERS,
@@ -525,12 +526,21 @@ async function prompts($: EngineInterface): Promise<PromptRef[]> {
   return promptList(await keptPrompts($), await allRows($))
 }
 
-async function marksKey($: EngineInterface): Promise<string> {
-  return marksKeyOf(await $.session.id())
+// Since 0.5.5 the marks are records in the register, pointed at by its slots (the data
+// design, 2026-10-16); the v2 -> v3 migration moves them out of the store (`marks:<sid>`,
+// core/store-keys.ts) at the conversation's start, and the store is the fallback when there
+// is no data root. handlers/bookmarks.ts derives the `Marks` the panes draw.
+async function loadMarks($: EngineInterface): Promise<Marks> {
+  return bookmarks_.marksOf(bookmarksPorts($))
 }
 
-async function loadMarks($: EngineInterface): Promise<Marks> {
-  return ((await $.store.get(await marksKey($))) as Marks | undefined) ?? {}
+// The conversation's title for the register header (unit 6): the /rename name the start
+// event carried (`session_title`, the only place the engine says it), else the head of the
+// first prompt. No engine call reads the title after the start, so it is kept here.
+let sessionTitle: string | undefined
+async function conversationTitle($: EngineInterface): Promise<string | undefined> {
+  if (sessionTitle) return sessionTitle
+  return (await prompts($))[0]?.head || undefined
 }
 
 // Bookmark anchors and the register (its file, minting, exports, prose anchors, the
@@ -545,6 +555,7 @@ function bookmarksPorts($: EngineInterface): BookmarksPorts {
     dataRoot: () => dataRoot($),
     sessionId: () => $.session.id(),
     cwd: () => $.session.cwd(),
+    title: () => conversationTitle($),
     pluginName: $.plugin.name,
     pluginVersion: () => pluginVersion($),
     configDir: () => configDir($),
@@ -553,6 +564,11 @@ function bookmarksPorts($: EngineInterface): BookmarksPorts {
     fsExists: path => $.fs.exists(path),
     fsRead: path => $.fs.read(path),
     fsWrite: (path, text) => $.fs.write(path, text),
+    fsList: path => $.fs.list(path),
+    storeGet: key => $.store.get(key),
+    storeSet: (key, value) => $.store.set(key, value),
+    storeDelete: key => $.store.delete(key),
+    storeKeys: () => $.store.keys(),
     resolveTarget: want => resolveTarget($, want),
     transcriptPath: () => transcriptPath($),
     allRows: () => allRows($),
@@ -701,11 +717,12 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
 // Favourite prompts to come back to (djdarcy, 2026-10-05), per conversation, kept in
 // the order they were pinned. Drawn as `245★)` and listed again at the top of the
 // prompts pane. Toggled by `*21` (or `*` for the newest) in the `#` field, or /bm-pin.
-async function pinsKey($: EngineInterface): Promise<string> {
-  return pinsKeyOf(await $.session.id())
-}
+// Since 0.5.4 the pins live in the register file (the data design, 2026-10-16: pins are
+// authored, so they are the person's and not Claude Code's housekeeping); the v1 -> v2
+// migration moves them out of the store (`pins:<sid>`, core/store-keys.ts) at the
+// conversation's start. handlers/bookmarks.ts owns the read and the toggle.
 async function loadPins($: EngineInterface): Promise<string[]> {
-  return ((await $.store.get(await pinsKey($))) as string[] | undefined) ?? []
+  return bookmarks_.pinnedPrompts(bookmarksPorts($))
 }
 
 // Toggles the pin on prompt #n (the newest when `typed` names none). Returns false when
@@ -720,7 +737,11 @@ async function togglePin($: EngineInterface, typed: string, known?: PromptRef[])
   }
   const pins = await loadPins($)
   const pinned = pins.includes(target.uuid)
-  await $.store.set(await pinsKey($), pinned ? pins.filter(u => u !== target.uuid) : [...pins, target.uuid])
+  const r = await bookmarks_.togglePinned(bookmarksPorts($), target.uuid, !pinned)
+  if ('error' in r) {
+    $.ui.toast(r.error, { timeoutMs: 8000 })
+    return false
+  }
   await update($, pinsRev, v => v + 1)
   $.ui.toast(`${pinned ? 'unpinned' : 'pinned'} #${n}: ${target.head.slice(0, 40)}`)
   log($, `[bm] ${pinned ? 'unpinned' : 'pinned'} prompt #${n} ${short(target.uuid)}`)
@@ -968,6 +989,9 @@ export const register: Register = (on, options) => {
     // id instead (sameConversation, below); these resets stay for a reload, and the
     // conversation the process starts in is noted.
     conversationId = await $.session.id()
+    // The start event's type carries no title today (only the SessionStart hook input does); read it if a build adds it.
+    const started = e as unknown as { session_title?: unknown }
+    sessionTitle = typeof started.session_title === 'string' ? started.session_title : undefined
     await resetConversationMemory()
     void $.config.list().then(rows => {
       const theme = rows.find(r => r.key === 'theme')?.value
@@ -1373,6 +1397,11 @@ export const register: Register = (on, options) => {
     await envCommand(diagnosticsPorts($))
     return {}
   })
+  // /bm-check: a linter over the data root (handlers/bookmarks.ts checkCommand); reads only.
+  on('command.run', { command: 'bm-check' }, async $ => {
+    await bookmarks_.checkCommand(bookmarksPorts($))
+    return {}
+  })
 
   // The band, above the prompt: its Buttons carry the borrowed engine actions, so the
   // chords bound to those actions in keybindings.json press them from the input box.
@@ -1387,7 +1416,8 @@ export const register: Register = (on, options) => {
     const last = await read($, shown)
     band.drawn(e.requestId)
     const mode = await read($, bandMode)
-    const marks = mode === 'idle' ? {} : await loadMarks($)
+    // From the cache (MarkCache, replaced after every mark write and at a start): a render hook reads no file.
+    const marks = mode === 'idle' ? {} : markCache.all
     // What happens after the key: the after-action rule, by what the key did.
     const done = (cause: Cause) => settle($, paneOf(mode), cause)
     const s = currentSettings()
@@ -1523,7 +1553,7 @@ export const register: Register = (on, options) => {
       )
     }
 
-    const marks = await loadMarks($)
+    const marks = markCache.all // the cache, never a file, in a render hook
     return marksPaneView(
       elements,
       { mode, marks, letters: LETTERS, readingLetter: READING },

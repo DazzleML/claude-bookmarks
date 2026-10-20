@@ -1,0 +1,61 @@
+{
+  "mutations": [
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/bookmarks/migrations.ts",
+      "original": ".sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))",
+      "mutated": ".sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))",
+      "note": "least common transcript spelling picked",
+      "verdict": "killed",
+      "core_red": [
+        "v1 -> v2: the hoist, the numbers in minting order, pins from the store; the result round-trips and reads back whole"
+      ],
+      "kit_red": [],
+      "kit_pass": "89"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/core/bookmarks/migrations.ts",
+      "original": "reg.perma.filter(r => r.sessionId === reg.sessionId && r.transcript)",
+      "mutated": "reg.perma.filter(r => r.transcript)",
+      "note": "other sessions' transcripts counted",
+      "verdict": "killed",
+      "core_red": [
+        "the file's transcript comes from its own records, never from records copied in from another conversation (mutation sweep v0.5.4, M6)"
+      ],
+      "kit_red": [],
+      "kit_pass": "89"
+    },
+    {
+      "id": "M13",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "    if (snapshot) return\n",
+      "mutated": "",
+      "note": "snapshot taken every time",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "89"
+    },
+    {
+      "id": "M14",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "  manifest.status = 'backed-up'\n  await writeManifest()\n",
+      "mutated": "  manifest.status = 'backed-up'\n",
+      "note": "backed-up status never persisted",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "a v1 register is migrated at the start: snapshot first, a run folder with its manifest, the file at v2, the pins moved out of the store"
+      ],
+      "kit_pass": "88"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "89"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "mutations": [
+    {
+      "id": "M3",
+      "file": "plugin/hooks/core/bookmarks/session-index.ts",
+      "original": "(a.n ?? Infinity) - (b.n ?? Infinity) || a.createdAt - b.createdAt",
+      "mutated": "(a.n ?? Infinity) - (b.n ?? Infinity)",
+      "note": "createdAt tie-break dropped",
+      "verdict": "killed",
+      "core_red": [
+        "an entry carries the header and every bookmark in number order, a mark left out, the note flag from the folder"
+      ],
+      "kit_red": [],
+      "kit_pass": "98"
+    },
+    {
+      "id": "M12",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "e.kind !== 'file' || !e.name.endsWith('.json') || e.name === INDEX_JSON",
+      "mutated": "e.kind !== 'file' || !e.name.endsWith('.json')",
+      "note": "index.json itself no longer skipped on rebuild",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "98"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "98"
+    }
+  ]
+}

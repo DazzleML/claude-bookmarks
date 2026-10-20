@@ -1,0 +1,131 @@
+{
+  "mutations": [
+    {
+      "id": "N1",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "updatedAt: typeof o.updatedAt === 'number' ? o.updatedAt : 0,",
+      "mutated": "updatedAt: typeof o.updatedAt === 'number' ? o.rev : 0,",
+      "note": "updatedAt takes rev value on parse",
+      "verdict": "killed",
+      "core_red": [
+        "the file is stable-ordered JSON that reads back equal",
+        "unknown keys survive a round trip at the file, record and tombstone level, after the known keys in their own order"
+      ],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "N2",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "writer: typeof o.writer === 'string' ? o.writer : '?',",
+      "mutated": "writer: typeof o.writer === 'string' ? '?' : '?',",
+      "note": "writer always lost on parse",
+      "verdict": "killed",
+      "core_red": [
+        "the file is stable-ordered JSON that reads back equal",
+        "unknown keys survive a round trip at the file, record and tombstone level, after the known keys in their own order"
+      ],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "N3",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "tombstones: Array.isArray(o.tombstones) ? o.tombstones : [],",
+      "mutated": "tombstones: Array.isArray(o.tombstones) ? [] : [],",
+      "note": "tombstones always dropped on parse",
+      "verdict": "killed",
+      "core_red": [
+        "unknown keys survive a round trip at the file, record and tombstone level, after the known keys in their own order",
+        "unknown keys survive the operations this build performs: relabel, share, claim, remove, prune"
+      ],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "N4",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "if (k === 'perma') ordered.perma = reg.perma.map(orderRecord)",
+      "mutated": "if (k === 'perma') ordered.perma = reg.perma",
+      "note": "records not ordered/normalized; unknown-key ordering lost",
+      "verdict": "killed",
+      "core_red": [
+        "the file is stable-ordered JSON that reads back equal"
+      ],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "N5",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "return JSON.stringify(ordered, null, 2) + '\n'",
+      "mutated": "return JSON.stringify(ordered, null, 2)",
+      "note": "trailing newline dropped",
+      "verdict": "apply-failed: original occurs 0 times"
+    },
+    {
+      "id": "N6",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "for (const [k, v] of Object.entries(from)) if (!known.includes(k) && v !== undefined) onto[k] = v",
+      "mutated": "for (const [k, v] of Object.entries(from)) if (!known.includes(k) && v !== undefined && v !== null) onto[k] = v",
+      "note": "null-valued unknown keys silently dropped",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "N7",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "if (parseRegister(existing)) await ports.fsWrite(`${path}.bak`, existing)",
+      "mutated": "if (parseRegister(existing)) await ports.fsWrite(`${path}.bak`, serializeRegister(reg))",
+      "note": "backup written from new register instead of previous file content",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        ".bak is the previous file when that file parses"
+      ],
+      "kit_pass": "82"
+    },
+    {
+      "id": "N8",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "await ports.fsWrite(path, serializeRegister({ ...reg, writer: `${ports.pluginName} ${await ports.pluginVersion()}` }))",
+      "mutated": "await ports.fsWrite(path, serializeRegister(reg))",
+      "note": "writer stamp not applied on save",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "N9",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "registerCache = { session: await ports.sessionId(), register: reg }\n  return true",
+      "mutated": "return true",
+      "note": "cache not updated after save",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "N10",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "if (p !== path) ports.log(`[bm] register: ${path} unreadable; loaded its .bak (rev ${reg.rev})`)",
+      "mutated": "if (p === path) ports.log(`[bm] register: ${path} unreadable; loaded its .bak (rev ${reg.rev})`)",
+      "note": "bak-fallback log condition inverted",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "83"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "83"
+    }
+  ]
+}

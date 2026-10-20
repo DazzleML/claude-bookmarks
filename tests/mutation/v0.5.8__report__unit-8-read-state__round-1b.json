@@ -1,0 +1,37 @@
+{
+  "mutations": [
+    {
+      "id": "M8",
+      "file": "plugin/hooks/core/bookmarks/read-state.ts",
+      "original": "writer: typeof o.writer === 'string' ? o.writer : '?',",
+      "mutated": "writer: typeof o.writer === 'string' ? o.writer : '',",
+      "note": "wrong default writer",
+      "verdict": "killed",
+      "core_red": [
+        "the file round-trips in a fixed key order with unknown keys kept, and sits beside the register"
+      ],
+      "kit_red": [],
+      "kit_pass": "94"
+    },
+    {
+      "id": "M9",
+      "file": "plugin/hooks/core/bookmarks/read-state.ts",
+      "original": "rev: typeof o.rev === 'number' ? o.rev : 0,",
+      "mutated": "rev: typeof o.rev === 'number' ? o.rev : 1,",
+      "note": "wrong default rev",
+      "verdict": "killed",
+      "core_red": [
+        "the file round-trips in a fixed key order with unknown keys kept, and sits beside the register"
+      ],
+      "kit_red": [],
+      "kit_pass": "94"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "94"
+    }
+  ]
+}

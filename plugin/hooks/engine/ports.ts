@@ -220,6 +220,8 @@ export type BookmarksPorts = {
   dataRoot: () => Promise<string | undefined>
   sessionId: () => Promise<string>
   cwd: () => Promise<string>
+  /** The conversation's title: its /rename name as the start event gave it (register.tsx's `sessionTitle`, set at session.start), else the first prompt's head; written into the register header on save (unit 6). */
+  title: () => Promise<string | undefined>
   pluginName: string
   pluginVersion: () => Promise<string>
   /** Claude Code's config folder, forward slashes (register.tsx configDir; the env names stay literal there for the validator). */
@@ -229,6 +231,13 @@ export type BookmarksPorts = {
   fsExists: (path: string) => Promise<boolean>
   fsRead: (path: string) => Promise<string>
   fsWrite: (path: string, text: string) => Promise<unknown>
+  /** A folder's entries by name (`$.fs.list`): the migrations list the registers and the backups. */
+  fsList: (path: string) => Promise<readonly { name: string; kind: string }[]>
+  /** The store, for what the migrations move out of it (pins, marks), the keys that name store-only conversations, and the marks' fallback when there is no data root. */
+  storeGet: (key: string) => Promise<unknown>
+  storeSet: (key: string, value: unknown) => Promise<unknown>
+  storeDelete: (key: string) => Promise<unknown>
+  storeKeys: () => Promise<readonly string[]>
   resolveTarget: (want: { uuid?: string; fragment?: string }) => Promise<ResolveOutcome>
   transcriptPath: () => Promise<string | undefined>
   allRows: () => Promise<readonly { uuid: string }[]>
@@ -268,7 +277,10 @@ export type MarksPorts = {
   jumpTo: (uuid: string, via: string, label: string, words?: string, probe?: boolean, block?: 'start' | 'end') => Promise<string | undefined>
   now: () => Promise<number>
   loadMarks: () => Promise<import('../core/marks/marks.ts').Marks>
-  saveMarks: (marks: import('../core/marks/marks.ts').Marks) => Promise<unknown>
+  /** A letter (or the reading position's key) set on a place: the register's slots since 0.5.5 (handlers/bookmarks.ts setMarkOp); the store when there is no data root. */
+  setMark: (letter: string, mark: import('../core/marks/marks.ts').Mark) => Promise<{ error?: string }>
+  /** Letters cleared: the slot's current becomes null, its history kept; the record stays. */
+  clearMarks: (letters: string[]) => Promise<{ error?: string }>
   /** The reading position's way back, this conversation's (core/store-keys.ts readingStateKey). */
   readingStateStored: () => Promise<unknown>
   storeReadingState: (state: unknown) => Promise<unknown>

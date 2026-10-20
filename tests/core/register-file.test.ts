@@ -5,12 +5,16 @@ import {
   addOrRelabel,
   emptyRegister,
   EXPORT_NOTES_MARKER,
+  EXPORT_VERSION,
   exportFileName,
   exportMarkdown,
   exportNotesOf,
   findRecord,
   listOf,
   newer,
+  formatOf,
+  newerThanBuild,
+  REGISTER_FORMAT,
   parseFrontMatter,
   parseRegister,
   prune,
@@ -19,6 +23,7 @@ import {
   share,
   claim,
   type Mint,
+  type Register,
 } from '../../plugin/hooks/core/bookmarks/register-file.ts'
 import { anchorHref, tierOf } from '../../plugin/hooks/core/bookmarks/anchor.ts'
 
@@ -123,9 +128,10 @@ test('temporary: a permanent mark stays permanent; prune removes old temporaries
 test('the file is stable-ordered JSON that reads back equal', () => {
   const r = addOrRelabel(emptyRegister(SESSION, 'w', T0, { configDir: 'C:/Users/x/.claude', cwd: 'C:/code/p' }), mint, T0).register
   const text = serializeRegister(r)
-  assert.ok(text.startsWith('{\n  "version": 1,\n  "sessionId": "' + SESSION))
+  assert.ok(text.startsWith('{\n  "version": 3,\n  "format": 3,\n  "sessionId": "' + SESSION))
   const keys = Object.keys(JSON.parse(text).perma[0])
-  assert.deepEqual(keys.slice(0, 5), ['sessionId', 'uuid', 'owner', 'label', 'why'])
+  // v2: the record's number first; its sessionId is the file's and so not written (the hoist).
+  assert.deepEqual(keys.slice(0, 5), ['n', 'uuid', 'owner', 'label', 'why'])
   assert.deepEqual(parseRegister(text), r)
   assert.equal(parseRegister('not json'), undefined)
   assert.equal(parseRegister('{"perma": 3}'), undefined)
@@ -186,7 +192,7 @@ test('the export carries every field in front matter and the message as a quote;
   const rec = addOrRelabel(emptyRegister(SESSION, 'w', T0), { ...mint, transcript: 'C:/x/projects/p/s.jsonl' }, T0).record
   const md = exportMarkdown(rec, 'One thing: a message\n\nwith "quotes" and a: colon', { minted: 'by the bookmark tool' })
   assert.equal(exportFileName(rec.uuid), '12d637fb.md')
-  assert.ok(md.startsWith('---\nkind: bookmark-anchor\nversion: 1\nsession: ' + SESSION))
+  assert.ok(md.startsWith(`---\nkind: bookmark-anchor\nversion: ${EXPORT_VERSION}\nsession: ` + SESSION))
   assert.ok(md.includes('\nbytes: 9763906-9765751\n'))
   assert.ok(md.includes('\n> One thing: a message\n>\n> with "quotes" and a: colon\n'))
   // The bookmarked words are bold inside the quote; a long message gets a heading and link.
@@ -241,4 +247,126 @@ test('words with $ replacement patterns are bolded literally (tester sweep, 2026
   assert.ok(md.includes('> intro **cost $& more** outro'), md)
   const dollars = exportMarkdown({ ...rec, words: "$$ and $'" }, "pay $$ and $' now")
   assert.ok(dollars.includes("> pay **$$ and $'** now"), dollars)
+})
+
+// --- The guard (0.5.1): what this build does not know, it keeps -------------------------
+
+/** A file as a newer build would write it: fields this build has never heard of at every level. */
+function newerBuildFile(version = 2, format?: number): string {
+  const r = addOrRelabel(emptyRegister(SESSION, 'bookmarks 0.9', T0), mint, T0).register
+  const removed = remove(r, mint.uuid, 'claude', 'test', T0 + 1)
+  assert.ok(!('error' in removed))
+  const withNew = addOrRelabel(removed.register, { ...mint, uuid: 'dddddddd-0000-4000-8000-000000000002' }, T0 + 2).register
+  const o = JSON.parse(serializeRegister(withNew))
+  o.version = version
+  // A file from before 0.5.12 has no `format`; a later one names the reader it needs.
+  if (format === undefined) delete o.format
+  else o.format = format
+  // Keys this build does not know (nextN and n became known in 0.5.3, so the unknowns are the slots and the rest).
+  o.slots = { user: { a: [{ n: 2, at: T0 + 2 }] } }
+  o.reading = null // a cleared value is a value: null rides through too (mutation sweep v0.5.1, N6)
+  o.perma[0].tags = ['design/records', 'kept']
+  o.perma[0].x = { claude: { why: 'nested, and not ours' } }
+  o.tombstones[0].n = 1
+  // Canonical text: the known keys in the writer's order, the unknown ones after, as the newer build would have written it.
+  return serializeRegister(parseRegister(JSON.stringify(o))!)
+}
+
+test('unknown keys survive a round trip at the file, record and tombstone level, after the known keys in their own order', () => {
+  const text = newerBuildFile()
+  const reg = parseRegister(text)!
+  assert.ok(reg, 'a v2 file reads')
+  assert.equal(reg.perma.length, 1)
+  assert.deepEqual((reg as Record<string, unknown>).slots, { user: { a: [{ n: 2, at: T0 + 2 }] } })
+  assert.equal((reg as Record<string, unknown>).reading, null)
+  assert.deepEqual((reg.perma[0] as Record<string, unknown>).tags, ['design/records', 'kept'])
+  assert.equal((reg.tombstones[0] as Record<string, unknown>).n, 1)
+  // Byte for byte: the file came from a writer that put known keys first, so this writer agrees with it.
+  assert.equal(serializeRegister(reg), text)
+  assert.ok(text.includes('"slots"') && text.includes('"reading": null'), text)
+  // Order: known keys first, then the file's own, as it had them.
+  const keys = Object.keys(JSON.parse(serializeRegister(reg)))
+  assert.deepEqual(keys.slice(-2), ['slots', 'reading'])
+  assert.ok(keys.indexOf('tombstones') < keys.indexOf('slots'))
+  const recordKeys = Object.keys(JSON.parse(serializeRegister(reg)).perma[0])
+  assert.deepEqual(recordKeys.slice(-2), ['tags', 'x'])
+})
+
+test('unknown keys survive the operations this build performs: relabel, share, claim, remove, prune', () => {
+  const reg = parseRegister(newerBuildFile(1))!
+  const id = reg.perma[0]!.uuid
+  const slots = { user: { a: [{ n: 2, at: T0 + 2 }] } }
+  const relabelled = addOrRelabel(reg, { ...mint, uuid: id, label: 'renamed' }, T0 + 5).register
+  assert.deepEqual((relabelled.perma[0] as Record<string, unknown>).tags, ['design/records', 'kept'], 'relabel keeps the record\'s unknown keys')
+  assert.deepEqual((relabelled as Record<string, unknown>).slots, slots, 'relabel keeps the file\'s unknown keys')
+  const shared = share(relabelled, id, 'claude', 'user', T0 + 6)
+  assert.ok(!('error' in shared))
+  assert.deepEqual((shared.register as Record<string, unknown>).slots, slots)
+  const claimed = claim(parseRegister(newerBuildFile(1))!, id, T0 + 7)
+  assert.ok(!('error' in claimed))
+  assert.deepEqual((claimed.record as Record<string, unknown>).tags, ['design/records', 'kept'], 'claim moves the record with its unknown keys')
+  const removed = remove(reg, id, 'claude', 'test', T0 + 8)
+  assert.ok(!('error' in removed))
+  assert.equal((removed.register.tombstones[0] as Record<string, unknown>).n, 1, 'the older tombstone keeps its n')
+  assert.deepEqual((removed.register as Record<string, unknown>).slots, slots)
+  const pruned = prune({ ...reg, perma: [{ ...reg.perma[0]!, temporary: true, updatedAt: 0 }] }, '7d', T0 + 10 * 86_400_000).register
+  assert.deepEqual((pruned as Record<string, unknown>).slots, slots, 'prune keeps the file\'s unknown keys')
+})
+
+test('a file from a newer build is recognised by its format, not its version; this build\'s own and older files are not', () => {
+  // No `format` (a file from before 0.5.12): the version stands in for it.
+  assert.equal(newerThanBuild(parseRegister(newerBuildFile(4))!), true)
+  assert.equal(newerThanBuild(parseRegister(newerBuildFile(3))!), false)
+  assert.equal(newerThanBuild(parseRegister(newerBuildFile(2))!), false)
+  assert.equal(newerThanBuild(parseRegister(newerBuildFile(1))!), false)
+  assert.equal(newerThanBuild(emptyRegister(SESSION, 'w', T0)), false)
+  // With `format`: a later version this build can still handle is NOT refused (djdarcy, 2026-10-17: never
+  // force an upgrade when nothing needs upgrading); a format above this build's is, whatever the version.
+  assert.equal(newerThanBuild(parseRegister(newerBuildFile(9, REGISTER_FORMAT))!), false)
+  assert.equal(newerThanBuild(parseRegister(newerBuildFile(9, REGISTER_FORMAT - 1))!), false)
+  assert.equal(newerThanBuild(parseRegister(newerBuildFile(3, REGISTER_FORMAT + 1))!), true)
+  assert.equal(formatOf(parseRegister(newerBuildFile(9, 3))!), 3)
+  assert.equal(formatOf(parseRegister(newerBuildFile(2))!), 2)
+  // The field rides through a save unchanged, after `version`.
+  const kept = serializeRegister(parseRegister(newerBuildFile(9, 3))!)
+  assert.ok(kept.startsWith('{\n  "version": 9,\n  "format": 3,\n'), kept.slice(0, 40))
+  assert.equal(emptyRegister(SESSION, 'w', T0).format, REGISTER_FORMAT)
+  // A file with no version at all is read as version 1 (the proof-of-concept files had none), older than this build.
+  const o = JSON.parse(newerBuildFile(1))
+  delete o.version
+  const unversioned = parseRegister(JSON.stringify(o))!
+  assert.equal(unversioned.version, 1)
+  assert.equal(newerThanBuild(unversioned), false)
+})
+
+test('the hoist (v2): a record\'s sessionId and transcript are written only when they differ from the file\'s, and read back filled in', () => {
+  const reg: Register = { ...emptyRegister(SESSION, 'w', T0), transcript: 'C:/Users/x/.claude/projects/p/s.jsonl' }
+  const a = addOrRelabel(reg, { ...mint, transcript: 'C:/Users/x/.claude/projects/p/s.jsonl' }, T0 + 1).register
+  const b = addOrRelabel(a, { ...mint, uuid: 'eeeeeeee-0000-4000-8000-000000000003', transcript: 'C:/elsewhere/other.jsonl' }, T0 + 2).register
+  const text = serializeRegister(b)
+  const own = JSON.parse(text).perma[0]
+  const other = JSON.parse(text).perma[1]
+  assert.equal(own.sessionId, undefined, 'the file\'s own record carries no sessionId')
+  assert.equal(own.transcript, undefined, 'nor the file\'s transcript')
+  assert.equal(other.transcript, 'C:/elsewhere/other.jsonl', 'a different transcript is an override and stays')
+  const back = parseRegister(text)!
+  assert.equal(back.perma[0]?.sessionId, SESSION)
+  assert.equal(back.perma[0]?.transcript, 'C:/Users/x/.claude/projects/p/s.jsonl')
+  assert.equal(back.perma[1]?.transcript, 'C:/elsewhere/other.jsonl')
+  assert.deepEqual(back, b, 'the file reads back as the register that wrote it')
+  // A v1 file is written whole: nothing hoisted, so an older reader sees every field.
+  const v1: Register = { ...a, version: 1 }
+  assert.equal(JSON.parse(serializeRegister(v1)).perma[0].sessionId, SESSION)
+})
+
+test('parse normalises what it keeps: a record without a label is dropped, a missing rev is 0, a version that is not a number is this build\'s (mutation sweep v0.5.1, M4-M6)', () => {
+  const o = JSON.parse(newerBuildFile(1))
+  o.perma.push({ uuid: 'eeeeeeee-0000-4000-8000-000000000003', head: 'no label here' })
+  delete o.rev
+  o.version = '2'
+  const reg = parseRegister(JSON.stringify(o))!
+  assert.equal(reg.perma.length, 1, 'the label-less record is not a record')
+  assert.equal(reg.rev, 0)
+  assert.equal(reg.version, 1)
+  assert.equal(newerThanBuild(reg), false)
 })

@@ -14,20 +14,29 @@ export const BOOKMARK_TOOL = {
   name: 'bookmark',
   description:
     'Bookmark a message: give a verbatim fragment (or uuid) and a label, get a markdown link to cite; a click jumps ' +
-    'there. owner: your list or the person\'s. tier: perma (your default: a stable link, no bookmark glyph) or bookmark. ' +
-    'Actions: add, relabel, remove, share, claim, list.',
+    'there. label: what the place says; why: what it decides or why it matters. owner: your list or the person\'s. ' +
+    'tier: perma (your default: a stable link, no bookmark glyph) or bookmark. Every answer carries the record\'s ' +
+    'number n. Actions: add, relabel, remove, share, claim, list.',
   inputSchema: {
     type: 'object',
     properties: {
       query: { type: 'string', description: 'A short verbatim fragment of the message to bookmark (the earliest message containing it)' },
       uuid: { type: 'string', description: 'The message uuid instead of a fragment (full, or its first 8+ characters)' },
-      label: { type: 'string', description: 'What the bookmark is for: the link text, a few words' },
-      why: { type: 'string', description: 'One or two sentences on why this place matters' },
+      label: { type: 'string', description: 'What the place says: the link text, a few words' },
+      why: { type: 'string', description: 'What the place decides, or why it matters: one or two sentences' },
       words: { type: 'string', description: 'The exact words to highlight on arrival; defaults to query' },
       temporary: { type: 'boolean', description: 'Prune after the retention period instead of keeping forever' },
       tier: { type: 'string', enum: ['perma', 'bookmark'], description: "perma (the default on your own list): a stable link to cite, drawn without the bookmark glyph; bookmark: a named place the person will want again (the default on the person's list)" },
       owner: { type: 'string', enum: ['claude', 'user'], description: "Whose list: your own (default) or the person's, when they asked you to bookmark it for them" },
-      action: { type: 'string', enum: ['add', 'relabel', 'remove', 'share', 'claim', 'list'], description: 'add (default); relabel/remove act on `owner`\'s list; share copies from `owner`\'s list to the other; claim moves one of yours to the person\'s list (they asked for it); list shows both' },
+      meta: {
+        type: 'object',
+        description: 'Anything else to keep on the record: `tags` (a list, nested with /: "design/records") and `x` (your own namespace, an object kept as given). Replaces tags; merges x.',
+        properties: {
+          tags: { type: 'array', items: { type: 'string' } },
+          x: { type: 'object' },
+        },
+      },
+      action: { type: 'string', enum: ['add', 'relabel', 'remove', 'share', 'claim', 'list'], description: 'add (default); relabel/remove act on `owner`\'s list; share copies from `owner`\'s list to the other; claim moves one of yours to the person\'s list (they asked for it); list shows both, with a link only where the record has its file' },
     },
   },
   isDeferred: false,
@@ -46,6 +55,20 @@ export type ToolInput = {
   why: string | undefined
   words: string | undefined
   temporary: boolean
+  /** From `meta`: tags trimmed and non-empty, `x` kept as an object of namespaces; absent when nothing was given. */
+  tags: string[] | undefined
+  x: Record<string, Record<string, unknown>> | undefined
+}
+
+/** The one `meta` parameter, read: tags as strings, `x` as an object of objects; anything else is ignored. */
+export function parseMeta(meta: unknown): { tags?: string[]; x?: Record<string, Record<string, unknown>> } {
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return {}
+  const m = meta as Record<string, unknown>
+  const tags = Array.isArray(m.tags) ? m.tags.filter((t): t is string => typeof t === 'string').map(t => t.trim()).filter(Boolean) : undefined
+  const x = m.x && typeof m.x === 'object' && !Array.isArray(m.x)
+    ? Object.fromEntries(Object.entries(m.x as Record<string, unknown>).filter(([, v]) => v && typeof v === 'object' && !Array.isArray(v))) as Record<string, Record<string, unknown>>
+    : undefined
+  return { ...(tags && tags.length > 0 ? { tags } : {}), ...(x && Object.keys(x).length > 0 ? { x } : {}) }
 }
 
 export function parseToolInput(input: Record<string, unknown>): ToolInput {
@@ -61,7 +84,8 @@ export function parseToolInput(input: Record<string, unknown>): ToolInput {
   const owner: AnchorOwner = input.owner === 'user' ? 'user' : 'claude'
   const why = typeof input.why === 'string' ? input.why.trim() : undefined
   const words = typeof input.words === 'string' && input.words.trim() ? input.words.trim() : undefined
-  return { query, uuid, label, action, tierAsked, owner, why, words, temporary: input.temporary === true }
+  const meta = parseMeta(input.meta)
+  return { query, uuid, label, action, tierAsked, owner, why, words, temporary: input.temporary === true, tags: meta.tags, x: meta.x }
 }
 
 /** The tier a new record gets: what was asked, else perma on Claude's list and bookmark on the person's. */
@@ -77,10 +101,15 @@ export const listName = (owner: AnchorOwner): string => (owner === 'user' ? "the
 // an object is refused as "does not match its output shape" (2.1.295, 2026-10-09).
 export const answer = (o: unknown) => ({ result: JSON.stringify(o, null, 2) })
 
-/** A record as the model sees it, with its link when the data root is known. */
-export const describe = (r: AnchorRecord, root: string | undefined) => ({
-  uuid: r.uuid, owner: ownerOf(r), tier: tierOf(r), label: r.label, why: r.why, words: r.words, line: r.line, sharedFrom: r.sharedFrom,
-  ...(root ? { anchor: anchorHref(r, root), markdown: anchorMarkdown(r, root) } : {}),
+/**
+ * A record as the model sees it: its number first (every answer carries `n`, unit 7), and its
+ * link when the data root is known and -- for a listing -- the record's file exists (`linked`
+ * false leaves the link out: nothing unresolvable is handed out).
+ */
+export const describe = (r: AnchorRecord, root: string | undefined, linked = true) => ({
+  n: r.n, uuid: r.uuid, owner: ownerOf(r), tier: tierOf(r), label: r.label, why: r.why, words: r.words, line: r.line, sharedFrom: r.sharedFrom,
+  ...(r.tags && r.tags.length > 0 ? { tags: r.tags } : {}),
+  ...(root && linked ? { anchor: anchorHref(r, root), markdown: anchorMarkdown(r, root) } : {}),
 })
 
 /** A transcript row as the model sees it. */

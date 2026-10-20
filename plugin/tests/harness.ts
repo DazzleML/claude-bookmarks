@@ -6,6 +6,8 @@
 // stub answers fails the test with "no implementation for <event>", which is how a new
 // dependency shows up.
 import { mock } from 'claude-code/testing'
+import { emptyRegister, serializeRegister } from '../hooks/core/bookmarks/register-file.ts'
+import { applyOp } from '../hooks/core/bookmarks/register-ops.ts'
 
 export type Call = { event: string; input: unknown }
 
@@ -20,6 +22,8 @@ export type WorldOptions = {
   prompt?: string
   // The session id $.session.id answers.
   session?: string
+  // The working directory $.session.cwd answers (C:/test-project by default).
+  cwd?: string
   // The plugin's open panes $.ui.panes answers (none by default), e.g. [{ id: 'bm-pane' }].
   panes?: { id: string; isFocused?: boolean }[]
   // What $.process.run answers, by argv; by default no program runs in tests.
@@ -44,6 +48,24 @@ export type World = {
 type On = (event: never, match: never, hook: never) => void
 
 export const BAND_PROPS = { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 40 } }
+
+/** The data root the plugin derives from this world's USERPROFILE. */
+export const DATA_ROOT = 'C:/test-home/claude/bookmarks'
+
+/**
+ * A register file (format v3) holding these letters, as `files` for `world`: since 0.5.5 the
+ * marks live in the register's slots, so a test that used to seed `marks:<sid>` in the store
+ * seeds the file instead. Each mark becomes a record of tier `mark` and a slot pointing at it.
+ */
+export function registerWithMarks(sid: string, marks: Record<string, { uuid: string; head: string; markedAt: number; snippet?: string }>): Record<string, string> {
+  let reg = emptyRegister(sid, 'bookmarks test', 0)
+  for (const [letter, m] of Object.entries(marks)) {
+    const r = applyOp(reg, { op: 'setMark', owner: 'user', letter, place: { uuid: m.uuid, head: m.head, ...(m.snippet ? { words: m.snippet } : {}) }, at: m.markedAt }, m.markedAt)
+    if ('error' in r) throw new Error(r.error)
+    reg = r.register
+  }
+  return { [`${DATA_ROOT}/sessions/${sid}.json`]: serializeRegister(reg) }
+}
 
 export function world(on: unknown, options: WorldOptions = {}): World {
   const hook = on as On
@@ -92,15 +114,31 @@ export function world(on: unknown, options: WorldOptions = {}): World {
   answer('ui.selection', () => options.selection?.())
   answer('prompt.read', () => ({ text: options.prompt ?? '', cursor: (options.prompt ?? '').length }))
   answer('session.id', () => options.session ?? '00000000-0000-4000-8000-000000000000')
-  answer('session.cwd', () => 'C:/test-project')
-  answer('fs.exists', e => norm(e.path) in files)
+  answer('session.cwd', () => options.cwd ?? 'C:/test-project')
+  // A file by its key, or a folder: anything in the map lies under it.
+  answer('fs.exists', e => {
+    const p = norm(e.path).replace(/\\+$/, '')
+    return p in files || Object.keys(files).some(k => k.startsWith(p + '\\'))
+  })
   answer('fs.read', e => files[norm(e.path)] ?? '')
   answer('fs.write', e => {
     files[norm(e.path)] = String(e.text ?? '')
     return undefined
   })
   answer('process.run', e => ({ stderr: '', isStdoutTruncated: false, ...(options.process?.(e.argv as readonly string[]) ?? { exitCode: 1, stdout: '', stderr: 'no process in tests' }) }))
-  answer('fs.list', () => [])
+  // A folder's entries from the files map: the names one level below `path`, files and folders.
+  answer('fs.list', e => {
+    const dir = norm(e.path).replace(/\\+$/, '') + '\\'
+    const seen = new Map<string, { name: string; kind: 'file' | 'dir'; size: number; mtimeMs: number; isLink: boolean }>()
+    for (const [p, text] of Object.entries(files)) {
+      if (!p.startsWith(dir)) continue
+      const rest = p.slice(dir.length)
+      const slash = rest.indexOf('\\')
+      const name = slash < 0 ? rest : rest.slice(0, slash)
+      if (!seen.has(name)) seen.set(name, { name, kind: slash < 0 ? 'file' : 'dir', size: slash < 0 ? text.length : 0, mtimeMs: 0, isLink: false })
+    }
+    return [...seen.values()]
+  })
   // The start path (a test's $.session.start, measured 2026-10-12): the base event passes
   // through with its fields, and the calls the plugin's start hook makes are answered.
   answerRaw('session.start', e => e)

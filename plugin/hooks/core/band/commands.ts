@@ -9,6 +9,7 @@ export const COMMANDS: readonly (readonly [string, string])[] = [
   ['bm-delmarks', 'Delete marks: /bm-delmarks a b (letters), or /bm-delmarks all'],
   ['bm-env', 'Show the version, the session id and what has been captured'],
   ['bm-config', 'Show every setting, its value and where it came from'],
+  ['bm-check', 'Check the bookmark files on disk: formats, backups, the index, the store; reports, changes nothing'],
   ['bm-timeline', 'Diagnostics: show the last N plugin events (draws, appends, pane, store, toast, scroll)'],
   ['bm-sel', 'Diagnostics: show what Claude Code reports for your mouse selection'],
   ['bm-pin', 'Pin or unpin prompt #N in the prompts pane (no number: the newest)'],

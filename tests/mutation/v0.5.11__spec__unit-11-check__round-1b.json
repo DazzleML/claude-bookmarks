@@ -1,0 +1,11 @@
+{
+ "mutations": [
+  {
+   "id": "M8",
+   "file": "plugin/hooks/core/bookmarks/check.ts",
+   "original": "if (!m || m.kind !== 'migration' || !Array.isArray(m.files)) {",
+   "mutated": "if (!m || !Array.isArray(m.files)) {",
+   "note": "dropped manifest kind guard"
+  }
+ ]
+}

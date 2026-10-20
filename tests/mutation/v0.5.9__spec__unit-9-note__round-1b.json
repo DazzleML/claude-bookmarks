@@ -1,0 +1,25 @@
+{
+ "mutations": [
+  {
+   "id": "M2",
+   "file": "plugin/hooks/core/bookmarks/note.ts",
+   "original": "return r.createdAt < best.createdAt ? r : best",
+   "mutated": "return r.createdAt > best.createdAt ? r : best",
+   "note": "among equals pick the latest instead of the earliest"
+  },
+  {
+   "id": "M8",
+   "file": "plugin/hooks/core/bookmarks/register-file.ts",
+   "original": "    const k = line.slice(0, i).trim()\n    if (!k || /\\s/.test(k)) continue",
+   "mutated": "    const k = line.slice(0, i).trim()\n    if (!k) continue",
+   "note": "keys containing whitespace are no longer skipped when parsing front matter"
+  },
+  {
+   "id": "M10",
+   "file": "plugin/hooks/core/bookmarks/register-file.ts",
+   "original": "out[k] = splitFlow(v.slice(1, -1)).map(yamlValue).filter(s => s !== '')",
+   "mutated": "out[k] = splitFlow(v.slice(1, -1)).map(yamlValue)",
+   "note": "empty flow-list items are no longer filtered out"
+  }
+ ]
+}

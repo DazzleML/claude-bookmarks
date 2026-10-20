@@ -1,0 +1,210 @@
+{
+  "mutations": [
+    {
+      "id": "M1",
+      "file": "plugin/hooks/core/bookmarks/migrations.ts",
+      "original": "k + 1]))",
+      "mutated": "k]))",
+      "note": "Numbering starts at 0 instead of 1",
+      "verdict": "killed",
+      "core_red": [
+        "v1 -> v2: the hoist, the numbers in minting order, pins from the store; the result round-trips and reads back whole"
+      ],
+      "kit_red": [
+        "a v1 register is migrated at the start: snapshot first, a run folder with its manifest, the file at v2, the pins moved out of the store"
+      ],
+      "kit_pass": "88"
+    },
+    {
+      "id": "M2",
+      "file": "plugin/hooks/core/bookmarks/migrations.ts",
+      "original": "nextN: reg.perma.length + 1,",
+      "mutated": "nextN: reg.perma.length,",
+      "note": "nextN reuses the last number",
+      "verdict": "killed",
+      "core_red": [
+        "v1 -> v2: the hoist, the numbers in minting order, pins from the store; the result round-trips and reads back whole",
+        "an empty v1 register (a store-only conversation) migrates to a v2 file with the pins and nothing else"
+      ],
+      "kit_red": [
+        "a v1 register is migrated at the start: snapshot first, a run folder with its manifest, the file at v2, the pins moved out of the store"
+      ],
+      "kit_pass": "88"
+    },
+    {
+      "id": "M3",
+      "file": "plugin/hooks/core/bookmarks/migrations.ts",
+      "original": ".sort((a, b) => a.r.createdAt - b.r.createdAt || a.i - b.i)",
+      "mutated": ".sort((a, b) => b.r.createdAt - a.r.createdAt || a.i - b.i)",
+      "note": "minting order reversed",
+      "verdict": "killed",
+      "core_red": [
+        "v1 -> v2: the hoist, the numbers in minting order, pins from the store; the result round-trips and reads back whole"
+      ],
+      "kit_red": [],
+      "kit_pass": "89"
+    },
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/bookmarks/migrations.ts",
+      "original": ".sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))",
+      "mutated": ".sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))",
+      "note": "least common transcript spelling picked",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "89"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/core/bookmarks/migrations.ts",
+      "original": "...(r.transcript ? { transcript: forwardSlashes(r.transcript) } : {}),",
+      "mutated": "...(r.transcript ? { transcript: r.transcript } : {}),",
+      "note": "per-record slash normalisation dropped",
+      "verdict": "killed",
+      "core_red": [
+        "v1 -> v2: the hoist, the numbers in minting order, pins from the store; the result round-trips and reads back whole"
+      ],
+      "kit_red": [],
+      "kit_pass": "89"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/core/bookmarks/migrations.ts",
+      "original": "reg.perma.filter(r => r.sessionId === reg.sessionId && r.transcript)",
+      "mutated": "reg.perma.filter(r => r.transcript)",
+      "note": "other sessions' transcripts counted",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "89"
+    },
+    {
+      "id": "M7",
+      "file": "plugin/hooks/core/bookmarks/migrations.ts",
+      "original": "return { ...out, rev: out.rev + 1, updatedAt: ctx.now }",
+      "mutated": "return { ...out, rev: out.rev, updatedAt: ctx.now }",
+      "note": "rev not bumped",
+      "verdict": "killed",
+      "core_red": [
+        "v1 -> v2: the hoist, the numbers in minting order, pins from the store; the result round-trips and reads back whole"
+      ],
+      "kit_red": [],
+      "kit_pass": "89"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/core/bookmarks/migrations.ts",
+      "original": "while (at < CURRENT) {",
+      "mutated": "while (at < CURRENT - 1) {",
+      "note": "plan stops one short",
+      "verdict": "killed",
+      "core_red": [
+        "the plan: a v1 file takes one step to CURRENT; a current or newer file takes none",
+        "v1 -> v2: the hoist, the numbers in minting order, pins from the store; the result round-trips and reads back whole",
+        "an empty v1 register (a store-only conversation) migrates to a v2 file with the pins and nothing else"
+      ],
+      "kit_red": [
+        "a v1 register is migrated at the start: snapshot first, a run folder with its manifest, the file at v2, the pins moved out of the store",
+        "a second start migrates nothing and takes no second snapshot",
+        "a conversation with pins in the store and no register gets one, at v2"
+      ],
+      "kit_pass": "86"
+    },
+    {
+      "id": "M9",
+      "file": "plugin/hooks/core/bookmarks/migrations.ts",
+      "original": ".replace(/\\.\\d{3}Z$/, 'Z').replace(/:/g, '-')",
+      "mutated": ".replace(/\\.\\d{3}Z$/, 'Z')",
+      "note": "colons left in the stamp",
+      "verdict": "killed",
+      "core_red": [
+        "folder names carry the stamp without colons, the versions, the writer and the conversation"
+      ],
+      "kit_red": [],
+      "kit_pass": "89"
+    },
+    {
+      "id": "M10",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "if (hoisted && k === 'sessionId' && v === reg.sessionId) continue",
+      "mutated": "if (k === 'sessionId' && v === reg.sessionId) continue",
+      "note": "hoist applied to v1 files",
+      "verdict": "killed",
+      "core_red": [
+        "v1 -> v2: the hoist, the numbers in minting order, pins from the store; the result round-trips and reads back whole",
+        "a migration is deterministic, and running the plan for an already-current file is a no-op",
+        "the hoist (v2): a record's sessionId and transcript are written only when they differ from the file's, and read back filled in"
+      ],
+      "kit_red": [],
+      "kit_pass": "89"
+    },
+    {
+      "id": "M11",
+      "file": "plugin/hooks/core/bookmarks/register-file.ts",
+      "original": "...(r.transcript === undefined && transcript !== undefined ? { transcript } : {}),",
+      "mutated": "...(transcript !== undefined ? { transcript } : {}),",
+      "note": "file transcript overrides a record's own on read",
+      "verdict": "killed",
+      "core_red": [
+        "v1 -> v2: the hoist, the numbers in minting order, pins from the store; the result round-trips and reads back whole",
+        "the hoist (v2): a record's sessionId and transcript are written only when they differ from the file's, and read back filled in"
+      ],
+      "kit_red": [],
+      "kit_pass": "89"
+    },
+    {
+      "id": "M12",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "const order = [session, ...registers.filter(s => s !== session)]",
+      "mutated": "const order = [...registers]",
+      "note": "current session not first",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "89"
+    },
+    {
+      "id": "M13",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "    if (snapshot) return\n",
+      "mutated": "",
+      "note": "snapshot taken every time",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "89"
+    },
+    {
+      "id": "M14",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "  manifest.status = 'backed-up'\n  await writeManifest()\n",
+      "mutated": "  manifest.status = 'backed-up'\n",
+      "note": "backed-up status never persisted",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "89"
+    },
+    {
+      "id": "M15",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "if (originalText !== undefined) await ports.fsWrite(`${path}.bak`, originalText)",
+      "mutated": "if (originalText === undefined) await ports.fsWrite(`${path}.bak`, text)",
+      "note": ".bak wrong or skipped",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "a v1 register is migrated at the start: snapshot first, a run folder with its manifest, the file at v2, the pins moved out of the store"
+      ],
+      "kit_pass": "88"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "89"
+    }
+  ]
+}
