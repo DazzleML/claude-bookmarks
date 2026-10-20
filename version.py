@@ -17,15 +17,15 @@ Version levels:
 
 # Version components - edit these for version bumps
 MAJOR = 0
-MINOR = 5
-PATCH = 12
+MINOR = 6
+PATCH = 0
 PHASE = ""  # Per-MINOR feature set: "" (stable), "alpha", "beta", "rc1", etc.
 
 # Project-level phase (independent of version phase)
 PROJECT_PHASE = "prealpha"  # "prealpha", "alpha", "beta", "stable", or ""
 
 # Auto-updated by git hooks - do not edit manually
-__version__ = "0.5.12_dev_157-20261017-48e5dd9c"
+__version__ = "0.6.0_dev_158-20261020-b081cd38"
 __app_name__ = "claude-bookmarks"
 
 

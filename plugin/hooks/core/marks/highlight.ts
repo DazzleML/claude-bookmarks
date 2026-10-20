@@ -11,11 +11,19 @@ export const snippetOf = (text: string) => (text.split('\n').find(l => l.trim())
 // ourselves. Undefined (caller falls back to bold) when the split is risky: no match,
 // the line is inside a fenced code block or is a table row, or the remainder is too long
 // for Markdown.
-// A selection is copied from the RENDERED reply, so `**bold**`, `code` and [links](url)
-// have lost their markup; compare against each source line with the same markup removed.
-// (Matching the raw markdown missed any line with inline formatting, 2026-10-04.)
+// A selection is copied from the RENDERED reply, so `**bold**`, `code`, [links](url) and
+// *italics* have lost their markup; compare against each source line with the same markup
+// removed. (Matching the raw markdown missed any line with inline formatting, 2026-10-04;
+// a line with `*italics*` was still missed and its mark fell to the quoted line at the
+// top of the reply, 2026-10-20.) Emphasis markers count only where Markdown would read
+// them: an opening `*` or `_` followed by a non-space, a closing one preceded by one, and
+// `_` only at a word's edge, so `2 * 3` and `a_001` are left as they are.
 export const plainMarkdown = (s: string) =>
-  s.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\*\*|__|`/g, '')
+  s
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\*\*|__|`/g, '')
+    .replace(/\*(\S(?:[^*\n]*\S)?)\*/g, '$1')
+    .replace(/(^|[^\w])_(\S(?:[^_\n]*\S)?)_(?![\w])/g, '$1$2')
 
 export type ColorSplit = {
   before: string

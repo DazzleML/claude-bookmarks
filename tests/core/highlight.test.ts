@@ -13,6 +13,29 @@ test('plainMarkdown strips bold, code and link markup the rendered reply has los
   assert.equal(plainMarkdown('__under__'), 'under')
 })
 
+// A reading mark set on "fixed what those files contain: one register" (the rendered
+// text) found no line in a reply whose source read `files *contain*: one register`, so the
+// mark was drawn as the quoted line at the top of the reply instead of on its paragraph
+// (djdarcy, 2026-10-20). Italics are stripped like bold; a lone `*` or an `_` inside a
+// word is not emphasis and stays.
+test('plainMarkdown strips *italics* and _italics_, not a lone * or an underscore inside a word', () => {
+  assert.equal(plainMarkdown('fixed what those files *contain*: one register'), 'fixed what those files contain: one register')
+  assert.equal(plainMarkdown('_italic_ at the start, and _this_ too'), 'italic at the start, and this too')
+  assert.equal(plainMarkdown('a *b* c **d** e'), 'a b c d e')
+  assert.equal(plainMarkdown('2 * 3 * 4'), '2 * 3 * 4')
+  assert.equal(plainMarkdown('a_001 and snake_case_name stay'), 'a_001 and snake_case_name stay')
+  assert.equal(plainMarkdown('`*21` then Enter'), '*21 then Enter')
+})
+
+test('colorSplit finds a line whose only markup is italics', () => {
+  const text = 'intro\n\nThe 0.5.x line (twelve commits on `dev`) fixed what those files *contain*: one register per conversation\n\nafter'
+  const c = colorSplit(text, '`', 'fixed what those files contain: one register')!
+  assert.notEqual(c, undefined)
+  assert.equal(c.pre, 'The 0.5.x line (twelve commits on dev) ')
+  assert.equal(c.post, ' per conversation')
+  assert.equal(c.after, 'after')
+})
+
 test('colorSplit finds the line, splits around it and keeps the paragraph gaps', () => {
   const text = 'intro line\n\nthe **marked** words here\n\nafter one\nafter two'
   const c = colorSplit(text, 'a', 'marked words')!

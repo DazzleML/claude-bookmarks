@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-20
+
+The 0.5.x line settled what the bookmark files hold and where they live. 0.6.x is the rest of the foundations: the keys, the input layers, the old issues, and the tidy-up around them.
+
+### Fixed
+
+- A mark set on a line of a reply that contains *italics* was drawn as a quoted line at the top of the reply instead of on its own paragraph. The words you select are copied from the reply as drawn, with the italics' markers gone, and the match against the reply's text knew about bold, code and links but not italics, so no line matched and the mark fell back to the top. Italics now match like bold does; a lone `*` (as in `2 * 3`) and an underscore inside a word (as in `a_001`) are left alone.
+
 ## [0.5.12] - 2026-10-17
 
 ### Added
@@ -1093,7 +1101,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.12...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.0...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
