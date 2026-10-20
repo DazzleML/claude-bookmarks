@@ -1,0 +1,162 @@
+{
+  "mutations": [
+    {
+      "id": "M1",
+      "file": "plugin/hooks/core/band/keymap.ts",
+      "original": "  if ([...key].length !== 1) return { reason: `\"${word}\" is not one key` }",
+      "mutated": "  if ([...key].length > 2) return { reason: `\"${word}\" is not one key` }",
+      "note": "boundary slip: multi-character words of length 2 accepted as one key",
+      "verdict": "killed",
+      "core_red": [
+        "an unknown command, an unusable key and a value with no usable key are named, and the default is kept"
+      ],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M2",
+      "file": "plugin/hooks/core/band/keymap.ts",
+      "original": "  if (UNUSABLE_NAMES.has(word)) return { reason: `${word} never reaches the band on a stock build` }",
+      "mutated": "  if (UNUSABLE_NAMES.has(key)) return { reason: `${word} never reaches the band on a stock build` }",
+      "note": "checks the mapped key instead of the typed word",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M3",
+      "file": "plugin/hooks/core/band/keymap.ts",
+      "original": "      if (words.at(-1) === HIDDEN_WORD) {",
+      "mutated": "      if (words[0] === HIDDEN_WORD) {",
+      "note": "hidden word looked up at the start instead of the end",
+      "verdict": "killed",
+      "core_red": [
+        "a command's value is its keys in order, Space spelled, hidden as the last word"
+      ],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/band/keymap.ts",
+      "original": "        shown = false\n        words.pop()",
+      "mutated": "        shown = false",
+      "note": "dropped pop: the hidden word is then parsed as a key",
+      "verdict": "killed",
+      "core_red": [
+        "a command's value is its keys in order, Space spelled, hidden as the last word"
+      ],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/core/band/keymap.ts",
+      "original": "      if (by !== undefined && by !== c.id) {",
+      "mutated": "      if (by !== undefined) {",
+      "note": "dropped the self-ownership guard in clash handling",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/core/band/keymap.ts",
+      "original": "    const finalKeys = kept.length > 0 ? kept : [...c.keys].filter(k => !taken.has(k) || taken.get(k) === c.id)",
+      "mutated": "    const finalKeys = kept.length > 0 ? kept : [...c.keys]",
+      "note": "default fallback no longer filters keys already taken",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M7",
+      "file": "plugin/hooks/core/band/keymap.ts",
+      "original": "    words.slice(0, renamable.length).forEach((w, i) => {",
+      "mutated": "    words.slice(0, renamable.length - 1).forEach((w, i) => {",
+      "note": "off-by-one in the number of list names applied",
+      "verdict": "killed",
+      "core_red": [
+        "the list keys are renamed by position; a digit, a field prefix and a clash are refused"
+      ],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/core/band/keymap.ts",
+      "original": "    if (words.length > renamable.length) problems.push(",
+      "mutated": "    if (words.length >= renamable.length) problems.push(",
+      "note": "boundary flip: warns about extras when counts are equal",
+      "verdict": "killed",
+      "core_red": [
+        "a clash on the command line goes to the first command in table order; the line and a list may share a key",
+        "the list keys are renamed by position; a digit, a field prefix and a clash are refused"
+      ],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M9",
+      "file": "plugin/hooks/core/band/keymap.ts",
+      "original": "      else if (/^[0-9]$/.test(k.key)) problems.push(",
+      "mutated": "      else if (/^[1-9]$/.test(k.key)) problems.push(",
+      "note": "digit rule regex no longer rejects 0",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M10",
+      "file": "plugin/hooks/core/band/keymap.ts",
+      "original": "    const finalKey = clash ? l.key : key",
+      "mutated": "    const finalKey = clash ? key : l.key",
+      "note": "swapped clash resolution branches",
+      "verdict": "killed",
+      "core_red": [
+        "the list keys are renamed by position; a digit, a field prefix and a clash are refused"
+      ],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M11",
+      "file": "plugin/hooks/core/band/keymap.ts",
+      "original": "    if (l.field) return l",
+      "mutated": "    if (!l.field) return l",
+      "note": "dropped negation inverts field passthrough",
+      "verdict": "killed",
+      "core_red": [
+        "an empty keymap gives tables whose hints, help and bar are the defaults, byte for byte",
+        "a command's value is its keys in order, Space spelled, hidden as the last word",
+        "an unknown command, an unusable key and a value with no usable key are named, and the default is kept",
+        "a clash on the command line goes to the first command in table order; the line and a list may share a key",
+        "the list keys are renamed by position; a digit, a field prefix and a clash are refused"
+      ],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M12",
+      "file": "plugin/hooks/core/band/keymap.ts",
+      "original": "    for (const p of l.panes) listTaken.set(`${p}:${finalKey}`, l.label)",
+      "mutated": "    for (const p of l.panes) listTaken.set(`${p}:${key}`, l.label)",
+      "note": "records the wanted key instead of the final key after a clash",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "106"
+    }
+  ]
+}

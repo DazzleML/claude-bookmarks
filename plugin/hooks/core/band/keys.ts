@@ -48,7 +48,7 @@ export type Routed = { operation: Operation; needsMore: boolean }
 // "optional fast keys"), carried only while the chords setting is on (djdarcy, 01:30:
 // kept, optional, "an easy enable/disable so their removal can be tested").
 export type Chord = 'mark' | 'jump' | 'prompts' | 'read'
-type LineCommand = {
+export type LineCommand = {
   id: string
   keys: readonly string[]
   then?: 'letter' | 'mark-letter' | 'number'
@@ -155,8 +155,11 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
 const keyName = (k: string) => (k === ' ' ? 'Space' : k)
 
 // The command line's hint, generated from the table: every key once, with what follows.
-export function lineHint(): string {
-  const parts = LINE_COMMANDS.map(c => {
+// Every reader below takes the tables it reads (`DEFAULT_TABLES` unless a keymap, #36,
+// supplied others through core/band/keymap.ts), so the band, the panes and the help agree
+// on whatever keys the person chose.
+export function lineHint(tables: Tables = DEFAULT_TABLES): string {
+  const parts = tables.line.map(c => {
     const keys = c.keys.map(keyName).join(' or ')
     const then = c.then === 'letter' || c.then === 'mark-letter' ? ' + letter' : c.then === 'number' ? ' + number' : ''
     return `${keys}${then} (${c.label})`
@@ -171,7 +174,7 @@ export function lineHint(): string {
 // djdarcy 2026-10-12: "Pane field only") and the pin's `*` -- never on the band's number
 // row and never in the hint (the field's placeholder says them); it is in the table so a
 // keymap (#36) reaches it like any other key (the keys design, 2026-10-20, unit 1).
-type ListKey = { key: string; label: string; button: string; panes: readonly Pane[]; field?: true; route: () => Routed }
+export type ListKey = { key: string; label: string; button: string; panes: readonly Pane[]; field?: true; route: () => Routed }
 export const LIST_KEYS: readonly ListKey[] = [
   { key: 'j', label: 'next', button: 'j↓', panes: ['list', 'bookmarks'], route: () => waiting({ op: 'step', dir: 1 }) },
   { key: 'k', label: 'previous', button: 'k↑', panes: ['list', 'bookmarks'], route: () => waiting({ op: 'step', dir: -1 }) },
@@ -183,36 +186,50 @@ export const LIST_KEYS: readonly ListKey[] = [
   { key: '/', label: 'filter', button: '/ filter', panes: ['list'], field: true, route: () => waiting({ op: 'filter' }) },
   { key: '*', label: 'pin prefix', button: '* pin', panes: ['list'], field: true, route: () => waiting({ op: 'pin' }) },
 ]
+// The two tables every reader works from. The defaults are the tables above; a keymap
+// (core/band/keymap.ts) derives another pair from them, and a caller that has one passes
+// it to each reader.
+export type Tables = { line: readonly LineCommand[]; list: readonly ListKey[] }
+export const DEFAULT_TABLES: Tables = { line: LINE_COMMANDS, list: LIST_KEYS }
+
+// The bar's hotkey for a command: the first of its keys the engine takes as a Button
+// hotkey -- one digit or one lowercase letter ("anything else is refused", and Shift+w is
+// "w": plugin/.claude-plugin/types/claude-code/index.d.ts, Button.hotkey). `'`, Space,
+// `?` and an uppercase key are typed in the field; their buttons are click-only.
+export function barHotkey(keys: readonly string[]): string | undefined {
+  return keys.find(k => /^[a-z0-9]$/.test(k))
+}
+
 // A pane's list keys, as the band draws them: the field-only keys are not among them.
-export function listKeysFor(pane: Pane): readonly ListKey[] {
-  return LIST_KEYS.filter(l => l.panes.includes(pane) && !l.field)
+export function listKeysFor(pane: Pane, tables: Tables = DEFAULT_TABLES): readonly ListKey[] {
+  return tables.list.filter(l => l.panes.includes(pane) && !l.field)
 }
 // A pane's field-only keys: the prefixes its `#` field reads.
-export function fieldKeysFor(pane: Pane): readonly ListKey[] {
-  return LIST_KEYS.filter(l => l.panes.includes(pane) && l.field === true)
+export function fieldKeysFor(pane: Pane, tables: Tables = DEFAULT_TABLES): readonly ListKey[] {
+  return tables.list.filter(l => l.panes.includes(pane) && l.field === true)
 }
 // What follows a field key in the pane's `#` field, when `typed` starts with the key that
 // routes to `op` (`/words` -> `words`; `*21` -> `21`), else undefined.
-export function fieldRest(typed: string, pane: Pane, op: 'filter' | 'pin'): string | undefined {
-  const k = fieldKeysFor(pane).find(l => l.route().operation.op === op)
+export function fieldRest(typed: string, pane: Pane, op: 'filter' | 'pin', tables: Tables = DEFAULT_TABLES): string | undefined {
+  const k = fieldKeysFor(pane, tables).find(l => l.route().operation.op === op)
   return k && typed.startsWith(k.key) ? typed.slice(k.key.length) : undefined
 }
 
 // Route what was typed in a context. `typed` is the whole command line for the band with
 // no pane (a command and maybe its argument), or a single key in a list pane.
-export function route(typed: string, ctx: { pane: Pane }): Routed {
+export function route(typed: string, ctx: { pane: Pane }, tables: Tables = DEFAULT_TABLES): Routed {
   if (typed === '') return waiting({ op: 'wait' })
   if (typed === '\u001b' || typed === 'Escape') return done({ op: 'close' })
   if (ctx.pane === 'list' || ctx.pane === 'bookmarks') {
     if (/^[0-9]$/.test(typed)) return waiting({ op: 'digit', digit: typed })
     if (typed === '\r' || typed === 'Enter') return done({ op: 'go' })
-    const k = LIST_KEYS.find(l => l.key === typed && l.panes.includes(ctx.pane))
+    const k = tables.list.find(l => l.key === typed && l.panes.includes(ctx.pane))
     if (k) return k.route()
-    return waiting({ op: 'hint', reason: listHint(ctx.pane) })
+    return waiting({ op: 'hint', reason: listHint(ctx.pane, tables) })
   }
   const first = typed[0]!
-  const cmd = LINE_COMMANDS.find(c => c.keys.includes(first))
-  if (!cmd) return done({ op: 'hint', reason: lineHint() })
+  const cmd = tables.line.find(c => c.keys.includes(first))
+  if (!cmd) return done({ op: 'hint', reason: lineHint(tables) })
   return cmd.route(typed.length > 1 ? typed[1] : undefined)
 }
 
@@ -229,15 +246,15 @@ export function parseListNumber(typed: string): ListNumber | undefined {
   return { n, k: Number(m[2]) }
 }
 
-export function listHint(pane: Pane): string {
-  const keys = listKeysFor(pane).map(l => `${l.key} ${l.label}`)
+export function listHint(pane: Pane, tables: Tables = DEFAULT_TABLES): string {
+  const keys = listKeysFor(pane, tables).map(l => `${l.key} ${l.label}`)
   return ['number + Enter jump', ...keys, 'Esc close'].join(' · ')
 }
 
 // Every key the command line routes, for tests and for a surface that draws one button
 // per command.
-export function lineKeys(): string[] {
-  return LINE_COMMANDS.flatMap(c => [...c.keys])
+export function lineKeys(tables: Tables = DEFAULT_TABLES): string[] {
+  return tables.line.flatMap(c => [...c.keys])
 }
 
 // The band's bar: one button per shown command, in table order. Its key is the command's
@@ -247,14 +264,14 @@ export function lineKeys(): string[] {
 // what the keys are, and `?` says the rest (it replaced `' m ␣ p b P o i`, which named
 // keys without saying what they did).
 export type BandButton = { id: string; key: string; label: string; hotkey?: string; chord?: Chord }
-export function bandButtons(opts: { chords: boolean }): BandButton[] {
-  return LINE_COMMANDS.filter(c => c.shown).map(c => {
-    const letter = c.keys.find(k => /^[A-Za-z0-9]$/.test(k))
+export function bandButtons(opts: { chords: boolean }, tables: Tables = DEFAULT_TABLES): BandButton[] {
+  return tables.line.filter(c => c.shown).map(c => {
+    const hotkey = barHotkey(c.keys)
     return {
       id: c.id,
       key: c.keys[0]!,
       label: c.button,
-      ...(letter ? { hotkey: letter } : {}),
+      ...(hotkey ? { hotkey } : {}),
       ...(opts.chords && c.chord ? { chord: c.chord } : {}),
     }
   })
@@ -262,31 +279,33 @@ export function bandButtons(opts: { chords: boolean }): BandButton[] {
 
 // The help `?` shows: every command with its keys and what it does, the list keys, and
 // the switches as they are now. One string per line.
-export function helpLines(now: { leader: string; chords: boolean; panes: boolean }): string[] {
+export function helpLines(now: { leader: string; chords: boolean; panes: boolean }, tables: Tables = DEFAULT_TABLES): string[] {
   const keysOf = (c: LineCommand) => {
     const then = c.then === 'letter' || c.then === 'mark-letter' ? ' + letter' : c.then === 'number' ? ' + number' : ''
     return `${c.keys.map(keyName).join(' or ')}${then}`
   }
-  const width = Math.max(...LINE_COMMANDS.map(c => keysOf(c).length))
+  const width = Math.max(...tables.line.map(c => keysOf(c).length))
+  const filterKey = fieldKeysFor('list', tables).find(k => k.route().operation.op === 'filter')?.key ?? '/'
   return [
     `${now.leader}, then:`,
-    ...LINE_COMMANDS.map(c => `  ${keysOf(c).padEnd(width)}  ${c.help}`),
+    ...tables.line.map(c => `  ${keysOf(c).padEnd(width)}  ${c.help}`),
     'In the prompts list:',
-    `  ${listHint('list')}; type /words in its # field to filter, N.k for a footnote`,
+    `  ${listHint('list', tables)}; type ${filterKey}words in its # field to filter, N.k for a footnote`,
     'In the bookmarks list:',
-    `  ${listHint('bookmarks')}`,
+    `  ${listHint('bookmarks', tables)}`,
     `Chords (mark, jump, prompts, read on their own keybindings): ${now.chords ? 'on' : 'off'}. Lists in a pane: ${now.panes ? 'on' : 'off'}. Both in /config.`,
   ]
 }
 
 // The same help in four lines, for a band too short for one line per command: each line
 // wraps to the band's width instead of adding rows the band would have to scroll.
-export function helpShort(now: { leader: string; chords: boolean; panes: boolean }): string[] {
-  const full = helpLines(now)
+export function helpShort(now: { leader: string; chords: boolean; panes: boolean }, tables: Tables = DEFAULT_TABLES): string[] {
+  const full = helpLines(now, tables)
+  const filterKey = fieldKeysFor('list', tables).find(k => k.route().operation.op === 'filter')?.key ?? '/'
   return [
-    `${now.leader}, then: ${lineHint().replace(/^bm: /, '').split('  ').join(' · ')}`,
-    `Prompts list: ${listHint('list')}; /words in its # field filters, N.k is a footnote`,
-    `Bookmarks list: ${listHint('bookmarks')}`,
+    `${now.leader}, then: ${lineHint(tables).replace(/^bm: /, '').split('  ').join(' · ')}`,
+    `Prompts list: ${listHint('list', tables)}; ${filterKey}words in its # field filters, N.k is a footnote`,
+    `Bookmarks list: ${listHint('bookmarks', tables)}`,
     full.at(-1)!,
   ]
 }

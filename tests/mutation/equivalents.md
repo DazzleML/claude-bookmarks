@@ -20,3 +20,8 @@ Guarded authority, not an allowlist: each group is keyed by the target file's co
 (The file changed since `66e79932a081`; the entry above is stale for this hash and is re-triaged when `migrateAtStart` is next in a sweep's scope.)
 
 - `e.kind !== 'file' || !e.name.endsWith('.json') || e.name === INDEX_JSON` -> `e.kind !== 'file' || !e.name.endsWith('.json')` in `rebuildIndex` -- **equivalent**: without the skip, `index.json` is read and handed to `parseRegister`, which refuses it (no `sessionId` string, no `perma` array) and returns undefined, so no entry is made and the two files written are byte-identical. The skip stays as a statement of intent and saves one parse. 2026-10-17, mode 1 (v0.5.10 sweep, M12).
+
+## plugin/hooks/core/band/keymap.ts @ 218ea0ee18e6
+
+- `if (UNUSABLE_NAMES.has(word))` -> `if (UNUSABLE_NAMES.has(key))` in `keyOf` -- **equivalent**: `key` differs from `word` only through `KEY_WORDS`, which maps `Space`/`space` to `' '`; no entry maps to an unusable name, so the two sets of inputs that reach the test are the same. Becomes a real difference only if a key word is ever added for an arrow or Enter, which the names set forbids by design. 2026-10-20, mode 1 (v0.6.2 sweep, M2).
+- `if (by !== undefined && by !== c.id)` -> `if (by !== undefined)` in `applyKeymap`'s clash filter -- **equivalent**: `taken` is filled for a command only after its own keys are decided, and `chosen` dedupes a value's words, so a command never meets its own id in the map; the `=== c.id` half is a belt the code never needs. The sibling filter on the fallback line has the same shape; the fallback itself is pinned (M6, killed in round 2). 2026-10-20, mode 1 (v0.6.2 sweep, M5).

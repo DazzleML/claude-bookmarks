@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-10-20
+
+### Added
+
+- Internal, no visible change yet: the keymap layer behind choosing your own keys ([#36](https://github.com/DazzleML/claude-bookmarks/issues/36)). A keymap is one value per command -- its keys in order, `Space` spelling the space, `hidden` as a last word to take the command's button off the bar, an empty value meaning the default -- plus one value for the list keys in the table's order. Applied to the plugin's key table it gives the band, the hints, the help and the panes the person's keys; a key that cannot work (an arrow name, two characters, a digit in a list) or that two commands claim is reported by name and the default kept for that command, so no command can be left unreachable. A command's bar button answers the keyboard only when one of its keys is a digit or a lowercase letter, which is what Claude Code's buttons take; any other key is typed after the leader. Where the keymap is set (the `/config` rows) comes in a later version; until then every surface draws exactly as before.
+
 ## [0.6.1] - 2026-10-20
 
 ### Changed
@@ -1107,7 +1113,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.2...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
