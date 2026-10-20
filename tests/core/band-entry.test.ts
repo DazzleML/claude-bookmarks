@@ -39,6 +39,9 @@ test('what an entry in the prompts list means', () => {
   assert.deepEqual(promptEntry('*21', 30), { kind: 'pin', typed: '21' })
   assert.deepEqual(promptEntry('*', 30), { kind: 'pin', typed: '' })
   assert.deepEqual(promptEntry('/band redraw', 30), { kind: 'filter', words: 'band redraw' })
+  // A bare slash submitted with Enter clears the filter; it is not an invalid number
+  // (mutation sweep v0.6.1, M12: a truthiness check on the words would swallow it).
+  assert.deepEqual(promptEntry('/', 30), { kind: 'filter', words: '' })
   assert.deepEqual(promptEntry('3.', 30), { kind: 'unfold', n: 3 })
   assert.deepEqual(promptEntry('3.1', 30), { kind: 'footnote', n: 3, k: 1 })
   assert.deepEqual(promptEntry(' 7 ', 30), { kind: 'jump', n: 7 })

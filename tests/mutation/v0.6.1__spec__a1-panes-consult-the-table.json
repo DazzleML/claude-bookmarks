@@ -1,0 +1,14 @@
+{"mutations": [
+{"id":"M1","file":"plugin/hooks/core/band/keys.ts","original":"l.panes.includes(pane) && !l.field)","mutated":"l.panes.includes(pane))","note":"listKeysFor drops the field-only exclusion so / and * show in the hint"},
+{"id":"M2","file":"plugin/hooks/core/band/keys.ts","original":"l.panes.includes(pane) && l.field === true)","mutated":"l.panes.includes(pane) && l.field !== true)","note":"fieldKeysFor flips to non-field keys"},
+{"id":"M3","file":"plugin/hooks/core/band/keys.ts","original":"l.panes.includes(pane) && l.field === true)","mutated":"l.field === true)","note":"fieldKeysFor drops the pane guard"},
+{"id":"M4","file":"plugin/hooks/core/band/keys.ts","original":"return k && typed.startsWith(k.key) ? typed.slice(k.key.length) : undefined","mutated":"return k && typed.startsWith(k.key) ? typed.slice(k.key.length + 1) : undefined","note":"off-by-one slice drops first char of the rest"},
+{"id":"M5","file":"plugin/hooks/core/band/keys.ts","original":"return k && typed.startsWith(k.key) ? typed.slice(k.key.length) : undefined","mutated":"return k && typed.startsWith(k.key) ? typed.slice(k.key.length) : typed","note":"non-matching input returns typed instead of undefined"},
+{"id":"M6","file":"plugin/hooks/core/band/keys.ts","original":"return k && typed.startsWith(k.key) ? typed.slice(k.key.length) : undefined","mutated":"return k && typed.endsWith(k.key) ? typed.slice(k.key.length) : undefined","note":"startsWith swapped for endsWith"},
+{"id":"M7","file":"plugin/hooks/core/band/keys.ts","original":"find(l => l.route().operation.op === op)","mutated":"find(l => l.route().operation.op !== op)","note":"=== flipped to !== when selecting the field key"},
+{"id":"M8","file":"plugin/hooks/core/band/keys.ts","original":"{ key: '*', label: 'pin prefix', button: '* pin', panes: ['list'], field: true,","mutated":"{ key: '*', label: 'pin prefix', button: '* pin', panes: ['list'],","note":"pin prefix row loses its field flag"},
+{"id":"M9","file":"plugin/hooks/core/band/keys.ts","original":"{ key: '/', label: 'filter', button: '/ filter', panes: ['list'], field: true,","mutated":"{ key: '/', label: 'filter', button: '/ filter', panes: ['bookmarks'], field: true,","note":"filter row bound to wrong pane"},
+{"id":"M10","file":"plugin/hooks/core/band/keys.ts","original":"const keys = listKeysFor(pane).map(l => `${l.key} ${l.label}`)","mutated":"const keys = LIST_KEYS.map(l => `${l.key} ${l.label}`)","note":"listHint ignores pane and field filtering"},
+{"id":"M11","file":"plugin/hooks/core/band/band-entry.ts","original":"const pin = fieldRest(t, 'list', 'pin')","mutated":"const pin = fieldRest(t, 'list', 'filter')","note":"pin read uses the filter op"},
+{"id":"M12","file":"plugin/hooks/core/band/band-entry.ts","original":"if (words !== undefined) return { kind: 'filter', words }","mutated":"if (words) return { kind: 'filter', words }","note":"truthiness check swallows empty filter text"}
+]}

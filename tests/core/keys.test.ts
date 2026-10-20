@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LINE_COMMANDS, bandButtons, helpLines, helpShort, lineHint, lineKeys, listHint, parseListNumber, route } from '../../plugin/hooks/core/band/keys.ts'
+import { LINE_COMMANDS, LIST_KEYS, bandButtons, fieldKeysFor, fieldRest, helpLines, helpShort, lineHint, lineKeys, listHint, listKeysFor, parseListNumber, route } from '../../plugin/hooks/core/band/keys.ts'
 
 test('a typed list number: a prompt, an unfold, or a footnote', () => {
   assert.deepEqual(parseListNumber('3'), { n: 3 })
@@ -101,8 +101,27 @@ test('a list pane takes digits, j/k, Enter, and its own keys', () => {
   assert.deepEqual(route('j', list).operation, { op: 'step', dir: 1 })
   assert.deepEqual(route('Enter', list), { operation: { op: 'go' }, needsMore: false })
   assert.deepEqual(route('s', list).operation, { op: 'pin' })
-  assert.equal(route('/', list).operation.op, 'hint', '`/words` belongs to the pane field, not a band key')
+  assert.equal(route('/', list).operation.op, 'filter', '`/words` is the pane field\'s own key, in the table since unit A1 of the keys design')
   assert.equal(route('h', list).operation.op, 'hint', 'groups are the bookmarks pane only')
+})
+
+// Unit A1 of the keys design (2026-10-20): the pane field's own prefixes live in the table so a
+// keymap reaches them, but never on the band's number row or in the hint.
+test("the pane field's keys are in the table, scoped to the field, and out of the band row and the hint", () => {
+  const list = { pane: 'list' as const }
+  assert.deepEqual(fieldKeysFor('list').map(k => k.key), ['/', '*'])
+  assert.deepEqual(fieldKeysFor('bookmarks').map(k => k.key), [])
+  assert.ok(!listKeysFor('list').some(k => k.key === '/' || k.key === '*'), 'the band row never draws a field key')
+  assert.ok(!listHint('list').includes('/') && !listHint('list').includes('*'), 'the hint never names a field key')
+  assert.deepEqual(route('/', list).operation, { op: 'filter' })
+  assert.deepEqual(route('*', list).operation, { op: 'pin' })
+  assert.deepEqual(route('q', list).operation, { op: 'close' })
+  assert.equal(fieldRest('/band', 'list', 'filter'), 'band')
+  assert.equal(fieldRest('*21', 'list', 'pin'), '21')
+  assert.equal(fieldRest('*21', 'list', 'filter'), undefined)
+  assert.equal(fieldRest('21', 'list', 'pin'), undefined)
+  assert.equal(fieldRest('/x', 'bookmarks', 'filter'), undefined, 'the bookmarks pane has no filter key')
+  for (const k of LIST_KEYS) assert.equal(route(k.key, { pane: k.panes[0]! }).operation.op, k.route().operation.op, k.key)
 })
 
 test('the bookmarks pane has groups and no pin', () => {

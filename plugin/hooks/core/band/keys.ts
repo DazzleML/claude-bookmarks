@@ -29,6 +29,8 @@ export type Operation =
   | { op: 'help' }
   | { op: 'wait' }
   | { op: 'hint'; reason: string }
+  // Typed in a list pane's own field only (`field` keys below): the filter's prefix (#28).
+  | { op: 'filter' }
 
 // `needsMore`: the operation waits for another key (a letter after `P`, a number in a
 // list), so whatever runs after it must leave the keyboard where it is (the after-action
@@ -164,8 +166,12 @@ export function lineHint(): string {
 
 // A list pane's keys (the prompts and bookmarks lists), in the order of their hint.
 // `button`: how the band's number row draws it (the band-mode row is generated from this
-// table too, so it cannot offer a key the hint does not name).
-type ListKey = { key: string; label: string; button: string; panes: readonly Pane[]; route: () => Routed }
+// table too, so it cannot offer a key the hint does not name). `field`: a key typed only
+// in the pane's own `#` field, as the prefix of what follows -- the filter's `/` (#28,
+// djdarcy 2026-10-12: "Pane field only") and the pin's `*` -- never on the band's number
+// row and never in the hint (the field's placeholder says them); it is in the table so a
+// keymap (#36) reaches it like any other key (the keys design, 2026-10-20, unit 1).
+type ListKey = { key: string; label: string; button: string; panes: readonly Pane[]; field?: true; route: () => Routed }
 export const LIST_KEYS: readonly ListKey[] = [
   { key: 'j', label: 'next', button: 'j↓', panes: ['list', 'bookmarks'], route: () => waiting({ op: 'step', dir: 1 }) },
   { key: 'k', label: 'previous', button: 'k↑', panes: ['list', 'bookmarks'], route: () => waiting({ op: 'step', dir: -1 }) },
@@ -174,14 +180,23 @@ export const LIST_KEYS: readonly ListKey[] = [
   { key: 'l', label: 'next group', button: '▸l', panes: ['bookmarks'], route: () => waiting({ op: 'group', dir: 1 }) },
   { key: 'c', label: 'claim', button: 'c claim', panes: ['bookmarks'], route: () => waiting({ op: 'claim' }) },
   { key: 'q', label: 'close', button: 'q close', panes: ['list', 'bookmarks'], route: () => done({ op: 'close' }) },
+  { key: '/', label: 'filter', button: '/ filter', panes: ['list'], field: true, route: () => waiting({ op: 'filter' }) },
+  { key: '*', label: 'pin prefix', button: '* pin', panes: ['list'], field: true, route: () => waiting({ op: 'pin' }) },
 ]
-// A pane's list keys, as the band draws them.
+// A pane's list keys, as the band draws them: the field-only keys are not among them.
 export function listKeysFor(pane: Pane): readonly ListKey[] {
-  return LIST_KEYS.filter(l => l.panes.includes(pane))
+  return LIST_KEYS.filter(l => l.panes.includes(pane) && !l.field)
 }
-// The prompts filter (#28) is typed as `/words` in the prompts pane's own number field
-// (djdarcy, 2026-10-12: "Pane field only"): `/` is not a letter or digit, so it can never
-// be a band key, and it is not listed here.
+// A pane's field-only keys: the prefixes its `#` field reads.
+export function fieldKeysFor(pane: Pane): readonly ListKey[] {
+  return LIST_KEYS.filter(l => l.panes.includes(pane) && l.field === true)
+}
+// What follows a field key in the pane's `#` field, when `typed` starts with the key that
+// routes to `op` (`/words` -> `words`; `*21` -> `21`), else undefined.
+export function fieldRest(typed: string, pane: Pane, op: 'filter' | 'pin'): string | undefined {
+  const k = fieldKeysFor(pane).find(l => l.route().operation.op === op)
+  return k && typed.startsWith(k.key) ? typed.slice(k.key.length) : undefined
+}
 
 // Route what was typed in a context. `typed` is the whole command line for the band with
 // no pane (a command and maybe its argument), or a single key in a list pane.
@@ -215,7 +230,7 @@ export function parseListNumber(typed: string): ListNumber | undefined {
 }
 
 export function listHint(pane: Pane): string {
-  const keys = LIST_KEYS.filter(l => l.panes.includes(pane)).map(l => `${l.key} ${l.label}`)
+  const keys = listKeysFor(pane).map(l => `${l.key} ${l.label}`)
   return ['number + Enter jump', ...keys, 'Esc close'].join(' · ')
 }
 

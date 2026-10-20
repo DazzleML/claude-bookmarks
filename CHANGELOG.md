@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-20
+
+### Changed
+
+- Internal, no visible change: the keys a list pane's own `#` field reads (`q` to close, `/words` to filter, `*N` to pin) now come from the plugin's one key table, where the band's keys already live, instead of being spelled out in the pane itself; the band's number row finds its `k`/`j` step buttons by what they do rather than by their letter. This is the ground the coming keymap stands on: a key you change in one place reaches the panes too. The hint, the help and the band row draw exactly as before.
+
 ## [0.6.0] - 2026-10-20
 
 The 0.5.x line settled what the bookmark files hold and where they live. 0.6.x is the rest of the foundations: the keys, the input layers, the old issues, and the tidy-up around them.
@@ -1101,7 +1107,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.1...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

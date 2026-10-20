@@ -99,7 +99,9 @@ export function bandView(elements: Elements, theirs: RenderChildren, m: BandMode
       // scroll ("not person-initiated", 2026-10-05 17:20 and 2026-10-07 07:10), a
       // Button press can.
       const bookmarks = m.mode === 'bookmarks'
-      const byKey = (k: string) => m.listKeys.find(l => l.key === k)!
+      // The step buttons are found by what they do, not by their letter, so a keymap's
+      // choice of keys (#36) still draws them either side of `go`.
+      const step = (dir: -1 | 1) => m.listKeys.find(l => l.operation.op === 'step' && l.operation.dir === dir)!
       const listKeyButton = (l: (typeof m.listKeys)[number]) => (
         <Button key={`band-num-${l.key}`} hotkey={l.key} label={l.button} plain {...s.button('legend')} onPress={() => a.listKey(l.operation)} />
       )
@@ -115,13 +117,13 @@ export function bandView(elements: Elements, theirs: RenderChildren, m: BandMode
         ...(bookmarks ? [] : [<Button key="band-num-dot" label="." plain {...s.button('legend')} onPress={() => a.dot()} />]),
         // `go` sits between k and j, so an arrow always has a neighbour to move to:
         // the ui.focus hook turns that move into k (previous) or j (next).
-        listKeyButton(byKey('k')),
+        listKeyButton(step(-1)),
         <Button key="band-num-go" label="go (Enter)" plain onPress={() => a.go()} />,
-        listKeyButton(byKey('j')),
+        listKeyButton(step(1)),
         // The rest of this list's keys, from the same table as its hint (core/band/keys.ts
         // LIST_KEYS); the bookmarks group's name sits between its h and l.
         ...m.listKeys
-          .filter(l => l.key !== 'j' && l.key !== 'k')
+          .filter(l => l.operation.op !== 'step')
           .flatMap(l => {
             const op = l.operation
             return op.op === 'group' && op.dir === -1

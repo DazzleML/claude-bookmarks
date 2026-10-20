@@ -1,0 +1,3 @@
+{"mutations": [
+{"id":"M12","file":"plugin/hooks/core/band/band-entry.ts","original":"if (words !== undefined) return { kind: 'filter', words }","mutated":"if (words) return { kind: 'filter', words }","note":"round 2: the round-1 survivor, after the killing assertion (a bare / clears the filter)"}
+]}

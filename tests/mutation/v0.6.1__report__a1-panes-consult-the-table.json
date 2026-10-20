@@ -1,0 +1,226 @@
+{
+  "mutations": [
+    {
+      "id": "M1",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "l.panes.includes(pane) && !l.field)",
+      "mutated": "l.panes.includes(pane))",
+      "note": "listKeysFor drops the field-only exclusion so / and * show in the hint",
+      "verdict": "killed",
+      "core_red": [
+        "the pane field's keys are in the table, scoped to the field, and out of the band row and the hint",
+        "each list pane's hint is generated from its own keys"
+      ],
+      "kit_red": [
+        "q in a list closes the pane and brings the bar back (Q261012-09)",
+        "the list row draws exactly the letter keys its hint names",
+        "panes off: p takes its key in the band and opens no pane",
+        "a footnote number that does not exist says so",
+        "in the band, 1 . then go unfolds #1",
+        "hidden: 1 . 1 go still finds the footnote; 1 . go says footnotes are hidden",
+        "p in the band opens the prompts pane and the band takes a number",
+        "the band's number row draws the step keys either side of go and no field key",
+        "2 go with nothing typed closes the list and brings the bar back (settle, esc)",
+        "4 a submitted prompt ends the band waiting for a number"
+      ],
+      "kit_pass": "96"
+    },
+    {
+      "id": "M2",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "l.panes.includes(pane) && l.field === true)",
+      "mutated": "l.panes.includes(pane) && l.field !== true)",
+      "note": "fieldKeysFor flips to non-field keys",
+      "verdict": "killed",
+      "core_red": [
+        "what an entry in the prompts list means",
+        "the pane field's keys are in the table, scoped to the field, and out of the band row and the hint"
+      ],
+      "kit_red": [
+        "/words narrows the list, numbers kept, words in any order",
+        "the kept text is searched past the excerpt, and a smaller budget drops it at once",
+        "without the slash the list is whole",
+        "a filter typed in the field still narrows the list, and a lone letter that is not a key does nothing"
+      ],
+      "kit_pass": "102"
+    },
+    {
+      "id": "M3",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "l.panes.includes(pane) && l.field === true)",
+      "mutated": "l.field === true)",
+      "note": "fieldKeysFor drops the pane guard",
+      "verdict": "killed",
+      "core_red": [
+        "the pane field's keys are in the table, scoped to the field, and out of the band row and the hint"
+      ],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "return k && typed.startsWith(k.key) ? typed.slice(k.key.length) : undefined",
+      "mutated": "return k && typed.startsWith(k.key) ? typed.slice(k.key.length + 1) : undefined",
+      "note": "off-by-one slice drops first char of the rest",
+      "verdict": "killed",
+      "core_red": [
+        "what an entry in the prompts list means",
+        "the pane field's keys are in the table, scoped to the field, and out of the band row and the hint"
+      ],
+      "kit_red": [
+        "/words narrows the list, numbers kept, words in any order",
+        "the kept text is searched past the excerpt, and a smaller budget drops it at once"
+      ],
+      "kit_pass": "104"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "return k && typed.startsWith(k.key) ? typed.slice(k.key.length) : undefined",
+      "mutated": "return k && typed.startsWith(k.key) ? typed.slice(k.key.length) : typed",
+      "note": "non-matching input returns typed instead of undefined",
+      "verdict": "killed",
+      "core_red": [
+        "what an entry in the prompts list means",
+        "the pane field's keys are in the table, scoped to the field, and out of the band row and the hint"
+      ],
+      "kit_red": [
+        "a footnote number that does not exist says so",
+        "in the band, 1 . then go unfolds #1",
+        "hidden: 1 . 1 go still finds the footnote; 1 . go says footnotes are hidden",
+        "a filter typed in the field still narrows the list, and a lone letter that is not a key does nothing"
+      ],
+      "kit_pass": "102"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "return k && typed.startsWith(k.key) ? typed.slice(k.key.length) : undefined",
+      "mutated": "return k && typed.endsWith(k.key) ? typed.slice(k.key.length) : undefined",
+      "note": "startsWith swapped for endsWith",
+      "verdict": "killed",
+      "core_red": [
+        "what an entry in the prompts list means",
+        "the pane field's keys are in the table, scoped to the field, and out of the band row and the hint"
+      ],
+      "kit_red": [
+        "/words narrows the list, numbers kept, words in any order",
+        "the kept text is searched past the excerpt, and a smaller budget drops it at once",
+        "without the slash the list is whole",
+        "a filter typed in the field still narrows the list, and a lone letter that is not a key does nothing"
+      ],
+      "kit_pass": "102"
+    },
+    {
+      "id": "M7",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "find(l => l.route().operation.op === op)",
+      "mutated": "find(l => l.route().operation.op !== op)",
+      "note": "=== flipped to !== when selecting the field key",
+      "verdict": "killed",
+      "core_red": [
+        "what an entry in the prompts list means",
+        "the pane field's keys are in the table, scoped to the field, and out of the band row and the hint"
+      ],
+      "kit_red": [
+        "/words narrows the list, numbers kept, words in any order",
+        "the kept text is searched past the excerpt, and a smaller budget drops it at once",
+        "without the slash the list is whole",
+        "a filter typed in the field still narrows the list, and a lone letter that is not a key does nothing"
+      ],
+      "kit_pass": "102"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "{ key: '*', label: 'pin prefix', button: '* pin', panes: ['list'], field: true,",
+      "mutated": "{ key: '*', label: 'pin prefix', button: '* pin', panes: ['list'],",
+      "note": "pin prefix row loses its field flag",
+      "verdict": "killed",
+      "core_red": [
+        "what an entry in the prompts list means",
+        "the pane field's keys are in the table, scoped to the field, and out of the band row and the hint",
+        "each list pane's hint is generated from its own keys"
+      ],
+      "kit_red": [
+        "q in a list closes the pane and brings the bar back (Q261012-09)",
+        "the list row draws exactly the letter keys its hint names",
+        "panes off: p takes its key in the band and opens no pane",
+        "a footnote number that does not exist says so",
+        "in the band, 1 . then go unfolds #1",
+        "hidden: 1 . 1 go still finds the footnote; 1 . go says footnotes are hidden",
+        "p in the band opens the prompts pane and the band takes a number",
+        "the band's number row draws the step keys either side of go and no field key",
+        "2 go with nothing typed closes the list and brings the bar back (settle, esc)",
+        "4 a submitted prompt ends the band waiting for a number"
+      ],
+      "kit_pass": "96"
+    },
+    {
+      "id": "M9",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "{ key: '/', label: 'filter', button: '/ filter', panes: ['list'], field: true,",
+      "mutated": "{ key: '/', label: 'filter', button: '/ filter', panes: ['bookmarks'], field: true,",
+      "note": "filter row bound to wrong pane",
+      "verdict": "killed",
+      "core_red": [
+        "what an entry in the prompts list means",
+        "a list pane takes digits, j/k, Enter, and its own keys",
+        "the pane field's keys are in the table, scoped to the field, and out of the band row and the hint"
+      ],
+      "kit_red": [
+        "/words narrows the list, numbers kept, words in any order",
+        "the kept text is searched past the excerpt, and a smaller budget drops it at once",
+        "without the slash the list is whole",
+        "a filter typed in the field still narrows the list, and a lone letter that is not a key does nothing"
+      ],
+      "kit_pass": "102"
+    },
+    {
+      "id": "M10",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "const keys = listKeysFor(pane).map(l => `${l.key} ${l.label}`)",
+      "mutated": "const keys = LIST_KEYS.map(l => `${l.key} ${l.label}`)",
+      "note": "listHint ignores pane and field filtering",
+      "verdict": "killed",
+      "core_red": [
+        "the pane field's keys are in the table, scoped to the field, and out of the band row and the hint",
+        "each list pane's hint is generated from its own keys"
+      ],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M11",
+      "file": "plugin/hooks/core/band/band-entry.ts",
+      "original": "const pin = fieldRest(t, 'list', 'pin')",
+      "mutated": "const pin = fieldRest(t, 'list', 'filter')",
+      "note": "pin read uses the filter op",
+      "verdict": "killed",
+      "core_red": [
+        "what an entry in the prompts list means"
+      ],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M12",
+      "file": "plugin/hooks/core/band/band-entry.ts",
+      "original": "if (words !== undefined) return { kind: 'filter', words }",
+      "mutated": "if (words) return { kind: 'filter', words }",
+      "note": "truthiness check swallows empty filter text",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "106"
+    }
+  ]
+}

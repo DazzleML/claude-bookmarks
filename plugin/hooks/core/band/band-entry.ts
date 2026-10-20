@@ -3,7 +3,7 @@
 // what a typed entry means in the prompts list, when a number is complete, where j/k go,
 // and which group comes next. Moved from register.tsx under /move-code, comments as they
 // were. The state reads, the scrolls, the toasts and the timers stay there.
-import { parseListNumber } from './keys.ts'
+import { fieldRest, parseListNumber } from './keys.ts'
 import { numberFootnotes, type FootnoteRef } from '../prompts/prompt-rows.ts'
 
 // When a typed prompt number jumps (a setting, #7): 'enter' waits for Enter, so the
@@ -50,8 +50,11 @@ export type PromptEntry =
   | { kind: 'invalid'; typed: string }
 export function promptEntry(typed: string, count: number): PromptEntry {
   const t = typed.trim()
-  if (t.startsWith('*')) return { kind: 'pin', typed: t.slice(1) }
-  if (t.startsWith('/')) return { kind: 'filter', words: t.slice(1) }
+  // The prefixes are the pane field's own keys in the table (keys.ts LIST_KEYS, `field`).
+  const pin = fieldRest(t, 'list', 'pin')
+  if (pin !== undefined) return { kind: 'pin', typed: pin }
+  const words = fieldRest(t, 'list', 'filter')
+  if (words !== undefined) return { kind: 'filter', words }
   const parsed = parseListNumber(t)
   if (parsed?.unfold) return { kind: 'unfold', n: parsed.n }
   if (parsed?.k !== undefined) return { kind: 'footnote', n: parsed.n, k: parsed.k }
