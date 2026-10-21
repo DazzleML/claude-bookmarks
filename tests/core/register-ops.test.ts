@@ -228,6 +228,87 @@ test('marksOf derives the panes\' marks from the slots; a cleared letter shows n
   assert.match(elsewhere.error, /not in a's history/)
 })
 
+// --- D: forget (the keys design, unit 5; djdarcy 2026-10-20: the latest mark with no history or reference goes without a tombstone) ---
+
+test('forget: a letter with one entry and nothing made from its place goes outright: no record, no tombstone, no slot', () => {
+  const d = diskRegister()
+  // On a message with no bookmark (`f`): a place with a bookmark on it counts as referred to.
+  const a1 = commit(d, { op: 'setMark', owner: 'user', letter: 'a', place: place('f', 'a plain head', 'words'), at: T0 + 3000 }, T0 + 3000) // n 13
+  const gone = applyOp(a1, { op: 'forget', owner: 'user', letter: 'a' }, T0 + 3100)
+  assert.ok(!('error' in gone))
+  assert.equal(gone.removed?.n, 13)
+  assert.equal(gone.tombstoned, false)
+  assert.ok(!gone.register.perma.some(r => r.n === 13), 'the record is gone')
+  assert.equal(gone.register.tombstones.length, d.tombstones.length, 'and left no tombstone')
+  assert.equal(gone.register.slots?.user?.a, undefined, 'the letter reads as never used')
+  assert.equal(marksOf(gone.register, 'user').a, undefined)
+  assert.equal(gone.register.rev, a1.rev + 1, 'one bump')
+  // Nothing current: nothing to forget (d cleared it, or it was never set).
+  const none = applyOp(gone.register, { op: 'forget', owner: 'user', letter: 'a' }, T0 + 3200)
+  assert.ok('error' in none)
+  assert.match(none.error, /no current mark/)
+  // A letter d cleared (current null, history kept) has no current mark either: refused, not a silent bump.
+  const cleared = commit(a1, { op: 'clearMarks', owner: 'user', letters: ['a'] }, T0 + 3050)
+  const refused = applyOp(cleared, { op: 'forget', owner: 'user', letter: 'a' }, T0 + 3060)
+  assert.ok('error' in refused)
+  // A slot still naming a record the file no longer holds (a hand edit, a restored copy) is mended, not refused.
+  const stale: Register = { ...a1, perma: a1.perma.filter(r => r.n !== 13) }
+  const mended = applyOp(stale, { op: 'forget', owner: 'user', letter: 'a' }, T0 + 3070)
+  assert.ok(!('error' in mended))
+  assert.equal(mended.register.slots?.user?.a, undefined)
+  assert.equal(mended.register.tombstones.length, d.tombstones.length)
+})
+
+test('forget: with older history, or a bookmark made from the place, the record leaves a tombstone and the rest of the history stays', () => {
+  const d = diskRegister()
+  const a1 = commit(d, { op: 'setMark', owner: 'user', letter: 'a', place: place('a', 'first head'), at: T0 + 3000 }, T0 + 3000) // n 13
+  const a2 = commit(a1, { op: 'setMark', owner: 'user', letter: 'a', place: place('e', 'second head'), at: T0 + 3200 }, T0 + 3200) // n 14
+  const r = applyOp(a2, { op: 'forget', owner: 'user', letter: 'a' }, T0 + 3300)
+  assert.ok(!('error' in r))
+  assert.equal(r.tombstoned, true)
+  assert.ok(!r.register.perma.some(x => x.n === 14))
+  assert.ok(r.register.tombstones.some(t => t.n === 14 && t.removedAt === T0 + 3300 && t.removedBy === 'user'))
+  assert.deepEqual(r.register.slots?.user?.a, { current: null, history: [{ n: 13, at: T0 + 3000 }] })
+  // An earlier tombstone (a removed bookmark) is still there after the forget.
+  const withTomb = commit(a2, { op: 'remove', id: { n: 1, uuid: u('a') }, removedBy: 'claude' }, T0 + 3250)
+  const r2 = applyOp(withTomb, { op: 'forget', owner: 'user', letter: 'a' }, T0 + 3300)
+  assert.ok(!('error' in r2) && r2.register.tombstones.length === 2 && r2.register.tombstones.some(t => t.n === 1), 'the older tombstone stays')
+  assert.deepEqual(letterHistory(r.register, 'user', 'a').map(h => [h.name, h.n]), [['a_001', 13]])
+  // The older place comes back by n, as before.
+  const back = commit(r.register, { op: 'bringBack', owner: 'user', letter: 'a', n: 13, at: T0 + 3400 }, T0 + 3400)
+  assert.equal(marksOf(back, 'user').a?.uuid, u('a'))
+  // One entry, but a bookmark was made from it (promote mints on the same message): a tombstone, and the slot goes.
+  const promoted = commit(a1, { op: 'mint', mint: { ...mintOf('a', 'promoted', 'user'), by: 'user', source: 'promote' } }, T0 + 3500)
+  const f = applyOp(promoted, { op: 'forget', owner: 'user', letter: 'a' }, T0 + 3600)
+  assert.ok(!('error' in f) && f.tombstoned === true)
+  assert.equal(f.register.slots?.user?.a, undefined)
+  assert.ok(f.register.tombstones.some(t => t.n === 13))
+  assert.ok(f.register.perma.some(x => x.label === 'promoted'), 'the bookmark stays')
+  // A record that points at the mark by `rel` (its `to` is the uuid) keeps the mark on a tombstone too.
+  const fa = commit(d, { op: 'setMark', owner: 'user', letter: 'a', place: place('f', 'a plain head'), at: T0 + 3000 }, T0 + 3000) // n 13 on f, no bookmark there
+  const linked: Register = { ...fa, perma: fa.perma.map(r => (r.n === 1 ? { ...r, rel: [{ kind: 'see', to: u('f') }] } : r)) }
+  const l = applyOp(linked, { op: 'forget', owner: 'user', letter: 'a' }, T0 + 3700)
+  assert.ok(!('error' in l) && l.tombstoned === true, 'referred to by rel: a tombstone')
+})
+
+test('union: a mark forgotten outright on this side does not come back from an older copy that still holds it', () => {
+  const d = diskRegister()
+  const both = commit(d, { op: 'setMark', owner: 'user', letter: 'a', place: place('f', 'a plain head'), at: T0 + 3000 }, T0 + 3000) // n 13, in both copies; no bookmark on f
+  const gone = commit(both, { op: 'forget', owner: 'user', letter: 'a' }, T0 + 3100) // this side: no tombstone
+  const theirs = commit(both, { op: 'mint', mint: mintOf('g', 'theirs only', 'user') }, T0 + 3050) // the other copy minted a bookmark this side never saw (a rev tie: the left-hand copy is the base)
+  const merged = union(gone, theirs, T0 + 3200)
+  assert.ok(!merged.register.perma.some(r => r.n === 13), 'no slot on the merged side names it, so the orphan is dropped')
+  assert.equal(merged.register.slots?.user?.a, undefined)
+  assert.ok(merged.register.perma.some(r => r.label === 'theirs only'), 'a bookmark from the other copy still arrives: only letter marks are orphan-checked')
+  // A union whose only difference is one record the other copy holds (the counters already agree) is a change, and that record arrives.
+  const left = commit(d, { op: 'mint', mint: mintOf('g', 'left', 'user') }, T0 + 4000) // n 13, nextN 14
+  const right = commit({ ...d, nextN: 14 }, { op: 'mint', mint: mintOf('h', 'right', 'user') }, T0 + 4000) // n 14, nextN 15
+  const onlyPush = union({ ...left, nextN: 15 }, right, T0 + 4100)
+  assert.ok(!onlyPush.unchanged, 'a pushed record is a change')
+  assert.ok(onlyPush.register.perma.some(r => r.label === 'right') && onlyPush.register.perma.some(r => r.label === 'left'))
+  assert.ok(union(merged.register, merged.register, T0 + 3300).unchanged, 'the union with itself still changes nothing')
+})
+
 test('a letter\'s history is capped at LETTER_HISTORY_CAP; an unnumbered (v1) file refuses a mark', () => {
   let reg = diskRegister()
   for (let i = 0; i < LETTER_HISTORY_CAP + 5; i++) {

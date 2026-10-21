@@ -102,6 +102,16 @@ export async function perform(ports: CommandLinePorts, operation: Operation, via
       await ports.promoteLetter(operation.letter)
       owedAfterAction(ports)
       return
+    case 'delete':
+      await ports.clearCommandLine()
+      await ports.clearLetter(operation.letter)
+      owedAfterAction(ports)
+      return
+    case 'forget':
+      await ports.clearCommandLine()
+      await ports.forgetLetter(operation.letter)
+      owedAfterAction(ports)
+      return
     case 'jumplist':
       // `<leader> ←` / `→` are wanted too; whether an arrow reaches this field is #23.
       await ports.clearCommandLine()

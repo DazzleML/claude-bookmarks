@@ -68,7 +68,7 @@ test('a clash on the command line goes to the first command in table order; the 
   assert.deepEqual(keysOf(tables, 'mark'), ['x'])
   assert.deepEqual(keysOf(tables, 'jump'), ["'", 'j'], 'jump keeps its default')
   assert.deepEqual(problems, [{ command: 'jump', key: 'x', reason: 'already mark' }])
-  const shared = applyKeymap({ jump: 'j', list: 'j k s h l c q' })
+  const shared = applyKeymap({ jump: 'j', list: 'j k s h l c d q' })
   assert.deepEqual(shared.problems, [], 'j on the line and j in a list are different contexts')
   // A command whose every key clashes falls back to its defaults -- minus any default an
   // earlier command now holds (sweep v0.6.2, M6: mark took j, so jump keeps only ').
@@ -90,7 +90,8 @@ test('the bar hotkey is the first key the engine takes: one digit or one lowerca
 })
 
 test('the list keys are renamed by position; a digit, a field prefix and a clash are refused', () => {
-  const { tables, problems } = applyKeymap({ list: 'j k s h l c x' })
+  // The list value is positional in the table's order: j k s h l c d q (d is the bookmarks list's remove, unit 5).
+  const { tables, problems } = applyKeymap({ list: 'j k s h l c d x' })
   assert.deepEqual(problems, [])
   assert.equal(route('x', list, tables).operation.op, 'close')
   assert.equal(route('q', list, tables).operation.op, 'hint')
@@ -112,6 +113,6 @@ test('the list keys are renamed by position; a digit, a field prefix and a clash
   assert.equal(new Set(chained.tables.list.filter(l => !l.field).map(l => l.key)).size, chained.tables.list.filter(l => !l.field).length, 'no list key twice')
   // 0 is a digit too (sweep v0.6.2, M9).
   assert.deepEqual(applyKeymap({ list: '0' }).problems.map(p => p.key), ['0'])
-  const extra = applyKeymap({ list: 'j k s h l c q z' })
-  assert.equal(extra.problems[0]!.reason, '8 keys for 7 list commands; the extra are ignored')
+  const extra = applyKeymap({ list: 'j k s h l c d q z' })
+  assert.equal(extra.problems[0]!.reason, '9 keys for 8 list commands; the extra are ignored')
 })

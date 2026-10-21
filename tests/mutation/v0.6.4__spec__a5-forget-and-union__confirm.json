@@ -1,0 +1,8 @@
+{
+  "target": "plugin/hooks/core/bookmarks/register-ops.ts, unit A5.1: the two round-2 survivors re-run after their killers (an earlier tombstone stays; a union whose only change is a pushed record is a change)",
+  "generation": "the round-2 mutants N3 and N6 as generated (mode 1); no new generation (the two-round cap)",
+  "mutations": [
+    {"id": "N3", "file": "plugin/hooks/core/bookmarks/register-ops.ts", "original": "tombstones: [...reg.tombstones, tomb] }", "mutated": "tombstones: [tomb] }", "note": "tombstones spread dropped, prior tombstones lost"},
+    {"id": "N6", "file": "plugin/hooks/core/bookmarks/register-ops.ts", "original": "  if (live.some(r => pushed.has(r))) changed = true\n", "mutated": "", "note": "changed flag no longer set when pushed records survive"}
+  ]
+}

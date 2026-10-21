@@ -326,3 +326,31 @@ export async function delmarksCommand(ports: MarksPorts, args: string) {
   ports.log(`[bm] deleted marks ${gone.join(' ') || '(none)'}${missing.length ? `; not set: ${missing.join(' ')}` : ''}`)
   ports.toast(gone.length ? `deleted mark${gone.length > 1 ? 's' : ''} ${gone.join(' ')}` : `not set: ${missing.join(' ')}`)
 }
+
+// The delete gesture from the band (the keys design, unit 5; djdarcy 2026-10-20: `d`/`D`, no
+// confirmation, a toast naming what happened). `d` + letter clears the letter, its history
+// kept, as /bm-delmarks does; `D` + letter forgets its current record too (register-ops.ts
+// `forget`: outright when nothing refers to it, else a tombstone keeps its place).
+async function letterDone(ports: MarksPorts, letter: string) {
+  ports.markCache.replace(await ports.loadMarks())
+  const showing = await ports.shown()
+  if (showing && showing.letter === letter) await clearShown(ports)
+}
+
+export async function clearLetter(ports: MarksPorts, letter: string) {
+  if (!(await ports.loadMarks())[letter]) return void ports.toast(`mark ${letter} is not set`)
+  const r = await ports.clearMarks([letter])
+  if (r.error) return void ports.toast(r.error, 8000)
+  await letterDone(ports, letter)
+  ports.log(`[bm] cleared mark ${letter} (its history is kept)`)
+  ports.toast(`mark ${letter} cleared; its history is kept`)
+}
+
+export async function forgetLetter(ports: MarksPorts, letter: string) {
+  if (!(await ports.loadMarks())[letter]) return void ports.toast(`mark ${letter} is not set`)
+  const r = await ports.forgetMark(letter)
+  if (r.error) return void ports.toast(r.error, 8000)
+  await letterDone(ports, letter)
+  ports.log(`[bm] forgot mark ${letter}${r.tombstoned ? ' (a tombstone keeps its place; its older history stays)' : ' (outright: nothing referred to it)'}`)
+  ports.toast(r.tombstoned ? `mark ${letter} forgotten; its older history stays` : `mark ${letter} forgotten`)
+}

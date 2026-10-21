@@ -123,6 +123,11 @@ export async function bandListKey(ports: BandCorePorts & PanePorts & ListPorts, 
   else if (operation.op === 'pin') await bandPin(ports)
   else if (operation.op === 'group') await ports.groupStep(operation.dir)
   else if (operation.op === 'claim') await bandClaim(ports)
+  else if (operation.op === 'remove') {
+    // `d` after the number (the keys design, unit 5): that bookmark leaves the list; the number is spent.
+    await ports.removeBookmarkNumber(await ports.bandNum())
+    await ports.setBandNum('')
+  }
 }
 
 // Returns the refusal, if any.

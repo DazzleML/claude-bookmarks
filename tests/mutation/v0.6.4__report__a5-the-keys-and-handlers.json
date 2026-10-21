@@ -1,0 +1,162 @@
+{
+  "mutations": [
+    {
+      "id": "M1",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "? done({ op: 'delete', letter: next })",
+      "mutated": "? done({ op: 'forget', letter: next })",
+      "note": "delete row routes to forget op",
+      "verdict": "killed",
+      "core_red": [
+        "the command line routes today's commands to the same operations"
+      ],
+      "kit_red": [
+        "d a clears the letter: it points at nothing, its history and its record stay"
+      ],
+      "kit_pass": "116"
+    },
+    {
+      "id": "M2",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "? done({ op: 'forget', letter: next })",
+      "mutated": "? done({ op: 'delete', letter: next })",
+      "note": "forget row routes to delete op",
+      "verdict": "killed",
+      "core_red": [
+        "the command line routes today's commands to the same operations"
+      ],
+      "kit_red": [
+        "D a forgets the letter: one entry and nothing referring to it, so the record and the slot go without a tombstone"
+      ],
+      "kit_pass": "116"
+    },
+    {
+      "id": "M3",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "id: 'delete',\n    keys: ['d'],",
+      "mutated": "id: 'delete',\n    keys: ['D'],",
+      "note": "delete row bound to wrong key",
+      "verdict": "killed",
+      "core_red": [
+        "an empty keymap gives tables whose hints, help and bar are the defaults, byte for byte",
+        "a command's value is its keys in order, Space spelled, hidden as the last word",
+        "an unknown command, an unusable key and a value with no usable key are named, and the default is kept",
+        "a clash on the command line goes to the first command in table order; the line and a list may share a key",
+        "the list keys are renamed by position; a digit, a field prefix and a clash are refused",
+        "the command line routes today's commands to the same operations",
+        "P alone waits for its letter; a bad letter gives a hint, not an action",
+        "the hint names every routed key exactly once",
+        "no key belongs to two commands"
+      ],
+      "kit_red": [
+        "d a clears the letter: it points at nothing, its history and its record stay",
+        "D a forgets the letter: one entry and nothing referring to it, so the record and the slot go without a tombstone"
+      ],
+      "kit_pass": "115"
+    },
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "id: 'forget',\n    keys: ['D'],\n    then: 'mark-letter',\n    label: 'forget mark',\n    button: 'forget',\n    shown: false,",
+      "mutated": "id: 'forget',\n    keys: ['D'],\n    then: 'mark-letter',\n    label: 'forget mark',\n    button: 'forget',\n    shown: true,",
+      "note": "forget row shown flipped",
+      "verdict": "killed",
+      "core_red": [
+        "the bar: one button per shown command, labelled once, ? last",
+        "a hotkey only where the engine takes one: not ', Space or ?"
+      ],
+      "kit_red": [
+        "? in a tall band: one line per command, and close returns to the bar",
+        "q in a list closes the pane and brings the bar back (Q261012-09)",
+        "chords off: no button carries a borrowed action",
+        "the idle band: the command field, the labelled commands, and ?",
+        "2 go with nothing typed closes the list and brings the bar back (settle, esc)",
+        "4 a submitted prompt ends the band waiting for a number"
+      ],
+      "kit_pass": "111"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "? done({ op: 'delete', letter: next })\n          : done({ op: 'hint', reason: 'd then",
+      "mutated": "? done({ op: 'delete', letter: next })\n          : done({ op: 'wait' })\n        || done({ op: 'hint', reason: 'd then",
+      "note": "delete row non-letter returns wait instead of hint",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "117"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "id: 'forget',\n    keys: ['D'],\n    then: 'mark-letter',\n    label: 'forget mark',\n    button: 'forget',\n    shown: false,\n    help: 'forget mark a-z: its record goes too (outright when nothing else refers to it)',\n    route: next =>\n      next === undefined\n        ? waiting({ op: 'wait' })\n        : /^[a-z`]$/.test(next)",
+      "mutated": "id: 'forget',\n    keys: ['D'],\n    then: 'mark-letter',\n    label: 'forget mark',\n    button: 'forget',\n    shown: false,\n    help: 'forget mark a-z: its record goes too (outright when nothing else refers to it)',\n    route: next =>\n      next === undefined\n        ? waiting({ op: 'wait' })\n        : /^[a-z]$/.test(next)",
+      "note": "forget regex narrowed, drops backtick mark",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "117"
+    },
+    {
+      "id": "M7",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "{ key: 'd', label: 'remove', button: 'd remove', panes: ['bookmarks'],",
+      "mutated": "{ key: 'd', label: 'remove', button: 'd remove', panes: ['marks'],",
+      "note": "list row pane changed",
+      "verdict": "killed",
+      "core_red": [
+        "the command line routes today's commands to the same operations",
+        "the pane field's keys are in the table, scoped to the field, and out of the band row and the hint",
+        "each list pane's hint is generated from its own keys"
+      ],
+      "kit_red": [
+        "d after a number in the bookmarks row removes that bookmark: a tombstone keeps its place"
+      ],
+      "kit_pass": "116"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/handlers/marks.ts",
+      "original": "  await letterDone(ports, letter)\n  ports.log(`[bm] cleared mark",
+      "mutated": "  ports.log(`[bm] cleared mark",
+      "note": "clearLetter skips letterDone",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "117"
+    },
+    {
+      "id": "M9",
+      "file": "plugin/hooks/handlers/marks.ts",
+      "original": "ports.toast(r.tombstoned ? `mark ${letter} forgotten; its older history stays` : `mark ${letter} forgotten`)",
+      "mutated": "ports.toast(!r.tombstoned ? `mark ${letter} forgotten; its older history stays` : `mark ${letter} forgotten`)",
+      "note": "tombstoned toast branch inverted",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "D a forgets the letter: one entry and nothing referring to it, so the record and the slot go without a tombstone"
+      ],
+      "kit_pass": "116"
+    },
+    {
+      "id": "M10",
+      "file": "plugin/hooks/handlers/marks.ts",
+      "original": "export async function forgetLetter(ports: MarksPorts, letter: string) {\n  if (!(await ports.loadMarks())[letter]) return void ports.toast(`mark ${letter} is not set`)",
+      "mutated": "export async function forgetLetter(ports: MarksPorts, letter: string) {",
+      "note": "forgetLetter drops not-set guard",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "D on a letter that is not set says so and changes no file"
+      ],
+      "kit_pass": "116"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "117"
+    }
+  ]
+}

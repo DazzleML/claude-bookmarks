@@ -1,0 +1,125 @@
+{
+  "mutations": [
+    {
+      "id": "N1",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "removedAt: now, removedBy: 'user' }",
+      "mutated": "removedAt: 0, removedBy: 'user' }",
+      "note": "tombstone removedAt zeroed",
+      "verdict": "killed",
+      "core_red": [
+        "forget: with older history, or a bookmark made from the place, the record leaves a tombstone and the rest of the history stays"
+      ],
+      "kit_red": [],
+      "kit_pass": "113"
+    },
+    {
+      "id": "N2",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "return { register: withSlots({ ...reg, perma }, op.owner, next, now), removed: rec, tombstoned: false }",
+      "mutated": "return { register: withSlots(reg, op.owner, next, now), removed: rec, tombstoned: false }",
+      "note": "outright path leaves record in perma",
+      "verdict": "killed",
+      "core_red": [
+        "forget: a letter with one entry and nothing made from its place goes outright: no record, no tombstone, no slot",
+        "union: a mark forgotten outright on this side does not come back from an older copy that still holds it"
+      ],
+      "kit_red": [],
+      "kit_pass": "113"
+    },
+    {
+      "id": "N3",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "tombstones: [...reg.tombstones, tomb] }",
+      "mutated": "tombstones: [tomb] }",
+      "note": "tombstones spread dropped, prior tombstones lost",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "113"
+    },
+    {
+      "id": "N4",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "removed: rec, tombstoned: true }",
+      "mutated": "removed: rec, tombstoned: false }",
+      "note": "tombstoned flag wrong on tombstone path",
+      "verdict": "killed",
+      "core_red": [
+        "forget: with older history, or a bookmark made from the place, the record leaves a tombstone and the rest of the history stays"
+      ],
+      "kit_red": [],
+      "kit_pass": "113"
+    },
+    {
+      "id": "N5",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "for (const letters of Object.values(base.slots ?? {})) for (const s of Object.values(letters ?? {})) for (const h of s.history) named.add(h.n)",
+      "mutated": "for (const letters of Object.values(other.slots ?? {})) for (const s of Object.values(letters ?? {})) for (const h of s.history) named.add(h.n)",
+      "note": "named built from other.slots instead of base.slots",
+      "verdict": "killed",
+      "core_red": [
+        "union: a mark forgotten outright on this side does not come back from an older copy that still holds it"
+      ],
+      "kit_red": [],
+      "kit_pass": "113"
+    },
+    {
+      "id": "N6",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "  if (live.some(r => pushed.has(r))) changed = true\n",
+      "mutated": "",
+      "note": "changed flag no longer set when pushed records survive",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "113"
+    },
+    {
+      "id": "M1",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "if (!slot || slot.current === null) return { error: `${op.letter} has no current mark to forget` }",
+      "mutated": "if (!slot) return { error: `${op.letter} has no current mark to forget` }",
+      "note": "round 1 survivor: forgetting a cleared letter no longer errors",
+      "verdict": "killed",
+      "core_red": [
+        "forget: a letter with one entry and nothing made from its place goes outright: no record, no tombstone, no slot"
+      ],
+      "kit_red": [],
+      "kit_pass": "113"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "if (!rec) return { register: withSlots(reg, op.owner, next, now) }",
+      "mutated": "if (!rec) return { error: `${op.letter} has no record` }",
+      "note": "round 1 survivor: the mend-the-slot path replaced by an error",
+      "verdict": "killed",
+      "core_red": [
+        "forget: a letter with one entry and nothing made from its place goes outright: no record, no tombstone, no slot"
+      ],
+      "kit_red": [],
+      "kit_pass": "113"
+    },
+    {
+      "id": "M10",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "const live = kept.filter(r => !(pushed.has(r) && tierOf(r) === 'mark' && r.n !== undefined && !named.has(r.n)))",
+      "mutated": "const live = kept.filter(r => !(pushed.has(r) && r.n !== undefined && !named.has(r.n)))",
+      "note": "round 1 survivor: the orphan rule loses the tier conjunct",
+      "verdict": "killed",
+      "core_red": [
+        "union: a mark forgotten outright on this side does not come back from an older copy that still holds it"
+      ],
+      "kit_red": [],
+      "kit_pass": "113"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "113"
+    }
+  ]
+}

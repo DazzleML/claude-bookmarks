@@ -31,4 +31,14 @@ Guarded authority, not an allowlist: each group is keyed by the target file's co
 Both entries are kit-blind rather than equivalent: the behaviour is real and is held by a live checklist line (the A6 checklist), not by a test.
 
 - `if (operation.pane === 'list' || operation.pane === 'bookmarks') await ports.setBandNum('')` -> `&&` in `perform`'s open case -- **don't-care (kit-blind)**: a number is still typed when an open command arrives only through a chord keybinding pressed in the band's list mode; the field and the bar are drawn only while the band is idle, the kit presses drawn elements only, and `endBandMode` clears the number on every other path. Live check: `p`, a digit, then the prompts chord's keybinding; the number field reads `_`. 2026-10-20, mode 1 (v0.6.3 sweep, M1).
+## plugin/hooks/views/bookmarks-pane.tsx @ 2c11c2213b9c
+
+- `/^\d+$/.test(typed.slice(0, -1))` -> `/^\d*$/` in the `#` field's remove check -- **equivalent**: the same condition requires `typed.length > 1`, so the prefix is never empty and the two patterns accept the same inputs. 2026-10-21, mode 1 (v0.6.4 sweep, unit A5.2 round 2, N6).
+
+## plugin/hooks/core/bookmarks/check.ts @ 74d54eb0d884
+
+- `(p.tier ?? 'bookmark') === 'mark' && p.n !== undefined && !named.has(p.n)` -> the `p.n !== undefined` conjunct dropped, in the orphan-mark note -- **equivalent**: a letter's record is minted only in a numbered file (`setMark` refuses an unnumbered one), so no `mark` record lacks `n`; the conjunct narrows the type for `Set<number>.has`, and the mutant does not type-check. 2026-10-21, mode 1 (v0.6.4 sweep, unit A5.3, M2).
+
+## plugin/hooks/handlers/command-line.ts @ 84b704e3cc08 (continued)
+
 - `operation.pane === 'mark' ? 'band-mark-cancel' : undefined` -> arms swapped, in `perform`'s `handOff` call -- **don't-care (kit-blind)**: both arms end in `focusBand`, whose `$.ui.focus` is not routed to kit hooks and throws (harness note, measured 2026-10-12) before the arms can differ. The cancel press is what scrolls back after a mark's highlight; checked live. 2026-10-20, mode 1 (v0.6.3 sweep, M9).

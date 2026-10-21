@@ -18,12 +18,17 @@ export type Operation =
   | { op: 'jump-mark'; letter: string }
   | { op: 'reading' }
   | { op: 'promote'; letter: string }
+  // The delete gesture's two verbs on a letter (the keys design, unit 5): clear it (its history kept), or forget its record.
+  | { op: 'delete'; letter: string }
+  | { op: 'forget'; letter: string }
   | { op: 'jumplist'; dir: -1 | 1 }
   | { op: 'digit'; digit: string }
   | { op: 'step'; dir: -1 | 1 }
   | { op: 'go' }
   | { op: 'pin' }
   | { op: 'claim' }
+  // `d` in the bookmarks list: the numbered bookmark leaves the list (a tombstone keeps its place); a bookmark's only verb.
+  | { op: 'remove' }
   | { op: 'group'; dir: -1 | 1 }
   | { op: 'close' }
   | { op: 'help' }
@@ -142,6 +147,40 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
           ? done({ op: 'promote', letter: next })
           : done({ op: 'hint', reason: 'P then a mark letter (a-z) promotes that mark into a bookmark' }),
   },
+  // The delete gesture (the keys design, unit 5; djdarcy 2026-10-20: d/D, no confirmation):
+  // `d` + letter clears the letter, its history kept; `D` + letter forgets its current record
+  // too. `D` is uppercase, so it is typed after the leader and has no bar key -- fitting for
+  // the destructive one. Which letter is which is the keymap's to change, like any key.
+  {
+    id: 'delete',
+    keys: ['d'],
+    then: 'mark-letter',
+    label: 'clear mark',
+    button: 'clear',
+    shown: false,
+    help: 'clear mark a-z: the letter points at nothing, its history is kept',
+    route: next =>
+      next === undefined
+        ? waiting({ op: 'wait' })
+        : /^[a-z`]$/.test(next)
+          ? done({ op: 'delete', letter: next })
+          : done({ op: 'hint', reason: 'd then a mark letter (a-z) clears that mark; its history is kept' }),
+  },
+  {
+    id: 'forget',
+    keys: ['D'],
+    then: 'mark-letter',
+    label: 'forget mark',
+    button: 'forget',
+    shown: false,
+    help: 'forget mark a-z: its record goes too (outright when nothing else refers to it)',
+    route: next =>
+      next === undefined
+        ? waiting({ op: 'wait' })
+        : /^[a-z`]$/.test(next)
+          ? done({ op: 'forget', letter: next })
+          : done({ op: 'hint', reason: 'D then a mark letter (a-z) forgets that mark and its record' }),
+  },
   { id: 'back', keys: ['o'], label: 'back', button: 'back', shown: false, help: 'back to where the last jump left from', route: () => done({ op: 'jumplist', dir: -1 }) },
   { id: 'forward', keys: ['i'], label: 'forward', button: 'forward', shown: false, help: 'forward again', route: () => done({ op: 'jumplist', dir: 1 }) },
   // `q` quits a view, as in Neovim's and Emacs's non-editing buffers: needed once a list
@@ -182,6 +221,8 @@ export const LIST_KEYS: readonly ListKey[] = [
   { key: 'h', label: 'previous group', button: 'h◂', panes: ['bookmarks'], route: () => waiting({ op: 'group', dir: -1 }) },
   { key: 'l', label: 'next group', button: '▸l', panes: ['bookmarks'], route: () => waiting({ op: 'group', dir: 1 }) },
   { key: 'c', label: 'claim', button: 'c claim', panes: ['bookmarks'], route: () => waiting({ op: 'claim' }) },
+  // The numbered bookmark leaves the list (the keys design, unit 5): typed after its number in the band's row or the pane's field.
+  { key: 'd', label: 'remove', button: 'd remove', panes: ['bookmarks'], route: () => waiting({ op: 'remove' }) },
   { key: 'q', label: 'close', button: 'q close', panes: ['list', 'bookmarks'], route: () => done({ op: 'close' }) },
   { key: '/', label: 'filter', button: '/ filter', panes: ['list'], field: true, route: () => waiting({ op: 'filter' }) },
   { key: '*', label: 'pin prefix', button: '* pin', panes: ['list'], field: true, route: () => waiting({ op: 'pin' }) },

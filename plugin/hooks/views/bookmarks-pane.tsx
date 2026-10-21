@@ -30,6 +30,8 @@ export type BookmarksPaneModel = {
 export type BookmarksPaneActions = {
   arrive: (r: AnchorRecord) => Promise<unknown>
   go: (typed: string) => Promise<unknown>
+  /** `<number>d`: that bookmark leaves the list. */
+  remove: (typed: string) => Promise<unknown>
   close: () => Promise<unknown>
 }
 
@@ -99,6 +101,9 @@ export function bookmarksPaneView(elements: Elements, m: BookmarksPaneModel, a: 
           onInput={(typed: string) => {
             // One key is read through the key table: `q` closes, as in the band (Q261012-09).
             if (typed.length === 1 && route(typed, { pane: 'bookmarks' }).operation.op === 'close') return void a.close()
+            // A number then the table's remove key (`d`): that bookmark leaves the list (the keys design, unit 5).
+            const last = typed.slice(-1)
+            if (typed.length > 1 && /^\d+$/.test(typed.slice(0, -1)) && route(last, { pane: 'bookmarks' }).operation.op === 'remove') return void a.remove(typed.slice(0, -1))
             if (promptNumberComplete(typed, all.length)) void go(typed)
           }}
           onSubmit={(typed: string) => void go(typed)}

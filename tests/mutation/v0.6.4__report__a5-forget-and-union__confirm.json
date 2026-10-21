@@ -1,0 +1,37 @@
+{
+  "mutations": [
+    {
+      "id": "N3",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "tombstones: [...reg.tombstones, tomb] }",
+      "mutated": "tombstones: [tomb] }",
+      "note": "tombstones spread dropped, prior tombstones lost",
+      "verdict": "killed",
+      "core_red": [
+        "forget: with older history, or a bookmark made from the place, the record leaves a tombstone and the rest of the history stays"
+      ],
+      "kit_red": [],
+      "kit_pass": "113"
+    },
+    {
+      "id": "N6",
+      "file": "plugin/hooks/core/bookmarks/register-ops.ts",
+      "original": "  if (live.some(r => pushed.has(r))) changed = true\n",
+      "mutated": "",
+      "note": "changed flag no longer set when pushed records survive",
+      "verdict": "killed",
+      "core_red": [
+        "union: a mark forgotten outright on this side does not come back from an older copy that still holds it"
+      ],
+      "kit_red": [],
+      "kit_pass": "113"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "113"
+    }
+  ]
+}

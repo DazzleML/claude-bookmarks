@@ -1,0 +1,8 @@
+{
+  "target": "unit A5.2: the two killable round-2 survivors re-run after their killers (the Esc reminder is owed after D; the band number is spent after a remove). N6 is equivalent (typed.length > 1 already makes the prefix non-empty) and is recorded in equivalents.md.",
+  "generation": "the round-2 mutants N2 and N3 as generated (mode 1); no new generation (the two-round cap)",
+  "mutations": [
+    {"id": "N2", "file": "plugin/hooks/handlers/command-line.ts", "original": "      await ports.forgetLetter(operation.letter)\n      owedAfterAction(ports)", "mutated": "      await ports.forgetLetter(operation.letter)", "note": "forget case drops owedAfterAction"},
+    {"id": "N3", "file": "plugin/hooks/handlers/band.ts", "original": "    await ports.setBandNum('')\n  }", "mutated": "  }", "note": "remove op no longer clears the spent band number"}
+  ]
+}

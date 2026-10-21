@@ -58,12 +58,23 @@ test("the command line routes today's commands to the same operations", () => {
   assert.deepEqual(route('Pc', none).operation, { op: 'promote', letter: 'c' })
   assert.deepEqual(route('o', none).operation, { op: 'jumplist', dir: -1 })
   assert.deepEqual(route('i', none).operation, { op: 'jumplist', dir: 1 })
+  // The delete gesture (unit 5): d clears, D forgets; the case is the whole difference, as the keymap may swap them.
+  assert.deepEqual(route('da', none).operation, { op: 'delete', letter: 'a' })
+  assert.deepEqual(route('Da', none).operation, { op: 'forget', letter: 'a' })
+  assert.deepEqual(route('d', { pane: 'bookmarks' }).operation, { op: 'remove' })
+  assert.equal(route('d', { pane: 'list' }).operation.op, 'hint', 'a prompt has no remove')
 })
 
 test('P alone waits for its letter; a bad letter gives a hint, not an action', () => {
   assert.deepEqual(route('P', none), { operation: { op: 'wait' }, needsMore: true })
   assert.equal(route('P9', none).operation.op, 'hint')
   assert.equal(route("'9", none).operation.op, 'hint')
+  assert.deepEqual(route('d', none), { operation: { op: 'wait' }, needsMore: true })
+  assert.equal(route('D9', none).operation.op, 'hint')
+  assert.equal(route('d9', none).operation.op, 'hint')
+  // The reading position (`) is a letter to both verbs, as it is to P.
+  assert.deepEqual(route('d`', none).operation, { op: 'delete', letter: '`' })
+  assert.deepEqual(route('D`', none).operation, { op: 'forget', letter: '`' })
 })
 
 test('an unknown first key gives the generated hint', () => {
@@ -137,7 +148,7 @@ test('Esc closes, in any context', () => {
 
 test("each list pane's hint is generated from its own keys", () => {
   assert.equal(listHint('list'), 'number + Enter jump · j next · k previous · s pin · q close · Esc close')
-  assert.equal(listHint('bookmarks'), 'number + Enter jump · j next · k previous · h previous group · l next group · c claim · q close · Esc close')
+  assert.equal(listHint('bookmarks'), 'number + Enter jump · j next · k previous · h previous group · l next group · c claim · d remove · q close · Esc close')
 })
 
 test('q closes, at rest and in a list (Q261012-09)', () => {

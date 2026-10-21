@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-10-21
+
+### Added
+
+- Deleting a mark from the band, no confirmation asked, a toast saying what happened: `d` then a letter clears that letter (it points at nothing; its history is kept, so the earlier place is still listed and can be brought back), and `D` then a letter forgets the letter's current record as well. A record nothing else refers to -- the letter's only entry, no bookmark made from it -- is removed outright; otherwise it leaves a tombstone so the rest of the letter's history and a merge with another copy of your bookmarks stay in order. `D` is uppercase and typed after the leader; which letter does which is the keymap's to change, like any key. The reading position's backtick counts as a letter to both.
+- `d` after a number in the bookmarks list (the band's row or the list's `#` field) removes that bookmark from your list, the same way Claude's tool removes one: it leaves a tombstone.
+- `/bm-check` notes a letter record that no letter names (an orphan a mark forgotten on another copy can leave behind); it reports and changes nothing. Merging two copies of a bookmark file no longer brings such a record back from the older copy.
+
 ## [0.6.3] - 2026-10-20
 
 ### Added
@@ -1119,7 +1127,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.4...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

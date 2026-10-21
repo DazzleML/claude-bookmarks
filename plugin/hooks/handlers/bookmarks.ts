@@ -361,6 +361,21 @@ export async function clearMarksOp(ports: BookmarksPorts, letters: string[]): Pr
   return 'error' in r ? r : {}
 }
 
+/** `D` + letter (handlers/marks.ts forgetLetter): the letter's current record leaves the file and the history (register-ops.ts `forget`); with no data root the store's marks hold no records, so the letter is cleared. */
+export async function forgetOp(ports: BookmarksPorts, letter: string): Promise<{ error?: string; tombstoned?: boolean }> {
+  if (!(await ports.dataRoot())) return clearMarksOp(ports, [letter])
+  const r = await commitOp(ports, { op: 'forget', owner: 'user', letter })
+  return 'error' in r ? r : { tombstoned: r.tombstoned }
+}
+
+/** `d` after a number in the bookmarks list: the record leaves the person's list and a tombstone keeps its place, as the tool's remove does. */
+export async function removeBookmark(ports: BookmarksPorts, target: AnchorRecord) {
+  const r = await commitOp(ports, { op: 'remove', id: idOf(target), removedBy: 'user' })
+  if ('error' in r) return void ports.toast(r.error, 8000)
+  ports.log(`[bm] bookmark removed by the person: ${short(target.uuid)} "${target.label}" (tombstoned)`, true)
+  ports.toast(`removed bookmark: ${target.label.slice(0, 40)}`)
+}
+
 // --- Pins: the person's pinned prompts, in the register since 0.5.4 ----------------------
 
 /** The pinned prompts of this conversation, by message uuid, in the order pinned. */

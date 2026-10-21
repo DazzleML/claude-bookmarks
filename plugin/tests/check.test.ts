@@ -4,6 +4,7 @@
 // nothing. Run: claude plugin test plugin
 import { expect, test } from 'claude-code/testing'
 import { addOrRelabel, emptyRegister, serializeRegister } from '../hooks/core/bookmarks/register-file.ts'
+import { applyOp } from '../hooks/core/bookmarks/register-ops.ts'
 import { fnv1a64 } from '../hooks/core/bookmarks/migrations.ts'
 import { DATA_ROOT, world } from './harness.ts'
 
@@ -58,4 +59,17 @@ test('/bm-check on a clean root says there is nothing to report', async ($, on) 
   await run($, 'bm-check')
   expect(w.logs().some(l => l === '[bm] bm-check: nothing to report; nothing was changed')).toBe(true)
   expect(w.logs().some(l => l.startsWith('[bm] WARN'))).toBe(false)
+})
+
+test('/bm-check notes a letter record no letter names (an orphan a forgotten mark can leave), and changes nothing', async ($, on) => {
+  // A letter set, then its slot taken away by hand: the record stays, named by nothing.
+  const marked = applyOp(emptyRegister(SID, 'bookmarks test', 1), { op: 'setMark', owner: 'user', letter: 'a', place: { uuid: U, head: 'h' }, at: 2 }, 2)
+  if ('error' in marked) throw new Error(marked.error)
+  const files = { [`${DATA_ROOT}/sessions/${SID}.json`]: serializeRegister({ ...marked.register, slots: {} }) }
+  const w = world(on, { session: SID, files })
+  const before = JSON.stringify(w.files)
+  await run($, 'bm-check')
+  expect(w.logs().some(l => l.includes(`note ${SID}.json holds 1 letter record(s) no letter names (#1)`))).toBe(true)
+  expect(w.logs().some(l => l.startsWith('[bm] WARN'))).toBe(false)
+  expect(JSON.stringify(w.files)).toBe(before)
 })

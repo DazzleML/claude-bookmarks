@@ -135,6 +135,8 @@ export type ListPorts = {
   bookmarkList: () => Promise<readonly import('../core/bookmarks/anchor.ts').AnchorRecord[]>
   jumpToPromptNumber: (typed: string, via: string) => Promise<unknown>
   jumpToBookmarkNumber: (typed: string, via: string) => Promise<unknown>
+  /** `d` after a number in the bookmarks list: that bookmark leaves the list (handlers/bookmarks.ts removeBookmark). */
+  removeBookmarkNumber: (typed: string) => Promise<unknown>
   togglePin: (typed: string) => Promise<unknown>
   groupStep: (dir: -1 | 1) => Promise<unknown>
   /** /bm-bookmarks': which bookmarks group the list shows (0, the first). */
@@ -281,6 +283,8 @@ export type MarksPorts = {
   setMark: (letter: string, mark: import('../core/marks/marks.ts').Mark) => Promise<{ error?: string }>
   /** Letters cleared: the slot's current becomes null, its history kept; the record stays. */
   clearMarks: (letters: string[]) => Promise<{ error?: string }>
+  /** `D` + letter: the letter's current record leaves the file and the history (handlers/bookmarks.ts forgetOp); `tombstoned` says whether a tombstone kept its place. */
+  forgetMark: (letter: string) => Promise<{ error?: string; tombstoned?: boolean }>
   /** The reading position's way back, this conversation's (core/store-keys.ts readingStateKey). */
   readingStateStored: () => Promise<unknown>
   storeReadingState: (state: unknown) => Promise<unknown>
@@ -297,6 +301,9 @@ export type CommandLinePorts = BandPorts & {
   jumpToMark: (letter: string) => Promise<unknown>
   readingToggle: () => Promise<unknown>
   promoteLetter: (letter: string) => Promise<unknown>
+  /** `d` + letter and `D` + letter (handlers/marks.ts clearLetter, forgetLetter). */
+  clearLetter: (letter: string) => Promise<unknown>
+  forgetLetter: (letter: string) => Promise<unknown>
   jumplistMove: (dir: -1 | 1) => Promise<unknown>
 }
 

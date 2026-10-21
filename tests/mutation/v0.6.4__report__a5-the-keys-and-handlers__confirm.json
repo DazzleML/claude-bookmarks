@@ -1,0 +1,37 @@
+{
+  "mutations": [
+    {
+      "id": "N2",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "      await ports.forgetLetter(operation.letter)\n      owedAfterAction(ports)",
+      "mutated": "      await ports.forgetLetter(operation.letter)",
+      "note": "forget case drops owedAfterAction",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "D a forgets the letter: one entry and nothing referring to it, so the record and the slot go without a tombstone"
+      ],
+      "kit_pass": "117"
+    },
+    {
+      "id": "N3",
+      "file": "plugin/hooks/handlers/band.ts",
+      "original": "    await ports.setBandNum('')\n  }",
+      "mutated": "  }",
+      "note": "remove op no longer clears the spent band number",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "d after a number in the bookmarks row removes that bookmark: a tombstone keeps its place"
+      ],
+      "kit_pass": "117"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "118"
+    }
+  ]
+}

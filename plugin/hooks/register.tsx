@@ -166,6 +166,7 @@ function marksPorts($: EngineInterface): MarksPorts {
     loadMarks: () => loadMarks($),
     setMark: (letter, mark) => bookmarks_.setMarkOp(bookmarksPorts($), letter, mark),
     clearMarks: letters => bookmarks_.clearMarksOp(bookmarksPorts($), letters),
+    forgetMark: letter => bookmarks_.forgetOp(bookmarksPorts($), letter),
     readingStateStored: async () => $.store.get(readingStateKey(await $.session.id())),
     storeReadingState: async state => $.store.set(readingStateKey(await $.session.id()), state),
     letters: LETTERS,
@@ -815,6 +816,15 @@ async function jumpToBookmarkNumber($: EngineInterface, typed: string, via: stri
   await settle($, 'bookmarks', 'jump')
 }
 
+// `d` after a number in the bookmarks list (the band's row or the pane's field): that bookmark leaves the list.
+async function removeBookmarkNumber($: EngineInterface, typed: string) {
+  const all = await bookmarkList($)
+  const n = listPosition(typed, all.length)
+  const target = n === undefined ? undefined : all[n - 1]
+  if (!target) return void $.ui.toast(`no bookmark #${typed.trim()} (1-${all.length})`)
+  await bookmarks_.removeBookmark(bookmarksPorts($), target)
+}
+
 async function promoteLetter($: EngineInterface, letter: string) {
   await bookmarks_.promoteLetter(bookmarksPorts($), letter)
 }
@@ -847,6 +857,7 @@ function bandPorts($: EngineInterface): BandPorts {
     bookmarkList: () => bookmarkList($),
     jumpToPromptNumber: (typed, via) => jumpToPromptNumber($, typed, via),
     jumpToBookmarkNumber: (typed, via) => jumpToBookmarkNumber($, typed, via),
+    removeBookmarkNumber: typed => removeBookmarkNumber($, typed),
     scrollPaneCentre: key => $.ui.scroll({ in: PANE, to: { key }, block: 'center' }),
     toast: (text, timeoutMs) => (timeoutMs ? $.ui.toast(text, { timeoutMs }) : $.ui.toast(text)),
     togglePin: typed => togglePin($, typed),
@@ -887,6 +898,8 @@ function commandLinePorts($: EngineInterface): CommandLinePorts {
     jumpToMark: letter => jumpToMark($, letter),
     readingToggle: () => readingToggle($),
     promoteLetter: letter => promoteLetter($, letter),
+    clearLetter: letter => marks_.clearLetter(marksPorts($), letter),
+    forgetLetter: letter => marks_.forgetLetter(marksPorts($), letter),
     jumplistMove: dir => jumplistMove($, dir),
   }
 }
@@ -1547,6 +1560,7 @@ export const register: Register = (on, options) => {
         {
           arrive: r => pressBookmarkRow($, r),
           go: typed => jumpToBookmarkNumber($, typed, 'bookmarks pane'),
+          remove: typed => removeBookmarkNumber($, typed),
           close: () => closeAll($, 'bookmarks pane'),
         },
         styles,
