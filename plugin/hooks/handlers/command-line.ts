@@ -70,6 +70,15 @@ export async function perform(ports: CommandLinePorts, operation: Operation, via
       if (operation.pane === 'bookmarks') await ports.setBandGroup(0) // start on the person's own bookmarks
       // Lists off (the `panes` setting): the band takes the key with no pane beside it.
       if (ports.settings().panes === 'off') return void (await bandOnly(ports, operation.pane))
+      // A pressed button on the pane it opened closes it: the button is a toggle (the keys
+      // design 2026-10-20, unit 4). Never the typed key (djdarcy at the gate: "the BUTTON on
+      // the BAND should have a toggle feature, but elsewhere I think it would be more of an
+      // annoyance"): `<leader> p` may be the start of `<leader> p 12`. Open means the
+      // plugin's own mode AND the pane on screen, since the mode atom starts at 'list' and
+      // closing the pane leaves it, so the mode alone would read a fresh session as open.
+      if (via !== 'field' && (await ports.paneMode()) === operation.pane && (await ports.panes()).some(p => p.id === ports.paneId)) {
+        return void (await closeAll(ports, via))
+      }
       // A pressed button opens the pane as the chords always did; the band's own keys
       // are the fallback openFor sets up when the pane can't take the keyboard.
       if (via !== 'field') return void (await openFor(ports, operation.pane, via))

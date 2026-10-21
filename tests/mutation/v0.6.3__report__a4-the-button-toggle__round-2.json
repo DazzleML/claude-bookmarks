@@ -1,0 +1,129 @@
+{
+  "mutations": [
+    {
+      "id": "N1",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "if (operation.pane === 'bookmarks') await ports.setBandGroup(0)",
+      "mutated": "if (operation.pane === 'list') await ports.setBandGroup(0)",
+      "note": "wrong pane constant: setBandGroup reset fires for list instead of bookmarks",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "b opens the bookmarks list on your own group, however far l had moved it"
+      ],
+      "kit_pass": "112"
+    },
+    {
+      "id": "N2",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "if (ports.settings().panes === 'off') return",
+      "mutated": "if (ports.settings().panes === 'on') return",
+      "note": "panes-off check compares to 'on'",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "a press on the bar does what its key does: prompts opens the list",
+        "panes off: p takes its key in the band and opens no pane",
+        "panes off: b takes its key in the band and opens no pane",
+        "panes off: m takes its key in the band and opens no pane",
+        "panes off: ' takes its key in the band and opens no pane",
+        "the log names what pressed the pane open: the button, never the command line",
+        "p in the band opens the prompts pane and the band takes a number",
+        "the chord-prompts button pressed twice opens its pane, then closes it",
+        "the chord-mark button pressed twice opens its pane, then closes it",
+        "a fresh conversation: the prompts button opens the list and closes nothing",
+        "with the lists off, the prompts button pressed twice opens nothing and closes nothing"
+      ],
+      "kit_pass": "102"
+    },
+    {
+      "id": "N3",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "(await ports.paneMode()) === operation.pane && (await ports.panes())",
+      "mutated": "(await ports.paneMode()) === 'list' && (await ports.panes())",
+      "note": "toggle comparison uses a fixed pane name instead of operation.pane",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "the chord-prompts button pressed twice opens its pane, then closes it",
+        "the chord-mark button pressed twice opens its pane, then closes it"
+      ],
+      "kit_pass": "111"
+    },
+    {
+      "id": "N4",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "return void (await closeAll(ports, via))\n      }",
+      "mutated": "void (await closeAll(ports, via))\n      }",
+      "note": "return dropped from toggle branch so it falls through to openFor and reopens",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "the chord-prompts button pressed twice opens its pane, then closes it",
+        "the chord-mark button pressed twice opens its pane, then closes it"
+      ],
+      "kit_pass": "111"
+    },
+    {
+      "id": "N5",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "(await ports.panes()).some(p => p.id === ports.paneId)",
+      "mutated": "(await ports.panes()).some(p => p.id === 'none')",
+      "note": "ports.paneId replaced by a literal that never matches, so toggle never closes",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "the chord-prompts button pressed twice opens its pane, then closes it",
+        "the chord-mark button pressed twice opens its pane, then closes it"
+      ],
+      "kit_pass": "111"
+    },
+    {
+      "id": "N6",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "return void (await closeAll(ports, via))",
+      "mutated": "return void (await bandOnly(ports, operation.pane))",
+      "note": "toggle's close replaced by bandOnly",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "the chord-prompts button pressed twice opens its pane, then closes it",
+        "the chord-mark button pressed twice opens its pane, then closes it"
+      ],
+      "kit_pass": "111"
+    },
+    {
+      "id": "M2",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "if (operation.pane === 'bookmarks') await ports.setBandGroup(0)",
+      "mutated": "if (operation.pane !== 'bookmarks') await ports.setBandGroup(0)",
+      "note": "round 1 survivor: flipped comparison, group reset on wrong panes",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "b opens the bookmarks list on your own group, however far l had moved it"
+      ],
+      "kit_pass": "112"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "if (via !== 'field') return void (await openFor(ports, operation.pane, via))",
+      "mutated": "if (via === 'field') return void (await openFor(ports, operation.pane, via))",
+      "note": "round 1 survivor: flipped, buttons fall through to handOff",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "the log names what pressed the pane open: the button, never the command line"
+      ],
+      "kit_pass": "112"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "113"
+    }
+  ]
+}
