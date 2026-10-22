@@ -5,6 +5,15 @@
 // were. The state reads, the scrolls, the toasts and the timers stay there.
 import { fieldRest, parseListNumber } from './keys.ts'
 import { numberFootnotes, type FootnoteRef } from '../prompts/prompt-rows.ts'
+import type { AnchorOwner } from '../bookmarks/anchor.ts'
+
+// The bookmarks pane's groups, cycled by the band's h/l (nextGroup below). Moved from
+// register.tsx under /move-code (U60, 2026-10-22).
+export const BOOKMARK_GROUPS: { owner: AnchorOwner | 'all'; title: string }[] = [
+  { owner: 'user', title: 'yours' },
+  { owner: 'claude', title: "Claude's" },
+  { owner: 'all', title: 'all' },
+]
 
 // When a typed prompt number jumps (a setting, #7): 'enter' waits for Enter, so the
 // person can check the number first; 'complete' jumps on the digit that makes it complete.

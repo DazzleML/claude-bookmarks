@@ -11,11 +11,9 @@ import { debugTextMode } from '../core/settings.ts'
 import { describePathOrder } from '../engine/select.ts'
 import type { DiagnosticsPorts } from '../engine/ports.ts'
 
-// Claude Code builds the borrowed-action chords were verified on. The start-up tripwire
-// (register.tsx) toasts on any other build, because a new build could give a borrowed
-// action a handler of its own; /bm-env names them. Add a build here after re-verifying.
-// (The one definition since 0.4.91: 0.4.45 had copied it, leaving two to keep in step.)
-export const VERIFIED_CLIENTS = ['2.1.288', '2.1.289', '2.1.290']
+// The verified builds live beside the chord actions they vouch for (core/band/keys.ts
+// VERIFIED_CLIENTS, since U60); /bm-env names them.
+import { VERIFIED_CLIENTS } from '../core/band/keys.ts'
 
 export async function idsCommand(ports: DiagnosticsPorts): Promise<void> {
   const report = idsReport(await ports.prompts(), ports.rendered())

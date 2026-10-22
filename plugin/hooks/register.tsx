@@ -15,12 +15,12 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { PaneMode, Row } from '../types'
 import {
   markLinks, markdownLinks, parseAnchor, tierOf,
-  type AnchorOwner, type MarkerStyle,
+  type MarkerStyle,
 } from './core/bookmarks/anchor'
 import { findRecord } from './core/bookmarks/register-file'
 import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution } from './core/bookmarks/transcript-lines'
 import { excerpt, type Channel } from './core/log/debug'
-import { bandButtons, helpLines, helpShort, listHint, listKeysFor, route, type Chord, type Operation, type Pane } from './core/band/keys'
+import { CHORD_ACTIONS, VERIFIED_CLIENTS, bandButtons, helpLines, helpShort, listHint, listKeysFor, route, type Operation, type Pane } from './core/band/keys'
 import type { Cause } from './core/band/after-action'
 import { installedFromCache, type Settings } from './core/settings'
 import { SettingsState } from './core/settings-state'
@@ -32,15 +32,15 @@ import { ECHO_POLICY_KEY, readingStateKey } from './core/store-keys'
 import { diagLine, keyLabel } from './core/log/diagnostics'
 import { colorSplit, tagMarksMarkdown, tagMarksPlain } from './core/marks/highlight'
 import { ScreenModel } from './core/kit/screen-model'
-import { MarkCache, marksShowing, type Mark, type Marks } from './core/marks/marks'
-import { footnoteAt, listPosition, nextGroup, promptEntry } from './core/band/band-entry'
+import { MARK_LETTERS, MarkCache, READING_LETTER, marksShowing, type Mark, type Marks } from './core/marks/marks'
+import { BOOKMARK_GROUPS, footnoteAt, listPosition, nextGroup, promptEntry } from './core/band/band-entry'
 import { debugCommand } from './handlers/debug-command'
 import { anchoredReply, markedColumn, markedReply, type MarkStyles } from './views/marked-message'
 import { bandView } from './views/band'
 import { bookmarksPaneView } from './views/bookmarks-pane'
 import { marksPaneView } from './views/marks-pane'
 import { promptsPaneView } from './views/prompts-pane'
-import { VERIFIED_CLIENTS, configCommand, envCommand, idsCommand, jumpCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
+import { configCommand, envCommand, idsCommand, jumpCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
 import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PromptsPorts, ResolveOutcome, ViewPorts } from './engine/ports'
 import { closeAll as bandCloseAll, endBandMode as bandEnd, settle as bandSettle, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
@@ -72,29 +72,10 @@ function currentSettings(): Settings {
 // The plugin's one pane id (prompts, bookmarks, mark and jump panes all open under it).
 const PANE = 'bm-pane'
 
-// Claude Code builds the borrowed-action chords (below) were verified on:
-// handlers/diagnostics-commands.ts VERIFIED_CLIENTS, the one list the start-up tripwire
-// and /bm-env both read.
-
-// Engine keybinding actions the chords borrow (docs/engine-quirks.md, "A plugin can't
-// define its own keyboard shortcut"). None should have a handler mounted while the built-in diff mod
-// is enabled; the version check in session.start is how we notice when a new build
-// might have changed that.
-const MARK_ACTION = 'app:toggleDiffNoiseFilter'
-const JUMP_ACTION = 'app:toggleDiffPreSession'
-// A third borrowed action (2026-10-04, user: "ctrl-x p" for the recent-prompts pane,
-// then 1-9): `ctrl+x p` in keybindings.json. The engine's own docs use it as their
-// example of a Button `action`; another diff-viewer toggle, idle in a conversation.
-const PROMPTS_ACTION = 'app:cycleDiffBase'
-// A fourth (2026-10-04, user: "Ctrl+x space" for the reading position). Scrolls the
-// diff panel's file list, so idle in a conversation like the other three. `ctrl+x x`,
-// djdarcy's first idea, is Claude Code's own chord for closing a pane.
-const READING_ACTION = 'app:diffFileListDown'
-// The reading position is kept as a mark under this key, so the highlight and the
-// band show it like any other; the panes list only a-z, so it never appears there.
-const READING = '`'
-
-const LETTERS = 'abcdefghijklmnopqrstuvwxyz'.split('')
+// The borrowed chord actions and the Claude Code builds they were verified on are
+// core/band/keys.ts CHORD_ACTIONS and VERIFIED_CLIENTS (the one list the start-up
+// tripwire and /bm-env both read); the mark letters and the reading position's key are
+// core/marks/marks.ts MARK_LETTERS and READING_LETTER (U60, 2026-10-22).
 
 const rows = atom({ plugin: 'bookmarks', key: 'rows' } as const, [])
 const paneMode = atom({ plugin: 'bookmarks', key: 'paneMode' } as const, 'list')
@@ -117,11 +98,6 @@ const viewRev = atom({ plugin: 'bookmarks', key: 'viewRev' } as const, 0)
 // Bumped when one of the plugin's /config fields changes, so the panes and the band,
 // which read settings while drawing, draw again.
 const settingsRev = atom({ plugin: 'bookmarks', key: 'settingsRev' } as const, 0)
-const BOOKMARK_GROUPS: { owner: AnchorOwner | 'all'; title: string }[] = [
-  { owner: 'user', title: 'yours' },
-  { owner: 'claude', title: "Claude's" },
-  { owner: 'all', title: 'all' },
-]
 
 
 // What is on screen, and when the plugin itself last caused a redraw: core/kit/screen-model.ts.
@@ -169,8 +145,8 @@ function marksPorts($: EngineInterface): MarksPorts {
     forgetMark: letter => bookmarks_.forgetOp(bookmarksPorts($), letter),
     readingStateStored: async () => $.store.get(readingStateKey(await $.session.id())),
     storeReadingState: async state => $.store.set(readingStateKey(await $.session.id()), state),
-    letters: LETTERS,
-    readingLetter: READING,
+    letters: MARK_LETTERS,
+    readingLetter: READING_LETTER,
   }
 }
 
@@ -680,9 +656,8 @@ async function jumpToMark($: EngineInterface, letter: string, probe = false): Pr
 
 // --- The band's command line -----------------------------------------------------------
 // The band's command line (the field the leader lands on, and `perform`) is
-// handlers/command-line.ts.
-// The borrowed engine action each chord command's button carries while chords are on.
-const CHORD_ACTION: Record<Chord, string> = { mark: MARK_ACTION, jump: JUMP_ACTION, prompts: PROMPTS_ACTION, read: READING_ACTION }
+// handlers/command-line.ts. The borrowed action each chord button carries is
+// core/band/keys.ts CHORD_ACTIONS.
 
 // Draw the field anew, empty.
 async function clearCommandLine($: EngineInterface) {
@@ -871,8 +846,8 @@ function bandPorts($: EngineInterface): BandPorts {
     after: (ms, fn) => $.clock.after(ms, fn),
     focus: (requestId, key) => $.ui.focus({ requestId, key }),
     loadMarks: () => loadMarks($),
-    letters: LETTERS,
-    readingLetter: READING,
+    letters: MARK_LETTERS,
+    readingLetter: READING_LETTER,
     every: (ms, fn) => $.clock.every(ms, fn),
     diagState: when => diagState($, when),
     setPaneMode: mode => update($, paneMode, () => mode as PaneMode),
@@ -1451,7 +1426,7 @@ export const register: Register = (on, options) => {
     const listKeys = listKeysFor(bookmarks ? 'bookmarks' : 'list').map(l => ({ key: l.key, button: l.button, operation: l.route().operation }))
     const groupTitle = bookmarks ? (BOOKMARK_GROUPS[await read($, bandGroup)]?.title ?? '') : ''
     const bar = s.band === 'full'
-      ? bandButtons({ chords: s.chords === 'on' }).map(b => ({ id: b.id, label: b.label, key: b.key, ...(b.hotkey ? { hotkey: b.hotkey } : {}), ...(b.chord ? { action: CHORD_ACTION[b.chord] } : {}) }))
+      ? bandButtons({ chords: s.chords === 'on' }).map(b => ({ id: b.id, label: b.label, key: b.key, ...(b.hotkey ? { hotkey: b.hotkey } : {}), ...(b.chord ? { action: CHORD_ACTIONS[b.chord] } : {}) }))
       : []
     return bandView(
       elements,
@@ -1460,7 +1435,7 @@ export const register: Register = (on, options) => {
       // each is read, and so redraws the band, only where it is drawn (a mode change
       // redraws through bandMode). Move audit F4.
       {
-        mode, shown: last, help, marks, letters: LETTERS, readingLetter: READING,
+        mode, shown: last, help, marks, letters: MARK_LETTERS, readingLetter: READING_LETTER,
         typed: mode === 'list' || bookmarks ? await read($, bandNum) : '',
         count, groupTitle, listKeys, bar,
         cmdRev: mode === 'idle' ? await read($, cmdRev) : 0,
@@ -1574,7 +1549,7 @@ export const register: Register = (on, options) => {
     const marks = markCache.all // the cache, never a file, in a render hook
     return marksPaneView(
       elements,
-      { mode, marks, letters: LETTERS, readingLetter: READING, columns: e.props.bodyColumns },
+      { mode, marks, letters: MARK_LETTERS, readingLetter: READING_LETTER, columns: e.props.bodyColumns },
       {
         press: l => (mode === 'mark' ? markThenSettle($, mode, l) : jumpToMarkThenSettle($, mode, l, true)),
         goToReading: async reading => {

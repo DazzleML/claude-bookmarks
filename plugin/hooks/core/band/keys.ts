@@ -10,6 +10,7 @@
 // buttons had become.
 //
 // Pure: no engine imports. The adapter in register.tsx performs the operation.
+import { isMarkLetter } from '../marks/marks.ts'
 
 export type Pane = 'none' | 'list' | 'mark' | 'jump' | 'bookmarks'
 
@@ -53,6 +54,32 @@ export type Routed = { operation: Operation; needsMore: boolean }
 // "optional fast keys"), carried only while the chords setting is on (djdarcy, 01:30:
 // kept, optional, "an easy enable/disable so their removal can be tested").
 export type Chord = 'mark' | 'jump' | 'prompts' | 'read'
+
+// Engine keybinding actions the chords borrow (docs/engine-quirks.md, "A plugin can't
+// define its own keyboard shortcut"). None should have a handler mounted while the built-in diff mod
+// is enabled; the version check in session.start is how we notice when a new build
+// might have changed that.
+// A third borrowed action (2026-10-04, user: "ctrl-x p" for the recent-prompts pane,
+// then 1-9): `ctrl+x p` in keybindings.json. The engine's own docs use it as their
+// example of a Button `action`; another diff-viewer toggle, idle in a conversation.
+// A fourth (2026-10-04, user: "Ctrl+x space" for the reading position). Scrolls the
+// diff panel's file list, so idle in a conversation like the other three. `ctrl+x x`,
+// djdarcy's first idea, is Claude Code's own chord for closing a pane.
+// The borrowed engine action each chord command's button carries while chords are on.
+// (Moved from register.tsx under /move-code, U60, 2026-10-22; the four comments as they were.)
+export const CHORD_ACTIONS: Record<Chord, string> = {
+  mark: 'app:toggleDiffNoiseFilter',
+  jump: 'app:toggleDiffPreSession',
+  prompts: 'app:cycleDiffBase',
+  read: 'app:diffFileListDown',
+}
+
+// Claude Code builds the borrowed-action chords were verified on. The start-up tripwire
+// (register.tsx) toasts on any other build, because a new build could give a borrowed
+// action a handler of its own; /bm-env names them. Add a build here after re-verifying.
+// (The one definition since 0.4.91: 0.4.45 had copied it, leaving two to keep in step.)
+export const VERIFIED_CLIENTS = ['2.1.288', '2.1.289', '2.1.290']
+
 export type LineCommand = {
   id: string
   keys: readonly string[]
@@ -98,7 +125,7 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
     route: next =>
       next === undefined
         ? waiting({ op: 'open', pane: 'jump' })
-        : /^[a-z]$/.test(next)
+        : isMarkLetter(next)
           ? done({ op: 'jump-mark', letter: next })
           : done({ op: 'hint', reason: lineHint() }),
   },
@@ -143,7 +170,7 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
     route: next =>
       next === undefined
         ? waiting({ op: 'wait' })
-        : /^[a-z`]$/.test(next)
+        : isMarkLetter(next, true)
           ? done({ op: 'promote', letter: next })
           : done({ op: 'hint', reason: 'P then a mark letter (a-z) promotes that mark into a bookmark' }),
   },
@@ -162,7 +189,7 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
     route: next =>
       next === undefined
         ? waiting({ op: 'wait' })
-        : /^[a-z`]$/.test(next)
+        : isMarkLetter(next, true)
           ? done({ op: 'delete', letter: next })
           : done({ op: 'hint', reason: 'd then a mark letter (a-z) clears that mark; its history is kept' }),
   },
@@ -177,7 +204,7 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
     route: next =>
       next === undefined
         ? waiting({ op: 'wait' })
-        : /^[a-z`]$/.test(next)
+        : isMarkLetter(next, true)
           ? done({ op: 'forget', letter: next })
           : done({ op: 'hint', reason: 'D then a mark letter (a-z) forgets that mark and its record' }),
   },

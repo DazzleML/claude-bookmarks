@@ -21,7 +21,7 @@ import {
 } from '../core/bookmarks/migrations.ts'
 import { checkReport, drawLine, STORE_CAP, type CheckInput } from '../core/bookmarks/check.ts'
 import { dataReadme, README_TEMPLATE, readmeNeedsWrite } from '../core/bookmarks/data-readme.ts'
-import type { Mark, Marks } from '../core/marks/marks.ts'
+import { isMarkLetter, type Mark, type Marks } from '../core/marks/marks.ts'
 import { rowPlace } from '../core/bookmarks/transcript-lines.ts'
 import { forwardSlashes } from '../core/kit/paths.ts'
 import { short } from '../core/kit/message-id.ts'
@@ -736,7 +736,7 @@ export async function arriveAtBookmark(ports: BookmarksPorts, record: { uuid: st
 // /bm-promote <letter> (moved from register.tsx's registration, 0.4.94).
 export async function promoteCommand(ports: BookmarksPorts, args: string | undefined) {
   const letter = (args ?? '').trim()
-  if (!/^[a-z`]$/.test(letter)) {
+  if (!isMarkLetter(letter, true)) {
     ports.toast('/bm-promote <letter>: promote that mark into a bookmark')
     return
   }

@@ -7,6 +7,16 @@ import { sameMessage } from '../kit/message-id.ts'
 export type Mark = { uuid: string; head: string; markedAt: number; source?: 'selection' | 'latest' | 'screen'; snippet?: string }
 export type Marks = Record<string, Mark>
 
+// The reading position is kept as a mark under this key, so the highlight and the
+// band show it like any other; the panes list only a-z, so it never appears there.
+// (Moved from register.tsx under /move-code, U60, 2026-10-22, as READING and LETTERS.)
+export const READING_LETTER = '`'
+
+export const MARK_LETTERS = 'abcdefghijklmnopqrstuvwxyz'.split('')
+
+/** One mark letter a-z; with `withReading`, the reading position's backtick counts too (the one spelling of the set the key table, the panes and the delete command share). */
+export const isMarkLetter = (ch: string, withReading = false): boolean => (withReading ? /^[a-z`]$/.test(ch) : /^[a-z]$/.test(ch))
+
 // The shown mark, if it is on this row: by real uuid, or a drawn id sharing its first
 // four groups. Only the one mark currently shown is ever highlighted.
 export function marksShowing(marks: Readonly<Marks>, requestId: string, showing: string | undefined): [string, Mark][] {
@@ -72,7 +82,7 @@ export type DeleteMarks = { letters: string[]; gone: string[]; missing: string[]
 /** What `/bm-delmarks <arg>` deletes: `all` or `!` every set letter, else the letters named; `gone` were set, `missing` were not, `kept` is the record after. */
 export function deleteMarks(marks: Readonly<Marks>, arg: string, letters: readonly string[]): DeleteMarks {
   const a = arg.trim().toLowerCase()
-  const named = a === 'all' || a === '!' ? letters.filter(l => marks[l]) : a.split(/[\s,]+/).filter(l => /^[a-z]$/.test(l))
+  const named = a === 'all' || a === '!' ? letters.filter(l => marks[l]) : a.split(/[\s,]+/).filter(l => isMarkLetter(l))
   const gone = named.filter(l => marks[l])
   const missing = named.filter(l => !marks[l])
   const kept = Object.fromEntries(Object.entries(marks).filter(([l]) => !gone.includes(l)))

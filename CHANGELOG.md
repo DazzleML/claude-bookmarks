@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.11] - 2026-10-22
+
+### Changed
+
+- Internal, no visible change: the borrowed keyboard actions behind the band's chords, the list of Claude Code builds they were checked on, the mark letters and the bookmarks pane's groups now live in the plugin's core modules beside the code that uses them, instead of in the hooks module. The first of a series of such moves.
+
 ## [0.6.10] - 2026-10-22
 
 ### Fixed
@@ -1163,7 +1169,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.10...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.11...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

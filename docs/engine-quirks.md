@@ -216,6 +216,16 @@ A message redrawn off screen for the first time since load (a bookmark link mint
 
 **Proper fix:** let `Button` take `color` and `bold` at rest, as it already does on hover.
 
+### A long button label wraps, and a pane knows its own width — Workaround
+
+**What you notice:** a prompts-pane row shows as much of the prompt as the pane is wide, cut with an ellipsis, however wide the pane is dragged (0.6.10).
+
+**Why:** a `Button` label longer than the pane wraps onto more rows, and a `Text` child with `wrap="truncate-end"` inside a `Button` is not honoured, so nothing the view draws can ask the terminal to cut a row (0.6.9 tried, and every row showed its whole prompt wrapped). The plugin's test kit cannot see this: it renders a tree, not columns, so a claim about the terminal's cut is a live check. What the engine does give is the width: the `Pane` render hook's `e.props.bodyColumns`.
+
+**What we do:** the view cuts each row to `bodyColumns` less its number column, with an ellipsis as the last character (`fitLine` in `core/bookmarks/transcript-lines.ts`), and draws it as a plain label. A row that should wrap on purpose (a lines-per-entry setting) can be cut to lines × width instead and let the terminal wrap it, in the row shape whose number column is its own `Box`.
+
+**Proper fix:** honour `wrap` on a `Text` inside a `Button`, or give `Button` a `wrap` of its own.
+
 ### Hover can reveal, but can't animate or notify — Limit
 
 Hover styles and reveals are applied by Claude Code itself: no plugin code runs, and a hover effect "settles, never loops". So a scrolling marquee on hover isn't possible, while a hover card showing the full text is.
