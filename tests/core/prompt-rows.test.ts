@@ -1,6 +1,48 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { FOOTNOTE_LABEL_MAX, footnoteOf, looksLikePrompt, numberFootnotes, numberRows, promptTextOf, unwrapQueued } from '../../plugin/hooks/core/prompts/prompt-rows.ts'
+import { AUTOMATED_ORIGINS, FOOTNOTE_LABEL_MAX, classifyAppend, footnoteOf, looksLikePrompt, numberFootnotes, numberRows, promptTextOf, unwrapQueued, type AppendEvent } from '../../plugin/hooks/core/prompts/prompt-rows.ts'
+
+// What session.append makes of a row (the sorter moved out of register.tsx, U60): a row to
+// keep, the prompt's text for the filter, a footnote, or nothing.
+const appended = (over: Partial<AppendEvent> & { text?: string }): AppendEvent => ({
+  uuid: 'u-1',
+  door: 'prompt',
+  origin: { kind: 'user' },
+  message: { type: 'user', content: [{ type: 'text', text: over.text ?? 'a typed prompt' }] },
+  ...over,
+})
+
+test('classifyAppend: a typed prompt is a row with its whole text kept for the filter', () => {
+  const r = classifyAppend(appended({ text: 'a typed prompt, kept whole' }))
+  assert.deepEqual(r.row, { uuid: 'u-1', door: 'prompt', head: 'a typed prompt, kept whole', text: 'a typed prompt, kept whole' })
+  assert.equal(r.promptText, 'a typed prompt, kept whole')
+  assert.equal(r.footnote, undefined)
+})
+
+test('classifyAppend: a queued attachment is a prompt, its text unwrapped', () => {
+  const wrapped = '<system-reminder>\nThe user sent a new message while you were working:\nwhile you work\n\nThis is how Claude Code surfaces messages the user sends mid-turn.\n</system-reminder>'
+  const r = classifyAppend(appended({ door: 'attachment', origin: { kind: 'engine' }, message: { type: 'attachment', name: 'queued_command', content: [{ type: 'text', text: wrapped }] } }))
+  assert.equal(r.row?.door, 'prompt')
+  assert.equal(r.row?.text, 'while you work')
+  assert.equal(r.promptText, 'while you work')
+  assert.equal(r.footnote, undefined)
+})
+
+test('classifyAppend: an automated origin, an agent row and a meta row are nothing', () => {
+  for (const kind of AUTOMATED_ORIGINS) assert.deepEqual(classifyAppend(appended({ origin: { kind } })), {}, kind)
+  assert.deepEqual(classifyAppend(appended({ agentId: 'agent-7' })), {})
+  assert.deepEqual(classifyAppend(appended({ message: { type: 'user', isMeta: true, content: [{ type: 'text', text: 'meta' }] } })), {})
+})
+
+test('classifyAppend: a response is a row with no prompt text and no footnote; a slash command is a footnote only', () => {
+  const r = classifyAppend(appended({ door: 'response', origin: { kind: 'engine' }, message: { type: 'assistant', content: [{ type: 'text', text: 'a reply' }] } }))
+  assert.equal(r.row?.door, 'response')
+  assert.equal(r.promptText, undefined)
+  assert.equal(r.footnote, undefined)
+  const f = classifyAppend(appended({ text: '<command-name>/goal</command-name> <command-args>build it</command-args>' }))
+  assert.equal(f.row, undefined)
+  assert.deepEqual(f.footnote, { kind: 'command', label: '/goal build it' })
+})
 
 test('kept footnotes number by the prompt they follow', () => {
   const f = (uuid: string, after: string | null) => ({ uuid, after, kind: 'command' as const, label: '/x' })

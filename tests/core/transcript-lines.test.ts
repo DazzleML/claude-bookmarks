@@ -12,6 +12,7 @@ import {
   resolveRows,
   rowPlace,
   rowsFromGrep,
+  targetPattern,
   uuidPattern,
 } from '../../plugin/hooks/core/bookmarks/transcript-lines.ts'
 
@@ -120,6 +121,10 @@ test('patterns are what the JSON line contains', () => {
   assert.equal(jsonEscaped('say "hi"\nnow'), 'say \\"hi\\"\\nnow')
   assert.equal(uuidPattern('abc'), '"uuid":"abc')
   assert.equal(headOf('  one\n\n two   three '), 'one two three')
+  // A request names a message by uuid first, else by a fragment, else by nothing (U60).
+  assert.equal(targetPattern({ uuid: 'abc', fragment: 'ignored' }), '"uuid":"abc')
+  assert.equal(targetPattern({ fragment: 'say "hi"' }), 'say \\"hi\\"')
+  assert.equal(targetPattern({}), undefined)
 })
 
 // A pane row draws the whole prompt as one line and lets the terminal cut it at the pane's

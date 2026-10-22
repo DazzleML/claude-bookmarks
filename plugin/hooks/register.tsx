@@ -18,24 +18,24 @@ import {
   type MarkerStyle,
 } from './core/bookmarks/anchor'
 import { findRecord } from './core/bookmarks/register-file'
-import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution } from './core/bookmarks/transcript-lines'
+import { headOf, resolveRows, rowsFromGrep, targetPattern, type Resolution } from './core/bookmarks/transcript-lines'
 import { excerpt, type Channel } from './core/log/debug'
-import { CHORD_ACTIONS, VERIFIED_CLIENTS, bandButtons, helpLines, helpShort, listHint, listKeysFor, route, type Operation, type Pane } from './core/band/keys'
+import { CHORD_ACTIONS, VERIFIED_CLIENTS, barFor, helpFor, listHint, listKeysFor, route, type Operation, type Pane } from './core/band/keys'
 import type { Cause } from './core/band/after-action'
 import { installedFromCache, type Settings } from './core/settings'
 import { SettingsState } from './core/settings-state'
 import type { Role, Style } from './core/palette'
-import { footnoteOf, looksLikePrompt, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
+import { classifyAppend, type FootnoteRef } from './core/prompts/prompt-rows'
 import { short } from './core/kit/message-id'
 import { configDirOf, dataRootOf } from './core/kit/paths'
 import { ECHO_POLICY_KEY, readingStateKey } from './core/store-keys'
-import { diagLine, keyLabel } from './core/log/diagnostics'
-import { colorSplit, tagMarksMarkdown, tagMarksPlain } from './core/marks/highlight'
+import { diagLine, editLine, focusLine, keyLabel, parseOnOff } from './core/log/diagnostics'
+import { firstColorSplit, tagMarksMarkdown, tagMarksPlain } from './core/marks/highlight'
 import { ScreenModel } from './core/kit/screen-model'
 import { MARK_LETTERS, MarkCache, READING_LETTER, marksShowing, type Mark, type Marks } from './core/marks/marks'
-import { BOOKMARK_GROUPS, footnoteAt, listPosition, nextGroup, promptEntry } from './core/band/band-entry'
+import { BOOKMARK_GROUPS, footnoteAt, nextGroup, pickNumbered, promptEntry } from './core/band/band-entry'
 import { debugCommand } from './handlers/debug-command'
-import { anchoredReply, markedColumn, markedReply, type MarkStyles } from './views/marked-message'
+import { anchoredReply, markedPrompt, markedReply, type MarkStyles } from './views/marked-message'
 import { bandView } from './views/band'
 import { bookmarksPaneView } from './views/bookmarks-pane'
 import { marksPaneView } from './views/marks-pane'
@@ -124,8 +124,8 @@ function marksPorts($: EngineInterface): MarksPorts {
     every: (ms, fn) => $.clock.every(ms, fn),
     expectRedraw,
     note,
-    log: (line, text) => log($, line, text ? { text: true } : undefined),
-    toast: (text, timeoutMs) => (timeoutMs ? $.ui.toast(text, { timeoutMs }) : $.ui.toast(text)),
+    log: logTextVia($),
+    toast: toastVia($),
     cut,
     selection: () => $.ui.selection(),
     allRows: () => allRows($),
@@ -238,6 +238,25 @@ function logPorts($: EngineInterface): LoggerPorts {
     folderBuild: !installedFromCache($.plugin.root),
   }
 }
+// The port closures every *Ports($) builder spells the same way (refactor-advisor 2026-10-22
+// row 8): one helper each, in this file, since the validator follows `$` only into functions
+// declared here (docs/engine-quirks.md, "Engine calls stay in the hooks module's own file").
+function toastVia($: EngineInterface) {
+  return (text: string, timeoutMs?: number) => (timeoutMs ? $.ui.toast(text, { timeoutMs }) : $.ui.toast(text))
+}
+function logTextVia($: EngineInterface) {
+  return (line: string, text?: boolean) => log($, line, text ? { text: true } : undefined)
+}
+function copyVia($: EngineInterface) {
+  return (text: string) => $.ui.copy({ text })
+}
+function scrollVia($: EngineInterface) {
+  return (uuid: string, block: 'start' | 'center' | 'end' | 'nearest') => $.ui.scroll({ to: { requestId: uuid }, block })
+}
+function bumpView($: EngineInterface) {
+  return update($, viewRev, v => v + 1)
+}
+
 function log($: EngineInterface, line: string, opts?: { always?: boolean; text?: boolean }) {
   logger.log(logPorts($), line, opts)
 }
@@ -478,7 +497,7 @@ async function grepTranscript($: EngineInterface, path: string, pattern: string)
 async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment?: string }): Promise<ResolveOutcome> {
   const path = await transcriptPath($)
   if (!path) return { kind: 'none', reason: 'transcript not found' }
-  const pattern = want.uuid ? uuidPattern(want.uuid) : want.fragment ? jsonEscaped(want.fragment) : undefined
+  const pattern = targetPattern(want)
   if (!pattern) return { kind: 'none', reason: 'nothing to look for' }
   const g = await grepTranscript($, path, pattern)
   if (!g) return { kind: 'none', reason: 'neither sh + grep nor PowerShell ran' }
@@ -490,9 +509,6 @@ async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment
 
 // The store's prune and the back-fill are handlers/prompts.ts (pruneStoreNow,
 // backfillPrompts), over promptsPorts($); userRows above is their program run.
-
-// Who-caused-the-row stamps (session.append's `origin.kind`) that are never the person.
-const AUTOMATED_ORIGINS = new Set(['task-notification', 'scheduled-trigger', 'peer-send-message', 'coordinator', 'observer', 'observer-activity', 'auto-continuation', 'projects-relay', 'channel'])
 
 // The stored prompts that are prompts, then the rows captured live this session that the
 // store lacks (core/prompts/prompt-store.ts promptList). Rows kept before the list knew them for
@@ -524,9 +540,9 @@ async function conversationTitle($: EngineInterface): Promise<string | undefined
 // anchor press, the model's tool): handlers/bookmarks.ts, over bookmarksPorts($).
 function bookmarksPorts($: EngineInterface): BookmarksPorts {
   return {
-    log: (line, text) => log($, line, text ? { text: true } : undefined),
+    log: logTextVia($),
     logAlways: line => log($, line, { always: true }),
-    toast: (text, timeoutMs) => (timeoutMs ? $.ui.toast(text, { timeoutMs }) : $.ui.toast(text)),
+    toast: toastVia($),
     cut,
     expectRedraw,
     dataRoot: () => dataRoot($),
@@ -555,7 +571,7 @@ function bookmarksPorts($: EngineInterface): BookmarksPorts {
     allRows: () => allRows($),
     jumpTo: (uuid, via, label, words) => jumpTo($, uuid, via, label, words),
     loadMarks: () => loadMarks($),
-    copy: text => $.ui.copy({ text }),
+    copy: copyVia($),
     highlightWords: (letter, uuid, words) => marks_.showWords(marksPorts($), letter, uuid, words),
   }
 }
@@ -576,10 +592,10 @@ function navPorts($: EngineInterface): NavigationPorts {
     sessionId: () => $.session.id(),
     storeGet: key => $.store.get(key),
     storeSet: (key, value) => $.store.set(key, value),
-    scroll: (uuid, block) => $.ui.scroll({ to: { requestId: uuid }, block }),
-    copy: text => $.ui.copy({ text }),
-    toast: (text, timeoutMs) => (timeoutMs ? $.ui.toast(text, { timeoutMs }) : $.ui.toast(text)),
-    log: (line, text) => log($, line, text ? { text: true } : undefined),
+    scroll: scrollVia($),
+    copy: copyVia($),
+    toast: toastVia($),
+    log: logTextVia($),
     note,
     drawnHead: uuid => drawn.texts.get(uuid),
     markHead: uuid => markCache.headOf(uuid),
@@ -620,7 +636,7 @@ function viewPorts($: EngineInterface): ViewPorts {
     after: (ms, fn) => $.clock.after(ms, fn),
     listPaneOpen: async () => (await read($, paneMode)) === 'list' && (await $.ui.panes()).some(p => p.id === PANE),
     heldChannel: () => logger.channels.has('held'),
-    bumpView: () => update($, viewRev, v => v + 1),
+    bumpView: () => bumpView($),
     followHere: () => currentSettings().followHere,
     bandNumEmpty: async () => (await read($, bandNum)) === '',
     scrollPaneTo: key => $.ui.scroll({ in: PANE, to: { key }, block: 'nearest' }),
@@ -709,12 +725,12 @@ async function loadPins($: EngineInterface): Promise<string[]> {
 // there is no such prompt. `known`: the list the caller already read (move audit F6).
 async function togglePin($: EngineInterface, typed: string, known?: PromptRef[]): Promise<boolean> {
   const all = known ?? (await prompts($))
-  const n = listPosition(typed, all.length, true)
-  const target = n === undefined ? undefined : all[n - 1]
-  if (!target) {
-    $.ui.toast(`no prompt #${typed.trim()} (1-${all.length})`)
+  const picked = pickNumbered(typed, all, 'prompt', true)
+  if ('error' in picked) {
+    $.ui.toast(picked.error)
     return false
   }
+  const { n, target } = picked
   const pins = await loadPins($)
   const pinned = pins.includes(target.uuid)
   const r = await bookmarks_.togglePinned(bookmarksPorts($), target.uuid, !pinned)
@@ -738,7 +754,7 @@ async function jumpToPromptNumber($: EngineInterface, typed: string, via: string
   }
   if (entry.kind === 'filter') {
     promptsPane.setFilter(entry.words)
-    await update($, viewRev, v => v + 1)
+    await bumpView($)
     return
   }
   if (entry.kind === 'unfold') {
@@ -746,7 +762,7 @@ async function jumpToPromptNumber($: EngineInterface, typed: string, via: string
     // but `N.` has nothing to show, so it says why.
     if (currentSettings().footnotes === 'hidden') return void $.ui.toast('Footnotes are hidden: "Footnotes in the prompts list" in /config shows them')
     promptsPane.toggleFold(entry.n)
-    await update($, viewRev, v => v + 1)
+    await bumpView($)
     return
   }
   if (entry.kind === 'footnote') {
@@ -784,24 +800,17 @@ async function bandGroupStep($: EngineInterface, step: -1 | 1) {
 }
 
 async function jumpToBookmarkNumber($: EngineInterface, typed: string, via: string) {
-  const all = await bookmarkList($)
-  const n = listPosition(typed, all.length)
-  const target = n === undefined ? undefined : all[n - 1]
-  if (!target) {
-    $.ui.toast(`no bookmark #${typed.trim()} (1-${all.length})`)
-    return
-  }
-  await arriveAtBookmark($, target, via)
+  const picked = pickNumbered(typed, await bookmarkList($), 'bookmark')
+  if ('error' in picked) return void $.ui.toast(picked.error)
+  await arriveAtBookmark($, picked.target, via)
   await settle($, 'bookmarks', 'jump')
 }
 
 // `d` after a number in the bookmarks list (the band's row or the pane's field): that bookmark leaves the list.
 async function removeBookmarkNumber($: EngineInterface, typed: string) {
-  const all = await bookmarkList($)
-  const n = listPosition(typed, all.length)
-  const target = n === undefined ? undefined : all[n - 1]
-  if (!target) return void $.ui.toast(`no bookmark #${typed.trim()} (1-${all.length})`)
-  await bookmarks_.removeBookmark(bookmarksPorts($), target)
+  const picked = pickNumbered(typed, await bookmarkList($), 'bookmark')
+  if ('error' in picked) return void $.ui.toast(picked.error)
+  await bookmarks_.removeBookmark(bookmarksPorts($), picked.target)
 }
 
 async function promoteLetter($: EngineInterface, letter: string) {
@@ -827,7 +836,7 @@ function bandPorts($: EngineInterface): BandPorts {
     closePaneUi: () => $.ui.close({ id: PANE }),
     expectRedraw,
     note,
-    log: (line, text) => log($, line, text ? { text: true } : undefined),
+    log: logTextVia($),
     paneGeometry: () => paneGeometry,
     paneAnchored: () => !!panePosition.anchor,
     restoreView: () => restoreView($),
@@ -838,7 +847,7 @@ function bandPorts($: EngineInterface): BandPorts {
     jumpToBookmarkNumber: (typed, via) => jumpToBookmarkNumber($, typed, via),
     removeBookmarkNumber: typed => removeBookmarkNumber($, typed),
     scrollPaneCentre: key => $.ui.scroll({ in: PANE, to: { key }, block: 'center' }),
-    toast: (text, timeoutMs) => (timeoutMs ? $.ui.toast(text, { timeoutMs }) : $.ui.toast(text)),
+    toast: toastVia($),
     togglePin: typed => togglePin($, typed),
     groupStep: dir => bandGroupStep($, dir),
     claimBookmark: uuid => bookmarks_.claimBookmark(bookmarksPorts($), uuid),
@@ -861,7 +870,7 @@ function bandPorts($: EngineInterface): BandPorts {
         { isPlaced?: boolean; reason?: string } | undefined,
     openPaneFocused: title => $.ui.open({ id: PANE, title, focus: true, closeOnEscape: true }),
     setBandGroup: index => update($, bandGroup, () => index),
-    scroll: (uuid, block) => $.ui.scroll({ to: { requestId: uuid }, block }),
+    scroll: scrollVia($),
     setPendingCentre: uuid => promptsPane.centreOnNextDraw(uuid),
     selection: () => $.ui.selection(),
     setSelectionAtChord: sel => markState.setAtChord(sel),
@@ -1047,7 +1056,7 @@ export const register: Register = (on, options) => {
     // Typing in the input box: the person has the keyboard back, no reminder owed.
     band.oweReminder(false)
     if (diag.logKeys) {
-      log($, `[diag] edit ${keyLabel(e.key)}: draft ${e.text.length} -> +${e.inputText.length}, ${diag.lastEditAt ? now - diag.lastEditAt : '-'} ms since last`)
+      log($, editLine(keyLabel(e.key), e.text.length, e.inputText.length, diag.lastEditAt, now))
     }
     diag.lastEditAt = now
     const mode = await read($, bandMode)
@@ -1093,11 +1102,11 @@ export const register: Register = (on, options) => {
 
   // The person closed the pane (its close mark, or Ctrl+X x): end the band's key mode too.
   on('ui.close', { id: PANE }, async ($, e, next) => {
-    // Esc with a filter active (#28): the first clears the filter, the second closes.
-    if (e.origin.kind === 'person' && promptsPane.filter) {
+    // Esc with a filter active (#28): the first clears the filter, the second closes
+    // (the rule is PromptsPaneState.escClears).
+    if (promptsPane.escClears(e.origin.kind === 'person')) {
       log($, '[bm] Esc cleared the prompts filter; the pane stays')
-      promptsPane.setFilter('')
-      await update($, viewRev, v => v + 1)
+      await bumpView($)
       return { deny: 'the prompts filter was cleared; Esc again closes the list' }
     }
     await endBandMode($)
@@ -1109,8 +1118,7 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'bm-diag-keys' }, async ($, e) => {
-    const arg = e.args.trim()
-    diag.logKeys = arg === 'on' ? true : arg === 'off' ? false : !diag.logKeys
+    diag.logKeys = parseOnOff(e.args, diag.logKeys)
     log($, `[diag] keystroke logging ${diag.logKeys ? 'ON' : 'OFF'}`)
     $.ui.toast(`bookmarks: keystroke logging ${diag.logKeys ? 'on' : 'off'}`)
     return {}
@@ -1126,8 +1134,7 @@ export const register: Register = (on, options) => {
   // Every focus move in the band or a pane, and whether it was refused.
   on('ui.focus', async ($, e, next) => {
     const r = await next(e)
-    const deny = r && typeof r === 'object' && 'deny' in r && r.deny ? ` DENY ${String(r.deny)}` : ''
-    log($, `[diag] focus ${e.component} -> ${e.element ?? '(engine stop)'} by ${e.origin.kind}${deny}`)
+    log($, focusLine(e.component, e.element, e.origin.kind, r && typeof r === 'object' && 'deny' in r ? r.deny : undefined))
     return r
   })
 
@@ -1139,42 +1146,20 @@ export const register: Register = (on, options) => {
     // reading; an append is one of the causes the redraw rule waits for (22:57Z: each of
     // Claude's replies flipped the yellow from #324 to the newest prompt).
     if (!e.agentId) expectRedraw('a message appended')
-    const isWanted = e.door === 'prompt' || e.door === 'response'
-    // A message typed while Claude was working arrives as an attachment named
-    // `queued_command`, its text wrapped in the engine's reminder prose (the transcript
-    // keeps the raw text in `attachment.prompt`, which this event does not carry). It is
-    // the person's prompt: unwrap it and keep it as one (djdarcy, 2026-10-11).
-    const queued = !e.agentId && e.message.type === 'attachment' && e.message.name === 'queued_command'
-    // Not the person's: the engine stamps who caused the row. A background task's notice,
-    // a scheduled firing, another session's message, a coordinator or observer: none is a
-    // prompt (djdarcy, 2026-10-12: the list shows "genuine user inputs, full stop"). A
-    // notice queued into a running turn is stamped `engine`, as the person's own queued
-    // message is; its text tells them apart (NOT_A_PROMPT, core/prompts/prompt-rows.ts).
-    const automated = AUTOMATED_ORIGINS.has(e.origin.kind)
-    if (!automated && (queued || (!e.agentId && isWanted && !e.message.isMeta))) {
-      const raw = e.message.content.map(block => (block.type === 'text' ? block.text : '')).join(' ')
-      const text = queued ? unwrapQueued(raw) : raw
-      if (looksLikePrompt(text)) {
-        // `text` (first 4000 chars) lets a selection mark check it landed in the right row.
-        // A queued message arrives by the `attachment` door; it is a prompt (0.4.0 stored it
-        // under the engine's door, so the list, which counts `prompt` rows, dropped every one).
-        const row: Row = { uuid: e.uuid, door: (queued ? 'prompt' : e.door) as Row['door'], head: headOf(text), text: text.slice(0, 4000) }
-        note(`append ${e.door} ${e.uuid} ${row.head.slice(0, 30)}`)
-        await update($, rows, list => [...(list as Row[]), row].slice(-500))
-        if (row.door === 'prompt') {
-          await prompts_.keepPrompt(promptsPorts($), { uuid: row.uuid, head: row.head })
-          await prompts_.keepPromptText(promptsPorts($), row.uuid, text)
-        }
+    // What the row is -- a prompt or response to keep, the prompt's text for the filter, a
+    // footnote, or nothing -- is core/prompts/prompt-rows.ts classifyAppend (the decisions
+    // and their comments moved there, U60); this hook keeps the stores, the redraw and the log.
+    const sorted = classifyAppend(e)
+    if (sorted.row) {
+      const row: Row = sorted.row
+      note(`append ${e.door} ${e.uuid} ${row.head.slice(0, 30)}`)
+      await update($, rows, list => [...(list as Row[]), row].slice(-500))
+      if (row.door === 'prompt' && sorted.promptText !== undefined) {
+        await prompts_.keepPrompt(promptsPorts($), { uuid: row.uuid, head: row.head })
+        await prompts_.keepPromptText(promptsPorts($), row.uuid, sorted.promptText)
       }
     }
-    // A footnote (#33): the person's slash command, `!` shell command or interruption,
-    // kept with the prompt it follows, as the back-fill keeps it. A row the person did not
-    // cause is no footnote either: a /loop firing runs a slash command (2026-10-15: 535 of
-    // the 671 stored footnotes were firings).
-    if (!automated && !e.agentId && !queued && e.door !== 'response') {
-      const fn = footnoteOf({ type: 'user', isMeta: e.message.isMeta, message: { content: e.message.content } })
-      if (fn) await prompts_.keepFootnote(promptsPorts($), { ...fn, uuid: e.uuid, after: (await keptPrompts($)).at(-1)?.uuid ?? null })
-    }
+    if (sorted.footnote) await prompts_.keepFootnote(promptsPorts($), { ...sorted.footnote, uuid: e.uuid, after: (await keptPrompts($)).at(-1)?.uuid ?? null })
     return stored
   })
 
@@ -1204,13 +1189,10 @@ export const register: Register = (on, options) => {
     // A prompt row drawn in colour, as a reply's marked line is (2026-10-09, for anchor
     // presses: "highlighted yellow like a mark"). The lines before the marked one keep
     // the engine's prompt styling; the marked line and the rest are drawn here.
-    const [first] = onRow
-    const colored = first && colorSplit(text, first[0], first[1].snippet)
+    const colored = firstColorSplit(text, onRow)
     if (colored) {
-      const elements = $.ui.resolve(e)
-      const { Text } = elements
       const engine = colored.before ? await next({ ...e, props: { ...e.props, text: colored.before } }) : null
-      return markedColumn(elements, colored, engine, colored.after && <Text>{colored.after}</Text>, markStyles())
+      return markedPrompt($.ui.resolve(e), colored, engine, markStyles())
     }
     const marked = tagMarksPlain(text, onRow)
     return marked === text ? next(e) : next({ ...e, props: { ...e.props, text: marked } })
@@ -1247,8 +1229,7 @@ export const register: Register = (on, options) => {
         const r = a && findRecord(reg, a.uuid)
         return r ? tierOf(r) === 'perma' : false
       }
-      const [first] = marksHere
-      const colored = first && colorSplit(e.props.text, first[0], first[1].snippet)
+      const colored = firstColorSplit(e.props.text, marksHere)
       // A mark whose words don't sit on one line: the bold «a» form (core/marks/highlight.ts).
       const text = tagMarksMarkdown(e.props.text, marksHere)
       return anchoredReply(
@@ -1274,8 +1255,7 @@ export const register: Register = (on, options) => {
     // (keeps the reply's bullet and formatting); the part after is drawn with the
     // Markdown element. Any case this split could mangle falls through to the bold
     // rewrite below.
-    const [first] = marks
-    const colored = first && colorSplit(e.props.text, first[0], first[1].snippet)
+    const colored = firstColorSplit(e.props.text, marks)
     if (colored) {
       const engine = colored.before ? await next({ ...e, props: { ...e.props, text: colored.before } }) : null
       return markedReply($.ui.resolve(e), colored, engine, markStyles())
@@ -1414,20 +1394,15 @@ export const register: Register = (on, options) => {
     const done = (cause: Cause) => settle($, paneOf(mode), cause)
     const s = currentSettings()
     const now = { leader: 'The leader (Ctrl+] by default)', chords: s.chords === 'on', panes: s.panes === 'on' }
-    // The help must fit the band's window. Taller, it scrolls, and the keyboard probe
-    // (showHelp) -- the only way to learn that Esc took the keyboard back -- focuses
-    // `close`, which scrolls it back to the top; the arrows in the band scroll its
-    // window without moving the ring (log 2026-10-12 18:02-18:09: no focus move onto a
-    // help line). So a band too short for one line per command gets the short form.
-    const full = helpLines(now)
-    const help = full.length + 1 <= e.props.maxRows ? full : helpShort(now)
+    // The help that fits the band's window, and the bar: core/band/keys.ts helpFor and
+    // barFor (the rules moved there under U60; the arrows in the band scroll its window
+    // without moving the ring).
+    const help = helpFor(now, e.props.maxRows)
     const bookmarks = mode === 'bookmarks'
     const count = mode === 'list' || bookmarks ? (bookmarks ? (await bookmarkList($)).length : (await prompts($)).length) : 0
     const listKeys = listKeysFor(bookmarks ? 'bookmarks' : 'list').map(l => ({ key: l.key, button: l.button, operation: l.route().operation }))
     const groupTitle = bookmarks ? (BOOKMARK_GROUPS[await read($, bandGroup)]?.title ?? '') : ''
-    const bar = s.band === 'full'
-      ? bandButtons({ chords: s.chords === 'on' }).map(b => ({ id: b.id, label: b.label, key: b.key, ...(b.hotkey ? { hotkey: b.hotkey } : {}), ...(b.chord ? { action: CHORD_ACTIONS[b.chord] } : {}) }))
-      : []
+    const bar = barFor(s, CHORD_ACTIONS)
     return bandView(
       elements,
       theirs,
@@ -1488,32 +1463,17 @@ export const register: Register = (on, options) => {
       // is open.
       const here = await promptHere($)
       viewTracker.drewHere(here)
-      // Centre the list on the nearest prompt once the rows below exist (set by
-      // openFor). A timer, since a render hook may not scroll; by then the draw is done.
-      // (The rows are views/prompts-pane.tsx's; openFor is handlers/band.ts's and sets
-      // the centre through its setPendingCentre port.)
+      // Centre the list on the nearest prompt once the rows below exist (set by openFor
+      // through its setPendingCentre port): handlers/band.ts centrePane, with the retries'
+      // waits in core/band/band-entry.ts centreDelays.
       const target = promptsPane.takeCentre()
-      if (target) {
-        // The rows are not scrollable-to the instant after the first draw (DENY "no
-        // element of its own is drawn under that key" at +7 ms, 2026-10-11) but are a
-        // few hundred ms later, when the follow scrolls succeed. Try at 60, 180, 420 and
-        // 900 ms after the draw and stop at the first that lands.
-        const attempt = (n: number) => {
-          $.clock.after(60 * 2 ** n - (n === 0 ? 0 : 60), () => {
-            void $.ui.scroll({ in: PANE, to: { key: `p-${target}` }, block: 'center' }).then(r => {
-              if (r.deny && n < 3) return attempt(n + 1)
-              log($, `[bm] prompts pane centred on ${short(target)} (nearest to the view) -> ${r.deny ? `DENY after ${n + 1} tries: ${r.deny}` : `ok (try ${n + 1})`}`)
-            })
-          })
-        }
-        attempt(0)
-      }
+      if (target) band_.centrePane(bandPorts($), target)
       return promptsPaneView(
         elements,
         { all, kept, footnoteMode, unfolded: promptsPane.unfolded, drawnFour: drawn.firstFours, pinIds, texts, paneFilter: promptsPane.filter, fromBand, here, columns: e.props.bodyColumns },
         {
-          unfold: async n => { promptsPane.unfold(n); await update($, viewRev, v => v + 1) },
-          refold: async n => { promptsPane.refold(n); await update($, viewRev, v => v + 1) },
+          unfold: async n => { promptsPane.unfold(n); await bumpView($) },
+          refold: async n => { promptsPane.refold(n); await bumpView($) },
           footnote: (uuid, label) => pressPromptRow($, uuid, label),
           pressPrompt: r => pressPromptRow($, r.uuid, `prompt #${r.n}`, r.head),
           go: typed => jumpToPromptNumber($, typed, 'prompts pane'),
@@ -1521,7 +1481,7 @@ export const register: Register = (on, options) => {
           setFilter: query => {
             if (!promptsPane.setFilter(query)) return false
             log($, `[bm] prompts filter: "${cut(query, 40)}"`, { text: true })
-            void update($, viewRev, v => v + 1)
+            void bumpView($)
             return true
           },
         },

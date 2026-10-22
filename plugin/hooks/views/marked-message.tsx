@@ -77,6 +77,12 @@ export function markedColumn(elements: Pick<Elements, 'Box' | 'Text'>, c: ColorS
   )
 }
 
+/** A prompt with its marked line drawn by the plugin: the column above, with the rest of the prompt as plain Text (a prompt row is plain text). The one JSX expression register.tsx's UserMessage hook held, moved here (U60). */
+export function markedPrompt(elements: Pick<Elements, 'Box' | 'Text'>, c: ColorSplit, engine: RenderChildren, styles: MarkStyles) {
+  const { Text } = elements
+  return markedColumn(elements, c, engine, c.after && <Text>{c.after}</Text>, styles)
+}
+
 // A reply with its marked line drawn by the plugin: the part before it still goes to the
 // engine (keeps the reply's bullet and formatting); the part after is drawn with the
 // Markdown element. With no engine part:

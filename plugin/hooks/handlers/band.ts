@@ -7,7 +7,7 @@
 // cluster and reached through `ports.band`; the pane position is PanePosition's.
 import { afterAction, isList, type Cause } from '../core/band/after-action.ts'
 import { ownerOf } from '../core/bookmarks/anchor.ts'
-import { promptNumberComplete, stepNumber } from '../core/band/band-entry.ts'
+import { centreDelays, promptNumberComplete, stepNumber } from '../core/band/band-entry.ts'
 import { parseListNumber, type Operation, type Pane } from '../core/band/keys.ts'
 import { short } from '../core/kit/message-id.ts'
 import type { BandCorePorts, ListPorts, PanePorts } from '../engine/ports.ts'
@@ -55,6 +55,24 @@ async function showInPane(ports: BandCorePorts & PanePorts & ListPorts, n: numbe
   if (!target) return
   const r = await ports.scrollPaneCentre(`${bookmarks ? 'b' : 'p'}-${target.uuid}`)
   if (r.deny) ports.log(`[bm] pane scroll to #${n} -> DENY: ${r.deny}`)
+}
+
+// Centre the prompts list on the nearest prompt once the rows below exist (openFor sets the
+// target through its setPendingCentre port; the Pane render hook takes it and calls this). A
+// timer, since a render hook may not scroll; by then the draw is done. Try at the gaps
+// centreDelays gives and stop at the first that lands. (Moved from register.tsx's Pane render
+// hook under /move-code, U60; the waits as the code had them.)
+export function centrePane(ports: BandCorePorts & PanePorts, target: string) {
+  const delays = centreDelays()
+  const attempt = (n: number) => {
+    ports.after(delays[n]!, () => {
+      void ports.scrollPaneCentre(`p-${target}`).then(r => {
+        if (r.deny && n < delays.length - 1) return attempt(n + 1)
+        ports.log(`[bm] prompts pane centred on ${short(target)} (nearest to the view) -> ${r.deny ? `DENY after ${n + 1} tries: ${r.deny}` : `ok (try ${n + 1})`}`)
+      })
+    })
+  }
+  attempt(0)
 }
 
 // Browse the prompts one by one from the band, vim's j and k. Why, and which way each key

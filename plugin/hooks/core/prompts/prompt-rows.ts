@@ -9,6 +9,8 @@
 // transcript). This module decides, so that the transcript back-fill and the live
 // capture agree.
 
+import { headOf } from '../bookmarks/transcript-lines.ts'
+
 // Text the engine wraps around rows that are not the person's words. A prompt that
 // happens to begin with one of these is lost; none has been seen.
 // `<teammate-message …>`: a row another agent sent into the conversation (claude-devtools
@@ -108,6 +110,58 @@ function footnoteWhole(o: any): Footnote | undefined {
   if (t.startsWith('<bash-input>')) return { kind: 'shell', label: `!${tagged(t, 'bash-input') ?? ''}` }
   if (t.startsWith('[Request interrupted by user')) return { kind: 'interrupted', label: t.replace(/^\[|\]$/g, '').trim() }
   return undefined
+}
+
+// Who-caused-the-row stamps (session.append's `origin.kind`) that are never the person.
+export const AUTOMATED_ORIGINS = new Set(['task-notification', 'scheduled-trigger', 'peer-send-message', 'coordinator', 'observer', 'observer-activity', 'auto-continuation', 'projects-relay', 'channel'])
+
+// The shape of a session.append event this module reads (structural, so no engine import):
+// the row's transcript uuid, its door, the agent that wrote it if not the person, who caused
+// it, and the message with its blocks.
+export type AppendEvent = {
+  uuid: string
+  door: string
+  agentId?: unknown
+  origin: { kind: string }
+  message: { type: string; name?: string; isMeta?: boolean; content: readonly { type: string; text?: string }[] }
+}
+
+/** What an appended row is to the plugin: a row to keep (a prompt or a response), the prompt's whole text to keep for the filter, a footnote, or nothing. The decisions session.append made in register.tsx until 0.6.12, moved here under /move-code with their comments; the hook keeps the stores, the redraw and the log. */
+export function classifyAppend(e: AppendEvent): { row?: { uuid: string; door: 'prompt' | 'response'; head: string; text: string }; promptText?: string; footnote?: Footnote } {
+  const out: { row?: { uuid: string; door: 'prompt' | 'response'; head: string; text: string }; promptText?: string; footnote?: Footnote } = {}
+  const isWanted = e.door === 'prompt' || e.door === 'response'
+  // A message typed while Claude was working arrives as an attachment named
+  // `queued_command`, its text wrapped in the engine's reminder prose (the transcript
+  // keeps the raw text in `attachment.prompt`, which this event does not carry). It is
+  // the person's prompt: unwrap it and keep it as one (djdarcy, 2026-10-11).
+  const queued = !e.agentId && e.message.type === 'attachment' && e.message.name === 'queued_command'
+  // Not the person's: the engine stamps who caused the row. A background task's notice,
+  // a scheduled firing, another session's message, a coordinator or observer: none is a
+  // prompt (djdarcy, 2026-10-12: the list shows "genuine user inputs, full stop"). A
+  // notice queued into a running turn is stamped `engine`, as the person's own queued
+  // message is; its text tells them apart (NOT_A_PROMPT above).
+  const automated = AUTOMATED_ORIGINS.has(e.origin.kind)
+  if (!automated && (queued || (!e.agentId && isWanted && !e.message.isMeta))) {
+    const raw = e.message.content.map(block => (block.type === 'text' ? block.text ?? '' : '')).join(' ')
+    const text = queued ? unwrapQueued(raw) : raw
+    if (looksLikePrompt(text)) {
+      // `text` (first 4000 chars) lets a selection mark check it landed in the right row.
+      // A queued message arrives by the `attachment` door; it is a prompt (0.4.0 stored it
+      // under the engine's door, so the list, which counts `prompt` rows, dropped every one).
+      const door = (queued ? 'prompt' : e.door) as 'prompt' | 'response'
+      out.row = { uuid: e.uuid, door, head: headOf(text), text: text.slice(0, 4000) }
+      if (door === 'prompt') out.promptText = text
+    }
+  }
+  // A footnote (#33): the person's slash command, `!` shell command or interruption,
+  // kept with the prompt it follows, as the back-fill keeps it. A row the person did not
+  // cause is no footnote either: a /loop firing runs a slash command (2026-10-15: 535 of
+  // the 671 stored footnotes were firings).
+  if (!automated && !e.agentId && !queued && e.door !== 'response') {
+    const fn = footnoteOf({ type: 'user', isMeta: e.message.isMeta, message: { content: e.message.content } })
+    if (fn) out.footnote = fn
+  }
+  return out
 }
 
 // A footnote as kept: `after` is the uuid of the prompt before it (null before the first).

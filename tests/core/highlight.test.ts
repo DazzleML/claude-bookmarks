@@ -1,6 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { colorSplit, markedLineMarkdown, plainMarkdown, snippetOf, tagMarksMarkdown, tagMarksPlain } from '../../plugin/hooks/core/marks/highlight.ts'
+import { colorSplit, firstColorSplit, markedLineMarkdown, plainMarkdown, snippetOf, tagMarksMarkdown, tagMarksPlain } from '../../plugin/hooks/core/marks/highlight.ts'
+
+// The render hooks ask for the first mark's split (U60): none on the row, or a mark with no
+// snippet, draws nothing special; otherwise the first mark's words decide the line.
+test('firstColorSplit: the first mark on the row, or nothing', () => {
+  assert.equal(firstColorSplit('a line\nmarked words here\nmore', []), undefined)
+  assert.equal(firstColorSplit('a line\nmarked words here\nmore', [['a', {}]]), undefined)
+  const c = firstColorSplit('a line\nmarked words here\nmore', [['a', { snippet: 'marked words' }], ['b', { snippet: 'more' }]])!
+  assert.equal(c.letter, 'a')
+  assert.equal(c.snippet, 'marked words')
+})
 
 test('snippetOf: the first non-blank line, trimmed, at most 120 characters', () => {
   assert.equal(snippetOf('\n\n  the words  \nmore'), 'the words')

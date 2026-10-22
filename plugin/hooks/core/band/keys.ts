@@ -332,6 +332,19 @@ export function lineKeys(tables: Tables = DEFAULT_TABLES): string[] {
 // what the keys are, and `?` says the rest (it replaced `' m ␣ p b P o i`, which named
 // keys without saying what they did).
 export type BandButton = { id: string; key: string; label: string; hotkey?: string; chord?: Chord }
+/** The help the band draws: the full lines when they fit the band's window (one line per command plus one), else the short form. The band must fit its window: taller, it scrolls, and the keyboard probe (showHelp) focuses `close`, which scrolls it back to the top (log 2026-10-12 18:02-18:09). (The band render hook's rule, moved here under U60.) */
+export function helpFor(now: { leader: string; chords: boolean; panes: boolean }, maxRows: number, tables: Tables = DEFAULT_TABLES): string[] {
+  const full = helpLines(now, tables)
+  return full.length + 1 <= maxRows ? full : helpShort(now, tables)
+}
+
+/** The bar's buttons as the band draws them: none with the field-only band; else each command's button with its hotkey and, while chords are on, the borrowed engine action its chord presses. */
+export function barFor(settings: { band: 'full' | 'field'; chords: 'on' | 'off' }, actions: Record<Chord, string>, tables: Tables = DEFAULT_TABLES): { id: string; label: string; key: string; hotkey?: string; action?: string }[] {
+  return settings.band === 'full'
+    ? bandButtons({ chords: settings.chords === 'on' }, tables).map(b => ({ id: b.id, label: b.label, key: b.key, ...(b.hotkey ? { hotkey: b.hotkey } : {}), ...(b.chord ? { action: actions[b.chord] } : {}) }))
+    : []
+}
+
 export function bandButtons(opts: { chords: boolean }, tables: Tables = DEFAULT_TABLES): BandButton[] {
   return tables.line.filter(c => c.shown).map(c => {
     const hotkey = barHotkey(c.keys)

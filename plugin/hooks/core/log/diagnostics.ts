@@ -17,6 +17,23 @@ export function diagLine(when: string, draftChars: number, lastEditAt: number, n
   return `[diag] ${when}: draft ${draftChars} chars, last edit ${since} ago, claude ${busy ? 'BUSY' : 'idle'}, panes ${open}`
 }
 
+/** `/bm-diag-keys on|off`, or a bare call that toggles. */
+export function parseOnOff(arg: string, current: boolean): boolean {
+  const a = arg.trim()
+  return a === 'on' ? true : a === 'off' ? false : !current
+}
+
+/** One keystroke in the input box, while keystroke logging is on: the key, the draft's length before and the characters it added, and the time since the last edit. Lengths only, never the draft's text. */
+export function editLine(key: string, draftChars: number, addedChars: number, lastEditAt: number, now: number): string {
+  return `[diag] edit ${key}: draft ${draftChars} -> +${addedChars}, ${lastEditAt ? now - lastEditAt : '-'} ms since last`
+}
+
+/** One focus move in the band or a pane, and whether the engine refused it. */
+export function focusLine(component: string, element: string | undefined, originKind: string, deny: unknown): string {
+  const refused = deny ? ` DENY ${String(deny)}` : ''
+  return `[diag] focus ${component} -> ${element ?? '(engine stop)'} by ${originKind}${refused}`
+}
+
 /** /bm-ids: a summary, one row per recent prompt saying how it was drawn (under its real uuid, under an id sharing the uuid's first four groups, under some id with the same text, or not seen), and the drawn ids no prompt owns. */
 export type IdsReport = { summary: string; rows: string[]; strays: string[] }
 export function idsReport(list: readonly { uuid: string; head: string }[], rendered: ReadonlyMap<string, string>, recent = 12, strayCap = 20): IdsReport {

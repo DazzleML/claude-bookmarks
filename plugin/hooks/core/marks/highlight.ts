@@ -68,6 +68,12 @@ export function markedLineMarkdown(c: ColorSplit): string | undefined {
   return `${c.raw.slice(0, at)}**«${c.letter}» ${c.snippet}**${c.raw.slice(end)}`
 }
 
+/** The colour split for the first mark on a row, or undefined when the row carries none or the mark has no snippet. The three render hooks each wrote `const [first] = marks; first && colorSplit(...)`; one spelling (U60). */
+export function firstColorSplit(text: string, marks: readonly (readonly [string, { snippet?: string }])[]): ColorSplit | undefined {
+  const [first] = marks
+  return first && colorSplit(text, first[0], first[1].snippet)
+}
+
 export function colorSplit(text: string, letter: string, snippet: string | undefined): ColorSplit | undefined {
   if (!snippet) return undefined
   const lines = text.split('\n')

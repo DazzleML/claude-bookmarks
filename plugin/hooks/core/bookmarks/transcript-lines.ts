@@ -127,6 +127,11 @@ export function uuidPattern(uuid: string): string {
   return `"uuid":"${uuid}`
 }
 
+/** What the transcript grep looks for when a request names a message: its uuid (full or prefix), else a fragment of its text as the JSON line holds it, else nothing. (register.tsx's resolveTarget chose it inline until U60.) */
+export function targetPattern(want: { uuid?: string; fragment?: string }): string | undefined {
+  return want.uuid ? uuidPattern(want.uuid) : want.fragment ? jsonEscaped(want.fragment) : undefined
+}
+
 /** A message's text as one line: runs of whitespace (newlines included) become one space. A pane row draws this and lets the terminal cut it at the pane's edge (U64). */
 export const lineOf = (text: string): string => text.replace(/\s+/g, ' ').trim()
 

@@ -1,6 +1,22 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LINE_COMMANDS, LIST_KEYS, bandButtons, fieldKeysFor, fieldRest, helpLines, helpShort, lineHint, lineKeys, listHint, listKeysFor, parseListNumber, route } from '../../plugin/hooks/core/band/keys.ts'
+import { CHORD_ACTIONS, LINE_COMMANDS, LIST_KEYS, bandButtons, barFor, fieldKeysFor, fieldRest, helpFor, helpLines, helpShort, lineHint, lineKeys, listHint, listKeysFor, parseListNumber, route } from '../../plugin/hooks/core/band/keys.ts'
+
+// The band render hook's two pure choices (U60): the help that fits the window, and the bar.
+test('helpFor gives the full help when it fits the window plus one row, else the short form', () => {
+  const now = { leader: 'The leader', chords: true, panes: true }
+  const full = helpLines(now)
+  assert.deepEqual(helpFor(now, full.length + 1), full)
+  assert.deepEqual(helpFor(now, full.length), helpShort(now))
+})
+
+test('barFor: no bar with the field-only band; with chords on each chord button carries its action', () => {
+  assert.deepEqual(barFor({ band: 'field', chords: 'on' }, CHORD_ACTIONS), [])
+  const bar = barFor({ band: 'full', chords: 'on' }, CHORD_ACTIONS)
+  assert.equal(bar.length, bandButtons({ chords: true }).length)
+  assert.equal(bar.find(b => b.id === 'mark')?.action, CHORD_ACTIONS.mark)
+  assert.equal(barFor({ band: 'full', chords: 'off' }, CHORD_ACTIONS).some(b => b.action !== undefined), false)
+})
 
 test('a typed list number: a prompt, an unfold, or a footnote', () => {
   assert.deepEqual(parseListNumber('3'), { n: 3 })
