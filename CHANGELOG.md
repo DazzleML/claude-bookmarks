@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.8] - 2026-10-22
+
+### Changed
+
+- For contributors, no change to the plugin itself: CI now has a second job that installs the Claude Code CLI on the runner (pinned to the version the plugin is verified against), validates the plugin and the repository's marketplace file the way the engine reads them, and runs the plugin's own test suite; the runner needs no sign-in for any of it. The strict type check is the one check that stays local, in the pre-push hook: it needs declarations the engine writes only when it loads the plugin in a live session, which a runner never does ([#5](https://github.com/DazzleML/claude-bookmarks/issues/5)).
+
 ## [0.6.7] - 2026-10-22
 
 ### Changed
@@ -1145,7 +1151,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.7...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.8...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

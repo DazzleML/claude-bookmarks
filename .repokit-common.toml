@@ -10,8 +10,8 @@
 # runs what guards this repository -- the core suite under Node, the version
 # tests under pytest, the strict type check and the plugin validator. The kit
 # suite (`claude plugin test plugin`) stays out of the hook for speed; run it
-# yourself (CI is to carry it). The hook runs the command with `sh -c` from
-# the repository root; a
+# yourself, and CI runs it on every push. The hook runs the command with
+# `sh -c` from the repository root; a
 # non-zero exit blocks a push to a gated branch and warns on any other.
 
 [tool.repokit-common]
