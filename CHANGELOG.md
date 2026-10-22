@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.9] - 2026-10-22
+
+### Fixed
+
+- A widened prompts pane left a quarter of its width empty: every row stopped at about sixty characters however wide the pane was dragged. A row now shows as much of the prompt as the pane is wide, cut at the edge with an ellipsis, and a narrow pane still cuts cleanly without squeezing the number column. The whole text is the one the `/words` filter already keeps; a prompt whose text is not kept (a conversation past the "Prompt text kept for the filter" budget) shows its first sixty characters as before. The jump pane's rows and its reading-position row fill their width the same way; they used to be cut at forty and thirty-two characters.
+
 ## [0.6.8] - 2026-10-22
 
 ### Changed
@@ -1151,7 +1157,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.8...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.9...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

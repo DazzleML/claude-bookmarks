@@ -1,0 +1,155 @@
+{
+  "mutations": [
+    {
+      "id": "m1",
+      "file": "plugin/hooks/core/bookmarks/transcript-lines.ts",
+      "original": "text.replace(/\\s+/g, ' ').trim()",
+      "mutated": "text.replace(/\\s+/g, ' ')",
+      "note": "dropped trim: leading/trailing whitespace stays in the line",
+      "verdict": "killed",
+      "core_red": [
+        "patterns are what the JSON line contains",
+        "lineOf is the whole text on one line; headOf is that line cut to 60"
+      ],
+      "kit_red": [],
+      "kit_pass": "126"
+    },
+    {
+      "id": "m2",
+      "file": "plugin/hooks/core/bookmarks/transcript-lines.ts",
+      "original": "text.replace(/\\s+/g, ' ').trim()",
+      "mutated": "text.replace(/\\s/g, ' ').trim()",
+      "note": "dropped run collapse: whitespace runs become several spaces",
+      "verdict": "killed",
+      "core_red": [
+        "a bookmark's place from its transcript row: line, bytes, head, path with forward slashes, role, timestamp when known",
+        "patterns are what the JSON line contains",
+        "lineOf is the whole text on one line; headOf is that line cut to 60"
+      ],
+      "kit_red": [
+        "a prompts-pane row carries the whole kept text on one line; the head when none is kept"
+      ],
+      "kit_pass": "125"
+    },
+    {
+      "id": "m3",
+      "file": "plugin/hooks/core/bookmarks/transcript-lines.ts",
+      "original": "lineOf(text).slice(0, 60)",
+      "mutated": "lineOf(text).slice(0, 61)",
+      "note": "head boundary off by one",
+      "verdict": "killed",
+      "core_red": [
+        "lineOf is the whole text on one line; headOf is that line cut to 60"
+      ],
+      "kit_red": [],
+      "kit_pass": "126"
+    },
+    {
+      "id": "m4",
+      "file": "plugin/hooks/core/bookmarks/transcript-lines.ts",
+      "original": "lineOf(text).slice(0, 60)",
+      "mutated": "text.slice(0, 60)",
+      "note": "head skips line normalisation",
+      "verdict": "killed",
+      "core_red": [
+        "a bookmark's place from its transcript row: line, bytes, head, path with forward slashes, role, timestamp when known",
+        "patterns are what the JSON line contains",
+        "lineOf is the whole text on one line; headOf is that line cut to 60"
+      ],
+      "kit_red": [],
+      "kit_pass": "126"
+    },
+    {
+      "id": "m5",
+      "file": "plugin/hooks/views/prompts-pane.tsx",
+      "original": "const rowText = (r: NumberedPrompt) => lineOf(texts.get(r.uuid) ?? r.head)",
+      "mutated": "const rowText = (r: NumberedPrompt) => lineOf(r.head)",
+      "note": "fallback operand: kept whole text ignored, always the head",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "the kept text is searched past the excerpt, and a smaller budget drops it at once",
+        "a prompts-pane row carries the whole kept text on one line; the head when none is kept"
+      ],
+      "kit_pass": "124"
+    },
+    {
+      "id": "m6",
+      "file": "plugin/hooks/views/prompts-pane.tsx",
+      "original": "const rowText = (r: NumberedPrompt) => lineOf(texts.get(r.uuid) ?? r.head)",
+      "mutated": "const rowText = (r: NumberedPrompt) => texts.get(r.uuid) ?? r.head",
+      "note": "dropped lineOf normalisation: newlines reach the row",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "a prompts-pane row carries the whole kept text on one line; the head when none is kept"
+      ],
+      "kit_pass": "125"
+    },
+    {
+      "id": "m7",
+      "file": "plugin/hooks/views/prompts-pane.tsx",
+      "original": "const text = `${pointer(r.n)}${numberLabel(r.n)}${rowText(r)}`",
+      "mutated": "const text = `${pointer(r.n)}${numberLabel(r.n)}${r.head}`",
+      "note": "wrong variable: plain row draws the head instead of rowText",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "the kept text is searched past the excerpt, and a smaller budget drops it at once",
+        "a prompts-pane row carries the whole kept text on one line; the head when none is kept"
+      ],
+      "kit_pass": "124"
+    },
+    {
+      "id": "m8",
+      "file": "plugin/hooks/views/prompts-pane.tsx",
+      "original": "const dim = unreached(drawnFour, r.uuid) && !isHere",
+      "mutated": "const dim = unreached(drawnFour, r.uuid) && isHere",
+      "note": "guard inverted: dimming applies to the here row only",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "126"
+    },
+    {
+      "id": "m9",
+      "file": "plugin/hooks/views/prompts-pane.tsx",
+      "original": "{...(dim && r.n !== targetN ? buttonStyle('unreached') : {})} onPress={press}>\n          <Text wrap=\"truncate-end\" {...(dim && r.n !== targetN ? style('unreached') : {})}>{text}</Text>",
+      "mutated": "{...(dim && r.n !== targetN ? buttonStyle('unreached') : {})} onPress={press}>\n          <Text wrap=\"truncate-end\" {...(dim && r.n === targetN ? style('unreached') : {})}>{text}</Text>",
+      "note": "guard inverted on the Text style: target row dimmed, others not",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "126"
+    },
+    {
+      "id": "m10",
+      "file": "plugin/hooks/views/marks-pane.tsx",
+      "original": "const readingText = reading ? `\u2423 reading: ${reading.head}` : ''",
+      "mutated": "const readingText = reading ? `\u2423 reading: ` : ''",
+      "note": "reading head dropped from the label",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "126"
+    },
+    {
+      "id": "m11",
+      "file": "plugin/hooks/views/marks-pane.tsx",
+      "original": "{used.length === 0 && !reading &&",
+      "mutated": "{used.length === 0 && reading &&",
+      "note": "guard inverted: empty-state legend shown only when a reading mark exists",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "126"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "126"
+    }
+  ]
+}

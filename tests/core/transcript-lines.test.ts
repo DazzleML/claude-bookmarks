@@ -5,6 +5,7 @@ import { utf8ByteLength } from '../../plugin/hooks/core/bookmarks/anchor.ts'
 import {
   headOf,
   jsonEscaped,
+  lineOf,
   messageTextOf,
   parseGrepLine,
   resolveRows,
@@ -118,6 +119,18 @@ test('patterns are what the JSON line contains', () => {
   assert.equal(jsonEscaped('say "hi"\nnow'), 'say \\"hi\\"\\nnow')
   assert.equal(uuidPattern('abc'), '"uuid":"abc')
   assert.equal(headOf('  one\n\n two   three '), 'one two three')
+})
+
+// A pane row draws the whole prompt as one line and lets the terminal cut it at the pane's
+// edge (U64, djdarcy 2026-10-15: fill a widened pane); the 60-character head stays the
+// fallback when no text is kept, and is the same line cut, so the two cannot drift.
+test('lineOf is the whole text on one line; headOf is that line cut to 60', () => {
+  const long = `first line of a prompt\n\n   second   line, past sixty characters by a fair margin\tand a tab`
+  assert.equal(lineOf(long), 'first line of a prompt second line, past sixty characters by a fair margin and a tab')
+  assert.equal(lineOf(long).length > 60, true)
+  assert.equal(headOf(long), lineOf(long).slice(0, 60))
+  assert.equal(headOf(long).length, 60)
+  assert.equal(lineOf('   '), '')
 })
 
 test('a line cut off at the output cap is skipped, not fatal', () => {

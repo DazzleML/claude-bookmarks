@@ -38,20 +38,23 @@ export function marksPaneView(elements: Elements, m: MarksPaneModel, a: MarksPan
     // must be a letter or digit, so it can't be pressed by ` or Space; instead the
     // pane's focus starts on it, and Ctrl+X ' then Enter goes there.
     const reading = marks[m.readingLetter]
+    // A row carries the whole head and truncates at the pane's edge (a Text child of the
+    // Button draws it; the label names the control), so a widened pane shows more of the
+    // line and a narrow one still cuts cleanly (U64; djdarcy, 2026-10-15). Before 0.6.9 the
+    // rows were cut to 40 and 32 characters on top of the head's own 60.
+    const readingText = reading ? `␣ reading: ${reading.head}` : ''
     return (
       <Box flexDirection="column">
         {used.length === 0 && !reading && <Text {...style('legend')}>No marks yet. Esc</Text>}
         {reading && (
-          <Button
-            key="jump-reading"
-            label={`␣ reading: ${reading.head.slice(0, 32)}`}
-            plain
-            autoFocus
-            onPress={() => a.goToReading(reading)}
-          />
+          <Button key="jump-reading" label={readingText} plain autoFocus onPress={() => a.goToReading(reading)}>
+            <Text wrap="truncate-end">{readingText}</Text>
+          </Button>
         )}
         {used.map(l => (
-          <Button key={`jump-${l}`} hotkey={l} label={(marks[l]?.head ?? '').slice(0, 40)} plain onPress={() => press(l)} />
+          <Button key={`jump-${l}`} hotkey={l} label={marks[l]?.head ?? ''} plain onPress={() => press(l)}>
+            <Text wrap="truncate-end">{marks[l]?.head ?? ''}</Text>
+          </Button>
         ))}
       </Box>
     )

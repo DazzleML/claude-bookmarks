@@ -14,6 +14,7 @@ import {
 } from '../core/prompts/list-model.ts'
 import type { FootnoteRef } from '../core/prompts/prompt-rows.ts'
 import type { PromptRef } from '../core/prompts/prompt-store.ts'
+import { lineOf } from '../core/bookmarks/transcript-lines.ts'
 import type { Role, Style } from '../core/palette.ts'
 
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
@@ -105,12 +106,23 @@ export function promptsPaneView(elements: Elements, m: PromptsPaneModel, a: Prom
   type NumberedPrompt = (typeof numbered)[number]
   const targetN = fromBand ? Number(fromBand) : undefined
   const pointer = pointerFor(fromBand, targetN)
+  // A row's text is the prompt's whole text on one line when it is kept (the filter's
+  // text), else its 60-character head; the row draws it as a Text that truncates at the
+  // pane's edge, so a widened pane fills with more of the prompt and a narrow one cuts it
+  // cleanly without wrapping (U64; djdarcy, 2026-10-15). The Button keeps the same text
+  // as its label: that names the control, the Text child is what is drawn.
+  const rowText = (r: NumberedPrompt) => lineOf(texts.get(r.uuid) ?? r.head)
   const promptRow = (r: NumberedPrompt, group: string) => {
     const isHere = r.uuid === here
     const dim = unreached(drawnFour, r.uuid) && !isHere
     const press = () => a.pressPrompt(r)
     if (!pinSet.has(r.uuid) && !isHere) {
-      return <Button key={`${group}-${r.uuid}`} label={`${pointer(r.n)}${numberLabel(r.n)}${r.head}`} plain {...(dim && r.n !== targetN ? buttonStyle('unreached') : {})} onPress={press} />
+      const text = `${pointer(r.n)}${numberLabel(r.n)}${rowText(r)}`
+      return (
+        <Button key={`${group}-${r.uuid}`} label={text} plain {...(dim && r.n !== targetN ? buttonStyle('unreached') : {})} onPress={press}>
+          <Text wrap="truncate-end" {...(dim && r.n !== targetN ? style('unreached') : {})}>{text}</Text>
+        </Button>
+      )
     }
     // `245★) `: a gold star inside the number, so it reads as the row's marker, not
     // part of the prompt (djdarcy, 2026-10-05, over a background band and a star
@@ -125,7 +137,9 @@ export function promptsPaneView(elements: Elements, m: PromptsPaneModel, a: Prom
           {pinSet.has(r.uuid) && <Text {...style('pinned')}>★</Text>}
           <Text {...(dim ? style('unreached') : {})} {...(isHere ? style('here') : {})}>{') '}</Text>
         </Box>
-        <Button key={`${group}-${r.uuid}`} label={r.head} plain {...(dim ? buttonStyle('unreached') : {})} onPress={press} />
+        <Button key={`${group}-${r.uuid}`} label={rowText(r)} plain {...(dim ? buttonStyle('unreached') : {})} onPress={press}>
+          <Text wrap="truncate-end" {...(dim ? style('unreached') : {})}>{rowText(r)}</Text>
+        </Button>
       </Box>
     )
   }

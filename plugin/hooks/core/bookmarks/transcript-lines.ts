@@ -127,8 +127,11 @@ export function uuidPattern(uuid: string): string {
   return `"uuid":"${uuid}`
 }
 
-/** A short head of a message: one line, 60 characters. */
-export const headOf = (text: string): string => text.replace(/\s+/g, ' ').trim().slice(0, 60)
+/** A message's text as one line: runs of whitespace (newlines included) become one space. A pane row draws this and lets the terminal cut it at the pane's edge (U64). */
+export const lineOf = (text: string): string => text.replace(/\s+/g, ' ').trim()
+
+/** A short head of a message: that line, 60 characters. The fallback a row draws when no fuller text is kept. */
+export const headOf = (text: string): string => lineOf(text).slice(0, 60)
 
 /** What a bookmark takes from the transcript row it points at: where the row is, its head, the transcript's path (forward slashes) and who wrote it. Each mint from a row (a prose link, a promoted mark, the model's tool) starts from this. */
 export function rowPlace(row: TranscriptRow, transcript: string | undefined) {
