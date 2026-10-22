@@ -647,6 +647,32 @@ async function writeExport(ports: BookmarksPorts, register: BookmarkRegister, re
   return exportPath
 }
 
+// Replies whose links were already logged and queued (a reply is drawn many times).
+// Cleared per conversation (newConversation): until U60 commit B it was never cleared.
+const anchorRowsLogged = new Set<string>()
+/** A reply carrying bookmark links, the first time this conversation draws it: log the counts and queue its prose anchors. */
+export function noteAnchoredReply(ports: BookmarksPorts, requestId: string, links: ReturnType<typeof markdownLinks>): void {
+  if (anchorRowsLogged.has(requestId)) return
+  anchorRowsLogged.add(requestId)
+  const anchors = links.filter(l => l.kind === 'anchor')
+  ports.log(`[bm] reply ${short(requestId)}: ${anchors.length} bookmark link(s), ${links.filter(l => l.kind === 'file').length} file link(s)`)
+  queueProseAnchors(ports, anchors)
+}
+/** A new conversation: the replies seen belong to the one before. */
+export function newConversation(): void {
+  anchorRowsLogged.clear()
+}
+
+// A perma record's link is drawn without the bookmark glyph (#21).
+export async function permaTest(ports: BookmarksPorts): Promise<(href: string) => boolean> {
+  const reg = await loadRegister(ports)
+  return (href: string) => {
+    const a = parseAnchor(href)
+    const r = a && findRecord(reg, a.uuid)
+    return r ? tierOf(r) === 'perma' : false
+  }
+}
+
 // A bookmark link written by hand (or by an older session) is a bookmark too: once drawn,
 // any anchor the register does not know is resolved by uuid and recorded with
 // `by: 'prose'`. Off the render path (a clock tick), one attempt per uuid per load.

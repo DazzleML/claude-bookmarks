@@ -1,6 +1,24 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { CHORD_ACTIONS, LINE_COMMANDS, LIST_KEYS, bandButtons, barFor, fieldKeysFor, fieldRest, helpFor, helpLines, helpShort, lineHint, lineKeys, listHint, listKeysFor, parseListNumber, route } from '../../plugin/hooks/core/band/keys.ts'
+import { CHORD_ACTIONS, LINE_COMMANDS, LIST_KEYS, bandButtons, bandFocusRoute, barFor, fieldKeysFor, fieldRest, helpFor, helpLines, helpShort, lineHint, lineKeys, listHint, listKeysFor, parseListNumber, route } from '../../plugin/hooks/core/band/keys.ts'
+
+// The AbovePrompt focus rules (U60 commit B), which no kit test raises: they came from two
+// incidents of 2026-10-07 (a second Ctrl+] marking `a`; the arrows wanted in the list).
+test('an arrow off go in list mode steps the list and keeps the ring on go; a chord focus while idle stays on the command field', () => {
+  const list = { byPerson: true, ring: 'band-num-go', mode: 'list', cmdRev: 3 }
+  assert.deepEqual(bandFocusRoute({ ...list, element: 'band-num-k' }), { element: 'band-num-go', step: -1 })
+  assert.deepEqual(bandFocusRoute({ ...list, element: 'band-num-j' }), { element: 'band-num-go', step: 1 })
+  assert.deepEqual(bandFocusRoute({ ...list, element: 'band-num-k', byPerson: false }), { element: 'band-num-k' }, 'the engine moving the ring is not an arrow')
+  assert.deepEqual(bandFocusRoute({ ...list, element: 'band-num-k', ring: 'band-num-1' }), { element: 'band-num-k' }, 'only off go')
+  assert.deepEqual(bandFocusRoute({ byPerson: true, ring: undefined, mode: 'idle', element: 'chord-mark', cmdRev: 3 }), { element: 'band-cmd-3', kept: true })
+})
+
+test("a chord focus while the band is busy, or not the person's, and a plain move pass through", () => {
+  assert.deepEqual(bandFocusRoute({ byPerson: true, ring: undefined, mode: 'list', element: 'chord-mark', cmdRev: 3 }), { element: 'chord-mark' })
+  assert.deepEqual(bandFocusRoute({ byPerson: false, ring: undefined, mode: 'idle', element: 'chord-mark', cmdRev: 3 }), { element: 'chord-mark' })
+  assert.deepEqual(bandFocusRoute({ byPerson: true, ring: 'band-cmd-0', mode: 'idle', element: 'band-cmd-0', cmdRev: 0 }), { element: 'band-cmd-0' })
+  assert.deepEqual(bandFocusRoute({ byPerson: true, ring: undefined, mode: 'idle', element: undefined, cmdRev: 0 }), { element: undefined })
+})
 
 // The band render hook's two pure choices (U60): the help that fits the window, and the bar.
 test('helpFor gives the full help when it fits the window plus one row, else the short form', () => {

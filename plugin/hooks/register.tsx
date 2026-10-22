@@ -14,13 +14,12 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { PaneMode, Row } from '../types'
 import {
-  markLinks, markdownLinks, parseAnchor, tierOf,
+  markLinks, markdownLinks,
   type MarkerStyle,
 } from './core/bookmarks/anchor'
-import { findRecord } from './core/bookmarks/register-file'
 import { headOf, resolveRows, rowsFromGrep, targetPattern, type Resolution } from './core/bookmarks/transcript-lines'
 import { excerpt, type Channel } from './core/log/debug'
-import { CHORD_ACTIONS, VERIFIED_CLIENTS, barFor, helpFor, listHint, listKeysFor, route, type Operation, type Pane } from './core/band/keys'
+import { CHORD_ACTIONS, VERIFIED_CLIENTS, bandFocusRoute, barFor, helpFor, listHint, listKeysFor, route, type Operation, type Pane } from './core/band/keys'
 import type { Cause } from './core/band/after-action'
 import { installedFromCache, type Settings } from './core/settings'
 import { SettingsState } from './core/settings-state'
@@ -331,6 +330,13 @@ function sameConversationSoon($: EngineInterface) {
 // are drawn before or after this reset is not known; paneGeometry is the pane's.
 async function resetConversationMemory() {
   for (const owner of [logger.files, promptsPane, band, panePosition, viewTracker]) await owner.newConversation()
+  // U60 commit B: three more parts a conversation leaves behind. The replies whose links
+  // were logged (handlers/bookmarks.ts), what was on screen (the reports belong to the
+  // transcript drawn before), and the title the start event carried (session.start sets
+  // the new one after this reset).
+  bookmarks_.newConversation()
+  screen.newConversation()
+  sessionTitle = undefined
 }
 
 // Mark and Marks: core/marks/marks.ts.
@@ -581,9 +587,6 @@ function bookmarksPorts($: EngineInterface): BookmarksPorts {
 // in a later version (#7); constants until then.
 const LINK_MARKERS: MarkerStyle = 'glyph'
 const LINK_LEGEND = true
-
-// Replies whose links were already logged and queued (a reply is drawn many times).
-const anchorRowsLogged = new Set<string>()
 
 // Every jump, the jumplist and the view's return: handlers/navigation.ts, over these ports.
 const navigation = new Navigation()
@@ -992,8 +995,8 @@ export const register: Register = (on, options) => {
     conversationId = await $.session.id()
     // The start event's type carries no title today (only the SessionStart hook input does); read it if a build adds it.
     const started = e as unknown as { session_title?: unknown }
-    sessionTitle = typeof started.session_title === 'string' ? started.session_title : undefined
     await resetConversationMemory()
+    sessionTitle = typeof started.session_title === 'string' ? started.session_title : undefined
     void $.config.list().then(rows => {
       const theme = rows.find(r => r.key === 'theme')?.value
       if (typeof theme === 'string') settings.themeIs(theme)
@@ -1074,27 +1077,18 @@ export const register: Register = (on, options) => {
   on('ui.focus', { component: 'AbovePrompt' }, async ($, e, next) => {
     // A focus move of the person's own onto the band starts a new command: no reminder owed.
     if (e.origin.kind === 'person') band.oweReminder(false)
-    // While the band is idle, the person's focus moves stay on the command field. After
-    // a command the band keeps the keyboard (a plugin can't hand it back; Esc does), so
-    // a second Ctrl+] moved the ring onto the `mark` button, Space pressed it, and Enter
-    // marked `a` (djdarcy, 2026-10-07; log 08:10:23). Clicks and chords still press the
-    // buttons; only the ring is kept on the field.
-    // The arrows in the band's prompt mode: they move the ring (they can't be hotkeys),
-    // so a move off `go` onto its neighbour is read as a step through the pane's list,
-    // k (previous: Up, Left, Shift+Tab) or j (next: Down, Right, Tab), and the ring
-    // stays on `go` for Enter (djdarcy, 2026-10-07: "we'd of course also want to add
-    // <up> <down> if possible").
-    if (e.origin.kind === 'person' && band.ring === 'band-num-go' && (await read($, bandMode)) === 'list' &&
-        (e.element === 'band-num-k' || e.element === 'band-num-j')) {
-      log($, `[bm] band arrow -> ${e.element === 'band-num-k' ? 'k (up)' : 'j (down)'}`)
-      await band_.bandStep(bandPorts($), e.element === 'band-num-k' ? -1 : 1)
-      return next({ ...e, element: 'band-num-go' })
+    // The two rules (an arrow off `go` steps the list; a chord focus while idle stays on
+    // the command field) and their history: core/band/keys.ts bandFocusRoute.
+    const r = bandFocusRoute({ byPerson: e.origin.kind === 'person', ring: band.ring, mode: await read($, bandMode), element: e.element, cmdRev: await read($, cmdRev) })
+    if (r.step) {
+      log($, `[bm] band arrow -> ${r.step === -1 ? 'k (up)' : 'j (down)'}`)
+      await band_.bandStep(bandPorts($), r.step)
+      return next({ ...e, element: r.element })
     }
-    if (e.origin.kind === 'person' && e.element?.startsWith('chord-') && (await read($, bandMode)) === 'idle') {
-      const field = `band-cmd-${await read($, cmdRev)}`
+    if (r.kept && r.element) {
       log($, `[bm] band focus kept on the command field (not ${e.element})`)
-      band.ringMoved(field)
-      return next({ ...e, element: field })
+      band.ringMoved(r.element)
+      return next({ ...e, element: r.element })
     }
     if (e.element) band.ringMoved(e.element)
     return next(e)
@@ -1217,18 +1211,10 @@ export const register: Register = (on, options) => {
     // The drawing is views/marked-message.tsx (anchoredReply, markedReply); this hook
     // gathers what it draws.
     if (anchors.length > 0) {
-      if (!anchorRowsLogged.has(e.requestId)) {
-        anchorRowsLogged.add(e.requestId)
-        log($, `[bm] reply ${short(e.requestId)}: ${anchors.length} bookmark link(s), ${links.filter(l => l.kind === 'file').length} file link(s)`)
-        bookmarks_.queueProseAnchors(bookmarksPorts($), anchors)
-      }
+      // Once per reply per conversation: the log line and the prose-anchor queue (handlers/bookmarks.ts).
+      bookmarks_.noteAnchoredReply(bookmarksPorts($), e.requestId, links)
       // A perma record's link is drawn without the bookmark glyph (#21).
-      const reg = await bookmarks_.loadRegister(bookmarksPorts($))
-      const isPerma = (href: string) => {
-        const a = parseAnchor(href)
-        const r = a && findRecord(reg, a.uuid)
-        return r ? tierOf(r) === 'perma' : false
-      }
+      const isPerma = await bookmarks_.permaTest(bookmarksPorts($))
       const colored = firstColorSplit(e.props.text, marksHere)
       // A mark whose words don't sit on one line: the bold «a» form (core/marks/highlight.ts).
       const text = tagMarksMarkdown(e.props.text, marksHere)

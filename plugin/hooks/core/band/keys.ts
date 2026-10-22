@@ -345,6 +345,28 @@ export function barFor(settings: { band: 'full' | 'field'; chords: 'on' | 'off' 
     : []
 }
 
+/** Where a focus move in the band lands, and what it means (the AbovePrompt ui.focus hook's two rules, moved here under U60; the hook reads the state and acts). */
+export type BandFocus = { element: string | undefined; step?: -1 | 1; kept?: true }
+export function bandFocusRoute(f: { byPerson: boolean; ring: string | undefined; mode: string; element: string | undefined; cmdRev: number }): BandFocus {
+  // While the band is idle, the person's focus moves stay on the command field. After
+  // a command the band keeps the keyboard (a plugin can't hand it back; Esc does), so
+  // a second Ctrl+] moved the ring onto the `mark` button, Space pressed it, and Enter
+  // marked `a` (djdarcy, 2026-10-07; log 08:10:23). Clicks and chords still press the
+  // buttons; only the ring is kept on the field.
+  // The arrows in the band's prompt mode: they move the ring (they can't be hotkeys),
+  // so a move off `go` onto its neighbour is read as a step through the pane's list,
+  // k (previous: Up, Left, Shift+Tab) or j (next: Down, Right, Tab), and the ring
+  // stays on `go` for Enter (djdarcy, 2026-10-07: "we'd of course also want to add
+  // <up> <down> if possible").
+  if (f.byPerson && f.ring === 'band-num-go' && f.mode === 'list' && (f.element === 'band-num-k' || f.element === 'band-num-j')) {
+    return { element: 'band-num-go', step: f.element === 'band-num-k' ? -1 : 1 }
+  }
+  if (f.byPerson && f.element?.startsWith('chord-') && f.mode === 'idle') {
+    return { element: `band-cmd-${f.cmdRev}`, kept: true }
+  }
+  return { element: f.element }
+}
+
 export function bandButtons(opts: { chords: boolean }, tables: Tables = DEFAULT_TABLES): BandButton[] {
   return tables.line.filter(c => c.shown).map(c => {
     const hotkey = barHotkey(c.keys)

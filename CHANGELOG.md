@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.13] - 2026-10-22
+
+### Changed
+
+- Internal, no visible change: the third round of moves out of the hooks module. Where a focus move in the band lands (an arrow off the go button steps the list; a chord button focused while the band is idle keeps the ring on the command field) and what a reply carrying bookmark links logs and queues now live in the core and the bookmarks handler, with their own tests.
+
+### Fixed
+
+- When the process moves to another conversation (a resume), the plugin now also forgets which replies' links it had already logged, what the previous conversation had on screen, and the title its start event carried. Before, the set of logged replies grew for the life of the process and the screen reports of the previous conversation could pass for the new one's.
+
 ## [0.6.12] - 2026-10-22
 
 ### Changed
@@ -1175,7 +1185,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.12...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.13...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

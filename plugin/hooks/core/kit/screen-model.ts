@@ -69,6 +69,15 @@ export class ScreenModel {
     return latestBurst(this.onScreenNow, this.otherNewsAt, ScreenModel.FRESH_MS)
   }
 
+  /** A new conversation: every report here described the transcript drawn before it (U60 commit B). */
+  newConversation(): void {
+    this.onScreenNow.clear()
+    this.otherOnScreen.clear()
+    this.otherNewsAt = 0
+    this.selfRedrawAt = 0
+    this.selfRedrawWhy = ''
+  }
+
   /** A message's last report, if it is on screen. */
   report(requestId: string): MessageReport | undefined {
     return this.onScreenNow.get(requestId)

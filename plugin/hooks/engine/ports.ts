@@ -332,12 +332,12 @@ export type CommandLinePorts = BandPorts & {
 //                                             0.4.102)
 //   conversationId (the conversation the    register.tsx sameConversation sameConversationSoon (read-only)
 //     plugin works for, Q261014-01)
-//   anchorRowsLogged (replies whose links   register.tsx, the reply       --
-//     were logged and queued)                 render hook
 //   settings (SettingsState: the /config    core/settings-state.ts        every reader through currentSettings(),
 //     values, theme, resolution, palette)     (register's load, the two     style(); /bm-config (resolved)
 //                                             config.set hooks; 0.4.104)
-//   registerCache, proseQueued              handlers/bookmarks.ts         --
+//   registerCache, proseQueued,             handlers/bookmarks.ts         newConversation (anchorRowsLogged
+//     anchorRowsLogged (replies whose                                       only; the reply render hook via
+//     links were logged and queued)                                         noteAnchoredReply)
 //   debug channels (DebugChannels)          handlers/log.ts (writers:     log, the screen channel, the view
 //                                             read, set); the Logger's    tracker (held), /bm-debug (on)
 //                                             (0.4.95), one in register.tsx

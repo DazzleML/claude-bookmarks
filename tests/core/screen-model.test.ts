@@ -60,3 +60,22 @@ test('the plugin\'s own redraw is expected for two seconds, with its reason', ()
   assert.equal(s.sinceSelfRedraw(6999), 1999)
   assert.equal(s.recentSelfRedraw(7000), false)
 })
+
+// U60 commit B: the process moving to another conversation (a resume) forgets the screen the
+// one before drew, including the expected redraw and the tool rows that dated the burst.
+test('a new conversation forgets every report', () => {
+  const s = new ScreenModel()
+  s.noteMessage(A, rows(1, 5, 5), 1000)
+  s.noteOther('t1', rows(1, 3, 3), 1100)
+  s.expectRedraw('a pane opened', 1000)
+  assert.deepEqual(s.fresh(), [A])
+  assert.equal(s.recentSelfRedraw(2500), true)
+  s.newConversation()
+  assert.deepEqual(s.fresh(), [])
+  assert.deepEqual(s.entries(), [])
+  assert.equal(s.recentSelfRedraw(2500), false, 'the stamp is back at zero, so 2500 ms is past the window')
+  assert.equal(s.selfRedrawWhy, '')
+  // The next conversation's first report is a fresh burst of its own.
+  s.noteMessage(B, rows(1, 2, 2), 1200)
+  assert.deepEqual(s.fresh(), [B])
+})
