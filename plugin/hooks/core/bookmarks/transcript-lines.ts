@@ -133,6 +133,12 @@ export const lineOf = (text: string): string => text.replace(/\s+/g, ' ').trim()
 /** A short head of a message: that line, 60 characters. The fallback a row draws when no fuller text is kept. */
 export const headOf = (text: string): string => lineOf(text).slice(0, 60)
 
+/** A line fitted to `width` columns: whole when it fits, else cut with an ellipsis as its last character. A pane row is cut this way to the pane's own width (`bodyColumns`, which the engine hands the pane at draw time), so a widened pane shows more and a narrow one never wraps (U64; live, a long Button label wraps and a Text's `truncate-end` inside a Button is not honoured, 2026-10-22). */
+export const fitLine = (text: string, width: number): string => {
+  if (width <= 0) return ''
+  return text.length <= width ? text : `${text.slice(0, width - 1)}…`
+}
+
 /** What a bookmark takes from the transcript row it points at: where the row is, its head, the transcript's path (forward slashes) and who wrote it. Each mint from a row (a prose link, a promoted mark, the model's tool) starts from this. */
 export function rowPlace(row: TranscriptRow, transcript: string | undefined) {
   return {

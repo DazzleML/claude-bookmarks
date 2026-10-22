@@ -1535,7 +1535,7 @@ export const register: Register = (on, options) => {
       }
       return promptsPaneView(
         elements,
-        { all, kept, footnoteMode, unfolded: promptsPane.unfolded, drawnFour: drawn.firstFours, pinIds, texts, paneFilter: promptsPane.filter, fromBand, here },
+        { all, kept, footnoteMode, unfolded: promptsPane.unfolded, drawnFour: drawn.firstFours, pinIds, texts, paneFilter: promptsPane.filter, fromBand, here, columns: e.props.bodyColumns },
         {
           unfold: async n => { promptsPane.unfold(n); await update($, viewRev, v => v + 1) },
           refold: async n => { promptsPane.refold(n); await update($, viewRev, v => v + 1) },
@@ -1574,7 +1574,7 @@ export const register: Register = (on, options) => {
     const marks = markCache.all // the cache, never a file, in a render hook
     return marksPaneView(
       elements,
-      { mode, marks, letters: LETTERS, readingLetter: READING },
+      { mode, marks, letters: LETTERS, readingLetter: READING, columns: e.props.bodyColumns },
       {
         press: l => (mode === 'mark' ? markThenSettle($, mode, l) : jumpToMarkThenSettle($, mode, l, true)),
         goToReading: async reading => {

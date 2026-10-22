@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { utf8ByteLength } from '../../plugin/hooks/core/bookmarks/anchor.ts'
 import {
+  fitLine,
   headOf,
   jsonEscaped,
   lineOf,
@@ -131,6 +132,17 @@ test('lineOf is the whole text on one line; headOf is that line cut to 60', () =
   assert.equal(headOf(long), lineOf(long).slice(0, 60))
   assert.equal(headOf(long).length, 60)
   assert.equal(lineOf('   '), '')
+})
+
+// A row is cut to the pane's width by the plugin (live, a long Button label wraps): whole
+// when it fits, else width-1 characters and an ellipsis, so the row never exceeds `width`.
+test('fitLine: whole when it fits, cut with an ellipsis to exactly the width otherwise', () => {
+  assert.equal(fitLine('short', 10), 'short')
+  assert.equal(fitLine('exactly ten', 11), 'exactly ten')
+  assert.equal(fitLine('twelve chars', 11), 'twelve cha…')
+  assert.equal(fitLine('twelve chars', 11).length, 11)
+  assert.equal(fitLine('abc', 1), '…')
+  assert.equal(fitLine('abc', 0), '')
 })
 
 test('a line cut off at the output cap is skipped, not fatal', () => {

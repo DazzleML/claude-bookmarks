@@ -71,18 +71,13 @@ test('p in the band opens the prompts pane and the band takes a number', async (
     'Text::(Esc)',
   ])
   const pane = await $.ui.mount(PANE as never)
-  // Since 0.6.9 each row's Button draws its text as a Text child that truncates at the
-  // pane's edge (U64); the kit lists that child as a leaf of its own after the Button,
-  // whose text is still the label.
+  // A row is cut to the pane's width (60 body columns here; U64), so these short rows draw whole.
   expect(leaves(await pane.findAll({}))).toEqual([
     'Input:prompt-number:',
     'Text::or Tab / Shift+Tab, Enter; *N pins',
     `Button:p-${PROMPTS[2]!.uuid}: 3) third prompt: list the prompts`,
-    'Text:: 3) third prompt: list the prompts',
     `Button:p-${PROMPTS[1]!.uuid}: 2) second prompt: add a band`,
-    'Text:: 2) second prompt: add a band',
     `Button:p-${PROMPTS[0]!.uuid}: 1) first prompt: set up the plugin`,
-    'Text:: 1) first prompt: set up the plugin',
   ])
 })
 
