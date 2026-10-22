@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.6] - 2026-10-21
+
+### Changed
+
+- Internal, no visible change: the text of the `README.md` the plugin writes into its data folder now lives in a template file inside the plugin (`templates/data-readme.md`), with the layout table filled in from the code, instead of as strings in the code. The README you get is identical to before, byte for byte. If the template is ever missing from an installed copy of the plugin, the start says so in the conversation and writes no README, rather than inventing one.
+
 ## [0.6.5] - 2026-10-21
 
 ### Fixed
@@ -1133,7 +1139,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.5...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.6...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

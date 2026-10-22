@@ -1,0 +1,97 @@
+{
+  "mutations": [
+    {
+      "id": "M1",
+      "file": "plugin/hooks/core/bookmarks/data-readme.ts",
+      "original": ".replace(/\\{\\{mark\\}\\}/g, () => README_MARK)",
+      "mutated": ".replace(/\\{\\{mark\\}\\}/, () => README_MARK)",
+      "note": "mark placeholder loses g flag; only first occurrence replaced",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "124"
+    },
+    {
+      "id": "M2",
+      "file": "plugin/hooks/core/bookmarks/data-readme.ts",
+      "original": ".replace(/\\{\\{writer\\}\\}/g, () => writer)",
+      "mutated": ".replace(/\\{\\{writer\\}\\}/g, () => README_MARK)",
+      "note": "writer placeholder replaced with mark",
+      "verdict": "killed",
+      "core_red": [
+        "the real template renders exactly the README the code used to produce (the fixture, 0.6.5)",
+        "the README names every path of the layout with its kind, says what to back up, and is deterministic for a writer",
+        "the render substitutes the three placeholders and nothing else; the table takes the template's own newline",
+        "a start rewrites the README when it is missing, foreign, or from another writer, and leaves this writer's alone"
+      ],
+      "kit_red": [
+        "a start writes bookmarks/README.md when it is missing, with the layout table and the writer",
+        "a start leaves this version's README alone"
+      ],
+      "kit_pass": "122"
+    },
+    {
+      "id": "M3",
+      "file": "plugin/hooks/core/bookmarks/data-readme.ts",
+      "original": "template.includes('\\r\\n') ? '\\r\\n' : '\\n'",
+      "mutated": "template.includes('\\r\\n') ? '\\n' : '\\r\\n'",
+      "note": "newline detection inverted",
+      "verdict": "killed",
+      "core_red": [
+        "the render substitutes the three placeholders and nothing else; the table takes the template's own newline"
+      ],
+      "kit_red": [],
+      "kit_pass": "124"
+    },
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/bookmarks/data-readme.ts",
+      "original": ".join(newline)",
+      "mutated": ".join('\\n')",
+      "note": "table ignores template's CRLF newline",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "124"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "if (template === undefined) {",
+      "mutated": "if (!template) {",
+      "note": "empty-string template now treated as missing",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "124"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "const template = await ports.pluginFile(README_TEMPLATE)\n    if (template === undefined) {",
+      "mutated": "const template = (await ports.pluginFile(README_TEMPLATE)) ?? ''\n    if (template === undefined) {",
+      "note": "missing template falls back to empty string; refusal never fires and an empty README is written",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "a plugin folder without its template writes no README and says so in the conversation"
+      ],
+      "kit_pass": "123"
+    },
+    {
+      "id": "M7",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "ports.logAlways(`[bm] data folder: README.md not written",
+      "mutated": "ports.log(`[bm] data folder: README.md not written",
+      "note": "packaging-bug message downgraded from logAlways to log",
+      "verdict": "apply-failed: original occurs 2 times"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "124"
+    }
+  ]
+}

@@ -30,7 +30,12 @@ export type WorldOptions = {
   process?: (argv: readonly string[]) => { exitCode: number; stdout: string; stderr?: string; isStdoutTruncated?: boolean }
   // What $.ui.selection answers, read at each call (so a test can change it mid-test).
   selection?: () => { requestId: string; text: string } | undefined
+  // false: the plugin's template files are missing (a packaging bug); by default a stand-in answers.
+  templates?: false
 }
+
+/** What the harness answers for plugin/templates/data-readme.md: the placeholders the real template uses, in a short page. */
+export const README_TEMPLATE_STANDIN = '{{mark}}\n<!-- writer: {{writer}} -->\n\n# Your bookmarks (kit stand-in)\n\n| Path | What | Kind |\n|---|---|---|\n{{layout_table}}\n\n## What to back up\n\nWritten by {{writer}}.\n'
 
 export type World = {
   calls: Call[]
@@ -116,11 +121,16 @@ export function world(on: unknown, options: WorldOptions = {}): World {
   answer('session.id', () => options.session ?? '00000000-0000-4000-8000-000000000000')
   answer('session.cwd', () => options.cwd ?? 'C:/test-project')
   // A file by its key, or a folder: anything in the map lies under it.
+  // The plugin's own template files (under $.plugin.root, a path this harness never sees) are
+  // answered with a stand-in, so a start can write the README; `templates: false` makes them
+  // missing. The real template's text is the core suite's to check (tests/core/data-readme.test.ts).
+  const isTemplate = (p: unknown) => /\\templates\\data-readme\.md$/.test(norm(p))
   answer('fs.exists', e => {
     const p = norm(e.path).replace(/\\+$/, '')
+    if (isTemplate(p)) return options.templates !== false
     return p in files || Object.keys(files).some(k => k.startsWith(p + '\\'))
   })
-  answer('fs.read', e => files[norm(e.path)] ?? '')
+  answer('fs.read', e => files[norm(e.path)] ?? (isTemplate(e.path) && options.templates !== false ? README_TEMPLATE_STANDIN : ''))
   answer('fs.write', e => {
     files[norm(e.path)] = String(e.text ?? '')
     return undefined

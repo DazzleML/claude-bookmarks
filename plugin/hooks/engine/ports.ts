@@ -220,6 +220,8 @@ export type BookmarksPorts = {
   cut: (text: string, n: number) => string
   expectRedraw: (why: string) => void
   dataRoot: () => Promise<string | undefined>
+  /** One of the plugin's own files by its path relative to the plugin folder ($.plugin.root): its text, or undefined when it is missing (a packaging bug the caller reports). */
+  pluginFile: (relative: string) => Promise<string | undefined>
   sessionId: () => Promise<string>
   cwd: () => Promise<string>
   /** The conversation's title: its /rename name as the start event gave it (register.tsx's `sessionTitle`, set at session.start), else the first prompt's head; written into the register header on save (unit 6). */

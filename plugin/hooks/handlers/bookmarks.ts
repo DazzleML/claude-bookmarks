@@ -20,7 +20,7 @@ import {
   type Manifest, type Migration,
 } from '../core/bookmarks/migrations.ts'
 import { checkReport, drawLine, STORE_CAP, type CheckInput } from '../core/bookmarks/check.ts'
-import { dataReadme, readmeNeedsWrite } from '../core/bookmarks/data-readme.ts'
+import { dataReadme, README_TEMPLATE, readmeNeedsWrite } from '../core/bookmarks/data-readme.ts'
 import type { Mark, Marks } from '../core/marks/marks.ts'
 import { rowPlace } from '../core/bookmarks/transcript-lines.ts'
 import { forwardSlashes } from '../core/kit/paths.ts'
@@ -241,7 +241,14 @@ export async function ensureReadme(ports: BookmarksPorts): Promise<void> {
     const writer = `${ports.pluginName} ${await ports.pluginVersion()}`
     const existing = (await ports.fsExists(path)) ? await ports.fsRead(path) : undefined
     if (!readmeNeedsWrite(existing, writer)) return
-    await ports.fsWrite(path, dataReadme(writer))
+    // The prose is the plugin's template file; a missing one is a packaging bug and is said so,
+    // never filled from code (djdarcy, 2026-10-20).
+    const template = await ports.pluginFile(README_TEMPLATE)
+    if (template === undefined) {
+      ports.logAlways(`[bm] data folder: README.md not written: the plugin's ${README_TEMPLATE} is missing (a packaging bug; nothing else is affected)`)
+      return
+    }
+    await ports.fsWrite(path, dataReadme(writer, template))
     ports.log(`[bm] data folder: README.md ${existing === undefined ? 'written' : 'rewritten'} by ${writer}`)
   } catch (err) {
     ports.logAlways(`[bm] data folder: README.md not written: ${String(err)}`)

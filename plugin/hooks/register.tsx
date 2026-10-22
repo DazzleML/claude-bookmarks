@@ -554,6 +554,10 @@ function bookmarksPorts($: EngineInterface): BookmarksPorts {
     cut,
     expectRedraw,
     dataRoot: () => dataRoot($),
+    pluginFile: async relative => {
+      const path = `${$.plugin.root}/${relative}`
+      return (await $.fs.exists(path)) ? await $.fs.read(path) : undefined
+    },
     sessionId: () => $.session.id(),
     cwd: () => $.session.cwd(),
     title: () => conversationTitle($),

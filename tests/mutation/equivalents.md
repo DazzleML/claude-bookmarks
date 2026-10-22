@@ -39,6 +39,10 @@ Both entries are kit-blind rather than equivalent: the behaviour is real and is 
 
 - `const labelEnd = labelStart + (m[1] ?? '').length` -> `+ 1`, in `markedLineMarkdown` -- **equivalent**: the words come from the plain line, which has no `]`, so a literal match in the raw line can never end one past the label (that character is the bracket); `inLabel` decides the same for every reachable input. 2026-10-21, mode 1 (v0.6.5 sweep, slice B, M5).
 
+## plugin/hooks/handlers/bookmarks.ts @ 9f4f67325ce5
+
+- `if (template === undefined) {` -> `if (!template) {` in `ensureReadme` -- **don't-care**: the two differ only for an empty template file, a packaging state the design never covered (missing was the case djdarcy named); an empty README written or a refusal are both defensible, and the kit cannot seed an empty template without a path it does not know. If an empty file ever shows up in practice, decide then and pin it. 2026-10-21, mode 1 (v0.6.6 sweep, slice C, M5).
+
 ## plugin/hooks/core/bookmarks/check.ts @ 74d54eb0d884
 
 - `(p.tier ?? 'bookmark') === 'mark' && p.n !== undefined && !named.has(p.n)` -> the `p.n !== undefined` conjunct dropped, in the orphan-mark note -- **equivalent**: a letter's record is minted only in a numbered file (`setMark` refuses an unnumbered one), so no `mark` record lacks `n`; the conjunct narrows the type for `Set<number>.has`, and the mutant does not type-check. 2026-10-21, mode 1 (v0.6.4 sweep, unit A5.3, M2).

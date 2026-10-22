@@ -1,0 +1,90 @@
+{
+  "mutations": [
+    {
+      "id": "N2",
+      "file": "plugin/hooks/core/bookmarks/data-readme.ts",
+      "original": "    .replace(/\\{\\{layout_table\\}\\}/g, () => layoutTable(newline))\n",
+      "mutated": "    .replace(/\\{\\{layout_table\\}\\}/g, () => layoutTable())\n",
+      "note": "layout table ignores detected newline, always LF on CRLF templates",
+      "verdict": "killed",
+      "core_red": [
+        "the render substitutes the three placeholders and nothing else; the table takes the template's own newline"
+      ],
+      "kit_red": [],
+      "kit_pass": "124"
+    },
+    {
+      "id": "N3",
+      "file": "plugin/hooks/core/bookmarks/data-readme.ts",
+      "original": "| ${KIND_WORDS[e.kind]} |`",
+      "mutated": "| ${e.kind} |`",
+      "note": "table prints raw kind key instead of the KIND_WORDS display word",
+      "verdict": "killed",
+      "core_red": [
+        "the real template renders exactly the README the code used to produce (the fixture, 0.6.5)",
+        "the README names every path of the layout with its kind, says what to back up, and is deterministic for a writer"
+      ],
+      "kit_red": [],
+      "kit_pass": "124"
+    },
+    {
+      "id": "N4",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "    await ports.fsWrite(path, dataReadme(writer, template))\n",
+      "mutated": "    await ports.fsWrite(path, template)\n",
+      "note": "raw template written without placeholder substitution",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "a start writes bookmarks/README.md when it is missing, with the layout table and the writer"
+      ],
+      "kit_pass": "123"
+    },
+    {
+      "id": "M1",
+      "file": "plugin/hooks/core/bookmarks/data-readme.ts",
+      "original": ".replace(/\\{\\{mark\\}\\}/g, () => README_MARK)",
+      "mutated": ".replace(/\\{\\{mark\\}\\}/, () => README_MARK)",
+      "note": "round 1 survivor: mark placeholder loses g flag",
+      "verdict": "killed",
+      "core_red": [
+        "the render substitutes the three placeholders and nothing else; the table takes the template's own newline"
+      ],
+      "kit_red": [],
+      "kit_pass": "124"
+    },
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/bookmarks/data-readme.ts",
+      "original": ".join(newline)",
+      "mutated": ".join('\\n')",
+      "note": "round 1 survivor: table ignores template's CRLF newline",
+      "verdict": "killed",
+      "core_red": [
+        "the render substitutes the three placeholders and nothing else; the table takes the template's own newline"
+      ],
+      "kit_red": [],
+      "kit_pass": "124"
+    },
+    {
+      "id": "M7",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "ports.logAlways(`[bm] data folder: README.md not written: the plugin's ${README_TEMPLATE} is missing",
+      "mutated": "ports.log(`[bm] data folder: README.md not written: the plugin's ${README_TEMPLATE} is missing",
+      "note": "round 1 apply-failed (ambiguous anchor), now unique: the packaging-bug message downgraded from logAlways to log",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "a plugin folder without its template writes no README and says so in the conversation"
+      ],
+      "kit_pass": "123"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "124"
+    }
+  ]
+}
