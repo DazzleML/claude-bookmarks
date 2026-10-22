@@ -1,0 +1,116 @@
+{
+  "mutations": [
+    {
+      "id": "M1",
+      "file": "plugin/hooks/core/marks/highlight.ts",
+      "original": "if (links.length === 0) return undefined",
+      "mutated": "if (links.length === 0) return c.raw",
+      "note": "no-link line returns raw instead of undefined",
+      "verdict": "killed",
+      "core_red": [
+        "markedLineMarkdown: a link line is drawn as markdown with the words tagged; no link, no markdown"
+      ],
+      "kit_red": [
+        "a marked line with no link is still drawn as Text"
+      ],
+      "kit_pass": "121"
+    },
+    {
+      "id": "M2",
+      "file": "plugin/hooks/core/marks/highlight.ts",
+      "original": "if (at < 0 || /[*`_]/.test(c.snippet)) return c.raw",
+      "mutated": "if (at < 0) return c.raw",
+      "note": "dropped disjunct: markdown chars in snippet no longer bail",
+      "verdict": "killed",
+      "core_red": [
+        "markedLineMarkdown: a link line is drawn as markdown with the words tagged; no link, no markdown"
+      ],
+      "kit_red": [],
+      "kit_pass": "122"
+    },
+    {
+      "id": "M3",
+      "file": "plugin/hooks/core/marks/highlight.ts",
+      "original": "const outside = end <= start || at >= stop",
+      "mutated": "const outside = end < start || at >= stop",
+      "note": "comparison flip: boundary adjacent to link start no longer outside",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "122"
+    },
+    {
+      "id": "M4",
+      "file": "plugin/hooks/core/marks/highlight.ts",
+      "original": "const inLabel = at >= labelStart && end <= labelEnd",
+      "mutated": "const inLabel = at >= labelStart || end <= labelEnd",
+      "note": "conjunct turned into disjunct",
+      "verdict": "killed",
+      "core_red": [
+        "markedLineMarkdown: a link line is drawn as markdown with the words tagged; no link, no markdown"
+      ],
+      "kit_red": [],
+      "kit_pass": "122"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/core/marks/highlight.ts",
+      "original": "const labelEnd = labelStart + (m[1] ?? '').length",
+      "mutated": "const labelEnd = labelStart + (m[1] ?? '').length + 1",
+      "note": "label end off by one",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "122"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/core/marks/highlight.ts",
+      "original": "`${c.raw.slice(0, at)}**\u00ab${c.letter}\u00bb ${c.snippet}**${c.raw.slice(end)}`",
+      "mutated": "`${c.raw.slice(0, at)}\u00ab${c.letter}\u00bb ${c.snippet}${c.raw.slice(end)}`",
+      "note": "bold markers dropped from tag",
+      "verdict": "killed",
+      "core_red": [
+        "markedLineMarkdown: a link line is drawn as markdown with the words tagged; no link, no markdown"
+      ],
+      "kit_red": [
+        "a marked line that carries a link is drawn as Markdown in the band: the words tagged, the link intact",
+        "words that are a link's own text: the link wins, tagged inside its label"
+      ],
+      "kit_pass": "120"
+    },
+    {
+      "id": "M7",
+      "file": "plugin/hooks/views/marked-message.tsx",
+      "original": "if (md === undefined) return markedLine(elements.Text, c, styles)",
+      "mutated": "if (md !== undefined) return markedLine(elements.Text, c, styles)",
+      "note": "view branch inverted: Text used where Markdown should be",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "a marked line that carries a link is drawn as Markdown in the band: the words tagged, the link intact",
+        "words that are a link's own text: the link wins, tagged inside its label",
+        "a marked line with no link is still drawn as Text"
+      ],
+      "kit_pass": "119"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/views/marked-message.tsx",
+      "original": "{...(links ? { pressableLinks: links.pressable, onLinkPress: (link: { href: string }) => links.onPress(link.href) } : {})}",
+      "mutated": "{...(links ? { onLinkPress: (link: { href: string }) => links.onPress(link.href) } : {})}",
+      "note": "pressableLinks prop dropped",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "122"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "122"
+    }
+  ]
+}

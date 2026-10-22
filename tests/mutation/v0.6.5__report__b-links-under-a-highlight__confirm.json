@@ -1,0 +1,24 @@
+{
+  "mutations": [
+    {
+      "id": "N4",
+      "file": "plugin/hooks/core/marks/highlight.ts",
+      "original": "const LINK = /\\[([^\\]]*)\\]\\(([^)\\s]+)\\)/g",
+      "mutated": "const LINK = /\\[(.*)\\]\\(([^)\\s]+)\\)/g",
+      "note": "label group made greedy so multiple links merge into one match",
+      "verdict": "killed",
+      "core_red": [
+        "markedLineMarkdown: a link line is drawn as markdown with the words tagged; no link, no markdown"
+      ],
+      "kit_red": [],
+      "kit_pass": "123"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "123"
+    }
+  ]
+}

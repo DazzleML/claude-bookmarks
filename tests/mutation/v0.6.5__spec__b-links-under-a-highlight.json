@@ -1,0 +1,14 @@
+{
+  "target": "plugin/hooks/core/marks/highlight.ts (markedLineMarkdown, the raw field) and plugin/hooks/views/marked-message.tsx (markedReplyLine), slice B",
+  "generation": "mode 1: fresh-context mid-engineer, zero tools, the excerpts inline; 2026-10-21",
+  "mutations": [
+    {"id": "M1", "file": "plugin/hooks/core/marks/highlight.ts", "original": "if (links.length === 0) return undefined", "mutated": "if (links.length === 0) return c.raw", "note": "no-link line returns raw instead of undefined"},
+    {"id": "M2", "file": "plugin/hooks/core/marks/highlight.ts", "original": "if (at < 0 || /[*`_]/.test(c.snippet)) return c.raw", "mutated": "if (at < 0) return c.raw", "note": "dropped disjunct: markdown chars in snippet no longer bail"},
+    {"id": "M3", "file": "plugin/hooks/core/marks/highlight.ts", "original": "const outside = end <= start || at >= stop", "mutated": "const outside = end < start || at >= stop", "note": "comparison flip: boundary adjacent to link start no longer outside"},
+    {"id": "M4", "file": "plugin/hooks/core/marks/highlight.ts", "original": "const inLabel = at >= labelStart && end <= labelEnd", "mutated": "const inLabel = at >= labelStart || end <= labelEnd", "note": "conjunct turned into disjunct"},
+    {"id": "M5", "file": "plugin/hooks/core/marks/highlight.ts", "original": "const labelEnd = labelStart + (m[1] ?? '').length", "mutated": "const labelEnd = labelStart + (m[1] ?? '').length + 1", "note": "label end off by one"},
+    {"id": "M6", "file": "plugin/hooks/core/marks/highlight.ts", "original": "`${c.raw.slice(0, at)}**«${c.letter}» ${c.snippet}**${c.raw.slice(end)}`", "mutated": "`${c.raw.slice(0, at)}«${c.letter}» ${c.snippet}${c.raw.slice(end)}`", "note": "bold markers dropped from tag"},
+    {"id": "M7", "file": "plugin/hooks/views/marked-message.tsx", "original": "if (md === undefined) return markedLine(elements.Text, c, styles)", "mutated": "if (md !== undefined) return markedLine(elements.Text, c, styles)", "note": "view branch inverted: Text used where Markdown should be"},
+    {"id": "M8", "file": "plugin/hooks/views/marked-message.tsx", "original": "{...(links ? { pressableLinks: links.pressable, onLinkPress: (link: { href: string }) => links.onPress(link.href) } : {})}", "mutated": "{...(links ? { onLinkPress: (link: { href: string }) => links.onPress(link.href) } : {})}", "note": "pressableLinks prop dropped"}
+  ]
+}

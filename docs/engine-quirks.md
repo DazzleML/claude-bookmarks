@@ -279,6 +279,7 @@ What a test has to supply, learned the same day:
 - Most answers are `{ value }`; `ui.focus` and `ui.scroll` answer the result itself (`{}` or `{ deny }`).
 - A plugin's own `$.ui.focus` (moving the band's focus ring onto a button) is not routed to the test's hooks: it fails with "no implementation for ui.focus" whatever the test registers. The plugin's state has changed by then, so a test checks what was drawn and lets that call throw. The same holds for the plugin's own `$.ui.scroll` (a jump): a test checks what happened before it, with a control that shows the path ran (measured 2026-10-12 on a footnote jump).
 - The kit has no snapshot matcher and a test cannot read files, so the goldens are written inline.
+- A `Markdown` (or any element) with `onLinkPress` or another press handler needs a `key`, "its address, what e.element carries at ui.press": without one the engine skips the whole render hook ("bookmarks's ui.render hook was skipped: HooksError ...") and the message draws as if the plugin had nothing to say. The kit reports it in its failure summary; a live session would only show the highlight missing. Measured 2026-10-21 on 2.1.303, drawing a marked line as Markdown on a reply with bookmark links.
 
 ## Patched builds: trying the proper fix early
 

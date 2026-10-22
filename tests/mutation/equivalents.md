@@ -35,6 +35,10 @@ Both entries are kit-blind rather than equivalent: the behaviour is real and is 
 
 - `/^\d+$/.test(typed.slice(0, -1))` -> `/^\d*$/` in the `#` field's remove check -- **equivalent**: the same condition requires `typed.length > 1`, so the prefix is never empty and the two patterns accept the same inputs. 2026-10-21, mode 1 (v0.6.4 sweep, unit A5.2 round 2, N6).
 
+## plugin/hooks/core/marks/highlight.ts @ 3b637d08b551
+
+- `const labelEnd = labelStart + (m[1] ?? '').length` -> `+ 1`, in `markedLineMarkdown` -- **equivalent**: the words come from the plain line, which has no `]`, so a literal match in the raw line can never end one past the label (that character is the bracket); `inLabel` decides the same for every reachable input. 2026-10-21, mode 1 (v0.6.5 sweep, slice B, M5).
+
 ## plugin/hooks/core/bookmarks/check.ts @ 74d54eb0d884
 
 - `(p.tier ?? 'bookmark') === 'mark' && p.n !== undefined && !named.has(p.n)` -> the `p.n !== undefined` conjunct dropped, in the orphan-mark note -- **equivalent**: a letter's record is minted only in a numbered file (`setMark` refuses an unnumbered one), so no `mark` record lacks `n`; the conjunct narrows the type for `Set<number>.has`, and the mutant does not type-check. 2026-10-21, mode 1 (v0.6.4 sweep, unit A5.3, M2).

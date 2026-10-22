@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-10-21
+
+### Fixed
+
+- A link on a highlighted line kept neither its colour nor its click: the marked line of a reply was drawn as plain text, so for as long as the highlight showed a link on it was just words. A marked line that carries a link is now drawn as markdown inside the band, so the link keeps its colour, its underline and its click, and the plugin's own bookmark links on it still jump; the marked words keep their bold `«a»` tag wherever the tag cannot break the link (when the words are a link's own text, the tag goes inside the link's label). A marked line with no link is drawn exactly as before.
+
 ## [0.6.4] - 2026-10-21
 
 ### Added
@@ -1127,7 +1133,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.4...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.5...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
