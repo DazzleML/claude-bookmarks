@@ -31,6 +31,8 @@ claude plugin test plugin          # the plugin in Claude Code's test kit: plugi
 python -m pytest tests/ -v         # version.py and plugin.json stay in step
 ```
 
+The pre-push hook (installed above) runs the core suite, the pytest check, the type check and `claude plugin validate ./plugin` before every push; the kit suite is left to you, for speed (CI does not run it yet). The command lives in `.repokit-common.toml` as `test-command`.
+
 ## Project Structure
 
 ```

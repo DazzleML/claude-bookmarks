@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.7] - 2026-10-22
+
+### Changed
+
+- For contributors, no change to the plugin itself: the pre-push git hook now runs this repository's own checks before a push (the core suite under Node, the version tests, the strict type check and `claude plugin validate ./plugin`) instead of the Python-package defaults it was built for, which here ran only the nine version tests. The kit suite is left out of the hook for speed; run it yourself (CI does not run it yet). CONTRIBUTING says so, and the repository's project record names the language as TypeScript.
+
 ## [0.6.6] - 2026-10-21
 
 ### Changed
@@ -1139,7 +1145,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.6...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.7...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
