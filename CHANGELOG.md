@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.21] - 2026-10-22
+
+### Added
+
+- A hand-run checklist for the keys work of this line (`tests/checklists/v0.6.20__Feature__the-keymap-the-toggle-and-deleting-a-mark.md`): the pane fields and the band reading one key table, the band-button toggle, `d` and `D` on a mark, hot reload, all against a scratch data folder; the `/config` keymap rows and their docs are listed as pending.
+
+### Changed
+
+- The keys probe (`tests/one-offs/probe_literal_keys_outside_table.py`) carries its hand classification: every literal key comparison outside the key table is printed with its class and reason, and the run ends with the count of keys a surface holds on its own (0 today). A line the table does not know is counted on the safe side until someone reads it.
+
 ## [0.6.20] - 2026-10-22
 
 ### Added
@@ -1235,7 +1245,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.20...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.21...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
