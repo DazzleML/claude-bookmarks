@@ -29,7 +29,7 @@ It writes nothing else: no configuration file, no settings file, no start-up fil
 To search the transcript, which can be larger than the plugin API will read at once, the plugin runs a search program already on your machine with the transcript's path and the search text as arguments:
 
 - on macOS, Linux and Git Bash on Windows: `sh` running `grep`, and, to read the whole conversation once in pieces, `sh` running `tail -c +<offset> <transcript> | head -c 4000000` (the offset and the path are arguments, never part of the command text);
-- on Windows without them: two PowerShell scripts shipped inside the plugin, `hooks/scripts/user-rows.ps1` and `hooks/scripts/grep-offsets.ps1`, started as `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <script>`; the whole-conversation read has no PowerShell form yet, so without `sh` the plugin keeps the search-per-request behaviour.
+- on Windows: three PowerShell scripts shipped inside the plugin, `hooks/scripts/user-rows.ps1`, `hooks/scripts/grep-offsets.ps1` and `hooks/scripts/read-chunk.ps1` (the whole-conversation read, one piece of the file by byte offset), started as `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <script>` with the path, the search text or the offset as named parameters.
 
 Their output is read back by the plugin and goes nowhere else. Nothing else is executed, and nothing is installed.
 

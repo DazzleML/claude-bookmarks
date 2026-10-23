@@ -6,7 +6,7 @@
 import { feed, append, loaderLine, newLoader, resolve, textsWithin, REPLY_TEXT_BUDGET, type LoaderState, type RowKind } from '../core/transcript/loader.ts'
 import { indexBase, indexOf, parseIndex, seedLoader, serializeIndex } from '../core/transcript/index.ts'
 import { headOf, type Resolution } from '../core/bookmarks/transcript-lines.ts'
-import { shard } from '../core/prompts/text-store.ts'
+import { shard, utf8Bytes } from '../core/prompts/text-store.ts'
 import type { Backfill } from '../core/prompts/prompt-store.ts'
 import type { TranscriptPorts } from '../engine/ports.ts'
 
@@ -16,7 +16,8 @@ export const CHUNK_BYTES = 4_000_000
 export const SAVE_EVERY = 8
 const REPLY_PIECE_BYTES = 3_500_000
 
-type Pass = { sid: string; path: string; state: LoaderState; chunks: number; startedAt: number; running: boolean; size: number | undefined; sinceSave: number }
+/** `offset` is the next byte to ask for: it advances by the bytes each chunk held, while the loader's `bytes` stays at the last complete line (the carry is re-fed, never re-read). */
+type Pass = { sid: string; path: string; state: LoaderState; offset: number; chunks: number; startedAt: number; running: boolean; size: number | undefined; sinceSave: number }
 let pass: Pass | undefined
 
 /** What `/bm-env` says. */
@@ -114,12 +115,12 @@ export async function startPass(ports: TranscriptPorts): Promise<void> {
       ports.log(`[bm] loader: index rebuilt: ${read.why}`)
     }
   }
-  const p: Pass = { sid, path, state, chunks: 0, startedAt: Date.now(), running: true, size, sinceSave: 0 }
+  const p: Pass = { sid, path, state, offset: state.bytes, chunks: 0, startedAt: Date.now(), running: true, size, sinceSave: 0 }
   pass = p
   const tick = async () => {
     if (pass !== p) return // another conversation took over
     try {
-      const r = await ports.readChunk(p.path, p.state.bytes)
+      const r = await ports.readChunk(p.path, p.offset)
       if (!r) {
         p.running = false
         ports.log('[bm] loader: no program could read the transcript; the grep readers stand')
@@ -127,7 +128,11 @@ export async function startPass(ports: TranscriptPorts): Promise<void> {
       }
       p.chunks += 1
       p.sinceSave += 1
-      const done = r.stdout.length === 0 || r.stdout.length < CHUNK_BYTES / 4
+      const got = utf8Bytes(r.stdout)
+      p.offset += got
+      // A piece short of what was asked is the file's end (the reader cuts a full piece back
+      // by at most three bytes to a character boundary, never by more).
+      const done = got === 0 || got < CHUNK_BYTES - 4
       feed(p.state, r.stdout, done)
       if (!done) {
         if (p.sinceSave >= SAVE_EVERY) await saveIndex(ports, p)

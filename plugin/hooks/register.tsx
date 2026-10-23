@@ -520,6 +520,21 @@ function transcriptPorts($: EngineInterface): TranscriptPorts {
       return typeof size === 'number' ? size : undefined
     },
     readChunk: async (path, offset) => {
+      // PowerShell first on a Windows path (the engine does not find Git Bash's sh here:
+      // "Command 'sh' not found", 2026-10-22), as userRows does; sh second, everywhere.
+      if (/^[A-Za-z]:[\\/]/.test(path)) {
+        try {
+          const r = await $.process.run(
+            ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', `${$.plugin.root}/hooks/scripts/read-chunk.ps1`,
+              '-Path', path, '-Offset', String(offset), '-Count', '4000000'],
+            { timeoutMs: 60_000 },
+          )
+          if (r.exitCode === 0 || r.stdout) return { stdout: r.stdout, via: 'powershell' as const }
+          log($, `[bm] loader: powershell returned ${r.exitCode} with no output at byte ${offset}${r.stderr ? `: ${r.stderr.slice(0, 200)}` : ''}`)
+        } catch (err) {
+          log($, `[bm] loader: the PowerShell chunk read threw: ${String(err).slice(0, 300)}`)
+        }
+      }
       try {
         const r = await $.process.run(
           ['sh', '-c', 'tail -c +"$1" "$2" | head -c 4000000', 'sh', String(offset + 1), path],
