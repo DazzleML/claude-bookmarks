@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
-import { DEFAULTS, MARK_BAND, THEME_KEYS, brightness, isColour, resolvePalette } from '../../plugin/hooks/core/palette.ts'
+import { DEFAULTS, HEADING, MARK_BAND, THEME_KEYS, brightness, isColour, resolvePalette } from '../../plugin/hooks/core/palette.ts'
 
 // #27: nothing that draws names a colour; every style comes from the palette by role.
 // register.tsx and, since the split (0.4.46-0.4.69), the views and handlers it moved into
@@ -32,10 +32,20 @@ test('the colour scan catches a named colour in a view', () => {
   assert.equal(colourOffenders('<Text color="cyan">x</Text>').length, 1)
 })
 
-test('defaults use theme keys for every foreground colour', () => {
+test('defaults use theme keys for every foreground colour, but the headings, a dark/light pair like the band', () => {
   for (const [role, style] of Object.entries(DEFAULTS)) {
+    if (role === 'heading') continue
     if (style.color) assert.ok((THEME_KEYS as readonly string[]).includes(style.color), `${role}: ${style.color}`)
   }
+  assert.equal(DEFAULTS.heading.color, HEADING.dark)
+})
+
+// U71 (djdarcy, 2026-10-22: "slightly dark-gray as it's currently colored, but with a hint of
+// blue ... just a test"): the group headings follow the theme's brightness and take an override.
+test('the group headings are a dim blue-gray that follows the theme, and an override replaces it', () => {
+  assert.deepEqual(resolvePalette({ theme: 'dark' }).palette.heading, { color: HEADING.dark, dimColor: true })
+  assert.deepEqual(resolvePalette({ theme: 'light' }).palette.heading, { color: HEADING.light, dimColor: true })
+  assert.deepEqual(resolvePalette({ theme: 'dark', overrides: { heading: { color: 'subtle', dimColor: false } } }).palette.heading, { color: 'subtle', dimColor: false })
 })
 
 test('search never shares the marks\' colour', () => {

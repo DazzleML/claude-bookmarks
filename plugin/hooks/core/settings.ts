@@ -106,7 +106,7 @@ export const FIELDS = {
     kind: 'text',
     default: '',
     title: 'Colour overrides',
-    description: 'JSON, e.g. {"here": {"color": "cyan"}, "markBand": {"backgroundColor": "#203040"}}. Roles: here, pinned, footnote, legend, mark, markBand, used, unused, unreached, emphasis, search. A colour is a theme key (warning, subtle, ...), a terminal colour name or #rrggbb; anything else is ignored',
+    description: 'JSON, e.g. {"here": {"color": "cyan"}, "markBand": {"backgroundColor": "#203040"}}. Roles: here, pinned, footnote, legend, heading, mark, markBand, used, unused, unreached, emphasis, search. A colour is a theme key (warning, subtle, ...), a terminal colour name or #rrggbb; anything else is ignored',
   },
   // #33: the person's slash commands, `!` shell commands and interruptions, as N.k rows
   // under their prompt in the prompts list. The fold is the first ladder on the

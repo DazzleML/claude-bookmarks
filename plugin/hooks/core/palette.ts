@@ -12,7 +12,7 @@
 // a theme key, a hex value or a terminal colour name is dropped, and the default stands
 // (#7: "an invalid colour falls back to the palette default").
 
-export type Role = 'here' | 'pinned' | 'footnote' | 'legend' | 'mark' | 'markBand' | 'used' | 'unused' | 'unreached' | 'emphasis' | 'search'
+export type Role = 'here' | 'pinned' | 'footnote' | 'legend' | 'heading' | 'mark' | 'markBand' | 'used' | 'unused' | 'unreached' | 'emphasis' | 'search'
 export type Style = { color?: string; backgroundColor?: string; dimColor?: boolean; bold?: boolean }
 export type Palette = Record<Role, Style>
 
@@ -32,11 +32,22 @@ const NAMED = new Set([
 // (#264F78), the value the plugin has drawn since round 4. Light: its counterpart.
 export const MARK_BAND = { dark: '#1B3754', light: '#D6E4F5' } as const
 
+// The group headings' blue-gray (U71, a trial value; djdarcy's "hint of blue"), a dark and a
+// light value like the mark band, since no theme key is a blue-gray.
+export const HEADING = { dark: '#8FA3C0', light: '#5A6B85' } as const
+
 export const DEFAULTS: Palette = {
   here: { color: 'warning', bold: true }, // the prompt nearest the view (yellow in the default themes)
   pinned: { color: 'warning' }, // the pin star
   footnote: { color: 'subtle', dimColor: true }, // non-prompt rows (#33): below whole prompts in priority; dim, since a Button row can't take the colour
   legend: { dimColor: true },
+  // The group headings in the prompts list ("★ pinned", "all prompts"): the legend's dim
+  // gray with a hint of blue, so they read as headings without standing out (djdarcy,
+  // 2026-10-22: "slightly dark-gray as it's currently colored, but with a hint of blue ...
+  // I'm not convinced yet the gray-blue will work, just a test"). A hex pair chosen by the
+  // theme's brightness (resolvePalette), not a theme key: no key is a blue-gray. Override
+  // it in /config's colour overrides to try another.
+  heading: { color: HEADING.dark, dimColor: true },
   mark: { color: 'warning', bold: true }, // a mark's highlighted words
   markBand: { backgroundColor: MARK_BAND.dark },
   used: { color: 'inactive' }, // a mark letter already taken, in the mark pane
@@ -63,6 +74,7 @@ export function resolvePalette(opts: { theme?: string; overrides?: Readonly<Reco
 } {
   const palette = Object.fromEntries(Object.entries(DEFAULTS).map(([r, s]) => [r, { ...s }])) as Palette
   palette.markBand.backgroundColor = MARK_BAND[brightness(opts.theme)]
+  palette.heading.color = HEADING[brightness(opts.theme)]
   const dropped: string[] = []
   for (const [role, raw] of Object.entries(opts.overrides ?? {})) {
     if (!(role in DEFAULTS) || typeof raw !== 'object' || raw === null) {

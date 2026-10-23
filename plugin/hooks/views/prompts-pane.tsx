@@ -181,9 +181,9 @@ export function promptsPaneView(elements: Elements, m: PromptsPaneModel, a: Prom
         </Text>
       )}
       {matchLine && <Text {...style('legend')}>{`/${paneFilter}: ${matchLine}`}</Text>}
-      {pinnedRows.length > 0 && <Text {...style('legend')}>★ pinned</Text>}
+      {pinnedRows.length > 0 && <Text {...style('heading')}>★ pinned</Text>}
       {pinnedRows.map(r => promptRow(r, 'pin'))}
-      {pinnedRows.length > 0 && <Text {...style('legend')}>all prompts</Text>}
+      {pinnedRows.length > 0 && <Text {...style('heading')}>all prompts</Text>}
       {numbered.filter(r => listed.has(r.uuid)).flatMap(r => [promptRow(r, 'p'), ...footnoteRows(r.n)])}
       {footnoteRows(0)}
     </Box>
