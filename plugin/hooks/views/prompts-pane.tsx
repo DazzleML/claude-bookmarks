@@ -14,7 +14,7 @@ import {
 } from '../core/prompts/list-model.ts'
 import type { FootnoteRef } from '../core/prompts/prompt-rows.ts'
 import type { PromptRef } from '../core/prompts/prompt-store.ts'
-import { fitLine, lineOf } from '../core/bookmarks/transcript-lines.ts'
+import { fitLines, lineOf } from '../core/bookmarks/transcript-lines.ts'
 import type { Role, Style } from '../core/palette.ts'
 
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
@@ -37,6 +37,8 @@ export type PromptsPaneModel = {
   here: string | undefined
   /** The pane body's width in columns (the engine's `bodyColumns`); a row is cut to it. */
   columns: number
+  /** How many lines a row may take (the `rowLines` setting, U70). */
+  lines: number
 }
 
 // Each action returns its promise (see views/band.tsx); setFilter answers at once whether
@@ -113,14 +115,19 @@ export function promptsPaneView(elements: Elements, m: PromptsPaneModel, a: Prom
   // so a widened pane fills with more of the prompt and a narrow one never wraps (U64;
   // djdarcy, 2026-10-15). The cut is the plugin's, by `columns`: live, a long Button label
   // wraps, and a Text's truncate-end inside a Button is not honoured (2026-10-22).
-  const rowText = (r: NumberedPrompt, prefixWidth: number) => fitLine(lineOf(texts.get(r.uuid) ?? r.head), m.columns - 1 - prefixWidth)
+  // A row may take `lines` lines (the rowLines setting, U70): the label carries hard lines, each
+  // cut to the width, so the terminal's word wrap never adds one. A plain row indents its
+  // continuation lines by the prefix's width so they sit under the text; a Box row's Button
+  // already sits beside its prefix, so its continuation lines need none.
+  const rowText = (r: NumberedPrompt, prefixWidth: number, indent: number) =>
+    fitLines(lineOf(texts.get(r.uuid) ?? r.head), m.columns - 1 - prefixWidth, m.lines, indent)
   const promptRow = (r: NumberedPrompt, group: string) => {
     const isHere = r.uuid === here
     const dim = unreached(drawnFour, r.uuid) && !isHere
     const press = () => a.pressPrompt(r)
     if (!pinSet.has(r.uuid) && !isHere) {
       const prefix = `${pointer(r.n)}${numberLabel(r.n)}`
-      return <Button key={`${group}-${r.uuid}`} label={`${prefix}${rowText(r, prefix.length)}`} plain {...(dim && r.n !== targetN ? buttonStyle('unreached') : {})} onPress={press} />
+      return <Button key={`${group}-${r.uuid}`} label={`${prefix}${rowText(r, prefix.length, prefix.length)}`} plain {...(dim && r.n !== targetN ? buttonStyle('unreached') : {})} onPress={press} />
     }
     // `245★) `: a gold star inside the number, so it reads as the row's marker, not
     // part of the prompt (djdarcy, 2026-10-05, over a background band and a star
@@ -135,7 +142,7 @@ export function promptsPaneView(elements: Elements, m: PromptsPaneModel, a: Prom
           {pinSet.has(r.uuid) && <Text {...style('pinned')}>★</Text>}
           <Text {...(dim ? style('unreached') : {})} {...(isHere ? style('here') : {})}>{') '}</Text>
         </Box>
-        <Button key={`${group}-${r.uuid}`} label={rowText(r, pointer(r.n).length + width + (pinSet.has(r.uuid) ? 1 : 0) + 2)} plain {...(dim ? buttonStyle('unreached') : {})} onPress={press} />
+        <Button key={`${group}-${r.uuid}`} label={rowText(r, pointer(r.n).length + width + (pinSet.has(r.uuid) ? 1 : 0) + 2, 0)} plain {...(dim ? buttonStyle('unreached') : {})} onPress={press} />
       </Box>
     )
   }

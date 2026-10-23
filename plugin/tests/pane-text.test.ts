@@ -58,7 +58,8 @@ test('a wide prompts pane carries the whole kept text on one line; the head when
   ])
 })
 
-test('a narrow prompts pane cuts each row to its width with an ellipsis, the number column intact', async ($, on) => {
+// The one-line cut of 0.6.10, pinned under `rowLines: 1` (the default is 2 since U70).
+test('a narrow prompts pane cuts each row to its width with an ellipsis, the number column intact', { options: { rowLines: 1 } }, async ($, on) => {
   world(on, { session: SID, store: STORE, files: TEXT_FILES })
   const rows = (await (await promptsPane($ as never, 60)).findAll({ type: 'Button' })).map(b => b.text ?? '')
   // 60 body columns, one spare, four for ` 1) `: 55 for the text, the last of them the ellipsis.
@@ -67,6 +68,33 @@ test('a narrow prompts pane cuts each row to its width with an ellipsis, the num
   expect(rows[0]).toBe(' 3) third prompt: a multi-line one with a second paragraph…')
   expect(rows[1]).toBe(' 2) second prompt: add a band')
   expect(rows.every(r => r.length <= 59)).toBe(true)
+})
+
+// U70 (djdarcy, 2026-10-22: "letting users choose how many lines per entry is best ... a good
+// default is "2 lines""): at the default a row's label carries up to two hard lines, each cut
+// to the width, the second indented under the text past the number column.
+test('at the default two lines a narrow pane shows two lines of a long prompt, the second under the text', async ($, on) => {
+  world(on, { session: SID, store: STORE, files: TEXT_FILES })
+  const rows = (await (await promptsPane($ as never, 60)).findAll({ type: 'Button' })).map(b => b.text ?? '')
+  // 55 columns of text per line after ` 1) `. The first line breaks before "zebra," (the word
+  // straddling the edge fits a line, djdarcy 2026-10-22); the second is cut hard with the ellipsis.
+  expect(rows[2]).toBe(' 1) first prompt: set up the plugin, and much later a\n    zebra, and a giraffe after that, well past sixty chara…')
+  expect(rows[1]).toBe(' 2) second prompt: add a band')
+  // The edge falls on the space after "paragraph": whole words, the rest on the second line.
+  expect(rows[0]).toBe(' 3) third prompt: a multi-line one with a second paragraph\n    and a tab')
+  for (const r of rows) for (const line of r.split('\n')) expect(line.length <= 59).toBe(true)
+})
+
+test('a prompt longer than two lines is cut at the end of the second with an ellipsis', { options: { rowLines: 2 } }, async ($, on) => {
+  const longer = `${LONG}, and then a third line's worth of text that no two lines could hold at sixty columns`
+  const files = { ...TEXT_FILES, [`${TEXT_BASE}.0.json`]: JSON.stringify([{ uuid: U1, text: longer }]) }
+  world(on, { session: SID, store: STORE, files })
+  const rows = (await (await promptsPane($ as never, 60)).findAll({ type: 'Button' })).map(b => b.text ?? '')
+  expect(longer.length > 110).toBe(true)
+  const lines = rows[2]!.split('\n')
+  expect(lines.length).toBe(2)
+  expect(lines[0]).toBe(' 1) first prompt: set up the plugin, and much later a')
+  expect(lines[1]).toBe('    zebra, and a giraffe after that, well past sixty chara…')
 })
 
 // A prompt not drawn since load reads dim (the v0.6.9 sweep's m8: the dim rule was unpinned).
@@ -100,10 +128,16 @@ test('a wide jump pane carries the whole 60-character head', async ($, on) => {
   expect((await wide.findAll({ type: 'Button' })).find(b => b.key === 'jump-a')?.text).toBe(HEAD60)
 })
 
-test('a narrow jump pane cuts the head to its width with an ellipsis', async ($, on) => {
+test('a narrow jump pane cuts the head to its width with an ellipsis', { options: { rowLines: 1 } }, async ($, on) => {
   const narrow = await jumpPane($ as never, MARK_A(), 40, on)
   // 40 columns, one spare, three for `a: `: 36 for the head, the last the ellipsis.
   expect((await narrow.findAll({ type: 'Button' })).find(b => b.key === 'jump-a')?.text).toBe(`${HEAD60.slice(0, 35)}…`)
+})
+
+test('at two lines a narrow jump pane carries the whole head over two, the second indented past `a: `', async ($, on) => {
+  const narrow = await jumpPane($ as never, MARK_A(), 40, on)
+  // 36 columns per line; the first breaks before "characters," which fits the second whole.
+  expect((await narrow.findAll({ type: 'Button' })).find(b => b.key === 'jump-a')?.text).toBe('a marked line that runs to sixty\n   characters, no fewer, so...')
 })
 
 test('the reading row carries the whole head after its label in a wide pane', async ($, on) => {

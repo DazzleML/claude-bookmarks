@@ -25,6 +25,11 @@ export type NumberField = { kind: 'number'; min: number; max: number; default: n
 export type TextField = { kind: 'text'; default: string; title: string; description: string }
 export type Field = EnumField | BooleanField | NumberField | TextField
 
+// U70 (djdarcy, 2026-10-22): "letting users choose how many lines per entry is best. I suspect
+// a good default is "2 lines"". The default is his guess, dogfooded; the cap is the loop's.
+export const ROW_LINES_DEFAULT = 2
+export const ROW_LINES_MAX = 5
+
 export const FIELDS = {
   listOpensAt: {
     kind: 'enum',
@@ -149,6 +154,17 @@ export const FIELDS = {
     default: 'on',
     title: 'Lists in a pane',
     description: "on: the prompts and bookmarks lists open in a pane beside the conversation; off: p and b take a number in the band and jump, with no pane",
+  },
+  // U70: how much of each row the prompts and jump lists show. The pane's width is known, so
+  // lines are the one control that matters; the text is cut with an ellipsis at the end of
+  // the last line.
+  rowLines: {
+    kind: 'number',
+    min: 1,
+    max: ROW_LINES_MAX,
+    default: ROW_LINES_DEFAULT,
+    title: 'Lines per row in the lists',
+    description: 'How many lines each prompt in the prompts list, and each mark in the jump list, may take (1 to 5); the text is cut with an ellipsis at the end of the last line',
   },
 } as const satisfies Record<string, Field>
 

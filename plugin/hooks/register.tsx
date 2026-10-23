@@ -1456,7 +1456,7 @@ export const register: Register = (on, options) => {
       if (target) band_.centrePane(bandPorts($), target)
       return promptsPaneView(
         elements,
-        { all, kept, footnoteMode, unfolded: promptsPane.unfolded, drawnFour: drawn.firstFours, pinIds, texts, paneFilter: promptsPane.filter, fromBand, here, columns: e.props.bodyColumns },
+        { all, kept, footnoteMode, unfolded: promptsPane.unfolded, drawnFour: drawn.firstFours, pinIds, texts, paneFilter: promptsPane.filter, fromBand, here, columns: e.props.bodyColumns, lines: currentSettings().rowLines },
         {
           unfold: async n => { promptsPane.unfold(n); await bumpView($) },
           refold: async n => { promptsPane.refold(n); await bumpView($) },
@@ -1495,7 +1495,7 @@ export const register: Register = (on, options) => {
     const marks = markCache.all // the cache, never a file, in a render hook
     return marksPaneView(
       elements,
-      { mode, marks, letters: MARK_LETTERS, readingLetter: READING_LETTER, columns: e.props.bodyColumns },
+      { mode, marks, letters: MARK_LETTERS, readingLetter: READING_LETTER, columns: e.props.bodyColumns, lines: currentSettings().rowLines },
       {
         press: l => (mode === 'mark' ? markThenSettle($, mode, l) : jumpToMarkThenSettle($, mode, l, true)),
         goToReading: async reading => {

@@ -101,9 +101,9 @@ test('/bm-config prints every setting with its source', async ($, on) => {
   const w = world(on, { store: STORE, session: SID })
   await $.command.run({ command: 'bm-config', args: '' } as never)
   expect(w.logs()).toEqual([
-    '[bm] settings: listOpensAt="nearest" (default); followHere="when-idle" (default); closeShare=0.6 (default); paneAfterJump="close" (default); paneWhileTyping="stay" (default); afterActionFocus="input" (default); debugDefault="off" (default); debugText="auto" (default); debugTextLength="reference" (default); palette="" (default); footnotes="folded" (default); promptTextBudget=2000000 (default); band="full" (default); chords="on" (default); panes="on" (default)',
+    '[bm] settings: listOpensAt="nearest" (default); followHere="when-idle" (default); closeShare=0.6 (default); paneAfterJump="close" (default); paneWhileTyping="stay" (default); afterActionFocus="input" (default); debugDefault="off" (default); debugText="auto" (default); debugTextLength="reference" (default); palette="" (default); footnotes="folded" (default); promptTextBudget=2000000 (default); band="full" (default); chords="on" (default); panes="on" (default); rowLines=2 (default)',
     '[bm] this build is loaded from a folder, so debugText="auto" means always; change any of these in /config',
-    // The kit draws no /config menu; live, all 15 rows are listed (screenshot 2026-10-12).
-    "[bm] /config lists 0 of this plugin's 15 fields",
+    // The kit draws no /config menu; live, all rows are listed (screenshot 2026-10-12, 15 then).
+    "[bm] /config lists 0 of this plugin's 16 fields",
   ])
 })

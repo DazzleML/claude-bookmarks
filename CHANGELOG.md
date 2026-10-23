@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.14] - 2026-10-22
+
+### Added
+
+- A setting, "Lines per row in the lists" (1 to 5, default 2), for how many lines each prompt in the prompts list and each mark in the jump list may take. A line breaks at a space when the word at its edge would fit on the next line, and cuts through a token no line could hold (a path, a slug); the last line ends in an ellipsis when the text runs on. A second line sits under the text rather than under the number, so the number column stays a column. Set 1 for the one-line rows of 0.6.10.
+
 ## [0.6.13] - 2026-10-22
 
 ### Changed
@@ -1185,7 +1191,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.13...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.14...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

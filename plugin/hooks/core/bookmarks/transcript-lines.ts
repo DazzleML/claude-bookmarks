@@ -139,9 +139,40 @@ export const lineOf = (text: string): string => text.replace(/\s+/g, ' ').trim()
 export const headOf = (text: string): string => lineOf(text).slice(0, 60)
 
 /** A line fitted to `width` columns: whole when it fits, else cut with an ellipsis as its last character. A pane row is cut this way to the pane's own width (`bodyColumns`, which the engine hands the pane at draw time), so a widened pane shows more and a narrow one never wraps (U64; live, a long Button label wraps and a Text's `truncate-end` inside a Button is not honoured, 2026-10-22). */
-export const fitLine = (text: string, width: number): string => {
-  if (width <= 0) return ''
-  return text.length <= width ? text : `${text.slice(0, width - 1)}…`
+export const fitLine = (text: string, width: number): string => fitLines(text, width, 1)
+
+/** A line fitted to `lines` rows of `width` columns (the rowLines setting, U70). The result carries hard lines (`\n`), each at most `width` characters, so the terminal's word wrap can never add a row; continuation lines are indented by `indent` columns to sit under the text (a plain prompts row's number column, the `a: ` the engine draws before a hotkey row). A line breaks at a space when the word straddling its edge would fit on a line of its own (djdarcy, 2026-10-22: "Feel fre / e" is hard to read), and cuts the word when it would not (a long token such as a path or a slug: "if it's not so large that it's effectively never going to properly fit on any line"). The last line is cut hard with an ellipsis as its last character, so `fitLines(t, w, 1)` is the one-line cut of 0.6.10. */
+export const fitLines = (text: string, width: number, lines: number, indent = 0): string => {
+  if (width <= 0 || lines <= 0) return ''
+  const out: string[] = []
+  let rest = text
+  for (let i = 0; i < lines && rest.length > 0; i++) {
+    let line: string
+    if (rest.length <= width) {
+      line = rest
+      rest = ''
+    } else if (i === lines - 1) {
+      line = `${rest.slice(0, width - 1)}…`
+      rest = ''
+    } else if (rest[width] === ' ') {
+      // The edge falls between words: the line is whole words, the space goes.
+      line = rest.slice(0, width)
+      rest = rest.slice(width + 1).trimStart()
+    } else {
+      const space = rest.lastIndexOf(' ', width - 1)
+      const wordEnd = rest.indexOf(' ', width)
+      const wordLength = (wordEnd === -1 ? rest.length : wordEnd) - (space + 1)
+      if (space > 0 && wordLength <= width) {
+        line = rest.slice(0, space).trimEnd()
+        rest = rest.slice(space + 1).trimStart()
+      } else {
+        line = rest.slice(0, width)
+        rest = rest.slice(width)
+      }
+    }
+    out.push(i === 0 ? line : `${' '.repeat(indent)}${line}`)
+  }
+  return out.join('\n')
 }
 
 /** What a bookmark takes from the transcript row it points at: where the row is, its head, the transcript's path (forward slashes) and who wrote it. Each mint from a row (a prose link, a promoted mark, the model's tool) starts from this. */

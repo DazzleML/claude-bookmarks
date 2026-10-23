@@ -3,7 +3,7 @@
 // in with the letters, the actions and the palette's lookups.
 import type { EngineInterface } from 'claude-code'
 import type { Mark } from '../core/marks/marks.ts'
-import { fitLine } from '../core/bookmarks/transcript-lines.ts'
+import { fitLines } from '../core/bookmarks/transcript-lines.ts'
 import type { PaneStyles } from './prompts-pane.tsx'
 
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
@@ -15,6 +15,8 @@ export type MarksPaneModel = {
   readingLetter: string
   /** The pane body's width in columns (the engine's `bodyColumns`); a jump row is cut to it. */
   columns: number
+  /** How many lines a jump row may take (the `rowLines` setting, U70). */
+  lines: number
 }
 
 export type MarksPaneActions = {
@@ -44,14 +46,15 @@ export function marksPaneView(elements: Elements, m: MarksPaneModel, a: MarksPan
     // A row carries as much of the head as the pane is wide (U64; djdarcy, 2026-10-15), cut
     // by the plugin to `columns` less the row's prefix (`a: ` for a hotkey row), since live a
     // long Button label wraps. Before 0.6.9 the rows were cut to 40 and 32 characters on top
-    // of the head's own 60.
-    const readingText = reading ? fitLine(`␣ reading: ${reading.head}`, m.columns - 1) : ''
+    // of the head's own 60. A row may take `lines` lines (U70); a continuation line is indented
+    // under the text: past the row's own label here, past the engine's `a: ` on a hotkey row.
+    const readingText = reading ? fitLines(`␣ reading: ${reading.head}`, m.columns - 1, m.lines, '␣ reading: '.length) : ''
     return (
       <Box flexDirection="column">
         {used.length === 0 && !reading && <Text {...style('legend')}>No marks yet. Esc</Text>}
         {reading && <Button key="jump-reading" label={readingText} plain autoFocus onPress={() => a.goToReading(reading)} />}
         {used.map(l => (
-          <Button key={`jump-${l}`} hotkey={l} label={fitLine(marks[l]?.head ?? '', m.columns - 1 - 3)} plain onPress={() => press(l)} />
+          <Button key={`jump-${l}`} hotkey={l} label={fitLines(marks[l]?.head ?? '', m.columns - 1 - 3, m.lines, 3)} plain onPress={() => press(l)} />
         ))}
       </Box>
     )

@@ -215,6 +215,8 @@ Unfolded, the ellipsis becomes the footnotes themselves, `12.1 /compact`, `12.2 
 
 The "Footnotes in the prompts list" setting chooses `folded` (the default), `shown` (always unfolded) or `hidden`. With `hidden` the rows are gone but the numbers still work: `12.1` jumps to that footnote, and `12.` says the footnotes are hidden. Footnotes are read from the transcript once, with the prompts, and added live after that.
 
+A row shows as much of its prompt as fits the pane's width, over as many lines as the "Lines per row in the lists" setting allows (the default is 2; 1 to 5). The text is cut with an ellipsis at the end of the last line, and a second line sits under the text, not under the number, so the numbers stay a column. Widen the pane for more of each prompt per line; set 1 for the densest list. The jump list's rows follow the same setting.
+
 ### Filtering the list
 
 Type `/` and some words in the pane's `#` field to list only the prompts containing all of them, in any order and any case: `/band redraw` finds "the redraw of the band". Prompts keep their numbers, and a line above the list says how many match, `/band redraw: 2 of 153 match`. Pinned prompts are filtered too. Clear the field to see the whole list again, or press `Esc`: with a filter active, the first `Esc` clears the filter and the second closes the pane. Typing in the field needs the keyboard in the pane (`/bm-prompts` from an empty input box).
