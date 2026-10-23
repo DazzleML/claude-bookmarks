@@ -15,6 +15,7 @@ test('stock picks the workaround for every gap that has one, and current for the
     'focus.handoff=workaround',
     'focus.leftSite=workaround',
     'keys.chord=workaround',
+    'transcript.chunks=workaround',
     'hover.multiline=current',
   ])
   for (const c of all) assert.ok(c.why.length > 0, c.gap)

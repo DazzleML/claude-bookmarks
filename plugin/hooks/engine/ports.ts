@@ -44,6 +44,8 @@ export type DiagnosticsPorts = LogPorts & {
   echoState: () => Promise<string>
   /** The chosen capability path per gap, one line (engine/select.ts pathsLine over the signals read at start). */
   capabilityPaths: () => string
+  /** The loader's pass: rows, bytes read, chunks, running or done (handlers/transcript.ts). */
+  loaderStatus: () => string
 }
 
 /** What the view tracker (handlers/view-tracker.ts) needs: the lists it orders, the settings it reads, and for the pane's follow, a timer, the pane's state and a scroll in it. */
@@ -208,6 +210,24 @@ export type PromptsPorts = {
   userRows: (path: string) => Promise<{ via: 'powershell' | 'sh'; ms: number; stdout: string; isStdoutTruncated?: boolean } | undefined>
 }
 
+/** What the loader's pass (handlers/transcript.ts, slice F) needs: the conversation and its file, a chunk of it by offset (the one program register.tsx runs for it), the data root for the index and the replies' pieces, the prompts' text cache to seed from, the clock, and the back-fill's publisher. */
+export type TranscriptPorts = {
+  sessionId: () => Promise<string>
+  transcriptPath: () => Promise<string | undefined>
+  fileSize: (path: string) => Promise<number | undefined>
+  /** Up to CHUNK_BYTES of the file from `offset`, as the program returned them; undefined when no program could run. */
+  readChunk: (path: string, offset: number) => Promise<{ stdout: string; via: 'sh' | 'powershell' } | undefined>
+  dataRoot: () => Promise<string | undefined>
+  fsExists: (path: string) => Promise<boolean>
+  fsRead: (path: string) => Promise<string>
+  fsWrite: (path: string, text: string) => Promise<unknown>
+  promptTexts: () => Promise<ReadonlyMap<string, string>>
+  after: (ms: number, fn: () => void) => { cancel: () => void }
+  log: (line: string) => void
+  /** The prompts and footnotes into the store, as the grep back-fill did (handlers/prompts.ts applyBackfill). */
+  publish: (backfill: import('../core/prompts/prompt-store.ts').Backfill, truncated: boolean) => Promise<unknown>
+}
+
 /** Finding a message in the transcript by uuid or by a verbatim fragment (register.tsx's resolveTarget). */
 export type ResolveOutcome =
   | { kind: 'one'; row: import('../core/bookmarks/transcript-lines.ts').TranscriptRow; via: string; ms: number }
@@ -347,6 +367,8 @@ export type CommandLinePorts = BandPorts & {
 //   debug channels (DebugChannels)          handlers/log.ts (writers:     log, the screen channel, the view
 //                                             read, set); the Logger's    tracker (held), /bm-debug (on)
 //                                             (0.4.95), one in register.tsx
+//   pass (the loader's state for this        handlers/transcript.ts        startPass, appendLive, newConversation;
+//     conversation, slice F)                  (the one writer)              read by resolveLoaded, loaderStatus
 //   promptTextCache, promptTextSave,        handlers/prompts.ts (the      --
 //     storedPromptTextDropped                 back-fill fills it there too,
 //                                             since 0.4.101)

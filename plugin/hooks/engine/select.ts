@@ -29,7 +29,7 @@ export type Chosen = PathName | 'current'
 export const PATH_ORDER: readonly PathName[] = ['ideal', 'patched', 'workaround']
 
 /** The engine APIs the plugin stands in for (docs/engine-quirks.md names each). */
-export type Gap = 'history.reach' | 'focus.handoff' | 'focus.leftSite' | 'keys.chord' | 'hover.multiline'
+export type Gap = 'history.reach' | 'focus.handoff' | 'focus.leftSite' | 'keys.chord' | 'hover.multiline' | 'transcript.chunks'
 
 /** What the start hook reads once: the build, and dcc-patcher's markers (`DCC_PATCH_H` is set by its history patch, `DCC_PATCHES` and `DCC_PATCHER` by its launcher). */
 export type Signals = { version: string; base?: string; dccPatcher?: string; dccPatchH?: string; dccPatches?: string }
@@ -78,6 +78,14 @@ export const CAPABILITIES: readonly Capability[] = [
     ideal: null,
     patched: null,
     workaround: 'the leader through abovePrompt:focus and four borrowed engine actions',
+  },
+  {
+    gap: 'transcript.chunks',
+    missing: 'a read of a file over 4 MiB, or a stream of it ($.fs.read refuses the file; a program\'s output is capped per call)',
+    ideal: null,
+    patched: null,
+    workaround: 'the whole conversation read in 4 MB pieces through sh (tail | head); without sh the grep readers stand',
+    verifiedOn: ['2.1.309'],
   },
   {
     gap: 'hover.multiline',

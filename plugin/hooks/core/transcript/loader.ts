@@ -83,9 +83,10 @@ function takeLine(s: LoaderState, raw: string, newline: boolean): void {
   const row: LoadedRow = { uuid: o.uuid, line: s.line, byteStart, byteEnd, role: c.role, text: c.text, kind: c.kind, ...(typeof o.timestamp === 'string' ? { timestamp: o.timestamp } : {}) }
   const at = s.byUuid.get(o.uuid)
   if (at !== undefined) {
-    // Seen live before the pass reached it: the file fills the hints; the live text stands when the file's is empty.
+    // Seen live before the pass reached it: the file fills the hints, and the longer text
+    // wins (the live capture keeps a cut of a reply; the file holds it whole).
     const have = s.rows[at]!
-    s.rows[at] = { ...have, line: row.line, byteStart: row.byteStart, byteEnd: row.byteEnd, ...(have.text ? {} : { text: row.text }), ...(row.timestamp ? { timestamp: row.timestamp } : {}) }
+    s.rows[at] = { ...have, line: row.line, byteStart: row.byteStart, byteEnd: row.byteEnd, text: row.text.length >= have.text.length ? row.text : have.text, ...(row.timestamp ? { timestamp: row.timestamp } : {}) }
     return
   }
   s.byUuid.set(o.uuid, s.rows.length)

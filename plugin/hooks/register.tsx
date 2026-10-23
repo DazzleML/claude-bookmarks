@@ -41,13 +41,14 @@ import { bookmarksPaneView } from './views/bookmarks-pane'
 import { marksPaneView } from './views/marks-pane'
 import { promptsPaneView } from './views/prompts-pane'
 import { configCommand, envCommand, idsCommand, jumpCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
-import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PromptsPorts, ResolveOutcome, ViewPorts } from './engine/ports'
+import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PromptsPorts, ResolveOutcome, TranscriptPorts, ViewPorts } from './engine/ports'
 import { closeAll as bandCloseAll, endBandMode as bandEnd, settle as bandSettle, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
 import * as commandLine from './handlers/command-line'
 import * as marks_ from './handlers/marks'
 import * as bookmarks_ from './handlers/bookmarks'
 import * as prompts_ from './handlers/prompts'
+import * as transcript_ from './handlers/transcript'
 import * as log_ from './handlers/log'
 import { MarkState } from './core/marks/mark-state'
 import { Navigation } from './handlers/navigation'
@@ -302,6 +303,7 @@ async function sameConversation($: EngineInterface): Promise<void> {
   await bookmarks_.startRegister(bookmarksPorts($))
   await marks_.startMarks(marksPorts($))
   pruneThenBackfill($)
+  startLoader($)
   log($, `[bm] a new conversation: ${short(before)} -> ${short(id)}; what the one before left in memory is reset`)
 }
 // The store's prune, then this conversation's back-fill (done once per conversation, by its
@@ -336,6 +338,7 @@ async function resetConversationMemory() {
   // transcript drawn before), and the title the start event carried (session.start sets
   // the new one after this reset).
   bookmarks_.newConversation()
+  transcript_.newConversation()
   screen.newConversation()
   sessionTitle = undefined
 }
@@ -501,7 +504,56 @@ async function grepTranscript($: EngineInterface, path: string, pattern: string)
 // prefix), or by a fragment of its text (earliest real message that contains it; several
 // are returned as candidates). The anchors DWP's resolver (2026-10-09). Its outcome type,
 // ResolveOutcome, is in engine/ports.ts since 0.4.64: handlers/bookmarks.ts names it too.
+// The loader's pass (handlers/transcript.ts, slice F): one background read of the whole
+// transcript in chunks, through the third program this plugin runs. `tail -c +N | head -c`
+// returns CHUNK_BYTES of the file from a byte offset; the path and the offset are argv
+// elements ("$1"/"$2"), never spliced into the command. sh only for now: a PowerShell
+// reader that emits raw bytes is the design's deferred unit; without sh the loader stays
+// off and the two readers above stand (the capability row `transcript.chunks`).
+function transcriptPorts($: EngineInterface): TranscriptPorts {
+  return {
+    sessionId: () => $.session.id(),
+    transcriptPath: () => transcriptPath($),
+    fileSize: async path => {
+      const s: unknown = await $.fs.stat(path, { resolve: true }).catch(() => undefined)
+      const size = (s as { size?: unknown } | undefined)?.size
+      return typeof size === 'number' ? size : undefined
+    },
+    readChunk: async (path, offset) => {
+      try {
+        const r = await $.process.run(
+          ['sh', '-c', 'tail -c +"$1" "$2" | head -c 4000000', 'sh', String(offset + 1), path],
+          { timeoutMs: 60_000 },
+        )
+        if (r.exitCode === 0 || r.stdout) return { stdout: r.stdout, via: 'sh' as const }
+        log($, `[bm] loader: sh returned ${r.exitCode} with no output at byte ${offset}${r.stderr ? `: ${r.stderr.slice(0, 200)}` : ''}`)
+      } catch (err) {
+        // sh is not there, or the engine refused the run: say which, for the next diagnosis.
+        log($, `[bm] loader: the chunk read threw: ${String(err).slice(0, 300)}`)
+      }
+      return undefined
+    },
+    dataRoot: () => dataRoot($),
+    fsExists: path => $.fs.exists(path),
+    fsRead: path => $.fs.read(path),
+    fsWrite: (path, text) => $.fs.write(path, text),
+    promptTexts: () => prompts_.promptTexts(promptsPorts($)),
+    after: (ms, fn) => $.clock.after(ms, fn),
+    log: line => log($, line),
+    publish: (backfill, truncated) => prompts_.applyBackfill(promptsPorts($), backfill, truncated),
+  }
+}
+function startLoader($: EngineInterface) {
+  void transcript_.startPass(transcriptPorts($)).catch(err => log($, `[bm] loader failed to start: ${String(err)}`))
+}
+
 async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment?: string }): Promise<ResolveOutcome> {
+  // The loader's rows first (in memory, every message the pass has read); the grep below
+  // while the pass is incomplete, or when no program could read the file.
+  const loaded = transcript_.resolveLoaded(want)
+  if (loaded?.kind === 'one') return { kind: 'one', row: loaded.row, via: 'loader', ms: 0 }
+  if (loaded?.kind === 'many') return { kind: 'many', rows: loaded.rows, earliest: loaded.earliest, via: 'loader', ms: 0 }
+  if (loaded?.kind === 'none') return { kind: 'none', via: 'loader', ms: 0, reason: 'no message holds it' }
   const path = await transcriptPath($)
   if (!path) return { kind: 'none', reason: 'transcript not found' }
   const pattern = targetPattern(want)
@@ -956,6 +1008,7 @@ function diagnosticsPorts($: EngineInterface): DiagnosticsPorts {
     dccPatches: () => $.env.get('DCC_PATCHES'),
     echoState: () => log_.echoStateLine(echoPorts($)),
     capabilityPaths: () => pathsLine(chooseAll(capabilitySignals ?? NO_SIGNALS)),
+    loaderStatus: () => transcript_.loaderStatus(),
   }
 }
 
@@ -1027,6 +1080,7 @@ export const register: Register = (on, options) => {
     await marks_.startMarks(marksPorts($))
     // Not awaited: session start should not wait on a third of a second of PowerShell.
     pruneThenBackfill($)
+    startLoader($)
 
     // The tracking mechanism for the borrowed actions: say so whenever the build is
     // not one the chords were verified on.
@@ -1164,6 +1218,7 @@ export const register: Register = (on, options) => {
       const row: Row = sorted.row
       note(`append ${e.door} ${e.uuid} ${row.head.slice(0, 30)}`)
       await update($, rows, list => [...(list as Row[]), row].slice(-500))
+      transcript_.appendLive({ uuid: row.uuid, role: row.door === 'prompt' ? 'user' : 'assistant', text: sorted.promptText ?? row.text ?? '' })
       if (row.door === 'prompt' && sorted.promptText !== undefined) {
         await prompts_.keepPrompt(promptsPorts($), { uuid: row.uuid, head: row.head })
         await prompts_.keepPromptText(promptsPorts($), row.uuid, sorted.promptText)

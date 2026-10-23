@@ -80,6 +80,8 @@ export async function envCommand(ports: DiagnosticsPorts): Promise<void> {
   )
   // dcc-patcher's build signal (core/log/diagnostics.ts, dccLine).
   ports.log(dccLine(await ports.dccPatcher(), await ports.dccPatchH(), await ports.dccPatches(), await ports.echoState()), true)
+  // The loader's pass (slice F): what it has read, and whether it is still running.
+  ports.log(`[bm] ${ports.loaderStatus()}`, true)
 }
 
 // /bm-jump first | last | N | r<N> | uuid (moved from register.tsx's registration, 0.4.94).

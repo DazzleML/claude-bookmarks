@@ -262,7 +262,7 @@ claude-bookmarks/
 
 4. **Jumps ask Claude Code to scroll.** A jump asks Claude Code to reveal the stored message. If the message isn't loaded (it's from before the last compaction and the session was restarted), Claude Code refuses, and the plugin falls back to the clipboard phrase.
 
-5. **The prompt list is back-filled once.** The first time the plugin sees a conversation, it reads the user prompts out of the session's transcript file with one shell command (`Select-String` on Windows, `grep` elsewhere), then keeps the list current as you type.
+5. **The prompt list is back-filled once.** The first time the plugin sees a conversation, it reads the user prompts out of the session's transcript file with one shell command (`Select-String` on Windows, `grep` elsewhere), then keeps the list current as you type. Where `sh` is available it also reads the whole conversation once, in the background and in pieces (`tail | head`), keeps an index of where each message sits so later loads resume instead of re-reading, and from then on answers "which message is this?" from memory; `/bm-env` shows how far that read has got.
 
 ## Contributing
 

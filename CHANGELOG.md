@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.18] - 2026-10-22
+
+### Added
+
+- The whole-conversation loader runs. Where `sh` is available the plugin reads the conversation file once, in the background and in 4 MB pieces, keeps every prompt and reply in memory, and from then on finds the message a bookmark or a link names without searching the file again; an index under `~/claude/bookmarks/transcript/` and the replies' text under `replytext/` let the next load resume where the last one stopped. `/bm-env` reports the read: rows, bytes, pieces, running or done. Without `sh` nothing changes: the per-request search and the one-time back-fill stand, and the capability table says so (`transcript.chunks`).
+
+### Fixed
+
+- Prompts whose pasted text happens to contain the strings the old back-fill filtered on (`"type":"tool_result"`, `"isMeta":true`) now reach the prompts list from the file read: the loader parses every line instead of grepping it (7% of one long conversation's prompts were missing).
+
 ## [0.6.17] - 2026-10-22
 
 ### Changed
@@ -1213,7 +1223,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.17...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.18...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
