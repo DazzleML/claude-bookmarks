@@ -29,6 +29,7 @@ import { short } from './core/kit/message-id'
 import { configDirOf, dataRootOf } from './core/kit/paths'
 import { ECHO_POLICY_KEY, readingStateKey } from './core/store-keys'
 import { diagLine, editLine, focusLine, keyLabel, parseOnOff } from './core/log/diagnostics'
+import { NO_SIGNALS, capabilityOf, choose, chooseAll, pathsLine, type Signals } from './engine/select'
 import { firstColorSplit, tagMarksMarkdown, tagMarksPlain } from './core/marks/highlight'
 import { ScreenModel } from './core/kit/screen-model'
 import { MARK_LETTERS, MarkCache, READING_LETTER, marksShowing, type Mark, type Marks } from './core/marks/marks'
@@ -602,6 +603,7 @@ function navPorts($: EngineInterface): NavigationPorts {
     note,
     drawnHead: uuid => drawn.texts.get(uuid),
     markHead: uuid => markCache.headOf(uuid),
+    pathFor: gap => choose(capabilityOf(gap), capabilitySignals ?? NO_SIGNALS).path,
     leavingFrom: async () => panePosition.view ?? (await viewAnchor($)),
     paneJumped: () => panePosition.jumped(),
     takeRestore: () => panePosition.takeRestore(),
@@ -953,8 +955,14 @@ function diagnosticsPorts($: EngineInterface): DiagnosticsPorts {
     dccPatchH: () => $.env.get('DCC_PATCH_H'),
     dccPatches: () => $.env.get('DCC_PATCHES'),
     echoState: () => log_.echoStateLine(echoPorts($)),
+    capabilityPaths: () => pathsLine(chooseAll(capabilitySignals ?? NO_SIGNALS)),
   }
 }
+
+// The capability signals (engine/select.ts, U59): the build and dcc-patcher's markers, read
+// once at session.start; the chooser is pure over them. The variable names are literal
+// here because the validator wants $.env.get's name at its call site.
+let capabilitySignals: Signals | undefined
 
 export const register: Register = (on, options) => {
   settings.loaded(options)
@@ -1023,6 +1031,14 @@ export const register: Register = (on, options) => {
     // The tracking mechanism for the borrowed actions: say so whenever the build is
     // not one the chords were verified on.
     const v = await $.session.version()
+    capabilitySignals = {
+      version: v.version,
+      ...(v.base ? { base: v.base } : {}),
+      dccPatcher: await $.env.get('DCC_PATCHER'),
+      dccPatchH: await $.env.get('DCC_PATCH_H'),
+      dccPatches: await $.env.get('DCC_PATCHES'),
+    }
+    log($, `[bm] ${pathsLine(chooseAll(capabilitySignals))}`)
     if (!VERIFIED_CLIENTS.includes(v.base ?? v.version)) {
       $.ui.toast(
         `${$.plugin.name} ${await pluginVersion($)}: chords verified on Claude Code ` +

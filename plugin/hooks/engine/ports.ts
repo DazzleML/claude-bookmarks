@@ -42,6 +42,8 @@ export type DiagnosticsPorts = LogPorts & {
   dccPatchH: () => Promise<string | undefined>
   dccPatches: () => Promise<string | undefined>
   echoState: () => Promise<string>
+  /** The chosen capability path per gap, one line (engine/select.ts pathsLine over the signals read at start). */
+  capabilityPaths: () => string
 }
 
 /** What the view tracker (handlers/view-tracker.ts) needs: the lists it orders, the settings it reads, and for the pane's follow, a timer, the pane's state and a scroll in it. */
@@ -74,6 +76,8 @@ export type NavigationPorts = {
   /** The head drawn for a message since load, if it was drawn. */
   drawnHead: (uuid: string) => string | undefined
   markHead: (uuid: string) => string | undefined
+  /** The capability path that runs for a gap on this build (engine/select.ts, U59): a refused jump words itself by it. */
+  pathFor: (gap: 'history.reach') => string
   /** Where the person is leaving from: the view before the pane, else the view now. */
   leavingFrom: () => Promise<{ uuid: string; block: 'start' | 'end' } | undefined>
   /** PanePosition's: a jump drops the way back; the restore reads and clears. */
@@ -332,6 +336,8 @@ export type CommandLinePorts = BandPorts & {
 //                                             0.4.102)
 //   conversationId (the conversation the    register.tsx sameConversation sameConversationSoon (read-only)
 //     plugin works for, Q261014-01)
+//   capabilitySignals (the build and the    register.tsx session.start    pathFor (navPorts), capabilityPaths
+//     patch markers, read once; U59)         (the one writer)              (diagnosticsPorts), read-only
 //   settings (SettingsState: the /config    core/settings-state.ts        every reader through currentSettings(),
 //     values, theme, resolution, palette)     (register's load, the two     style(); /bm-config (resolved)
 //                                             config.set hooks; 0.4.104)

@@ -8,7 +8,6 @@ import { configListedLine, dccLine, idsReport, jumpTarget, notAppliedLine, selec
 import { clock } from '../core/log/log-ring.ts'
 import { short } from '../core/kit/message-id.ts'
 import { debugTextMode } from '../core/settings.ts'
-import { describePathOrder } from '../engine/select.ts'
 import type { DiagnosticsPorts } from '../engine/ports.ts'
 
 // The verified builds live beside the chord actions they vouch for (core/band/keys.ts
@@ -76,7 +75,7 @@ export async function envCommand(ports: DiagnosticsPorts): Promise<void> {
     `[bm] ${ports.pluginName} ${await ports.pluginVersion()} on Claude Code ${v} ` +
       `(chords verified on ${VERIFIED_CLIENTS.join(', ')}); session ${await ports.sessionId()}; ` +
       `captured ${promptCount} prompts, ${list.length - promptCount} replies; ${ports.rendered().size} drawn ids; ` +
-      describePathOrder(),
+      ports.capabilityPaths(),
     true,
   )
   // dcc-patcher's build signal (core/log/diagnostics.ts, dccLine).

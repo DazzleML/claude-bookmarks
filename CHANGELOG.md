@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.16] - 2026-10-22
+
+### Added
+
+- The capability paths have a table and a chooser: for each engine feature the plugin stands in for (a jump past a compaction after a resume, the keyboard's return to the input box, the band losing the keyboard, a plugin-defined shortcut, the hover highlight on a two-line row), the plugin now works out at start which path runs on this build (the proper API, a patched build's route, the stock workaround, or the plain behaviour) and `/bm-env` says so per feature, with the reason.
+
+### Changed
+
+- When a jump is refused because nothing is drawn for the message, the toast's wording follows the path: on stock it still suggests a compaction; on a build with the history patch it says the patch is present and offers the same search route without the guess. The log line names the path.
+
 ## [0.6.15] - 2026-10-22
 
 ### Changed
@@ -1197,7 +1207,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.15...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.16...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

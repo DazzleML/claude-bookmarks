@@ -19,7 +19,10 @@ test('/bm-env names the plugin, the Claude Code build, the session and the capab
   expect(line !== undefined).toBe(true)
   expect(line!.includes('on Claude Code 2.1.296')).toBe(true)
   expect(line!.includes(`session ${SID}`)).toBe(true)
-  expect(line!.includes('capability paths: ideal > patched > workaround')).toBe(true)
+  // U59: the chosen path per gap, not the order; the kit's world is stock, so every gap with
+  // a workaround reports it and the hover gap reports the plain behaviour.
+  expect(line!.includes('capability paths: history.reach=workaround (stock; ')).toBe(true)
+  expect(line!.includes('hover.multiline=current (no path; ')).toBe(true)
   expect(w.logs().some(l => l.startsWith('[bm] dcc-patcher: none seen'))).toBe(true)
 })
 

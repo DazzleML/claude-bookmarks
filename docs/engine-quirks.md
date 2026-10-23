@@ -170,6 +170,13 @@ A click presses the button, but with a draft in the input box the band never get
 
 **Limits of that fallback:** `[` writes only what Claude Code holds, and your terminal's scrollback has a size limit (Windows Terminal keeps 9,001 lines by default).
 
+**Pathways** (the plugin's capability table, `history.reach`; `/bm-env` says which runs):
+
+- *Ideal:* a build that follows `logicalParentUuid` on resume; none yet.
+- *Workaround:* the clipboard phrase and the search route above; what stock Claude Code gets.
+- *Patched:* a build whose history patch makes pre-compaction rows real rows (it sets `DCC_PATCH_H`); the jump lands, and a scroll still refused there is worded as such, not as a compaction.
+- *Current:* the workaround.
+
 **Proper fix:** follow `logicalParentUuid` on resume, or load older history in pages as you scroll back. Opening the full session file outside Claude Code is planned (issue #16).
 
 ### A jump shows a tall message from its top — Limit
@@ -229,6 +236,8 @@ A message redrawn off screen for the first time since load (a bookmark link mint
 ### Hover can reveal, but can't animate or notify — Limit
 
 Hover styles and reveals are applied by Claude Code itself: no plugin code runs, and a hover effect "settles, never loops". So a scrolling marquee on hover isn't possible, while a hover card showing the full text is.
+
+**A multi-line button highlights one line on hover** (seen 2026-10-22, the prompts list at two lines per row): the hover highlight covers the terminal line under the pointer, not the button's whole label, and nothing in the plugin can widen it. In the capability table this is `hover.multiline`, with no path: *Ideal* is the engine highlighting every line of the button; *Current* is one line.
 
 ## Running and loading
 
