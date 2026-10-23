@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.17] - 2026-10-22
+
+### Changed
+
+- Internal, no visible change yet: the core of the whole-conversation loader. A pure reader is fed the transcript in chunks of any size and keeps one row for every prompt and reply with its line and byte range, carrying a line split across chunks; a pure index remembers a pass (the rows without their text, the byte watermark, the conversation) so the next load resumes instead of re-reading. Nothing is wired to it yet; the wiring and the public text follow. Measured on the way: the old back-fill's text filter drops queued prompts whose pasted text quotes a marker string (7% of one long conversation's prompts); the loader keeps them.
+
 ## [0.6.16] - 2026-10-22
 
 ### Added
@@ -1207,7 +1213,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.16...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.17...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
