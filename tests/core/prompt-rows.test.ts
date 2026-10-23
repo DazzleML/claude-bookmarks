@@ -80,6 +80,43 @@ test('engine rows and outputs are not footnotes; a prompt is not a footnote', ()
   assert.equal(footnoteOf({ type: 'assistant', message: { content: '<command-name>/x</command-name>' } }), undefined)
 })
 
+// 2026-10-23: the transcript held 56 footnotes the reader found, and two shapes it missed.
+// Built-in commands (/goal clear, /rename, /branch, /fork, /cd, /feedback) are `system` rows
+// with subtype `local_command`; and setting a goal leaves no command row at all, only the
+// engine's queued "Goal set: <condition>" from `auto-continuation` (8 in this transcript).
+const systemCommand = (content: string, extra: Record<string, unknown> = {}) => ({ type: 'system', subtype: 'local_command', uuid: 's1', content, ...extra })
+const goalQueued = (prompt: string, over: Record<string, unknown> = {}) => ({
+  type: 'attachment',
+  uuid: 'g1',
+  attachment: { type: 'queued_command', prompt, commandMode: 'prompt', origin: { kind: 'auto-continuation' }, ...over },
+})
+
+test('a built-in command written as a system row is a footnote; its output row is not', () => {
+  const cmd = '<command-name>/goal</command-name>\n            <command-message>goal</command-message>\n            <command-args>clear</command-args>'
+  assert.deepEqual(footnoteOf(systemCommand(cmd)), { kind: 'command', label: '/goal clear' })
+  assert.deepEqual(footnoteOf(systemCommand('<command-name>/rename</command-name> <command-message>rename</command-message> <command-args>my session</command-args>')), { kind: 'command', label: '/rename my session' })
+  assert.equal(footnoteOf(systemCommand('<local-command-stdout>Goal cleared: x</local-command-stdout>')), undefined, 'the output folds into its command')
+  assert.equal(footnoteOf({ ...systemCommand(cmd), subtype: 'informational' }), undefined, 'only local_command rows')
+  assert.equal(footnoteOf(systemCommand(cmd, { isMeta: true })), undefined)
+  assert.equal(footnoteOf(systemCommand(cmd, { isSidechain: true })), undefined)
+})
+
+test('a goal the person set is a /goal footnote, from the engine\'s queued "Goal set:" message', () => {
+  assert.deepEqual(footnoteOf(goalQueued('Goal set: Make it so.\n\nRecord: x.md')), { kind: 'command', label: '/goal Make it so. Record: x.md' })
+  assert.equal(footnoteOf(goalQueued('another continuation the engine queued')), undefined)
+  assert.equal(footnoteOf(goalQueued('Goal set: typed by hand', { humanTurn: true, origin: { kind: 'engine' } })), undefined, 'a queued message the person typed is a prompt')
+  assert.equal(footnoteOf({ ...goalQueued('Goal set: x'), isSidechain: true }), undefined)
+  assert.equal(footnoteOf(goalQueued(`Goal set: ${'brief '.repeat(100)}`))!.label.length, FOOTNOTE_LABEL_MAX, 'a long brief is cut like any label')
+})
+
+test('classifyAppend: a goal set arrives queued from auto-continuation: a footnote, never a row', () => {
+  const wrapped = '<system-reminder>\nThe user sent a new message while you were working:\nGoal set: Build it all.\n\nThis is how Claude Code surfaces messages the user sends mid-turn.\n</system-reminder>'
+  const r = classifyAppend(appended({ door: 'attachment', origin: { kind: 'auto-continuation' }, message: { type: 'attachment', name: 'queued_command', content: [{ type: 'text', text: wrapped }] } }))
+  assert.deepEqual(r, { footnote: { kind: 'command', label: '/goal Build it all.' } })
+  const other = classifyAppend(appended({ door: 'attachment', origin: { kind: 'auto-continuation' }, message: { type: 'attachment', name: 'queued_command', content: [{ type: 'text', text: 'keep going' }] } }))
+  assert.deepEqual(other, {}, 'any other continuation is still nothing')
+})
+
 test('footnotes number N.k under the prompt before them and never shift prompt numbers', () => {
   const kinds = ['footnote', 'prompt', 'footnote', 'footnote', 'prompt', 'prompt', 'footnote'] as const
   assert.deepEqual(numberRows(kinds), [

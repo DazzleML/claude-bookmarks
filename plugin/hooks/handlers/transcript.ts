@@ -54,7 +54,10 @@ export function backfillOf(state: LoaderState): Backfill {
     return { uuid: u, head: headOf(row.text) }
   })
   const texts: [string, string][] = state.prompts.map(u => [u, state.rows[state.byUuid.get(u)!]!.text])
-  return { found, texts, footnotes: state.footnotes }
+  // Every row read that is not a prompt, so the merge can retire a stored row the live
+  // capture once took for one (2026-10-23: the "Goal set" queued messages of 2026-10-12).
+  const notPrompts = new Set(state.rows.filter(r => r.kind !== 'prompt').map(r => r.uuid))
+  return { found, texts, footnotes: state.footnotes, notPrompts }
 }
 
 async function readPieces(ports: TranscriptPorts, base: string): Promise<{ header: string | undefined; pieces: string[] }> {

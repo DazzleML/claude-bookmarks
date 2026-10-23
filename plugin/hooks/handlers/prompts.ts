@@ -175,11 +175,16 @@ export async function backfillPrompts(ports: PromptsPorts) {
  * prompts list has one writer whichever read it was. A cut-off read is left unmarked, so
  * a later session start tries again.
  */
-export async function applyBackfill(ports: PromptsPorts, { found, texts, footnotes }: Backfill, truncated: boolean): Promise<PromptRef[]> {
+export async function applyBackfill(ports: PromptsPorts, { found, texts, footnotes, notPrompts }: Backfill, truncated: boolean): Promise<PromptRef[]> {
   const cache = await promptTexts(ports)
   for (const [uuid, text] of texts) cache.set(uuid, text)
   await ports.storeSet(await footnotesKey(ports), footnotes.slice(-PROMPTS_KEPT))
-  const merged = mergeBackfill(found, await keptPrompts(ports))
+  const kept = await keptPrompts(ports)
+  // A stored row the reader read and judged not a prompt leaves the list; say which, once,
+  // so a wrong judgment can be seen in the log rather than as a missing prompt.
+  const retired = notPrompts ? kept.filter(p => notPrompts.has(p.uuid)) : []
+  if (retired.length) ports.log(`[bm] prompts list: ${retired.length} stored row(s) the transcript holds as not prompts retired: ${retired.map(p => `${p.uuid.slice(0, 8)} "${p.head.slice(0, 40)}"`).join('; ')}`)
+  const merged = mergeBackfill(found, kept, PROMPTS_KEPT, notPrompts)
   await ports.storeSet(await promptsKey(ports), merged)
   await savePromptTexts(ports)
   if (!truncated) await ports.storeSet(backfilledKey(BACKFILL_VERSION, await ports.sessionId()), true)

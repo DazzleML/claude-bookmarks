@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.22] - 2026-10-23
+
+### Fixed
+
+- The prompts list no longer shows, as its newest rows, old messages the person never typed. Three "Goal set" messages Claude Code queued on 2026-10-12 had been captured live as prompts back then; the whole-conversation read holds them as non-prompt rows, and since 0.6.18 every read moved them to the end of the list, where they read as tonight's prompts and a click on one scrolled the view back to October. A stored row the read has seen and judged not a prompt now leaves the list, and the debug log says which; a stored row the read has never seen is kept, so nothing the file did not judge is dropped.
+- Footnotes are kept across sessions again. Since 0.6.18 the whole-conversation read resumed from an index that held the prompts but not the footnotes, and each publish replaced the stored footnotes with only those in the newly read part of the file, so the list thinned out at every start (one conversation: 56 footnotes in the file, 1 in the list). The index keeps them now; every existing index is rebuilt once, a background read of the whole conversation, after which they are back.
+- A goal you set with `/goal` shows as a footnote under the prompt before it. Claude Code records setting a goal only as a queued "Goal set: ..." message, which the list read as nothing (or, captured live, as a prompt); it is now the `/goal <condition>` footnote. Commands Claude Code runs itself and writes as system rows (`/goal clear`, `/rename`, `/branch`, `/fork`, `/cd`, `/feedback`) are footnotes too, from the next session start.
+- The CI workflow was invalid since 0.6.8 and no job ran on a push: the plugin job set its config directory from the `runner` context in a job-level `env`, which GitHub does not allow ("Unrecognized named-value: 'runner'"). The directory is now set from a step. The plugin job (validate and the kit suite on the runner) runs for the first time on the next push.
+
 ## [0.6.21] - 2026-10-22
 
 ### Added
@@ -1245,7 +1254,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.21...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.22...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

@@ -28,9 +28,34 @@ test('an index round-trips: the rows without their text, the prompts in order, t
   const back = parseIndex(pieces[0], pieces.slice(1), SID, file.length)
   assert.equal(back.kind, 'ok')
   if (back.kind !== 'ok') return
-  assert.deepEqual(back.index.header, { version: INDEX_VERSION, sessionId: SID, bytesRead: s.bytes, lines: 3, size: file.length, prompts: [U(1), U(3)], pieces: 1 })
+  assert.deepEqual(back.index.header, { version: INDEX_VERSION, sessionId: SID, bytesRead: s.bytes, lines: 3, size: file.length, prompts: [U(1), U(3)], footnotes: [], pieces: 1 })
   assert.deepEqual(back.index.rows.map(r => [r.uuid, r.line, r.kind, r.byteStart, r.byteEnd, r.timestamp]), s.rows.map(r => [r.uuid, r.line, r.kind, r.byteStart, r.byteEnd, r.timestamp]))
   assert.equal('text' in back.index.rows[0]!, false)
+})
+
+// 2026-10-23: the index kept rows and prompts but not footnotes, so a resumed pass knew only
+// the footnotes in the bytes it had just read, and the publish replaced the stored list with
+// that: 56 footnotes in the transcript, 1 in the store. The index carries them now.
+test('footnotes survive a resume: the index keeps them, and the new tail adds after them', () => {
+  const withFn = file + JSON.stringify({ type: 'user', uuid: U(5), message: { role: 'user', content: '<command-name>/model</command-name><command-args></command-args>' } }) + '\n'
+  const s = newLoader()
+  feed(s, withFn, true)
+  assert.equal(s.footnotes.length, 1)
+  const pieces = serializeIndex(indexOf(s, SID, withFn.length))
+  const back = parseIndex(pieces[0], pieces.slice(1), SID, withFn.length)
+  assert.equal(back.kind, 'ok')
+  if (back.kind !== 'ok') return
+  const seeded = seedLoader(back.index)
+  assert.deepEqual(seeded.footnotes, s.footnotes)
+  feed(seeded, JSON.stringify({ type: 'user', uuid: U(6), message: { role: 'user', content: '<bash-input>ls</bash-input>' } }) + '\n', true)
+  assert.deepEqual(seeded.footnotes.map(f => f.label), ['/model', '!ls'])
+})
+
+test('an index from before footnotes were kept rebuilds', () => {
+  const pieces = serializeIndex(indexOf(loaded(), SID, file.length))
+  const old = JSON.stringify({ ...JSON.parse(pieces[0]!), version: 1, footnotes: undefined })
+  const back = parseIndex(old, pieces.slice(1), SID, file.length)
+  assert.equal(back.kind, 'rebuild')
 })
 
 test('seeding a loader from an index resumes at the watermark with the texts the pieces supply; the file\'s new tail then adds rows', () => {

@@ -197,7 +197,7 @@ A pinned prompt shows a gold star inside its number, `245★) `, both in a **★
 
 ### Footnotes
 
-Some of what you type is not a prompt: a slash command (`/compact`, `/bm-pin 21`), a `!` shell command, an interruption (`Esc` while Claude is working). These are listed as **footnotes** under the prompt they followed, numbered `N.k`, so prompt numbers stay as they were:
+Some of what you type is not a prompt: a slash command (`/compact`, `/bm-pin 21`, `/goal ...`), a `!` shell command, an interruption (`Esc` while Claude is working). These are listed as **footnotes** under the prompt they followed, numbered `N.k`, so prompt numbers stay as they were:
 
 ```
   13) Then a recap and a what-next
@@ -213,7 +213,7 @@ Unfolded, the ellipsis becomes the footnotes themselves, `12.1 /compact`, `12.2 
 | Fold them again | Click the `▴ fold` row under them, or type `12.` again |
 | Jump to footnote 12.1 | Type `12.1` and `Enter` in the pane's `#` field, or on the band type `1` `2`, click the band's `.` button, `1`, `Enter` (a band key is one letter or digit, so `.` is a button there) |
 
-The "Footnotes in the prompts list" setting chooses `folded` (the default), `shown` (always unfolded) or `hidden`. With `hidden` the rows are gone but the numbers still work: `12.1` jumps to that footnote, and `12.` says the footnotes are hidden. Footnotes are read from the transcript once, with the prompts, and added live after that.
+The "Footnotes in the prompts list" setting chooses `folded` (the default), `shown` (always unfolded) or `hidden`. With `hidden` the rows are gone but the numbers still work: `12.1` jumps to that footnote, and `12.` says the footnotes are hidden. Footnotes are read from the transcript with the prompts and added live after that. A few commands Claude Code runs itself and records apart from your messages (`/goal clear`, `/rename`, `/branch`, `/cd`) are not seen live and appear from the next session start.
 
 A row shows as much of its prompt as fits the pane's width, over as many lines as the "Lines per row in the lists" setting allows (the default is 2; 1 to 5). The text is cut with an ellipsis at the end of the last line, and a second line sits under the text, not under the number, so the numbers stay a column. Widen the pane for more of each prompt per line; set 1 for the densest list. The jump list's rows follow the same setting.
 

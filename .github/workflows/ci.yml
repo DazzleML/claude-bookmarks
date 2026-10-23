@@ -60,8 +60,6 @@ jobs:
     env:
       # The client the plugin is verified against; bump on purpose, never float.
       CLAUDE_CODE_VERSION: '2.1.308'
-      # A config directory of the run's own, so nothing depends on the runner's home.
-      CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude-config
 
     steps:
     - uses: actions/checkout@v7
@@ -70,6 +68,15 @@ jobs:
       uses: actions/setup-node@v5
       with:
         node-version: '24'
+
+    # A config directory of the run's own, so nothing depends on the runner's home.
+    # Set from a step: a job-level `env` cannot read the `runner` context (GitHub
+    # rejected the file with "Unrecognized named-value: 'runner'", runs 39842630023
+    # and 39887529592, so no job ran on either push since this job was added).
+    - name: A config directory for this run
+      run: |
+        mkdir -p "$RUNNER_TEMP/claude-config"
+        echo "CLAUDE_CONFIG_DIR=$RUNNER_TEMP/claude-config" >> "$GITHUB_ENV"
 
     - name: Install the Claude Code CLI
       run: npm install -g @anthropic-ai/claude-code@${{ env.CLAUDE_CODE_VERSION }}

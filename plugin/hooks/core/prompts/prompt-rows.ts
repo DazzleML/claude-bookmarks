@@ -87,11 +87,45 @@ const tagged = (text: string, tag: string) => new RegExp(`<${tag}>([\\s\\S]*?)</
 
 // A transcript row's footnote, or undefined when the row is not one.
 export function footnoteOf(o: any): Footnote | undefined {
-  const fn = footnoteWhole(o)
-  return fn && fn.label.length > FOOTNOTE_LABEL_MAX ? { ...fn, label: `${fn.label.slice(0, FOOTNOTE_LABEL_MAX - 1)}…` } : fn
+  return capped(footnoteWhole(o))
+}
+
+const capped = (fn: Footnote | undefined): Footnote | undefined =>
+  fn && fn.label.length > FOOTNOTE_LABEL_MAX ? { ...fn, label: `${fn.label.slice(0, FOOTNOTE_LABEL_MAX - 1)}…` } : fn
+
+// A slash command's footnote from the tags the engine writes it in, or undefined.
+function commandFootnote(t: string): Footnote | undefined {
+  if (!(t.startsWith('<command-name>') || t.startsWith('<command-message>'))) return undefined
+  const name = tagged(t, 'command-name') ?? tagged(t, 'command-message') ?? ''
+  const args = tagged(t, 'command-args') ?? ''
+  return { kind: 'command', label: `${name}${args ? ` ${args}` : ''}`.trim() }
+}
+
+// Setting a goal leaves no command row: the engine queues "Goal set: <condition>" into the
+// conversation from `auto-continuation` (8 in one transcript, 2026-10-11 to 2026-10-20). It is
+// the person's /goal, so it is a footnote with the condition as its label, never a prompt
+// (2026-10-23: three of them stood in the list as prompts #725-#727). The prefix is the
+// engine's wording and may change; when it does, a goal set is simply not footnoted.
+const GOAL_SET = /^\s*Goal set:\s*/
+export function goalSetFootnote(text: string): Footnote | undefined {
+  const m = GOAL_SET.exec(text)
+  return m ? capped({ kind: 'command', label: `/goal ${text.slice(m[0].length).replace(/\s+/g, ' ').trim()}`.trim() }) : undefined
 }
 
 function footnoteWhole(o: any): Footnote | undefined {
+  // Built-in commands the engine runs itself (/goal clear, /rename, /branch, /fork, /cd,
+  // /feedback) are written as `system` rows with subtype `local_command`, in the same tags a
+  // slash command uses; their output is a second such row (`<local-command-stdout>`), which
+  // folds into the command as the user-row form's does (7 in one transcript, 2026-10-23).
+  if (o?.type === 'system') {
+    if (o.subtype !== 'local_command' || o.isMeta || o.isSidechain) return undefined
+    return commandFootnote(String(o.content ?? '').trimStart())
+  }
+  if (o?.type === 'attachment') {
+    const a = o.attachment
+    if (o.isSidechain || a?.type !== 'queued_command' || a.humanTurn || a.origin?.kind !== 'auto-continuation' || typeof a.prompt !== 'string') return undefined
+    return goalSetFootnote(a.prompt)
+  }
   if (o?.type !== 'user' || o.isMeta || o.isSidechain || o.isCompactSummary || scheduled(o)) return undefined
   const content = o.message?.content
   let text: string | undefined
@@ -102,11 +136,8 @@ function footnoteWhole(o: any): Footnote | undefined {
   }
   if (!text) return undefined
   const t = text.trimStart()
-  if (t.startsWith('<command-name>') || t.startsWith('<command-message>')) {
-    const name = tagged(t, 'command-name') ?? tagged(t, 'command-message') ?? ''
-    const args = tagged(t, 'command-args') ?? ''
-    return { kind: 'command', label: `${name}${args ? ` ${args}` : ''}`.trim() }
-  }
+  const cmd = commandFootnote(t)
+  if (cmd) return cmd
   if (t.startsWith('<bash-input>')) return { kind: 'shell', label: `!${tagged(t, 'bash-input') ?? ''}` }
   if (t.startsWith('[Request interrupted by user')) return { kind: 'interrupted', label: t.replace(/^\[|\]$/g, '').trim() }
   return undefined
@@ -141,6 +172,14 @@ export function classifyAppend(e: AppendEvent): { row?: { uuid: string; door: 'p
   // notice queued into a running turn is stamped `engine`, as the person's own queued
   // message is; its text tells them apart (NOT_A_PROMPT above).
   const automated = AUTOMATED_ORIGINS.has(e.origin.kind)
+  // A goal the person set arrives the same way, queued from `auto-continuation`: it is their
+  // /goal, a footnote and never a prompt (goalSetFootnote above). Any other continuation is
+  // still nothing.
+  if (queued && e.origin.kind === 'auto-continuation') {
+    const goal = goalSetFootnote(unwrapQueued(e.message.content.map(block => (block.type === 'text' ? block.text ?? '' : '')).join(' ')))
+    if (goal) out.footnote = goal
+    return out
+  }
   if (!automated && (queued || (!e.agentId && isWanted && !e.message.isMeta))) {
     const raw = e.message.content.map(block => (block.type === 'text' ? block.text ?? '' : '')).join(' ')
     const text = queued ? unwrapQueued(raw) : raw
