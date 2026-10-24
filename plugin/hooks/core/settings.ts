@@ -27,10 +27,29 @@ export type Field = EnumField | BooleanField | NumberField | TextField
 
 // U70 (djdarcy, 2026-10-22): "letting users choose how many lines per entry is best. I suspect
 // a good default is "2 lines"". The default is his guess, dogfooded; the cap is the loop's.
+// A fold row's leading marker (djdarcy, 2026-10-24: "some sort of leading indicator to show
+// something is a fold group"): closed in the manifest's title, and the config.describe hook
+// draws it open while the fold is shown (core/settings-fold.ts foldLabel). Not `>`, which
+// reads as a second copy of the menu's own `❯` cursor.
+export const FOLD_CLOSED = '▸'
+export const FOLD_OPEN = '▾'
+
 export const ROW_LINES_DEFAULT = 2
 export const ROW_LINES_MAX = 5
 
 export const FIELDS = {
+  // The fold over every other row (core/settings-fold.ts), first so it heads the plugin's
+  // block in /config. djdarcy, 2026-10-24: "every option should be hidden by default".
+  // The folds are true/false rows because /config flips those in place with Enter; a
+  // plugin's choice row always opens a picker (2.1.310 sets pickToCommit on every one), so
+  // the ‹ › cycler the menu's own rows use is not open to a plugin.
+  settingsShown: {
+    kind: 'boolean',
+    default: false,
+    title: `${FOLD_CLOSED} Bookmarks`,
+    description:
+      "true: the plugin's settings appear below (the prompts list, the band, the lists' rows, debugging, colours, and the keys behind their own row); false: folded away, and everything you set still applies",
+  },
   listOpensAt: {
     kind: 'enum',
     values: ['nearest', 'newest'],
@@ -75,31 +94,6 @@ export const FIELDS = {
     default: 'input',
     title: 'Keyboard after an action',
     description: 'input: back to the input box once Claude Code allows a plugin to do it; band: stay in the band',
-  },
-  debugDefault: {
-    kind: 'enum',
-    values: ['off', 'on'],
-    default: 'off',
-    title: 'Debug echo by default',
-    description: "Whether the plugin's log lines are echoed into a conversation that has not chosen; /bm-debug decides per conversation",
-  },
-  // djdarcy, 2026-10-12: "In the dev build it should always be on, and in the main build
-  // it should always be off by default unless the person turns the feature on" and
-  // "some instances we might want the full output and other times just enough to identify
-  // the location". `auto` is that rule: debugTextMode() reads it per build.
-  debugText: {
-    kind: 'enum',
-    values: ['auto', 'off', 'with-debug', 'always'],
-    default: 'auto',
-    title: 'Conversation text in the debug log',
-    description: "auto: off in an installed plugin, always in one loaded from a folder; off: log lines name places by id only; with-debug: they also quote the conversation while this conversation's debugging is on; always: they always quote it",
-  },
-  debugTextLength: {
-    kind: 'enum',
-    values: ['reference', 'full'],
-    default: 'reference',
-    title: 'How much text a debug line quotes',
-    description: 'reference: a short excerpt, enough to find the place; full: the whole text',
   },
   // #27: a role's colour, background, dim or bold, as JSON; core/palette.ts validates it.
   palette: {
@@ -173,11 +167,10 @@ export const FIELDS = {
   // table's own keys; a value is keys separated by spaces, `Space` for the space key, and
   // `hidden` last to take the button off the bar.
   keysShown: {
-    kind: 'enum',
-    values: ['hidden', 'shown'],
-    default: 'hidden',
-    title: 'Keys: show the key rows',
-    description: 'shown: the rows below set the band\'s keys, one per command, and the list keys; hidden: they are folded away (your keys stay as set)',
+    kind: 'boolean',
+    default: false,
+    title: `${FOLD_CLOSED} Keys: show the key rows`,
+    description: 'true: the rows below set the band\'s keys, one per command, and the list keys; false: they are folded away (your keys stay as set)',
   },
   keyMark: keyRow('mark', 'm'),
   keyJump: keyRow('jump', "' j"),
@@ -202,6 +195,40 @@ export const FIELDS = {
     default: '',
     title: 'Keys: the leader',
     description: 'The leader is a Claude Code keybinding (abovePrompt:focus in ~/.claude/keybindings.json), not set here',
+  },
+  // The debugging rows behind their own fold (djdarcy, 2026-10-24: a fold "for our debug
+  // options so they can be grouped together better", each leading with "Debug:"), last in
+  // the block so they read as one group.
+  debugShown: {
+    kind: 'boolean',
+    default: false,
+    title: `${FOLD_CLOSED} Debug: show the debug rows`,
+    description: 'true: the rows below set what the debug log echoes and quotes; false: they are folded away (what you set stays)',
+  },
+  debugDefault: {
+    kind: 'enum',
+    values: ['off', 'on'],
+    default: 'off',
+    title: 'Debug: echo by default',
+    description: "Whether the plugin's log lines are echoed into a conversation that has not chosen; /bm-debug decides per conversation",
+  },
+  // djdarcy, 2026-10-12: "In the dev build it should always be on, and in the main build
+  // it should always be off by default unless the person turns the feature on" and
+  // "some instances we might want the full output and other times just enough to identify
+  // the location". `auto` is that rule: debugTextMode() reads it per build.
+  debugText: {
+    kind: 'enum',
+    values: ['auto', 'off', 'with-debug', 'always'],
+    default: 'auto',
+    title: 'Debug: conversation text in the log',
+    description: "auto: off in an installed plugin, always in one loaded from a folder; off: log lines name places by id only; with-debug: they also quote the conversation while this conversation's debugging is on; always: they always quote it",
+  },
+  debugTextLength: {
+    kind: 'enum',
+    values: ['reference', 'full'],
+    default: 'reference',
+    title: 'Debug: how much text a line quotes',
+    description: 'reference: a short excerpt, enough to find the place; full: the whole text',
   },
 } as const satisfies Record<string, Field>
 

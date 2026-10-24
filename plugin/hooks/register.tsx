@@ -21,7 +21,8 @@ import { headOf, resolveRows, rowsFromGrep, targetPattern, type Resolution } fro
 import { excerpt, type Channel } from './core/log/debug'
 import { CHORD_ACTIONS, VERIFIED_CLIENTS, bandFocusRoute, barFor, helpFor, listHint, listKeysFor, route, type Operation, type Pane } from './core/band/keys'
 import type { Cause } from './core/band/after-action'
-import { KEYS_SHOWN_FIELD, LEADER_FIELD, isKeyRow, leaderChord, rowDenial, type Problem } from './core/band/keymap'
+import { LEADER_FIELD, isKeyRow, leaderChord, rowDenial, type Problem } from './core/band/keymap'
+import { FOLD_FIELDS, foldLabel, rowHidden } from './core/settings-fold'
 import { installedFromCache, type Settings } from './core/settings'
 import { SettingsState } from './core/settings-state'
 import type { Role, Style } from './core/palette'
@@ -1065,7 +1066,10 @@ export const register: Register = (on, options) => {
       // The fold: the key rows show or hide in the open menu. A change reloads the plugin on
       // 2.1.308, and the reload asks every row again (the fold look, 2026-10-24); the
       // invalidate keeps the fold working on a build that does not reload.
-      if (field === KEYS_SHOWN_FIELD) await $.ui.invalidate('config.describe')
+      if (FOLD_FIELDS.has(field)) {
+        log($, `[bm] fold: ${field} set to ${JSON.stringify(result.value)}; asking /config to redraw its rows`)
+        await $.ui.invalidate('config.describe')
+      }
       if (isKeyRow(field)) {
         const problems = settings.keymap().problems
         if (problems.length) log($, keymapProblemsLine(problems))
@@ -1074,14 +1078,17 @@ export const register: Register = (on, options) => {
     }
     return result
   })
-  // The key rows behind their fold (the fold look of 2026-10-24: rows behind a fold), and
-  // the Leader row's help text naming the chord the person bound in keybindings.json.
-  on('config.describe', { key: /^bookmarks\.key/ }, async ($, e, next) => {
+  // Every row of the plugin behind the Bookmarks fold, the key rows behind their own fold
+  // inside it (core/settings-fold.ts rowHidden; the fold look of 2026-10-24), and the Leader
+  // row's help text naming the chord the person bound in keybindings.json.
+  on('config.describe', { key: /^bookmarks\./ }, async ($, e, next) => {
     const r = await next(e)
     const field = e.key.slice('bookmarks.'.length)
-    if (!isKeyRow(field)) return r
-    const isHidden = currentSettings().keysShown === 'hidden'
-    if (field !== LEADER_FIELD) return { ...r, isHidden }
+    const values = currentSettings() as unknown as Record<string, unknown>
+    const isHidden = rowHidden(field, values)
+    // A fold row leads with its state's marker (▸ closed, ▾ open).
+    const label = foldLabel(field, r.label, values)
+    if (field !== LEADER_FIELD) return { ...r, isHidden, label }
     const dir = await configDir($)
     const path = dir ? `${dir}/keybindings.json` : undefined
     const text = path && (await $.fs.exists(path)) ? await $.fs.read(path).catch(() => undefined) : undefined
@@ -1089,7 +1096,7 @@ export const register: Register = (on, options) => {
     const description = chord
       ? `Bound to ${chord} (abovePrompt:focus in ~/.claude/keybindings.json); change it there, not here`
       : 'Not bound yet: bind a chord to abovePrompt:focus in ~/.claude/keybindings.json (docs/keys.md has the recipe)'
-    return { ...r, isHidden, description }
+    return { ...r, isHidden, label, description }
   })
   // The theme decides the mark band's light or dark value (#27).
   on('config.set', { key: 'theme' }, async ($, e, next) => {

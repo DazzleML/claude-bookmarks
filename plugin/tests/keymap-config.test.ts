@@ -74,16 +74,36 @@ test('the Leader row is refused with where the leader is bound', async ($, on) =
   expect(r.deny?.includes('abovePrompt:focus')).toBe(true)
 })
 
-test('folded: the key rows are hidden, the fold row is not', async ($, on) => {
+test('by default every row is folded behind Bookmarks, and Bookmarks itself shows', async ($, on) => {
   world(on, { store: STORE, session: SID })
   answerBase(on)
+  expect((await describe($, 'settingsShown')).isHidden).toBe(false)
+  expect((await describe($, 'rowLines')).isHidden).toBe(true)
+  expect((await describe($, 'keysShown')).isHidden).toBe(true)
   expect((await describe($, 'keyMark')).isHidden).toBe(true)
-  expect((await describe($, 'keyList')).isHidden).toBe(true)
-  expect((await describe($, 'keysShown')).isHidden).toBe(false)
-  expect((await describe($, 'rowLines')).isHidden).toBe(false)
 })
 
-test('unfolded: the key rows show, and the Leader row names the chord in keybindings.json', { options: { keysShown: 'shown' } }, async ($, on) => {
+test('Bookmarks open, keys folded: the settings show, the key rows do not', { options: { settingsShown: true } }, async ($, on) => {
+  world(on, { store: STORE, session: SID })
+  answerBase(on)
+  expect((await describe($, 'rowLines')).isHidden).toBe(false)
+  expect((await describe($, 'keysShown')).isHidden).toBe(false)
+  expect((await describe($, 'keyMark')).isHidden).toBe(true)
+  expect((await describe($, 'keyList')).isHidden).toBe(true)
+})
+
+test('an open fold leads with ▾, a closed one with ▸, and the debug rows wait behind theirs', { options: { settingsShown: true } }, async ($, on) => {
+  world(on, { store: STORE, session: SID })
+  answerBase(on)
+  const d = $ as unknown as { config: { describe: (i: object) => Promise<{ isHidden: boolean; label: string }> } }
+  const row = (field: string) => d.config.describe({ key: `bookmarks.${field}`, label: field, description: 'd', isHidden: false, provider: PROVIDER })
+  expect((await row('settingsShown')).label.startsWith('▾')).toBe(true)
+  expect((await row('debugShown')).label.startsWith('▸')).toBe(true)
+  expect((await row('debugText')).isHidden).toBe(true)
+  expect((await row('rowLines')).label).toBe('rowLines')
+})
+
+test('unfolded: the key rows show, and the Leader row names the chord in keybindings.json', { options: { settingsShown: true, keysShown: true } }, async ($, on) => {
   const bindings = JSON.stringify({ bindings: [{ context: 'Chat', bindings: { 'ctrl+]': 'abovePrompt:focus' } }] })
   world(on, { store: STORE, session: SID, files: { 'C:/test-home/.claude/keybindings.json': bindings } })
   answerBase(on)

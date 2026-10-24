@@ -111,7 +111,7 @@ Claude has one tool, `bookmark`, with the actions `add` (default), `relabel`, `r
 
 ## Choosing your own keys
 
-Open `/config`, type `bookmarks` in its search box, and set **Keys: show the key rows** to `shown`. One row appears for each command in section 2, one for the list keys in section 3, and a row for the leader. Set it back to `hidden` to fold them away again; the keys you chose stay as set.
+Open `/config`, type `bookmarks` in its search box, press `Enter` on **Bookmarks** so it reads `true` (every setting of the plugin is folded behind it), then on **Keys: show the key rows**. One row appears for each command in section 2, one for the list keys in section 3, and a row for the leader. Press `Enter` on the fold again to put them away; the keys you chose stay as set.
 
 **A command's row** takes its keys separated by spaces, in the order the hint and the help should name them:
 

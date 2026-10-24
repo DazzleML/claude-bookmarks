@@ -1,7 +1,7 @@
 {
   "name": "bookmarks",
   "displayName": "Bookmarks",
-  "version": "0.6.24",
+  "version": "0.6.25",
   "description": "Bookmarks and vim-style marks inside Claude Code conversations: mark a line, jump back, keep a reading position, browse your prompts, and let Claude cite earlier places as clickable links.",
   "author": {
     "name": "DazzleML",
@@ -27,6 +27,12 @@
     "claude-code"
   ],
   "userConfig": {
+    "settingsShown": {
+      "type": "boolean",
+      "title": "▸ Bookmarks",
+      "description": "true: the plugin's settings appear below (the prompts list, the band, the lists' rows, debugging, colours, and the keys behind their own row); false: folded away, and everything you set still applies",
+      "default": false
+    },
     "listOpensAt": {
       "type": "string",
       "title": "Prompts list opens at",
@@ -84,38 +90,6 @@
       "options": [
         "input",
         "band"
-      ]
-    },
-    "debugDefault": {
-      "type": "string",
-      "title": "Debug echo by default",
-      "description": "Whether the plugin's log lines are echoed into a conversation that has not chosen; /bm-debug decides per conversation",
-      "default": "off",
-      "options": [
-        "off",
-        "on"
-      ]
-    },
-    "debugText": {
-      "type": "string",
-      "title": "Conversation text in the debug log",
-      "description": "auto: off in an installed plugin, always in one loaded from a folder; off: log lines name places by id only; with-debug: they also quote the conversation while this conversation's debugging is on; always: they always quote it",
-      "default": "auto",
-      "options": [
-        "auto",
-        "off",
-        "with-debug",
-        "always"
-      ]
-    },
-    "debugTextLength": {
-      "type": "string",
-      "title": "How much text a debug line quotes",
-      "description": "reference: a short excerpt, enough to find the place; full: the whole text",
-      "default": "reference",
-      "options": [
-        "reference",
-        "full"
       ]
     },
     "palette": {
@@ -182,14 +156,10 @@
       "max": 5
     },
     "keysShown": {
-      "type": "string",
-      "title": "Keys: show the key rows",
-      "description": "shown: the rows below set the band's keys, one per command, and the list keys; hidden: they are folded away (your keys stay as set)",
-      "default": "hidden",
-      "options": [
-        "hidden",
-        "shown"
-      ]
+      "type": "boolean",
+      "title": "▸ Keys: show the key rows",
+      "description": "true: the rows below set the band's keys, one per command, and the list keys; false: they are folded away (your keys stay as set)",
+      "default": false
     },
     "keyMark": {
       "type": "string",
@@ -274,6 +244,44 @@
       "title": "Keys: the leader",
       "description": "The leader is a Claude Code keybinding (abovePrompt:focus in ~/.claude/keybindings.json), not set here",
       "default": ""
+    },
+    "debugShown": {
+      "type": "boolean",
+      "title": "▸ Debug: show the debug rows",
+      "description": "true: the rows below set what the debug log echoes and quotes; false: they are folded away (what you set stays)",
+      "default": false
+    },
+    "debugDefault": {
+      "type": "string",
+      "title": "Debug: echo by default",
+      "description": "Whether the plugin's log lines are echoed into a conversation that has not chosen; /bm-debug decides per conversation",
+      "default": "off",
+      "options": [
+        "off",
+        "on"
+      ]
+    },
+    "debugText": {
+      "type": "string",
+      "title": "Debug: conversation text in the log",
+      "description": "auto: off in an installed plugin, always in one loaded from a folder; off: log lines name places by id only; with-debug: they also quote the conversation while this conversation's debugging is on; always: they always quote it",
+      "default": "auto",
+      "options": [
+        "auto",
+        "off",
+        "with-debug",
+        "always"
+      ]
+    },
+    "debugTextLength": {
+      "type": "string",
+      "title": "Debug: how much text a line quotes",
+      "description": "reference: a short excerpt, enough to find the place; full: the whole text",
+      "default": "reference",
+      "options": [
+        "reference",
+        "full"
+      ]
     }
   },
   "types": "./types/index.d.ts"

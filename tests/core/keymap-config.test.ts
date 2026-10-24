@@ -13,7 +13,7 @@ test('one row per band command, one for the list keys, the fold and the leader, 
     assert.equal(field in FIELDS, true, field)
     assert.equal((DEFAULTS as Record<string, unknown>)[field], '', `${field} defaults to empty: the table's own keys`)
   }
-  assert.equal((DEFAULTS as Record<string, unknown>)[KEYS_SHOWN_FIELD], 'hidden', 'the rows start folded away')
+  assert.equal((DEFAULTS as Record<string, unknown>)[KEYS_SHOWN_FIELD], false, 'the rows start folded away')
   assert.equal(manifestUserConfig()[KEY_FIELDS.mark!]!.type, 'string')
 })
 

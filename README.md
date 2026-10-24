@@ -181,10 +181,11 @@ The known limits, briefly; **[docs/troubleshooting.md](docs/troubleshooting.md)*
 
 ## Configuration
 
-Open `/config` and find the plugin's settings under its name. A change takes effect at once; `/bm-config` prints every setting, its value and where the value came from.
+Open `/config` and find the plugin's one row, **▸ Bookmarks**, reading `false`: every setting is folded away behind it, since the defaults are meant to need no changing. Press `Enter` on it and it turns `true` in place: the rows below appear, the key rows and the debug rows behind folds of their own inside it. Press `Enter` again to fold them away; everything you set still applies. A change takes effect at once; `/bm-config` prints every setting, its value and where the value came from.
 
 | Setting | Values (default first) | What it does |
 |---|---|---|
+| ▸ Bookmarks | `false`, `true` | The fold over every row below: folded by default; your settings apply either way |
 | Prompts list opens at | `nearest`, `newest` | Where the prompts list opens: centred on the prompt nearest your view, or at the newest |
 | Prompts list follows the view | `when-idle`, `always`, `never` | Whether the list scrolls to keep the yellow row showing as you scroll the conversation (`when-idle`: not while you type a number) |
 | Closeness for the earlier prompt | `0.6` (0 to 1) | How much of the screen an earlier exchange must hold to count as nearest |
@@ -197,10 +198,11 @@ Open `/config` and find the plugin's settings under its name. A change takes eff
 | Chords on their own keybindings | `on`, `off` | Whether mark, jump, prompts and read also answer the optional chords bound to their borrowed actions |
 | Lists in a pane | `on`, `off` | Whether the prompts and bookmarks lists open in a pane, or `p`/`b` take a number in the band with no pane |
 | Keyboard after an action | `input`, `band` | Where the keyboard should go after an action (`input` waits on Claude Code allowing it) |
-| Debug echo by default | `off`, `on` | Whether the debug log is echoed into conversations that have not chosen (`/bm-debug` decides per conversation) |
-| Conversation text in the debug log | `auto`, `off`, `with-debug`, `always` | Whether debug lines quote the conversation; `auto` is off in an installed plugin, always in one loaded from a folder |
-| How much text a debug line quotes | `reference`, `full` | A short excerpt to find the place, or the whole text |
-| Keys: show the key rows | `hidden`, `shown` | Unfolds the rows below, which choose the band's keys; the keys you set stay when folded |
+| ▸ Debug: show the debug rows | `false`, `true` | The fold over the three debug rows below |
+| Debug: echo by default | `off`, `on` | Whether the debug log is echoed into conversations that have not chosen (`/bm-debug` decides per conversation) |
+| Debug: conversation text in the log | `auto`, `off`, `with-debug`, `always` | Whether debug lines quote the conversation; `auto` is off in an installed plugin, always in one loaded from a folder |
+| Debug: how much text a line quotes | `reference`, `full` | A short excerpt to find the place, or the whole text |
+| ▸ Keys: show the key rows | `false`, `true` | Unfolds the rows below, which choose the band's keys; the keys you set stay when folded |
 | Keys: mark, jump, prompts, ... help (one row each) | empty = the default keys | A command's keys, separated by spaces (`Space` for the space key), `hidden` last to take its button off the bar; a clash or a key the band never receives is refused with the reason ([Choosing your own keys](docs/keys.md#choosing-your-own-keys)) |
 | Keys: in a list | empty = `j k s h l c d q` | The list keys renamed by position: next, previous, pin, previous group, next group, claim, remove, close |
 | Keys: the leader | (shows the bound chord) | Says which chord opens the band; the leader is set in `~/.claude/keybindings.json`, not here |

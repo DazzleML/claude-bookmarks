@@ -285,6 +285,14 @@ A command run from a key (a `command:` binding) is drawn for a moment under a `p
 
 `claude plugin validate` follows `$` only into functions declared in the same file as the hooks, never across an import, and wants every engine call spelled `$.noun.event(...)` at its call site. Moving the debug log into `engine/debug-log.ts` with `$` passed in failed validation (measured 2026-10-12, Claude Code 2.1.296): "$ is passed to "log", imported from "./engine/debug-log": $ is followed only into a function declared in this same file, never across an import". So `register.tsx` keeps every function that touches the engine; what can leave it is code that does not take `$`: pure rules (`core/`), and drawing helpers that take the resolved elements and plain data. Within the file, a helper that takes `$` and returns a closure over an engine call (`toastVia($)` returning `text => $.ui.toast(text)`) passes (measured 2026-10-22, Claude Code 2.1.308), so the ports every builder spells the same way can be written once.
 
+### A saved setting of the wrong type stops the plugin loading — Limit
+
+Claude Code checks the plugin's saved settings (`pluginConfigs` in `~/.claude/settings.json`) against the field types in `plugin.json` before the plugin's code runs. A value that doesn't fit, such as a string saved for a true/false field, refuses the load with "options do not fit plugin.json userConfig", and the plugin's commands become unknown (measured 2026-10-24, Claude Code 2.1.310: the folds changed from a `hidden`/`shown` choice to true/false, and a saved `"keysShown": "hidden"` kept the plugin from loading until it was changed to `false`). So a setting that has shipped never changes its type; a new form gets a new field name, and the old one is left to read as unknown.
+
+### A plugin's choice row always opens a picker — Limit
+
+In `/config`, a plugin's string field with `options` is drawn as a row that opens a picker screen; the in-place `‹ value ›` cycler is drawn only for Claude Code's own rows (2.1.310 marks every plugin choice row `pickToCommit`). A plugin's true/false field is drawn as a toggle that `Enter` flips in place, so the plugin's folds are true/false rows.
+
 ### Testing the plugin with Claude Code's own test kit — Workaround
 
 `claude plugin test plugin` runs every `*.test.ts` under the plugin folder with `claude-code/testing`: the plugin is loaded by the engine's own host, a test mounts a component (`$.ui.mount` with `AbovePrompt`, `Pane`, ...), reads what it drew, types into an `Input`, presses a `Button`, runs a command (`$.command.run`), and passes `userConfig` values (`test(name, { options }, body)`). The plugin's kit tests live in `plugin/tests/`; the pure core's `node:test` suites live in `tests/core/`, because the kit refuses any import but the plugin's own files and `claude-code` (measured 2026-10-12, Claude Code 2.1.296: every `node:test` file failed to load).
