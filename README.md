@@ -200,6 +200,10 @@ Open `/config` and find the plugin's settings under its name. A change takes eff
 | Debug echo by default | `off`, `on` | Whether the debug log is echoed into conversations that have not chosen (`/bm-debug` decides per conversation) |
 | Conversation text in the debug log | `auto`, `off`, `with-debug`, `always` | Whether debug lines quote the conversation; `auto` is off in an installed plugin, always in one loaded from a folder |
 | How much text a debug line quotes | `reference`, `full` | A short excerpt to find the place, or the whole text |
+| Keys: show the key rows | `hidden`, `shown` | Unfolds the rows below, which choose the band's keys; the keys you set stay when folded |
+| Keys: mark, jump, prompts, ... help (one row each) | empty = the default keys | A command's keys, separated by spaces (`Space` for the space key), `hidden` last to take its button off the bar; a clash or a key the band never receives is refused with the reason ([Choosing your own keys](docs/keys.md#choosing-your-own-keys)) |
+| Keys: in a list | empty = `j k s h l c d q` | The list keys renamed by position: next, previous, pin, previous group, next group, claim, remove, close |
+| Keys: the leader | (shows the bound chord) | Says which chord opens the band; the leader is set in `~/.claude/keybindings.json`, not here |
 | Colour overrides | JSON, empty by default | A role's colour, background, dim or bold, e.g. `{"here": {"color": "cyan"}}`; roles: `here`, `pinned`, `footnote`, `legend`, `heading`, `mark`, `markBand`, `used`, `unused`, `unreached`, `emphasis`, `search`; a colour is a theme key (`warning`, `subtle`, ...), a terminal colour name or `#rrggbb` |
 
 Still constants, planned as settings ([#7](https://github.com/DazzleML/claude-bookmarks/issues/7)): how old a selection may be before a mark uses the top of the screen (75 seconds), where "back" from the bottom returns, whether a typed prompt number waits for `Enter`, the highlight's duration, and the pane sizes.

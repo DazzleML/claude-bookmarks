@@ -114,7 +114,7 @@ Claude Code remembers the last text you selected even after its highlight is gon
 
 **Pressing a letter that is already in use moves it**: the old mark under that letter is replaced, as in vim.
 
-**To delete marks:** `/bm-delmarks m`, `/bm-delmarks a b c`, or `/bm-delmarks all`. The reading position isn't a letter and stays.
+**To delete marks:** after the leader, `d` and a letter clears that mark (the letter points at nothing, and its history is kept, so `/bm-marks` still shows where it was), and `D` and a letter forgets it (its record goes too, outright when nothing else refers to it). Neither asks to confirm. Or type `/bm-delmarks m`, `/bm-delmarks a b c`, or `/bm-delmarks all`. The reading position isn't a letter and stays.
 
 **The highlight** stays for two minutes, or until you send your next prompt, whichever comes first. It only changes what is drawn on your screen: Claude never sees it, and the session file is not changed.
 
@@ -259,7 +259,7 @@ Bookmarks come in two lists that never mix: **yours** and **Claude's**. Claude b
      (12m, you said it)
 ```
 
-The band takes the keys, as for prompts: digits type a number, `j`/`k` move the `▶`, `l`/`h` switch the group (the band shows which), `Enter` jumps and highlights the bookmark's words, `Esc` closes. Numbers are shared across the groups, so #3 is #3 in every view. `/bm-bookmarks` from an empty input box puts the keyboard in the pane itself.
+The band takes the keys, as for prompts: digits type a number, `j`/`k` move the `▶`, `l`/`h` switch the group (the band shows which), `Enter` jumps and highlights the bookmark's words, `c` moves Claude's bookmark under the `▶` onto your list, a number then `d` removes that bookmark from your list, `Esc` closes. Clicking the bar's `bookmarks` button (or `prompts`) while its pane is open closes the pane; the typed key never does. Numbers are shared across the groups, so #3 is #3 in every view. `/bm-bookmarks` from an empty input box puts the keyboard in the pane itself.
 
 ### Promote a mark into a bookmark
 
@@ -357,7 +357,7 @@ From an empty input box, a pane opened by a command takes the keyboard, so its o
 
 ## Settings
 
-The plugin's settings are in Claude Code's `/config`, at the bottom of its list, each row ending `· bookmarks`; type `bookmarks` in its search box to see only them. The README lists them all ([Configuration](../README.md#configuration)). A change takes effect at once. `/bm-config` prints each setting, its value, and where the value came from: `default`, or `/config` when you chose it.
+The plugin's settings are in Claude Code's `/config`, at the bottom of its list, each row ending `· bookmarks`; type `bookmarks` in its search box to see only them. The rows that choose the band's keys are folded away behind **Keys: show the key rows**: set it to `shown` to see them, one per command and one for the list keys, and `hidden` to fold them again. Each takes the command's keys separated by spaces, with `hidden` last to take its button off the bar; a key that clashes or never reaches the band is refused with the reason. The whole syntax is in [Choosing your own keys](keys.md#choosing-your-own-keys). The README lists them all ([Configuration](../README.md#configuration)). A change takes effect at once. `/bm-config` prints each setting, its value, and where the value came from: `default`, or `/config` when you chose it.
 
 Two of them decide what the debug log may quote from the conversation. "Conversation text in the debug log" is `auto` by default: off in a plugin installed from a marketplace, always in one loaded from a folder (a developer's build). `with-debug` quotes only while the conversation's debugging is on (`/bm-debug on`), `always` and `off` mean what they say, and the `text` debug channel turns quoting on for one conversation whatever the setting. "How much text a debug line quotes" is `reference` (a short excerpt, enough to find the place) or `full`.
 

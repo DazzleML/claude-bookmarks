@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.24] - 2026-10-24
+
+### Changed
+
+- The keys documentation covers what the 0.6 line added. `docs/keys.md` gains "Choosing your own keys" (the rows in `/config`, how a value is written, which keys a button can be pressed with, what is refused and why, and how to change the leader) and lists `d` and `D` on the band, `c` and number-then-`d` in the bookmarks list, and that a bar button closes the pane it opened while its key never does. `docs/usage.md` describes deleting a mark with `d` and `D`, the keymap rows under Settings, and the bookmarks list's new keys; the README's Configuration table lists the key rows.
+- With this, the 0.6 line's keys work is complete: one key table drives the band, its help, its hints and the lists (0.6.1); a keymap layer applies your choices to it (0.6.2); a bar button toggles its pane (0.6.3); `d` and `D` clear and forget a mark (0.6.4); and the keys are yours to choose in `/config` (0.6.23).
+
 ## [0.6.23] - 2026-10-24
 
 ### Added
@@ -1261,7 +1268,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.23...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.24...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
