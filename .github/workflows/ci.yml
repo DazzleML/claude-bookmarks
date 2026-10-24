@@ -5,7 +5,7 @@ name: CI
 #   tooling -- the version tooling (version.py and the plugin manifest that
 #              must match it), both manifests parse, and the pure core's
 #              tests, which need only Node: it strips the types itself.
-#   plugin  -- the Claude Code CLI installed from npm at the version the
+#   plugin  -- on Linux and Windows: the Claude Code CLI installed from npm at the version the
 #              plugin is verified against, then `claude plugin validate` on
 #              the plugin (its manifest and hooks module as the engine reads
 #              them) and on the repository (the marketplace file), and the
@@ -55,7 +55,21 @@ jobs:
       run: node --test tests/core/*.test.ts
 
   plugin:
-    runs-on: ubuntu-latest
+    # Linux and Windows, so each proves the plugin on its own platform. Until 0.6.26 the
+    # kit suite failed on Linux (66 of 145, run 40133392990): the harness's Windows paths
+    # (C:/test-home/...) are not absolute to the engine there, which resolved them against
+    # the plugin's folder. The harness now keys paths the same on both (pathKey in
+    # plugin/tests/harness.ts); measured 145 of 145 on WSL Ubuntu and on Windows.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest ]
+    runs-on: ${{ matrix.os }}
+
+    # Bash on both (Git Bash on Windows), so the steps read the same on each.
+    defaults:
+      run:
+        shell: bash
 
     env:
       # The client the plugin is verified against; bump on purpose, never float.

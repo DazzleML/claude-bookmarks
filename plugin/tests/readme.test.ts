@@ -5,13 +5,13 @@
 // makes it missing, which a start reports and writes nothing for. Run: claude plugin test plugin
 import { expect, test } from 'claude-code/testing'
 import { dataReadme, README_MARK } from '../hooks/core/bookmarks/data-readme.ts'
-import { DATA_ROOT, README_TEMPLATE_STANDIN, world } from './harness.ts'
+import { DATA_ROOT, README_TEMPLATE_STANDIN, pathKey, world } from './harness.ts'
 
 type Engine = { session: { start: (i: object) => Promise<unknown> } }
 const SID = '11111111-2222-4333-8444-555555555555'
 const README = `${DATA_ROOT}/README.md`
 const start = ($: unknown) => ($ as Engine).session.start({ cwd: 'C:/test-project', surface: 'terminal', isInteractive: true })
-const readmeWrites = (w: { calls: { event: string; input: unknown }[] }) => w.calls.filter(c => c.event === 'fs.write' && String((c.input as { path: string }).path).replace(/\\/g, '/') === README).length
+const readmeWrites = (w: { calls: { event: string; input: unknown }[] }) => w.calls.filter(c => c.event === 'fs.write' && pathKey((c.input as { path: string }).path) === pathKey(README)).length
 
 test('a start writes bookmarks/README.md when it is missing, with the layout table and the writer', async ($, on) => {
   const w = world(on, { session: SID })

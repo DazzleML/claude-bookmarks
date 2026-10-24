@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.26] - 2026-10-24
+
+### Changed
+
+- The plugin's automated tests now pass on Linux as well as Windows, and every push checks the plugin on both. Until now the plugin tests could only pass on Windows, so a problem specific to Linux would have gone unnoticed.
+
 ## [0.6.25] - 2026-10-24
 
 ### Changed
@@ -1275,7 +1281,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.25...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.26...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

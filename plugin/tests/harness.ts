@@ -58,6 +58,19 @@ export const BAND_PROPS = { hasSurvey: false, isWorking: false, maxRows: 10, bod
 export const DATA_ROOT = 'C:/test-home/claude/bookmarks'
 
 /**
+ * A path as this world keys it, so a path a test wrote and the path an engine call carries
+ * compare equal on every platform: backslashes throughout, and nothing before the drive.
+ *
+ * The engine hands hooks the platform's own separators (backslashes on Windows). This
+ * world's home and project are Windows paths (C:/test-home, C:/test-project), and off
+ * Windows the engine does not read `C:/` as absolute: it resolves the path against the
+ * plugin's folder, so the calls arrive as `/<plugin root>/C:/test-home/...` (measured on
+ * Linux, Claude Code 2.1.308, 2026-10-24: tests/one-offs/thinking/kit_linux_probe.sh, where
+ * 66 of 145 kit tests failed on it). Cutting what precedes the drive undoes that.
+ */
+export const pathKey = (p: unknown): string => String(p).replace(/\//g, '\\').replace(/^.*?\\(?=[A-Za-z]:\\)/, '')
+
+/**
  * A register file (format v3) holding these letters, as `files` for `world`: since 0.5.5 the
  * marks live in the register's slots, so a test that used to seed `marks:<sid>` in the store
  * seeds the file instead. Each mark becomes a record of tier `mark` and a slot pointing at it.
@@ -75,9 +88,7 @@ export function registerWithMarks(sid: string, marks: Record<string, { uuid: str
 export function world(on: unknown, options: WorldOptions = {}): World {
   const hook = on as On
   const calls: Call[] = []
-  // The engine hands hooks the platform's own separators (backslashes on Windows), so
-  // files are keyed with them whichever slash a test wrote.
-  const norm = (p: unknown) => String(p).replace(/\//g, '\\')
+  const norm = pathKey
   const files: Record<string, string> = Object.fromEntries(Object.entries(options.files ?? {}).map(([p, t]) => [norm(p), t]))
   const answer = (event: string, value: (input: Record<string, unknown>) => unknown) =>
     hook(event as never, {} as never, (async (_$: unknown, e: Record<string, unknown>) => {
