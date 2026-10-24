@@ -21,6 +21,7 @@ import { headOf, resolveRows, rowsFromGrep, targetPattern, type Resolution } fro
 import { excerpt, type Channel } from './core/log/debug'
 import { CHORD_ACTIONS, VERIFIED_CLIENTS, bandFocusRoute, barFor, helpFor, listHint, listKeysFor, route, type Operation, type Pane } from './core/band/keys'
 import type { Cause } from './core/band/after-action'
+import { KEYS_SHOWN_FIELD, LEADER_FIELD, isKeyRow, leaderChord, rowDenial, type Problem } from './core/band/keymap'
 import { installedFromCache, type Settings } from './core/settings'
 import { SettingsState } from './core/settings-state'
 import type { Role, Style } from './core/palette'
@@ -69,6 +70,14 @@ const settings = new SettingsState()
 function currentSettings(): Settings {
   return settings.current()
 }
+// The key tables the person's keymap rows make (#36; core/band/keymap.ts), which every
+// reader of core/band/keys.ts takes: the band, its help, the panes' keys and the hints.
+function currentTables() {
+  return settings.keymap().tables
+}
+// What in the keymap could not be used, one line (the default stands for each).
+const keymapProblemsLine = (problems: readonly Problem[]) =>
+  `[bm] keymap: ${problems.map(p => `${p.command}${p.key !== undefined ? ` "${p.key}"` : ''}: ${p.reason}`).join('; ')}; the defaults stand for those`
 
 // The plugin's one pane id (prompts, bookmarks, mark and jump panes all open under it).
 const PANE = 'bm-pane'
@@ -961,6 +970,7 @@ function commandLinePorts($: EngineInterface): CommandLinePorts {
     clearLetter: letter => marks_.clearLetter(marksPorts($), letter),
     forgetLetter: letter => marks_.forgetLetter(marksPorts($), letter),
     jumplistMove: dir => jumplistMove($, dir),
+    tables: () => currentTables(),
   }
 }
 async function settle($: EngineInterface, pane: Pane, cause: Cause, needsMore = false) {
@@ -1038,14 +1048,48 @@ export const register: Register = (on, options) => {
   // A change in /config to one of this plugin's fields: keep the values current and
   // redraw what reads them (settingsRev), whether or not Claude Code also reloads us.
   on('config.set', { key: /^bookmarks\./ }, async ($, e, next) => {
+    const field = e.key.slice('bookmarks.'.length)
+    // A keymap row (#36): refused before it is written when it would add a clash, a key the
+    // band never receives, or no usable key, with the reason; the Leader row always, with
+    // where the leader is bound (core/band/keymap.ts rowDenial).
+    const denial = rowDenial(field, e.value, currentSettings() as unknown as Record<string, unknown>)
+    if (denial) {
+      log($, `[bm] keymap: ${field} not set: ${denial}`)
+      return { deny: denial }
+    }
     const result = await next(e)
     if (!result.deny) {
-      settings.changed(e.key.slice('bookmarks.'.length), result.value)
+      settings.changed(field, result.value)
       // A smaller text budget frees memory and store now, not at the next prompt.
       if (e.key === 'bookmarks.promptTextBudget') await prompts_.savePromptTexts(promptsPorts($))
+      // The fold: the key rows show or hide in the open menu. A change reloads the plugin on
+      // 2.1.308, and the reload asks every row again (the fold look, 2026-10-24); the
+      // invalidate keeps the fold working on a build that does not reload.
+      if (field === KEYS_SHOWN_FIELD) await $.ui.invalidate('config.describe')
+      if (isKeyRow(field)) {
+        const problems = settings.keymap().problems
+        if (problems.length) log($, keymapProblemsLine(problems))
+      }
       await update($, settingsRev, v => v + 1)
     }
     return result
+  })
+  // The key rows behind their fold (the fold look of 2026-10-24: rows behind a fold), and
+  // the Leader row's help text naming the chord the person bound in keybindings.json.
+  on('config.describe', { key: /^bookmarks\.key/ }, async ($, e, next) => {
+    const r = await next(e)
+    const field = e.key.slice('bookmarks.'.length)
+    if (!isKeyRow(field)) return r
+    const isHidden = currentSettings().keysShown === 'hidden'
+    if (field !== LEADER_FIELD) return { ...r, isHidden }
+    const dir = await configDir($)
+    const path = dir ? `${dir}/keybindings.json` : undefined
+    const text = path && (await $.fs.exists(path)) ? await $.fs.read(path).catch(() => undefined) : undefined
+    const chord = leaderChord(typeof text === 'string' ? text : undefined)
+    const description = chord
+      ? `Bound to ${chord} (abovePrompt:focus in ~/.claude/keybindings.json); change it there, not here`
+      : 'Not bound yet: bind a chord to abovePrompt:focus in ~/.claude/keybindings.json (docs/keys.md has the recipe)'
+    return { ...r, isHidden, description }
   })
   // The theme decides the mark band's light or dark value (#27).
   on('config.set', { key: 'theme' }, async ($, e, next) => {
@@ -1108,6 +1152,10 @@ export const register: Register = (on, options) => {
       dccPatches: await $.env.get('DCC_PATCHES'),
     }
     log($, `[bm] ${pathsLine(chooseAll(capabilitySignals))}`)
+    // A keymap value that cannot be used (set by hand in settings.json, or by an older
+    // version): named once here; the default stands for that command.
+    const keymapProblems = settings.keymap().problems
+    if (keymapProblems.length) log($, keymapProblemsLine(keymapProblems))
     if (!VERIFIED_CLIENTS.includes(v.base ?? v.version)) {
       $.ui.toast(
         `${$.plugin.name} ${await pluginVersion($)}: chords verified on Claude Code ` +
@@ -1469,12 +1517,13 @@ export const register: Register = (on, options) => {
     // The help that fits the band's window, and the bar: core/band/keys.ts helpFor and
     // barFor (the rules moved there under U60; the arrows in the band scroll its window
     // without moving the ring).
-    const help = helpFor(now, e.props.maxRows)
+    const tables = currentTables()
+    const help = helpFor(now, e.props.maxRows, tables)
     const bookmarks = mode === 'bookmarks'
     const count = mode === 'list' || bookmarks ? (bookmarks ? (await bookmarkList($)).length : (await prompts($)).length) : 0
-    const listKeys = listKeysFor(bookmarks ? 'bookmarks' : 'list').map(l => ({ key: l.key, button: l.button, operation: l.route().operation }))
+    const listKeys = listKeysFor(bookmarks ? 'bookmarks' : 'list', tables).map(l => ({ key: l.key, button: l.button, operation: l.route().operation }))
     const groupTitle = bookmarks ? (BOOKMARK_GROUPS[await read($, bandGroup)]?.title ?? '') : ''
-    const bar = barFor(s, CHORD_ACTIONS)
+    const bar = barFor(s, CHORD_ACTIONS, tables)
     return bandView(
       elements,
       theirs,
@@ -1498,7 +1547,7 @@ export const register: Register = (on, options) => {
         dot: () => band_.bandDot(bandPorts($)),
         go: () => band_.bandNumberGo(bandPorts($)),
         runCommandLine: (typed, kind) => runCommandLine($, typed, kind),
-        perform: (key, id, action) => perform($, route(key, { pane: 'none' }).operation, action ?? `button:${id}`),
+        perform: (key, id, action) => perform($, route(key, { pane: 'none' }, tables).operation, action ?? `button:${id}`),
       },
       { text: style, button: buttonStyle },
     )
@@ -1542,7 +1591,7 @@ export const register: Register = (on, options) => {
       if (target) band_.centrePane(bandPorts($), target)
       return promptsPaneView(
         elements,
-        { all, kept, footnoteMode, unfolded: promptsPane.unfolded, drawnFour: drawn.firstFours, pinIds, texts, paneFilter: promptsPane.filter, fromBand, here, columns: e.props.bodyColumns, lines: currentSettings().rowLines },
+        { tables: currentTables(), all, kept, footnoteMode, unfolded: promptsPane.unfolded, drawnFour: drawn.firstFours, pinIds, texts, paneFilter: promptsPane.filter, fromBand, here, columns: e.props.bodyColumns, lines: currentSettings().rowLines },
         {
           unfold: async n => { promptsPane.unfold(n); await bumpView($) },
           refold: async n => { promptsPane.refold(n); await bumpView($) },
@@ -1567,7 +1616,7 @@ export const register: Register = (on, options) => {
       const groupIndex = await read($, bandGroup)
       return bookmarksPaneView(
         elements,
-        { all, groups: BOOKMARK_GROUPS, groupIndex, fromBand, drawnFour: drawn.firstFours, now: Date.now(), glyph: LINK_MARKERS === 'glyph', hint: listHint('bookmarks') },
+        { tables: currentTables(), all, groups: BOOKMARK_GROUPS, groupIndex, fromBand, drawnFour: drawn.firstFours, now: Date.now(), glyph: LINK_MARKERS === 'glyph', hint: listHint('bookmarks', currentTables()) },
         {
           arrive: r => pressBookmarkRow($, r),
           go: typed => jumpToBookmarkNumber($, typed, 'bookmarks pane'),

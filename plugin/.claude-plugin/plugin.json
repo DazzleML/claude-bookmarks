@@ -1,7 +1,7 @@
 {
   "name": "bookmarks",
   "displayName": "Bookmarks",
-  "version": "0.6.22",
+  "version": "0.6.23",
   "description": "Bookmarks and vim-style marks inside Claude Code conversations: mark a line, jump back, keep a reading position, browse your prompts, and let Claude cite earlier places as clickable links.",
   "author": {
     "name": "DazzleML",
@@ -180,6 +180,100 @@
       "default": 2,
       "min": 1,
       "max": 5
+    },
+    "keysShown": {
+      "type": "string",
+      "title": "Keys: show the key rows",
+      "description": "shown: the rows below set the band's keys, one per command, and the list keys; hidden: they are folded away (your keys stay as set)",
+      "default": "hidden",
+      "options": [
+        "hidden",
+        "shown"
+      ]
+    },
+    "keyMark": {
+      "type": "string",
+      "title": "Keys: mark",
+      "description": "Keys for mark, separated by spaces (default: m); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyJump": {
+      "type": "string",
+      "title": "Keys: jump",
+      "description": "Keys for jump, separated by spaces (default: ' j); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyPrompts": {
+      "type": "string",
+      "title": "Keys: prompts",
+      "description": "Keys for prompts, separated by spaces (default: p); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyRead": {
+      "type": "string",
+      "title": "Keys: reading position",
+      "description": "Keys for reading position, separated by spaces (default: Space r); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyBookmarks": {
+      "type": "string",
+      "title": "Keys: bookmarks",
+      "description": "Keys for bookmarks, separated by spaces (default: b); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyPromote": {
+      "type": "string",
+      "title": "Keys: promote a mark",
+      "description": "Keys for promote a mark, separated by spaces (default: P); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyDelete": {
+      "type": "string",
+      "title": "Keys: clear a mark",
+      "description": "Keys for clear a mark, separated by spaces (default: d); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyForget": {
+      "type": "string",
+      "title": "Keys: forget a mark",
+      "description": "Keys for forget a mark, separated by spaces (default: D); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyBack": {
+      "type": "string",
+      "title": "Keys: back",
+      "description": "Keys for back, separated by spaces (default: o); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyForward": {
+      "type": "string",
+      "title": "Keys: forward",
+      "description": "Keys for forward, separated by spaces (default: i); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyClose": {
+      "type": "string",
+      "title": "Keys: close",
+      "description": "Keys for close, separated by spaces (default: q); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyHelp": {
+      "type": "string",
+      "title": "Keys: help",
+      "description": "Keys for help, separated by spaces (default: ?); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyList": {
+      "type": "string",
+      "title": "Keys: in a list",
+      "description": "The list keys in order: next previous pin previous-group next-group claim remove close (default: j k s h l c d q); empty = the defaults",
+      "default": ""
+    },
+    "keyLeader": {
+      "type": "string",
+      "title": "Keys: the leader",
+      "description": "The leader is a Claude Code keybinding (abovePrompt:focus in ~/.claude/keybindings.json), not set here",
+      "default": ""
     }
   },
   "types": "./types/index.d.ts"

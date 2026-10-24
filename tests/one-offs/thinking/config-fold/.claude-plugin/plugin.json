@@ -1,0 +1,42 @@
+{
+  "name": "bmfoldpoc",
+  "displayName": "Fold POC",
+  "version": "0.0.1",
+  "description": "Proof-of-concept: can one /config row fold a plugin's other rows away (a config.describe hook answering isHidden, with $.ui.invalidate on change)? Throwaway; see README.md beside this folder.",
+  "author": { "name": "DazzleML" },
+  "license": "GPL-3.0",
+  "userConfig": {
+    "fold": {
+      "type": "string",
+      "title": "Fold POC settings (invalidates)",
+      "description": "hidden: the three test rows below are hidden by a describe hook, and $.ui.invalidate('config.describe') is called so the menu can redraw",
+      "default": "shown",
+      "options": ["shown", "hidden"]
+    },
+    "foldNoInvalidate": {
+      "type": "string",
+      "title": "Fold POC settings (CONTROL: no invalidate)",
+      "description": "hidden: the same hiding, but WITHOUT the invalidate call -- the describe answers stay cached, so the rows are predicted to remain until the plugins reload",
+      "default": "shown",
+      "options": ["shown", "hidden"]
+    },
+    "rowA": {
+      "type": "boolean",
+      "title": "Fold POC test row A",
+      "description": "a row the fold should hide",
+      "default": false
+    },
+    "rowB": {
+      "type": "boolean",
+      "title": "Fold POC test row B",
+      "description": "a row the fold should hide",
+      "default": true
+    },
+    "rowC": {
+      "type": "string",
+      "title": "Fold POC test row C",
+      "description": "a text row the fold should hide",
+      "default": "abc"
+    }
+  }
+}

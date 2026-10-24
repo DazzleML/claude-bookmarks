@@ -166,7 +166,54 @@ export const FIELDS = {
     title: 'Lines per row in the lists',
     description: 'How many lines each prompt in the prompts list, and each mark in the jump list, may take (1 to 5); the text is cut with an ellipsis at the end of the last line',
   },
+  // The keymap (#36; the keys design, unit 3). djdarcy's fold look of 2026-10-24 chose rows
+  // behind a fold: `keysShown` hides the rows below it (a config.describe hook), so /config
+  // stays short until the person opens it. The names are core/band/keymap.ts KEY_FIELDS,
+  // LIST_FIELD and LEADER_FIELD (a core test holds them together). An empty row is the
+  // table's own keys; a value is keys separated by spaces, `Space` for the space key, and
+  // `hidden` last to take the button off the bar.
+  keysShown: {
+    kind: 'enum',
+    values: ['hidden', 'shown'],
+    default: 'hidden',
+    title: 'Keys: show the key rows',
+    description: 'shown: the rows below set the band\'s keys, one per command, and the list keys; hidden: they are folded away (your keys stay as set)',
+  },
+  keyMark: keyRow('mark', 'm'),
+  keyJump: keyRow('jump', "' j"),
+  keyPrompts: keyRow('prompts', 'p'),
+  keyRead: keyRow('reading position', 'Space r'),
+  keyBookmarks: keyRow('bookmarks', 'b'),
+  keyPromote: keyRow('promote a mark', 'P'),
+  keyDelete: keyRow('clear a mark', 'd'),
+  keyForget: keyRow('forget a mark', 'D'),
+  keyBack: keyRow('back', 'o'),
+  keyForward: keyRow('forward', 'i'),
+  keyClose: keyRow('close', 'q'),
+  keyHelp: keyRow('help', '?'),
+  keyList: {
+    kind: 'text',
+    default: '',
+    title: 'Keys: in a list',
+    description: 'The list keys in order: next previous pin previous-group next-group claim remove close (default: j k s h l c d q); empty = the defaults',
+  },
+  keyLeader: {
+    kind: 'text',
+    default: '',
+    title: 'Keys: the leader',
+    description: 'The leader is a Claude Code keybinding (abovePrompt:focus in ~/.claude/keybindings.json), not set here',
+  },
 } as const satisfies Record<string, Field>
+
+// One keymap row: a text field whose empty value is the command's default keys.
+function keyRow(what: string, defaults: string) {
+  return {
+    kind: 'text',
+    default: '',
+    title: `Keys: ${what}`,
+    description: `Keys for ${what}, separated by spaces (default: ${defaults}); Space spells the space key; end with hidden to take its button off the bar; empty = the default`,
+  } as const
+}
 
 export type FieldName = keyof typeof FIELDS
 type ValueOf<F> = F extends { kind: 'enum'; values: readonly (infer V)[] }

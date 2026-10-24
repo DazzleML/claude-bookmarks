@@ -135,3 +135,89 @@ export function applyKeymap(keymap: Keymap, base: Tables = DEFAULT_TABLES): { ta
   result = { line, list }
   return { tables: result, problems }
 }
+
+// The keymap's /config rows (the keys design, 2026-10-20, unit 3). djdarcy's fold look of
+// 2026-10-24 chose rows behind a fold: one row per band command and one for the list keys,
+// shown only while the fold row says so, and a Leader row that says where the leader is
+// bound. Each field name is a /config key (core/settings.ts FIELDS has the same names; a
+// core test holds the two together). A row's value is the command's value above; an empty
+// row is the table's own keys.
+export const KEY_FIELDS: Readonly<Record<string, string>> = {
+  mark: 'keyMark',
+  jump: 'keyJump',
+  prompts: 'keyPrompts',
+  read: 'keyRead',
+  bookmarks: 'keyBookmarks',
+  promote: 'keyPromote',
+  delete: 'keyDelete',
+  forget: 'keyForget',
+  back: 'keyBack',
+  forward: 'keyForward',
+  close: 'keyClose',
+  help: 'keyHelp',
+}
+export const LIST_FIELD = 'keyList'
+export const LEADER_FIELD = 'keyLeader'
+export const KEYS_SHOWN_FIELD = 'keysShown'
+const ROW_COMMAND = new Map<string, string>([...Object.entries(KEY_FIELDS).map(([id, field]) => [field, id] as [string, string]), [LIST_FIELD, LIST_ROW]])
+
+/** A row the fold hides: every key row and the Leader row, never the fold itself. */
+export const isKeyRow = (field: string): boolean => ROW_COMMAND.has(field) || field === LEADER_FIELD
+
+/** The keymap the rows hold: a command row by its command's id, the list row as `list`; empty rows left out. */
+export function keymapOf(values: Readonly<Record<string, unknown>>): Keymap {
+  const keymap: Record<string, string> = {}
+  for (const [field, command] of ROW_COMMAND) {
+    const v = values[field]
+    if (typeof v === 'string' && v.trim()) keymap[command] = v.trim()
+  }
+  return keymap
+}
+
+/** Why the leader is not a row the plugin sets: it is Claude Code's own keybinding. */
+export const LEADER_RECIPE =
+  'The leader is a Claude Code keybinding, not a plugin setting: in ~/.claude/keybindings.json bind your chord to "abovePrompt:focus" in the Chat context, then start a new session (docs/keys.md has the recipe).'
+
+const keyLabel = (k: string) => (k === ' ' ? 'Space' : k)
+function problemText(p: Problem, row: string): string {
+  if (p.key !== undefined && p.reason.startsWith('already ')) {
+    const owner = p.command === row ? p.reason.slice('already '.length) : p.command
+    return `${keyLabel(p.key)} is already ${owner}'s key`
+  }
+  return `${p.command}${p.key !== undefined ? ` ${keyLabel(p.key)}` : ''}: ${p.reason}`
+}
+
+/**
+ * Why a change to a key row is refused, or undefined when it may be made. A change is refused
+ * only for the problems it adds (a clash, an unusable key, no usable key); one the keymap
+ * already had is not this change's to answer for. The Leader row is always refused, with the
+ * recipe.
+ */
+export function rowDenial(field: string, value: unknown, values: Readonly<Record<string, unknown>>): string | undefined {
+  if (field === LEADER_FIELD) return LEADER_RECIPE
+  const command = ROW_COMMAND.get(field)
+  if (command === undefined) return undefined
+  const before = applyKeymap(keymapOf(values)).problems.map(p => problemText(p, command))
+  const after = applyKeymap(keymapOf({ ...values, [field]: value })).problems.map(p => problemText(p, command))
+  const added = after.filter(p => !before.includes(p))
+  return added.length > 0 ? `Not set: ${added.join('; ')}. The keys stay as they were.` : undefined
+}
+
+/** The chord bound to `abovePrompt:focus` in keybindings.json's text, or undefined. */
+export function leaderChord(json: string | undefined): string | undefined {
+  if (!json) return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(json)
+  } catch {
+    return undefined
+  }
+  const blocks = (parsed as { bindings?: unknown })?.bindings
+  if (!Array.isArray(blocks)) return undefined
+  for (const b of blocks) {
+    const map = (b as { bindings?: unknown })?.bindings
+    if (!map || typeof map !== 'object') continue
+    for (const [chord, action] of Object.entries(map as Record<string, unknown>)) if (action === 'abovePrompt:focus') return chord
+  }
+  return undefined
+}

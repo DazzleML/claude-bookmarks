@@ -7,7 +7,7 @@
 import type { EngineInterface } from 'claude-code'
 import { filterPrompts, matchLegend } from '../core/prompts/filter.ts'
 import { promptNumberComplete } from '../core/band/band-entry.ts'
-import { fieldRest, route } from '../core/band/keys.ts'
+import { fieldRest, route, type Tables } from '../core/band/keys.ts'
 import {
   footnoteDisplay, footnotesByPrompt, foldedLabel, numberLabel as numberLabelAt, numberNewestFirst, numberWidth,
   pinnedRowsOf, pointerFor, unreached, type FootnoteMode,
@@ -20,6 +20,8 @@ import type { Role, Style } from '../core/palette.ts'
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
 
 export type PromptsPaneModel = {
+  /** The key tables the person's keymap makes (core/settings-state.ts keymap). */
+  tables: Tables
   all: readonly PromptRef[]
   kept: readonly FootnoteRef[]
   footnoteMode: FootnoteMode
@@ -160,7 +162,7 @@ export function promptsPaneView(elements: Elements, m: PromptsPaneModel, a: Prom
           onInput={(typed: string) => {
             // One key is read through the key table (core/band/keys.ts): `q` closes the pane,
             // as in the band (Q261012-09), whatever key a keymap gives it.
-            if (typed.length === 1 && route(typed, { pane: 'list' }).operation.op === 'close') return void a.close()
+            if (typed.length === 1 && route(typed, { pane: 'list' }, m.tables).operation.op === 'close') return void a.close()
             // `/words` filters the list (#28), `/` being the field's filter key in the table;
             // anything else clears the filter.
             const query = fieldRest(typed, 'list', 'filter') ?? ''

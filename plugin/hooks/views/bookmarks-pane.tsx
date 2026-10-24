@@ -5,13 +5,15 @@
 import type { EngineInterface } from 'claude-code'
 import { ownerOf, type AnchorOwner, type AnchorRecord } from '../core/bookmarks/anchor.ts'
 import { promptNumberComplete } from '../core/band/band-entry.ts'
-import { route } from '../core/band/keys.ts'
+import { route, type Tables } from '../core/band/keys.ts'
 import { bookmarkWho, groupHeader, numberNewestFirst, numberWidth, pointerFor, unreached } from '../core/prompts/list-model.ts'
 import type { PaneStyles } from './prompts-pane.tsx'
 
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
 
 export type BookmarksPaneModel = {
+  /** The key tables the person's keymap makes (core/settings-state.ts keymap). */
+  tables: Tables
   /** Every bookmark of this conversation, in the order minted. */
   all: readonly AnchorRecord[]
   groups: readonly { owner: AnchorOwner | 'all'; title: string }[]
@@ -100,10 +102,10 @@ export function bookmarksPaneView(elements: Elements, m: BookmarksPaneModel, a: 
           autoFocus
           onInput={(typed: string) => {
             // One key is read through the key table: `q` closes, as in the band (Q261012-09).
-            if (typed.length === 1 && route(typed, { pane: 'bookmarks' }).operation.op === 'close') return void a.close()
+            if (typed.length === 1 && route(typed, { pane: 'bookmarks' }, m.tables).operation.op === 'close') return void a.close()
             // A number then the table's remove key (`d`): that bookmark leaves the list (the keys design, unit 5).
             const last = typed.slice(-1)
-            if (typed.length > 1 && /^\d+$/.test(typed.slice(0, -1)) && route(last, { pane: 'bookmarks' }).operation.op === 'remove') return void a.remove(typed.slice(0, -1))
+            if (typed.length > 1 && /^\d+$/.test(typed.slice(0, -1)) && route(last, { pane: 'bookmarks' }, m.tables).operation.op === 'remove') return void a.remove(typed.slice(0, -1))
             if (promptNumberComplete(typed, all.length)) void go(typed)
           }}
           onSubmit={(typed: string) => void go(typed)}

@@ -15,9 +15,6 @@ import { bandOnly, closeAll, handOff, openFor, showHelp } from './band.ts'
 // only until the handler returns; a fire-and-forget `void` lost it, 2026-10-09). So the
 // keys below act directly; the once-per-version probe that used to decide this is gone.
 
-// Generated from the router's table (core/band/keys.ts), so every key is named once.
-const CMD_HINT = lineHint()
-
 // Owned here: one command at a time.
 // Since 0.4.83 it holds when the running command started: a command that never settles
 // (an engine call that does not answer) frees the field after CMD_STUCK_MS instead of
@@ -42,7 +39,7 @@ export async function runCommandLine(ports: CommandLinePorts, typed: string, via
   try {
     ports.log(`[bm] band command line ${via}: "${ports.cut(typed, 40)}"`, true)
     // What the keys mean lives in the router's table (core/band/keys.ts); perform does it.
-    await perform(ports, route(typed, { pane: 'none' }).operation, 'field')
+    await perform(ports, route(typed, { pane: 'none' }, ports.tables()).operation, 'field')
   } finally {
     if (cmdBusy === started) cmdBusy = undefined
   }
@@ -128,6 +125,6 @@ export async function perform(ports: CommandLinePorts, operation: Operation, via
       return
     default:
       await ports.clearCommandLine()
-      ports.toast(CMD_HINT)
+      ports.toast(lineHint(ports.tables()))
   }
 }

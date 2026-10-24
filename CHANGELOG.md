@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.23] - 2026-10-24
+
+### Added
+
+- Choose the band's keys in `/config`. A row, "Keys: show the key rows", unfolds one row per band command (mark, jump, prompts, the reading position, bookmarks, promote, clear and forget a mark, back, forward, close, help) and one for the keys in a list. A row takes the command's keys separated by spaces (`Space` spells the space key) and `hidden` at the end takes its button off the bar; an empty row keeps the default. The band's buttons, the help, the hints and the lists' keys all follow. A change that would give two commands the same key, or use a key the band never receives (an arrow, Tab, Enter), is refused with the reason, and a value set by hand in settings.json that cannot be used keeps the default and is named in the debug log. The rows stay folded until you open them.
+- A "Keys: the leader" row says which chord opens the band, read from `~/.claude/keybindings.json`, and how to change it there: the leader is a Claude Code keybinding, so the row itself is never set.
+
 ## [0.6.22] - 2026-10-23
 
 ### Fixed
@@ -1254,7 +1261,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.22...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.23...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

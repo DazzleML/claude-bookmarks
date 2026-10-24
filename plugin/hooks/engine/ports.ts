@@ -331,6 +331,8 @@ export type CommandLinePorts = BandPorts & {
   clearLetter: (letter: string) => Promise<unknown>
   forgetLetter: (letter: string) => Promise<unknown>
   jumplistMove: (dir: -1 | 1) => Promise<unknown>
+  /** The key tables the person's keymap makes (core/settings-state.ts keymap). */
+  tables: () => import('../core/band/keys.ts').Tables
 }
 
 // Ownership of shared state (notes/meta/2026-10-12__22-48-40, one owner, read-only ports).
