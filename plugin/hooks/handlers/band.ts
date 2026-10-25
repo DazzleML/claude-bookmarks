@@ -9,6 +9,7 @@ import { afterAction, isList, type Cause } from '../core/band/after-action.ts'
 import { ownerOf } from '../core/bookmarks/anchor.ts'
 import { centreDelays, promptNumberComplete, stepNumber } from '../core/band/band-entry.ts'
 import { parseListNumber, type Operation, type Pane } from '../core/band/keys.ts'
+import { fieldInput } from '../core/band/field-input.ts'
 import { short } from '../core/kit/message-id.ts'
 import type { BandCorePorts, ListPorts, PanePorts } from '../engine/ports.ts'
 
@@ -53,7 +54,9 @@ async function showInPane(ports: BandCorePorts & PanePorts & ListPorts, n: numbe
   const bookmarks = (await ports.paneMode()) === 'bookmarks'
   const target = bookmarks ? (await ports.bookmarkList())[n - 1] : (await ports.prompts())[n - 1]
   if (!target) return
-  const r = await ports.scrollPaneCentre(`${bookmarks ? 'b' : 'p'}-${target.uuid}`)
+  // A courtesy: the ▶ is drawn either way, so a refused or failed scroll never undoes the
+  // key that asked for it (the parked Backspace patch found the throw aborting its hook).
+  const r = await ports.scrollPaneCentre(`${bookmarks ? 'b' : 'p'}-${target.uuid}`).catch((err: unknown) => ({ deny: String(err).slice(0, 120) }))
   if (r.deny) ports.log(`[bm] pane scroll to #${n} -> DENY: ${r.deny}`)
 }
 
@@ -134,6 +137,77 @@ export async function bandNumberGo(ports: BandCorePorts & PanePorts & ListPorts)
   await jumpToListNumber(ports, typed, 'band list')
 }
 
+// The band's own field for a list number (input routing, 2026-10-25): the field holds the
+// whole text, and the list field's contract (core/band/field-input.ts) says what it means,
+// as it does for the panes' `#` fields. Backspace is the field's own: a shorter text
+// arrives here like any other. Every path returns its promise, so a jump runs while the
+// field's handler is still running and counts as the person's.
+export async function bandFieldInput(ports: BandCorePorts & PanePorts & ListPorts, typed: string) {
+  const list = (await ports.bandMode()) === 'bookmarks' ? 'bookmarks' : 'list'
+  const step = fieldInput(typed, list, await listCount(ports), ports.tables())
+  if (step.op === 'close') return void (await closeAll(ports, 'band field'))
+  if (step.op === 'remove') {
+    await ports.removeBookmarkNumber(step.number)
+    await ports.setBandNum('')
+    return renewField(ports)
+  }
+  if (step.op === 'key') {
+    // From the number typed before the key (`12j`), else from the number the band holds
+    // (the last step's, shown dim in the empty field).
+    const from = step.number !== '' ? step.number : await ports.bandNum()
+    await ports.setBandNum(from)
+    await bandListKey(ports, step.operation)
+    ports.log(`[bm] band field: "${typed}" -> ${step.operation.op} from "${from}", the number is now "${await ports.bandNum()}"`)
+    return renewField(ports)
+  }
+  await ports.setBandNum(typed)
+  if (list === 'list' && ports.setPromptFilter(step.filter ?? '')) return keepBandWaiting(ports)
+  if (step.go !== undefined) {
+    await ports.setBandNum('')
+    return jumpToListNumber(ports, step.go, 'band field')
+  }
+  const n = parseListNumber(typed)?.n
+  if (n) await showInPane(ports, n)
+  keepBandWaiting(ports)
+}
+
+// Enter in the band's field: what the text says (a number jumps; `*N` pins; `/words`
+// filters), as `go` does for the digit buttons. With nothing typed it acts on the number the
+// band holds (a step's), and closes the list only when there is none.
+export async function bandFieldSubmit(ports: BandCorePorts & PanePorts & ListPorts, typed: string) {
+  if (typed !== '') await ports.setBandNum(typed)
+  return bandNumberGo(ports)
+}
+
+// The plugin changed the number itself (a step, a pin, a removal): the field is drawn anew,
+// empty, under a fresh key, and the ring moves onto it; the number stays the band's (bandNum),
+// shown dim in the field and as the pane's ▶. The field only ever holds what the person
+// typed: Claude Code draws a field's `value` only until the person types (InputProps.value),
+// so a number written into it read back as "1j5" or as nothing (djdarcy's live checks,
+// 2026-10-25 07:16 and 07:31). The person's own typing never comes here.
+async function renewField(ports: BandCorePorts) {
+  await focusBand(ports, await ports.renewBandField())
+}
+
+/**
+ * After the ui.focus hook stepped the list off the field (Tab, or an arrow with the
+ * AbovePromptInput binding): the hook has put the ring back on the field it was on, and
+ * this draws the fresh one and moves the ring there once the band has drawn it. Asking the
+ * hook for a field not drawn yet was refused (07:32:00, "no element of bookmarks is drawn
+ * under that key"); $.ui.focus waits for the drawing.
+ */
+export function renewFieldSoon(ports: BandCorePorts) {
+  ports.after(0, () => void renewField(ports).catch(() => undefined))
+}
+
+// Where the band's ring goes for a list number: the field, or `go` among the digit buttons.
+async function listFocusKey(ports: BandCorePorts): Promise<string> {
+  return ports.listInput() === 'band-field' ? ports.bandFieldKey() : 'band-num-go'
+}
+/** The band's field, drawn under `band-num-field-<n>`; `n` grows each time the plugin renews it. */
+export const BAND_FIELD_PREFIX = 'band-num-field'
+export const bandFieldKeyOf = (rev: number) => `${BAND_FIELD_PREFIX}-${rev}`
+
 // A list key pressed on the band's number row (its buttons come from LIST_KEYS).
 export async function bandListKey(ports: BandCorePorts & PanePorts & ListPorts, operation: Operation) {
   if (operation.op === 'close') return void (await closeAll(ports, 'band list'))
@@ -155,6 +229,11 @@ export async function focusBand(ports: BandCorePorts, key: string): Promise<stri
   const r = await ports.focus(bandId, key)
   const deny = 'deny' in r && r.deny ? String(r.deny) : undefined
   ports.log(`[bm] band focus ${key}: ${deny ? `DENY ${deny}` : 'ok'}`)
+  // A plugin's own focus move is not reported to its own ui.focus hook, so the band records
+  // where it put the ring here; else the ring read as the command field and the first arrow
+  // off the band field moved the ring instead of stepping (djdarcy, 2026-10-25 07:40:53: "when
+  // I hit up first it navigates the band rather than the panel").
+  if (!deny) ports.band.ringMoved(key)
   return deny
 }
 
@@ -163,8 +242,10 @@ export async function focusBand(ports: BandCorePorts, key: string): Promise<stri
 export async function bandProbeKey(ports: BandCorePorts & ListPorts, mode: string): Promise<string | undefined> {
   const prefix = isList(mode as Pane) ? 'band-num-' : `band-${mode}-`
   const ring = ports.band.ring
+  // The field's key changes as it is renewed: aim at the one drawn now, never a stale ring.
+  if (ring?.startsWith(BAND_FIELD_PREFIX)) return ports.bandFieldKey()
   if (ring?.startsWith(prefix)) return ring
-  if (isList(mode as Pane)) return 'band-num-go'
+  if (isList(mode as Pane)) return listFocusKey(ports)
   if (mode === 'mark') return 'band-mark-cancel'
   const marks = await ports.loadMarks()
   if (marks[ports.readingLetter]) return 'band-jump-reading'
@@ -241,7 +322,7 @@ export async function bandOnly(ports: BandCorePorts & PanePorts & ListPorts, mod
   await ports.setBandMode(mode)
   ports.log(`[bm] ${mode}: lists are off, the band takes the key`)
   keepBandWaiting(ports)
-  const deny = await focusBand(ports, isList(mode as Pane) ? 'band-num-go' : mode === 'jump' ? 'band-jump-reading' : 'band-mark-cancel')
+  const deny = await focusBand(ports, isList(mode as Pane) ? await listFocusKey(ports) : mode === 'jump' ? 'band-jump-reading' : 'band-mark-cancel')
   if (deny && /does not hold the keyboard/i.test(deny)) ports.toast('With lists off, the band takes the keys: press the leader (Ctrl+] by default) first.')
 }
 
@@ -338,7 +419,7 @@ export async function openFor(ports: BandCorePorts & PanePorts & ListPorts, mode
     // Enter's default: `go` for a prompt number, the reading position for a jump (a
     // missing element, no reading position, is simply denied), and never a letter for a
     // mark: Enter on `a` overwrote mark a (djdarcy, 2026-10-07).
-    const deny = await focusBand(ports, isList(mode as Pane) ? 'band-num-go' : mode === 'jump' ? 'band-jump-reading' : 'band-mark-cancel')
+    const deny = await focusBand(ports, isList(mode as Pane) ? await listFocusKey(ports) : mode === 'jump' ? 'band-jump-reading' : 'band-mark-cancel')
     // The band never had the keyboard: the button was clicked (over a draft, a click
     // presses it without moving the keys). The watcher below would then close the pane
     // at once (djdarcy, 2026-10-07: "the panel popped up for a second but then

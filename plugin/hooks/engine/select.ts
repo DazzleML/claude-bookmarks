@@ -29,7 +29,7 @@ export type Chosen = PathName | 'current'
 export const PATH_ORDER: readonly PathName[] = ['ideal', 'patched', 'workaround']
 
 /** The engine APIs the plugin stands in for (docs/engine-quirks.md names each). */
-export type Gap = 'history.reach' | 'focus.handoff' | 'focus.leftSite' | 'keys.chord' | 'hover.multiline' | 'transcript.chunks'
+export type Gap = 'history.reach' | 'focus.handoff' | 'focus.leftSite' | 'focus.paneFromBand' | 'keys.chord' | 'keys.fieldArrows' | 'hover.multiline' | 'transcript.chunks'
 
 /** What the start hook reads once: the build, and dcc-patcher's markers (`DCC_PATCH_H` is set by its history patch, `DCC_PATCHES` and `DCC_PATCHER` by its launcher). */
 export type Signals = { version: string; base?: string; dccPatcher?: string; dccPatchH?: string; dccPatches?: string }
@@ -71,6 +71,23 @@ export const CAPABILITIES: readonly Capability[] = [
     ideal: null,
     patched: null,
     workaround: 'the keyboard probe (watchBand) and the first edit in the input box',
+  },
+  // The input-routing design (2026-10-25): the first gap a runtime decision reads
+  // (core/band/routes.ts listInputTarget). A pane the band opens never gets the keyboard
+  // (the typings' PaneOpenArgs.focus), so the list number is typed in the band's own field.
+  {
+    gap: 'focus.paneFromBand',
+    missing: "the band handing its own pane the keyboard (a band-opened pane's focus is refused)",
+    ideal: null,
+    patched: null,
+    workaround: "the band's own field (listInput)",
+  },
+  {
+    gap: 'keys.fieldArrows',
+    missing: 'arrow keys reaching a plugin field (a focused band Input swallows them; a patch could report them through ui.input)',
+    ideal: null,
+    patched: null,
+    workaround: "an AbovePromptInput up/down keybinding that moves the ring onto the band's step buttons",
   },
   {
     gap: 'keys.chord',

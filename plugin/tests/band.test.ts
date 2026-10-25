@@ -95,7 +95,7 @@ test('band: field draws the field alone', { options: { band: 'field' } }, async 
 // Every command that opens a list or a letter pane, with lists off: no pane, the band's
 // own row for the key (the band row's title tells which).
 for (const [cmd, title] of [['p', 'prompt #'], ['b', 'bookmark #'], ['m', 'mark as:'], ["'", 'jump:']] as const) {
-  test(`panes off: ${cmd} takes its key in the band and opens no pane`, { options: { panes: 'off' } }, async ($, on) => {
+  test(`panes off: ${cmd} takes its key in the band and opens no pane`, { options: { panes: 'off', listInput: 'buttons' } }, async ($, on) => {
     const w = world(on, { store: STORE, session: SID })
     const band = await mount($)
     await band.input({ key: 'band-cmd-0', text: cmd }).catch(() => undefined)

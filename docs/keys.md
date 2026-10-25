@@ -49,19 +49,34 @@ After any of these the keyboard stays on the band for the next command; `Esc` re
 
 ## 3. On the band with the prompts or bookmarks pane open
 
-After `p` or `b` the pane shows the list and the band takes the keys:
+After `p` or `b` the pane shows the list, and the band draws a `#` field of its own that takes the keys. It is an ordinary text field, so you can correct what you type:
 
 | Key | Does |
 |-----|------|
 | digits | Type a number; the pane's `#` field shows it and the list scrolls to it |
+| `Backspace` | Takes the last character off what you typed |
+| `/words` | Prompts only: filters the list, as in the pane's own field |
+| `*21`, then `Enter` | Prompts only: pins or unpins prompt 21 |
 | `Enter` | Jumps to the prompt or bookmark under the `▶` (or the typed number) |
-| `j` / `k` | Moves the `▶` down (older) / up (newer); the first press starts at the newest |
+| `j` / `k` | Moves the `▶` down (older) / up (newer); the first press starts at the newest. After a step the field is empty again, with the number shown dim in it; `12j` steps from 12 |
+| `Tab` / `Shift+Tab` | The same as `j` / `k` |
+| `Down` / `Up` | The same, once you add the binding below |
 | `s` | Prompts only: pins or unpins the prompt under the `▶`; the band stays open to pin more |
 | `h` / `l` | Bookmarks only: previous / next group (yours, Claude's, all) |
 | `c` | Bookmarks only: moves Claude's bookmark under the `▶` onto your list |
 | a number, then `d` | Bookmarks only: removes that bookmark from your list; the bookmarks file keeps a tombstone in its place |
 | `q` | Closes the pane (also typed alone in the pane's own `#` field) |
 | `Esc` | Closes the pane without jumping |
+
+**Up and Down in the band's field.** A text field in the band keeps the arrow keys to itself, so out of the box they do nothing there. One entry in `~/.claude/keybindings.json`, beside your leader's, makes them move off the field, which the band reads as a step:
+
+```json
+{ "context": "AbovePromptInput", "bindings": { "up": "abovePrompt:previous", "down": "abovePrompt:next" } }
+```
+
+Start a new session after adding it. The plugin never writes this file for you.
+
+**The digit buttons instead.** "Typing a list number" in `/config` (under **▸ Bookmarks**) set to `buttons` brings back the earlier band: one button per digit, no field. `auto`, the default, uses the field.
 
 ## 4. In a pane that holds the keyboard itself
 

@@ -85,7 +85,7 @@ test('relabel with meta sets tags on the record and answers with them', async ($
 })
 
 // A named bookmark: permalinks are off the pane (Q261012-07), so `c` acts on bookmarks.
-test('c in the bookmarks list claims the chosen record', async ($, on) => {
+test('c in the bookmarks list claims the chosen record', { options: { listInput: 'buttons' } }, async ($, on) => {
   const w = world(on, { session: SID, files: seeded('bookmark') })
   type Ui = { input: (t: object) => Promise<unknown>; press: (t: object) => Promise<unknown> }
   const band = (await $.ui.mount({ plugin: 'bookmarks', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS, requestId: 'band-1' } as never)) as unknown as Ui

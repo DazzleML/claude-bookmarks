@@ -13,6 +13,21 @@ test('an arrow off go in list mode steps the list and keeps the ring on go; a ch
   assert.deepEqual(bandFocusRoute({ byPerson: true, ring: undefined, mode: 'idle', element: 'chord-mark', cmdRev: 3 }), { element: 'band-cmd-3', kept: true })
 })
 
+// Input routing, unit 3b (2026-10-25): the band's own field has the step buttons either
+// side; a person's move off the field onto one steps the list and keeps the ring on the field.
+test('a move off the band field onto a step button steps the list and keeps the ring on the field, in both lists', () => {
+  // The field is drawn as band-num-field-<n>; the hook renews it after the step (field: true).
+  const field = { byPerson: true, ring: 'band-num-field-4', mode: 'list', cmdRev: 0 }
+  assert.deepEqual(bandFocusRoute({ ...field, element: 'band-num-k' }), { element: 'band-num-field-4', step: -1, field: true })
+  assert.deepEqual(bandFocusRoute({ ...field, element: 'band-num-j' }), { element: 'band-num-field-4', step: 1, field: true })
+  assert.deepEqual(bandFocusRoute({ ...field, mode: 'bookmarks', element: 'band-num-j' }), { element: 'band-num-field-4', step: 1, field: true })
+  assert.deepEqual(bandFocusRoute({ ...field, element: 'band-num-j', byPerson: false }), { element: 'band-num-j' }, 'the engine moving the ring is not a step')
+  assert.deepEqual(bandFocusRoute({ ...field, element: 'band-num-s' }), { element: 'band-num-s' }, 'only the step buttons step')
+  // A keymap that gives the steps n and p: the buttons are band-num-p and band-num-n.
+  assert.deepEqual(bandFocusRoute({ ...field, element: 'band-num-n', stepKeys: { prev: 'band-num-p', next: 'band-num-n' } }), { element: 'band-num-field-4', step: 1, field: true })
+  assert.deepEqual(bandFocusRoute({ ...field, element: 'band-num-j', stepKeys: { prev: 'band-num-p', next: 'band-num-n' } }), { element: 'band-num-j' })
+})
+
 test("a chord focus while the band is busy, or not the person's, and a plain move pass through", () => {
   assert.deepEqual(bandFocusRoute({ byPerson: true, ring: undefined, mode: 'list', element: 'chord-mark', cmdRev: 3 }), { element: 'chord-mark' })
   assert.deepEqual(bandFocusRoute({ byPerson: false, ring: undefined, mode: 'idle', element: 'chord-mark', cmdRev: 3 }), { element: 'chord-mark' })

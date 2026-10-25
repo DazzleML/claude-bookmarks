@@ -149,6 +149,18 @@ export const FIELDS = {
     title: 'Lists in a pane',
     description: "on: the prompts and bookmarks lists open in a pane beside the conversation; off: p and b take a number in the band and jump, with no pane",
   },
+  // Where a list number is typed when the band holds the keyboard (the input-routing design,
+  // 2026-10-25; core/band/routes.ts). A new field, never a changed type (docs/engine-quirks.md,
+  // "A saved setting of the wrong type stops the plugin loading"): `auto` names the best
+  // pathway this build has, so a better one can become the default without a saved value
+  // changing meaning.
+  listInput: {
+    kind: 'enum',
+    values: ['auto', 'field', 'buttons'],
+    default: 'auto',
+    title: 'Typing a list number',
+    description: "auto: the best way this Claude Code build allows (today the band's own field); field: the band's own field, where Backspace, /words and * work; buttons: one key per digit, as before 0.6.27",
+  },
   // U70: how much of each row the prompts and jump lists show. The pane's width is known, so
   // lines are the one control that matters; the text is cut with an ellipsis at the end of
   // the last line.

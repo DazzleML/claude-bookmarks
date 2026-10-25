@@ -4,8 +4,8 @@
 // the numbering, grouping and rows are worked out here, with the hook's local names.
 import type { EngineInterface } from 'claude-code'
 import { ownerOf, type AnchorOwner, type AnchorRecord } from '../core/bookmarks/anchor.ts'
-import { promptNumberComplete } from '../core/band/band-entry.ts'
-import { route, type Tables } from '../core/band/keys.ts'
+import { fieldInput } from '../core/band/field-input.ts'
+import type { Tables } from '../core/band/keys.ts'
 import { bookmarkWho, groupHeader, numberNewestFirst, numberWidth, pointerFor, unreached } from '../core/prompts/list-model.ts'
 import type { PaneStyles } from './prompts-pane.tsx'
 
@@ -101,12 +101,12 @@ export function bookmarksPaneView(elements: Elements, m: BookmarksPaneModel, a: 
           {...(fromBand !== undefined ? { value: fromBand } : {})}
           autoFocus
           onInput={(typed: string) => {
-            // One key is read through the key table: `q` closes, as in the band (Q261012-09).
-            if (typed.length === 1 && route(typed, { pane: 'bookmarks' }, m.tables).operation.op === 'close') return void a.close()
-            // A number then the table's remove key (`d`): that bookmark leaves the list (the keys design, unit 5).
-            const last = typed.slice(-1)
-            if (typed.length > 1 && /^\d+$/.test(typed.slice(0, -1)) && route(last, { pane: 'bookmarks' }, m.tables).operation.op === 'remove') return void a.remove(typed.slice(0, -1))
-            if (promptNumberComplete(typed, all.length)) void go(typed)
+            // What the text means is the list field's contract (core/band/field-input.ts),
+            // shared with the band's own field; the pane only runs the step.
+            const step = fieldInput(typed, 'bookmarks', all.length, m.tables)
+            if (step.op === 'close') return void a.close()
+            if (step.op === 'remove') return void a.remove(step.number)
+            if (step.op === 'text' && step.go !== undefined) void go(step.go)
           }}
           onSubmit={(typed: string) => void go(typed)}
         />

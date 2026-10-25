@@ -163,16 +163,21 @@ The reading position is kept apart from the letters: it never takes up a letter,
 ▶ 12) Our readme feels a bit weak
 ```
 
-The band takes the keys, and the pane shows where you are:
+The band takes the keys in a `#` field of its own, and the pane shows where you are:
 
 | Key | Does |
 |-----|------|
 | Digits | Type a prompt number; it shows in the pane's `#` field, and the list scrolls to that prompt, marked `▶` |
-| `j` / Down | Moves the `▶` one prompt down the list (older); the first press starts at the newest |
-| `k` / Up | Moves it one prompt up (newer) |
+| `Backspace` | Takes the last character off what you typed |
+| `/words` | Filters the list, as the pane's own field does |
+| `j` / `Tab` | Moves the `▶` one prompt down the list (older); the first press starts at the newest |
+| `k` / `Shift+Tab` | Moves it one prompt up (newer) |
+| `Down` / `Up` | The same as `j` / `k`, with the keybinding in [keys.md](keys.md#3-on-the-band-with-the-prompts-or-bookmarks-pane-open) |
 | `Enter` | Jumps to the prompt under the `▶` |
 | `s` | Pins or unpins the prompt under the `▶` (see [Pinned prompts](#pinned-prompts)) |
 | `Esc` | Closes without jumping |
+
+After a step the field is empty again, with the number shown dim in it, so the next key starts fresh; type a number before `j` (`12j`) to step from it. "Typing a list number" in `/config` set to `buttons` brings back the earlier row of digit buttons.
 
 The list includes prompts from before the plugin was loaded. The first time it sees a conversation, the plugin reads the prompts from the conversation's transcript file in one pass. After that it adds each prompt as you send it, including messages you typed while Claude was still working, which Claude Code queues and delivers mid-turn.
 

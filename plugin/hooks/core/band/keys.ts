@@ -346,8 +346,16 @@ export function barFor(settings: { band: 'full' | 'field'; chords: 'on' | 'off' 
 }
 
 /** Where a focus move in the band lands, and what it means (the AbovePrompt ui.focus hook's two rules, moved here under U60; the hook reads the state and acts). */
-export type BandFocus = { element: string | undefined; step?: -1 | 1; kept?: true }
-export function bandFocusRoute(f: { byPerson: boolean; ring: string | undefined; mode: string; element: string | undefined; cmdRev: number }): BandFocus {
+export type BandFocus = { element: string | undefined; step?: -1 | 1; kept?: true; /** The step came off the band's field: the hook renews the field and keeps the ring there. */ field?: true }
+export function bandFocusRoute(f: {
+  byPerson: boolean
+  ring: string | undefined
+  mode: string
+  element: string | undefined
+  cmdRev: number
+  /** The step buttons' keys beside the band's field (`band-num-<key>`), from the person's keymap; k and j by default. */
+  stepKeys?: { prev: string; next: string }
+}): BandFocus {
   // While the band is idle, the person's focus moves stay on the command field. After
   // a command the band keeps the keyboard (a plugin can't hand it back; Esc does), so
   // a second Ctrl+] moved the ring onto the `mark` button, Space pressed it, and Enter
@@ -360,6 +368,16 @@ export function bandFocusRoute(f: { byPerson: boolean; ring: string | undefined;
   // <up> <down> if possible").
   if (f.byPerson && f.ring === 'band-num-go' && f.mode === 'list' && (f.element === 'band-num-k' || f.element === 'band-num-j')) {
     return { element: 'band-num-go', step: f.element === 'band-num-k' ? -1 : 1 }
+  }
+  // The same on the band's own field (input routing, 2026-10-25, unit 3b): the step buttons
+  // sit either side of it, so a move off the field (Tab, Shift+Tab, or Up/Down with the
+  // AbovePromptInput binding in docs/keys.md) lands on one, steps the list, and the ring
+  // stays on the field for the next key. Both lists step here.
+  const steps = f.stepKeys ?? { prev: 'band-num-k', next: 'band-num-j' }
+  // The field is drawn as `band-num-field-<n>` (handlers/band.ts renewField); the hook draws
+  // a fresh one after the step, so `element` here is where the ring was.
+  if (f.byPerson && f.ring?.startsWith('band-num-field') && (f.mode === 'list' || f.mode === 'bookmarks') && (f.element === steps.prev || f.element === steps.next)) {
+    return { element: f.ring, step: f.element === steps.prev ? -1 : 1, field: true }
   }
   if (f.byPerson && f.element?.startsWith('chord-') && f.mode === 'idle') {
     return { element: `band-cmd-${f.cmdRev}`, kept: true }

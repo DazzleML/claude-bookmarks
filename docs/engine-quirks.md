@@ -138,7 +138,9 @@ A click presses the button, but with a draft in the input box the band never get
 
 **Why:** Claude Code grants a pane's focus request only while the band isn't holding the keyboard, and it never considers *who* asked, even when the person's own press on the same plugin's band opened the pane. Traced in Claude Code's internals: `ui.open` knows a request came from a person's press, but uses that only to decide where the pane goes. A retry a moment later is refused too.
 
-**What we do:** the band takes the next key itself. It redraws as the row of letters (`jump: reading (Enter)  a: …  b: …`), and the pane stays open beside it as a readable list. In prompt mode the band takes digits, `j`/`k` and the arrows, and the pane shows the number and a `▶` on the prompt.
+**What we do:** the band takes the next key itself. It redraws as the row of letters (`jump: reading (Enter)  a: …  b: …`), and the pane stays open beside it as a readable list. For a prompt or bookmark number the band draws a text field of its own (since 0.6.27; `core/band/routes.ts` chooses it, and "Typing a list number" in `/config` can bring back the older row of digit buttons), so Backspace, `/words` and `*N` work as in the pane's own field, and the pane shows the number and a `▶` on the row. The capability row `focus.paneFromBand` (`engine/select.ts`) is where a build that could hand the band's pane the keyboard would be chosen instead.
+
+A typed command such as `/bm-prompts` from an empty input box does get a focused pane, and so would a keybinding to `command:bm-prompts` in `keybindings.json`, which runs from the input box too: Claude Code grants the focus "only while the prompt has the keys over an empty composer" (the typings, `PaneOpenArgs.focus`).
 
 **Proper fix:** grant the focus when a person's press on a plugin's band opens that same plugin's pane, or let `$.ui.focus` move the keyboard between a plugin's own band and pane.
 
@@ -292,6 +294,18 @@ Claude Code checks the plugin's saved settings (`pluginConfigs` in `~/.claude/se
 ### A plugin's choice row always opens a picker — Limit
 
 In `/config`, a plugin's string field with `options` is drawn as a row that opens a picker screen; the in-place `‹ value ›` cycler is drawn only for Claude Code's own rows (2.1.310 marks every plugin choice row `pickToCommit`). A plugin's true/false field is drawn as a toggle that `Enter` flips in place, so the plugin's folds are true/false rows.
+
+### A field's text is the person's; the plugin can't set it reliably — Workaround
+
+An `Input`'s `value` is "the text the field holds when drawn; the person's typing replaces it until the hook draws another" (the typings, `InputProps.value`), and there is no prop for the cursor. Measured live on 2026-10-25 with the band's number field (2.1.310): a number the plugin wrote into a field the person had typed in kept the old cursor, so the next key landed mid-number (`1j5`); written into a freshly drawn field, it read back as nothing once the person typed. So the band's field holds only what the person types. A number the plugin sets (a step's) lives in the plugin's state and is shown as the empty field's dim placeholder; each time the plugin changes it, a new field is drawn under a new key and the ring moved onto it.
+
+### A focused band field swallows the arrow keys — Workaround
+
+A band `Input` holding the ring takes printable keys and Backspace, and drops the arrows, Home, End, Delete and Page Up/Down without an event (the 2.1.310 bundle's band key handler, read 2026-10-25). Keybindings are resolved first, though, so `"up": "abovePrompt:previous"` and `"down": "abovePrompt:next"` in the `AbovePromptInput` context move the ring off the field like `Shift+Tab` and `Tab`. The band draws its step buttons on either side of its field, and its `ui.focus` hook reads a move onto one as a step and puts the ring back. A patched build could report the swallowed keys to the plugin instead (the capability row `keys.fieldArrows`).
+
+### A plugin's own focus move isn't reported to its own hook — Limit
+
+`$.ui.focus` from the plugin moves the ring, but the plugin's own `ui.focus` hook never sees that move; it sees the person's. So a plugin that tracks where its ring is records its own successful moves itself (`handlers/band.ts` `focusBand`). Before it did, the band thought its ring was still where the person last put it, and the first Up off the band's field moved the ring instead of stepping (2026-10-25, 2.1.310).
 
 ### Testing the plugin with Claude Code's own test kit — Workaround
 

@@ -155,6 +155,10 @@ docs/images/bak/
 # The root tsconfig.json only extends those declarations (no secrets); keep it
 # tracked despite the *config*.json rule above, so contributors can run tsc.
 !/tsconfig.json
+# Editor settings inside plugin/: plugin/ is the folder that installs and that
+# Anthropic's directory reviews, so they stay out of it. The root .vscode/ rules
+# above still let shared debug settings be committed.
+plugin/.vscode/
 
 # RepoKit Private Content Protection (DO NOT REMOVE)
 CLAUDE.md

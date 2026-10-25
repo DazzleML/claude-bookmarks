@@ -52,7 +52,7 @@ test('a lone letter that is not a key neither closes the pane nor narrows the li
 
 // band.test.ts pins that the row draws exactly the hint's letter keys (so no field key);
 // this only pins the order: the step buttons either side of go, found by operation.
-test("the band's number row draws the step keys either side of go", async ($, on) => {
+test("the band's number row draws the step keys either side of go", { options: { listInput: 'buttons' } }, async ($, on) => {
   world(on, { session: SID, store: STORE })
   const { band } = await promptsPane($ as never)
   const keys = (await band.findAll({ type: 'Button' })).map(b => (b as { key?: string }).key ?? '')

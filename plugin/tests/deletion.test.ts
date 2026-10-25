@@ -83,7 +83,23 @@ function registerWithBookmark() {
   return { [REG]: serializeRegister(reg) }
 }
 
-test('d after a number in the bookmarks row removes that bookmark: a tombstone keeps its place', async ($, on) => {
+// The same through the band's own field (input routing, 2026-10-25, unit 4): `1d` typed.
+test('1d typed in the band field removes that bookmark: a tombstone keeps its place, and the field starts fresh', async ($, on) => {
+  const w = world(on, { session: SID, files: registerWithBookmark() })
+  const band = await mount($)
+  await band.input({ key: 'band-cmd-0', text: 'b' }).catch(() => undefined)
+  const field = () => band.findAll({ type: 'Input' }).then(f => f.find(i => (i.key ?? '').startsWith('band-num-field'))?.key)
+  const before = await field()
+  expect(before).toBe('band-num-field-0')
+  await band.input({ key: before, text: '1d', kind: 'change' }).catch(() => undefined)
+  const reg = register(w)
+  expect(reg.perma.length).toBe(0)
+  expect(reg.tombstones.length).toBe(1)
+  expect(w.toasts().at(-1)).toBe('removed bookmark: the one bookmark')
+  expect(await field()).not.toBe(before)
+})
+
+test('d after a number in the bookmarks row removes that bookmark: a tombstone keeps its place', { options: { listInput: 'buttons' } }, async ($, on) => {
   const w = world(on, { session: SID, files: registerWithBookmark() })
   const band = await mount($)
   await band.input({ key: 'band-cmd-0', text: 'b' }).catch(() => undefined)

@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.27] - 2026-10-25
+
+### Changed
+
+- After `Ctrl+] p` or `Ctrl+] b`, the band takes the number in a text field of its own instead of a row of digit buttons. You can correct what you type with Backspace, even with an empty input box, and `/words` filters the prompts list and `*21` pins prompt 21 from the band, as they already did in the pane's own field. `j`/`k` and `Tab`/`Shift+Tab` still step the list; after a step the field is empty again with the number shown dim in it, and `12j` steps from 12.
+- Up and Down can step the list too, with one entry in `~/.claude/keybindings.json` (`docs/keys.md` has it). The plugin never writes that file.
+- "Typing a list number" in `/config` brings back the digit buttons (`buttons`) if you prefer them; `auto` is the default.
+
+### Fixed
+
+- Typing `/` after `Ctrl+] p` no longer ends the band and lands the text in your input box.
+
 ## [0.6.26] - 2026-10-24
 
 ### Changed
@@ -1281,7 +1293,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.26...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.27...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

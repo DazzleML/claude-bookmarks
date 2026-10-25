@@ -25,8 +25,13 @@ declare module 'claude-code' {
       // Bumped after the band's command line runs a command: the field is drawn
       // under a new key, so it starts empty (POC 2026-10-07).
       cmdRev: number
-      // The digits of a prompt number typed into the band, one Button press each.
+      // The prompt or bookmark number typed into the band: its field's text, or the digit
+      // Buttons pressed (listInput: buttons).
       bandNum: string
+      // Bumped when the plugin itself changes the band field's number (a step, a pin, a
+      // removal): the field is drawn under a new key, so its cursor starts at the end
+      // (input routing, 2026-10-25; djdarcy's "1j5").
+      bandFieldRev: number
       // Which group the bookmarks pane shows: the person's, Claude's, (later: a team
       // member's). Cycled from the band; an index into BOOKMARK_GROUPS.
       bandGroup: number

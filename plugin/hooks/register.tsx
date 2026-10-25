@@ -36,6 +36,7 @@ import { firstColorSplit, tagMarksMarkdown, tagMarksPlain } from './core/marks/h
 import { ScreenModel } from './core/kit/screen-model'
 import { MARK_LETTERS, MarkCache, READING_LETTER, marksShowing, type Mark, type Marks } from './core/marks/marks'
 import { BOOKMARK_GROUPS, footnoteAt, nextGroup, pickNumbered, promptEntry } from './core/band/band-entry'
+import { listInputTarget } from './core/band/routes'
 import { debugCommand } from './handlers/debug-command'
 import { anchoredReply, markedPrompt, markedReply, type MarkStyles } from './views/marked-message'
 import { bandView } from './views/band'
@@ -97,6 +98,8 @@ const pinsRev = atom({ plugin: 'bookmarks', key: 'pinsRev' } as const, 0)
 // the field is drawn under a new key and starts empty; and the prompt number's digits.
 const cmdRev = atom({ plugin: 'bookmarks', key: 'cmdRev' } as const, 0)
 const bandNum = atom({ plugin: 'bookmarks', key: 'bandNum' } as const, '')
+// The band field's generation (handlers/band.ts renewField): its key is band-num-field-<n>.
+const bandFieldRev = atom({ plugin: 'bookmarks', key: 'bandFieldRev' } as const, 0)
 // The bookmarks pane shows one group at a time, cycled from the band (djdarcy, 2026-10-09:
 // start on "their" bookmarks, a key cycles to Claude's, and a third group such as team
 // members' can join later). An ordered list, so a group is one entry, not a code path.
@@ -826,6 +829,25 @@ async function togglePin($: EngineInterface, typed: string, known?: PromptRef[])
   return true
 }
 
+// The prompts list's `/words` filter as a field sets it while the person types (the pane's
+// own `#` field, and the band's field since input routing): true when it changed.
+function setPromptFilter($: EngineInterface, query: string): boolean {
+  if (!promptsPane.setFilter(query)) return false
+  log($, `[bm] prompts filter: "${cut(query, 40)}"`, { text: true })
+  void bumpView($)
+  return true
+}
+
+// Where the band takes a list number (core/band/routes.ts): the band holds the keyboard,
+// so the pane's own field is never the answer here; a build that could hand the pane the
+// keyboard (focus.paneFromBand patched) would be read here and still type in the band
+// until that hand-off exists.
+function bandListInput(): 'band-field' | 'band-buttons' {
+  const handoff = choose(capabilityOf('focus.paneFromBand'), capabilitySignals ?? NO_SIGNALS).path
+  const r = listInputTarget({ paneHasKeyboard: false }, currentSettings().listInput, handoff)
+  return r.target === 'band-buttons' ? 'band-buttons' : 'band-field'
+}
+
 // What the entry means (pin, filter, unfold, footnote, jump): core/band/band-entry.ts promptEntry.
 async function jumpToPromptNumber($: EngineInterface, typed: string, via: string) {
   const all = await prompts($)
@@ -926,6 +948,14 @@ function bandPorts($: EngineInterface): BandPorts {
     prompts: () => prompts($),
     bookmarkList: () => bookmarkList($),
     jumpToPromptNumber: (typed, via) => jumpToPromptNumber($, typed, via),
+    setPromptFilter: query => setPromptFilter($, query),
+    tables: currentTables,
+    listInput: bandListInput,
+    bandFieldKey: async () => band_.bandFieldKeyOf(await read($, bandFieldRev)),
+    renewBandField: async () => {
+      await update($, bandFieldRev, v => v + 1)
+      return band_.bandFieldKeyOf(await read($, bandFieldRev))
+    },
     jumpToBookmarkNumber: (typed, via) => jumpToBookmarkNumber($, typed, via),
     removeBookmarkNumber: typed => removeBookmarkNumber($, typed),
     scrollPaneCentre: key => $.ui.scroll({ in: PANE, to: { key }, block: 'center' }),
@@ -1219,10 +1249,19 @@ export const register: Register = (on, options) => {
     if (e.origin.kind === 'person') band.oweReminder(false)
     // The two rules (an arrow off `go` steps the list; a chord focus while idle stays on
     // the command field) and their history: core/band/keys.ts bandFocusRoute.
-    const r = bandFocusRoute({ byPerson: e.origin.kind === 'person', ring: band.ring, mode: await read($, bandMode), element: e.element, cmdRev: await read($, cmdRev) })
+    const focusMode = await read($, bandMode)
+    // The step buttons beside the band's field, by the keys the person's keymap gives them.
+    const stepKey = (dir: -1 | 1) => {
+      const l = listKeysFor(focusMode === 'bookmarks' ? 'bookmarks' : 'list', currentTables()).find(k => { const op = k.route().operation; return op.op === 'step' && op.dir === dir })
+      return `band-num-${l?.key ?? (dir === -1 ? 'k' : 'j')}`
+    }
+    const r = bandFocusRoute({ byPerson: e.origin.kind === 'person', ring: band.ring, mode: focusMode, element: e.element, cmdRev: await read($, cmdRev), stepKeys: { prev: stepKey(-1), next: stepKey(1) } })
     if (r.step) {
-      log($, `[bm] band arrow -> ${r.step === -1 ? 'k (up)' : 'j (down)'}`)
+      log($, `[bm] band arrow -> ${r.step === -1 ? 'k (up)' : 'j (down)'}${r.field ? ' (from the band field)' : ''}`)
       await band_.bandStep(bandPorts($), r.step)
+      // Off the band's field: the ring goes back to the field it was on (drawn), and a fresh
+      // empty field follows once drawn (handlers/band.ts renewFieldSoon).
+      if (r.field) band_.renewFieldSoon(bandPorts($))
       return next({ ...e, element: r.element })
     }
     if (r.kept && r.element) {
@@ -1541,6 +1580,8 @@ export const register: Register = (on, options) => {
         mode, shown: last, help, marks, letters: MARK_LETTERS, readingLetter: READING_LETTER,
         typed: mode === 'list' || bookmarks ? await read($, bandNum) : '',
         count, groupTitle, listKeys, bar,
+        listInput: bandListInput(),
+        fieldKey: mode === 'list' || bookmarks ? band_.bandFieldKeyOf(await read($, bandFieldRev)) : '',
         cmdRev: mode === 'idle' ? await read($, cmdRev) : 0,
       },
       {
@@ -1553,6 +1594,8 @@ export const register: Register = (on, options) => {
         digit: d => band_.bandDigit(bandPorts($), d),
         dot: () => band_.bandDot(bandPorts($)),
         go: () => band_.bandNumberGo(bandPorts($)),
+        fieldInput: typed => band_.bandFieldInput(bandPorts($), typed),
+        fieldSubmit: typed => band_.bandFieldSubmit(bandPorts($), typed),
         runCommandLine: (typed, kind) => runCommandLine($, typed, kind),
         perform: (key, id, action) => perform($, route(key, { pane: 'none' }, tables).operation, action ?? `button:${id}`),
       },
@@ -1606,12 +1649,7 @@ export const register: Register = (on, options) => {
           pressPrompt: r => pressPromptRow($, r.uuid, `prompt #${r.n}`, r.head),
           go: typed => jumpToPromptNumber($, typed, 'prompts pane'),
           close: () => closeAll($, 'prompts pane'),
-          setFilter: query => {
-            if (!promptsPane.setFilter(query)) return false
-            log($, `[bm] prompts filter: "${cut(query, 40)}"`, { text: true })
-            void bumpView($)
-            return true
-          },
+          setFilter: query => setPromptFilter($, query),
         },
         styles,
       )

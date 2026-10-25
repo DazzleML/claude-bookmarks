@@ -14,6 +14,8 @@ test('stock picks the workaround for every gap that has one, and current for the
     'history.reach=workaround',
     'focus.handoff=workaround',
     'focus.leftSite=workaround',
+    'focus.paneFromBand=workaround',
+    'keys.fieldArrows=workaround',
     'keys.chord=workaround',
     'transcript.chunks=workaround',
     'hover.multiline=current',

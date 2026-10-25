@@ -1,7 +1,7 @@
 {
   "name": "bookmarks",
   "displayName": "Bookmarks",
-  "version": "0.6.26",
+  "version": "0.6.27",
   "description": "Bookmarks and vim-style marks inside Claude Code conversations: mark a line, jump back, keep a reading position, browse your prompts, and let Claude cite earlier places as clickable links.",
   "author": {
     "name": "DazzleML",
@@ -145,6 +145,17 @@
       "options": [
         "on",
         "off"
+      ]
+    },
+    "listInput": {
+      "type": "string",
+      "title": "Typing a list number",
+      "description": "auto: the best way this Claude Code build allows (today the band's own field); field: the band's own field, where Backspace, /words and * work; buttons: one key per digit, as before 0.6.27",
+      "default": "auto",
+      "options": [
+        "auto",
+        "field",
+        "buttons"
       ]
     },
     "rowLines": {

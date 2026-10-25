@@ -48,7 +48,7 @@ test('the idle band: the command field, the labelled commands, and ?', async ($,
   expect([help?.props.hotkey, help?.props.action]).toEqual([undefined, undefined])
 })
 
-test('p in the band opens the prompts pane and the band takes a number', async ($, on) => {
+test('p in the band opens the prompts pane and the band takes a number', { options: { listInput: 'buttons' } }, async ($, on) => {
   const w = world(on, { store: STORE, session: SID })
   const band = await $.ui.mount(BAND as never)
   // The plugin then moves the band's focus ring onto "go"; the kit does not route a
@@ -101,11 +101,11 @@ test('/bm-config prints every setting with its source', async ($, on) => {
   const w = world(on, { store: STORE, session: SID })
   await $.command.run({ command: 'bm-config', args: '' } as never)
   expect(w.logs()).toEqual([
-    '[bm] settings: settingsShown=false (default); listOpensAt="nearest" (default); followHere="when-idle" (default); closeShare=0.6 (default); paneAfterJump="close" (default); paneWhileTyping="stay" (default); afterActionFocus="input" (default); palette="" (default); footnotes="folded" (default); promptTextBudget=2000000 (default); band="full" (default); chords="on" (default); panes="on" (default); rowLines=2 (default); keysShown=false (default); keyMark="" (default); keyJump="" (default); keyPrompts="" (default); keyRead="" (default); keyBookmarks="" (default); keyPromote="" (default); keyDelete="" (default); keyForget="" (default); keyBack="" (default); keyForward="" (default); keyClose="" (default); keyHelp="" (default); keyList="" (default); keyLeader="" (default); debugShown=false (default); debugDefault="off" (default); debugText="auto" (default); debugTextLength="reference" (default)',
+    '[bm] settings: settingsShown=false (default); listOpensAt="nearest" (default); followHere="when-idle" (default); closeShare=0.6 (default); paneAfterJump="close" (default); paneWhileTyping="stay" (default); afterActionFocus="input" (default); palette="" (default); footnotes="folded" (default); promptTextBudget=2000000 (default); band="full" (default); chords="on" (default); panes="on" (default); listInput="auto" (default); rowLines=2 (default); keysShown=false (default); keyMark="" (default); keyJump="" (default); keyPrompts="" (default); keyRead="" (default); keyBookmarks="" (default); keyPromote="" (default); keyDelete="" (default); keyForget="" (default); keyBack="" (default); keyForward="" (default); keyClose="" (default); keyHelp="" (default); keyList="" (default); keyLeader="" (default); debugShown=false (default); debugDefault="off" (default); debugText="auto" (default); debugTextLength="reference" (default)',
     '[bm] this build is loaded from a folder, so debugText="auto" means always; change any of these in /config',
     // The kit draws no /config menu; live, all rows are listed (screenshot 2026-10-12, 15 then).
     // 31 since the keymap rows (0.6.23): 16 settings, the fold row, 12 command rows, the list row, the Leader row;
-    // 33 since the Bookmarks fold over all of them and the debug fold (0.6.26).
-    "[bm] /config lists 0 of this plugin's 33 fields",
+    // 33 since the Bookmarks fold over all of them and the debug fold (0.6.26); 34 with listInput.
+    "[bm] /config lists 0 of this plugin's 34 fields",
   ])
 })

@@ -103,6 +103,13 @@ export type BandCorePorts = {
   now: () => Promise<number>
   after: (ms: number, fn: () => void) => { cancel: () => void }
   every: (ms: number, fn: () => unknown) => { cancel: () => void }
+  /** The key tables the person's keymap makes (core/settings-state.ts keymap). */
+  tables: () => import('../core/band/keys.ts').Tables
+  /** Where the band takes a list number: its own field or its digit buttons (core/band/routes.ts listInputTarget, the setting and the capability path). */
+  listInput: () => 'band-field' | 'band-buttons'
+  /** The band field's key now (`band-num-field-<n>`), and a fresh one: the field is drawn anew under it, holding the band's number. */
+  bandFieldKey: () => Promise<string>
+  renewBandField: () => Promise<string>
   // The band's focus probe (focusBand, bandProbeKey, watchBand):
   focus: (requestId: string, key: string) => Promise<{ deny?: unknown } | object>
   diagState: (when: string) => Promise<unknown>
@@ -140,6 +147,8 @@ export type ListPorts = {
   prompts: () => Promise<readonly { uuid: string }[]>
   bookmarkList: () => Promise<readonly import('../core/bookmarks/anchor.ts').AnchorRecord[]>
   jumpToPromptNumber: (typed: string, via: string) => Promise<unknown>
+  /** The prompts list's `/words` filter, as the pane's own field sets it; true when the filter changed. */
+  setPromptFilter: (query: string) => boolean
   jumpToBookmarkNumber: (typed: string, via: string) => Promise<unknown>
   /** `d` after a number in the bookmarks list: that bookmark leaves the list (handlers/bookmarks.ts removeBookmark). */
   removeBookmarkNumber: (typed: string) => Promise<unknown>
