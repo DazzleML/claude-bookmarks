@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.28] - 2026-10-25
+
+Documentation only; the plugin behaves exactly as in 0.6.27.
+
+### Fixed
+
+- The plugin's README, which is also its listing, and `PRIVACY.md` now say everything the plugin runs and writes. Since 0.6.18 the plugin also reads the conversation's transcript once in 4 MB pieces (`sh` running `tail` and `head`, or `hooks/scripts/read-chunk.ps1` on Windows), which the README did not mention and the reviewers' note in `register.tsx` did not count. Both READMEs also said marks and pins live in Claude Code's plugin store; since 0.5.4 and 0.5.5 they live in your bookmark files, and the store keeps only the prompt lists, the jumplist and the reading position's way back. The data folder's index, its README and the migration backups are listed too.
+- `docs/status.md` describes the plugin as it is: settings exist, the tested Claude Code versions run to 2.1.310, the automated tests pass on Linux, and the "big changes coming" list drops what 0.5 and 0.6 delivered.
+
+### Changed
+
+- For contributors: every README under `plugin/hooks/` lists every file in its folder (twenty were missing), and a new `core/transcript/README.md` covers the loader. The hooks README counts three program calls, not two, and the engine README describes the capability table as it is since 0.6.16.
+
 ## [0.6.27] - 2026-10-25
 
 ### Changed
@@ -1293,7 +1306,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.27...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.28...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

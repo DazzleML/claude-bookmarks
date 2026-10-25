@@ -9,17 +9,17 @@ Claude Code's validator reads `register.tsx` statically, so that it can find eve
 - **Every hook is registered in `register.tsx`**, with its filter written literally (`on('command.run', { command: 'bm-ids' }, ...)`). A filter built at run time still works, but the validator can no longer say which command it is (it reports `command=?`).
 - **`$` never leaves `register.tsx`.** The validator follows `$` only into functions declared there. Code in other files gets the engine through *ports*: plain objects of small functions, each spelled `$.noun.verb(...)` inside a top-level factory in `register.tsx` (`marksPorts($)`, `promptsPorts($)`, ...), whose types live in `engine/ports.ts`.
 
-So `register.tsx` is the registrations, the ports factories, a few one-line wrappers that keep old call sites working, and the few things that must call `$` where the validator can see them (`log()`, which calls `$.ui.log`; the two functions that run a program, so their arguments stay literal and visible).
+So `register.tsx` is the registrations, the ports factories, and the few things that must call `$` where the validator can see them: the `uiLog` port behind the Logger (`handlers/log.ts`), and every program the plugin runs, so their arguments stay literal and visible. Those are the two transcript searches (`userRows`, `grepTranscript`) and the whole-conversation loader's chunk read (`transcriptPorts`).
 
 ## The folders
 
 | Folder | Holds | May import |
 |---|---|---|
 | `core/` | Pure logic and the classes that own shared state: no `$`, no engine, testable with `node --test` | `core/` only |
-| `engine/` | The ports' types, the ownership table, and the capability paths for engine APIs Claude Code is missing | types from `core/` |
+| `engine/` | The ports' types, the ownership table, and the capability table: for each engine feature Claude Code is missing, which route runs on this build | types from `core/` |
 | `handlers/` | What each feature does (marks, band, navigation, bookmarks, prompts, log, the commands), written against ports | `core/`, `engine/` |
 | `views/` | What is drawn (the band, the panes, a marked message), as JSX that takes already-resolved data and actions | `core/` |
-| `scripts/` | PowerShell helpers the plugin runs on Windows, where `sh` and `grep` may be missing | nothing |
+| `scripts/` | PowerShell helpers the plugin runs on Windows, where `sh` and `grep` may be missing: the two transcript searches and the loader's chunk read | nothing |
 
 The direction is one way: `register.tsx` uses handlers and views; handlers and views use `core/`; `core/` uses nothing outside itself.
 
@@ -32,7 +32,7 @@ Every piece of state that more than one part of the plugin reads (the marks cach
 - `tests/core/` (repository root): `node --test tests/core/*.test.ts`, for everything in `core/` and the ownership and colour scans.
 - `plugin/tests/`: `claude plugin test plugin`, which drives the hooks through a fake `$` (the kit).
 
-Before a commit, also `npx tsc -p plugin --noEmit` and `claude plugin validate ./plugin`.
+Before a commit, also `npx tsc -p plugin --noEmit` and `claude plugin validate ./plugin`. The pre-push hook runs the core suite, the type check and the validator; CI runs the validator and the kit suite on Linux and on Windows for every push.
 
 ## Moving code here
 

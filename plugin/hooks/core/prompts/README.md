@@ -9,4 +9,5 @@ The prompts list: which transcript rows are your prompts, how they are numbered 
 | `list-model.ts` | The list's model: numbering from the first prompt, footnotes under their prompt and whether they show, the pinned group, the pointer, group headers. |
 | `filter.ts` | The filter (#28): words in any order, case-insensitive, matched against each prompt's kept text; a prompt keeps its number. |
 | `text-store.ts` | How much prompt text the filter keeps, and how it is split into files under the data root. |
+| `prompts-pane-state.ts` | `PromptsPaneState`: the pane's own state, owned in one place: the filter's words, the footnotes unfolded by hand, and the prompt the list centres on at its next draw. |
 | `view-position.ts` | Which prompt the person is nearest to, for the pane's yellow row: the exchange (a prompt and its replies) that takes the most screen lines, with redraws that are not a view change ignored. |
