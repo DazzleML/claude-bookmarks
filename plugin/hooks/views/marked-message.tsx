@@ -5,13 +5,44 @@
 // register.tsx's. Location provisional (Q261012-11, question 3);
 // settled here by the layout pass (0.4.77).
 import type { ElementConstructor, EngineInterface, RenderChildren, TextProps } from 'claude-code'
-import type { ColorSplit } from '../core/marks/highlight.ts'
+import { markedLineMarkdown, type ColorSplit } from '../core/marks/highlight.ts'
 import type { Style } from '../core/palette.ts'
 
 /** The two roles a marked line draws with: the soft band, and the letter and words. */
 export type MarkStyles = { band: Style; mark: Style }
 
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
+
+/** What a marked line drawn as Markdown needs when the reply's links are the plugin's to press (anchoredReply). */
+export type LineLinks = {
+  pressable: readonly string[]
+  onPress: (href: string) => unknown
+  markText: (text: string) => string
+  /** The element's address: an element with onLinkPress needs a key (the engine refuses one without; the kit showed it, 2026-10-21). */
+  key: string
+}
+
+// A reply's marked line that carries a link is drawn as Markdown inside the band's Box, so the
+// link keeps its colour and its click (slice B, 2026-10-21; the draft "a link on a highlighted
+// line loses its colour and its click"); the words get the bold «a» form where the tag cannot
+// break a link (core/marks/highlight.ts markedLineMarkdown). A line with no link keeps the
+// Text drawing below. Whether the Box's background paints behind Markdown is the checklist's
+// to see: the kit shows the tree, not the terminal.
+export function markedReplyLine(elements: Pick<Elements, 'Box' | 'Text' | 'Markdown'>, c: ColorSplit, styles: MarkStyles, links?: LineLinks) {
+  const md = markedLineMarkdown(c)
+  if (md === undefined) return markedLine(elements.Text, c, styles)
+  const { Box, Markdown } = elements
+  const bg = styles.band.backgroundColor
+  return (
+    <Box {...(bg ? { backgroundColor: bg } : {})}>
+      <Markdown
+        {...(links ? { key: links.key } : {})}
+        text={links ? links.markText(md) : md}
+        {...(links ? { pressableLinks: links.pressable, onLinkPress: (link: { href: string }) => links.onPress(link.href) } : {})}
+      />
+    </Box>
+  )
+}
 
 // The marked line as drawn on a prompt or a reply: the soft band, then the mark's letter
 // and words bold in the palette's `mark` role (styles.mark; WORDS_FG until 0.4.19).
@@ -46,6 +77,12 @@ export function markedColumn(elements: Pick<Elements, 'Box' | 'Text'>, c: ColorS
   )
 }
 
+/** A prompt with its marked line drawn by the plugin: the column above, with the rest of the prompt as plain Text (a prompt row is plain text). The one JSX expression register.tsx's UserMessage hook held, moved here (U60). */
+export function markedPrompt(elements: Pick<Elements, 'Box' | 'Text'>, c: ColorSplit, engine: RenderChildren, styles: MarkStyles) {
+  const { Text } = elements
+  return markedColumn(elements, c, engine, c.after && <Text>{c.after}</Text>, styles)
+}
+
 // A reply with its marked line drawn by the plugin: the part before it still goes to the
 // engine (keeps the reply's bullet and formatting); the part after is drawn with the
 // Markdown element. With no engine part:
@@ -56,7 +93,7 @@ export function markedColumn(elements: Pick<Elements, 'Box' | 'Text'>, c: ColorS
 // message's bullet is not drawn while its first line is highlighted.
 export function markedReply(elements: Pick<Elements, 'Box' | 'Text' | 'Markdown'>, c: ColorSplit, engine: RenderChildren | null, styles: MarkStyles) {
   const { Box, Text, Markdown } = elements
-  const line = markedLine(Text, c, styles)
+  const line = markedReplyLine(elements, c, styles)
   // On whether there is text before the line, as before the move (0.4.48 branched on the
   // engine's answer instead, which differs when the engine draws nothing for that text:
   // RenderChildren may be null; move audit F2, restored 0.4.93).
@@ -126,7 +163,7 @@ export function anchoredReply(elements: Pick<Elements, 'Box' | 'Text' | 'Markdow
       <Box flexDirection="column">
         {before && md(before, `anchors-${m.keyBase}-a`)}
         {gapAbove && <Text> </Text>}
-        {markedLine(Text, m.colored, styles)}
+        {markedReplyLine(elements, m.colored, styles, { pressable: m.pressable, onPress: onLinkPress, markText: m.markText, key: `anchors-${m.keyBase}-line` })}
         {gapBelow && <Text> </Text>}
         {after && md(after, `anchors-${m.keyBase}-b`)}
         {legend}

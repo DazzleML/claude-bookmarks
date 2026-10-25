@@ -1,13 +1,18 @@
 # git-repokit-common settings for claude-bookmarks.
 #
-# The product is a Claude Code mod (TypeScript, in .claude-plugin/, hooks/ and
-# types/), so there is no pyproject.toml: this is repokit-common's own config
-# file for projects that are not Python packages. It configures the vendored
-# copy at scripts/repokit-common/ (version sync, CHANGELOG links, git hooks).
+# The product is a Claude Code plugin (TypeScript, under plugin/), so there is
+# no pyproject.toml: this is repokit-common's own config file for projects that
+# are not Python packages. It configures the vendored copy at
+# scripts/repokit-common/ (version sync, CHANGELOG links, git hooks).
 # The table header stays [tool.repokit-common], as in a pyproject.toml.
 #
-# Tests: none declared here. The pre-push hook runs tests/ (without the
-# vendored copy), and CI runs `python -m pytest tests/`.
+# Tests: `test-command` below replaces the hook's pytest default, so a push
+# runs what guards this repository -- the core suite under Node, the version
+# tests under pytest, the strict type check and the plugin validator. The kit
+# suite (`claude plugin test plugin`) stays out of the hook for speed; run it
+# yourself, and CI runs it on every push. The hook runs the command with
+# `sh -c` from the repository root; a
+# non-zero exit blocks a push to a gated branch and warns on any other.
 
 [tool.repokit-common]
 # Source of truth for version components (MAJOR/MINOR/PATCH/PHASE).
@@ -19,6 +24,9 @@ tag-prefix = "v"
 # from .claude-plugin/plugin.json.
 tag-format = "human"
 private-patterns = ["private/", "local/", ".env"]
+# What a push must pass (see the header). Kept in the table above the
+# extra-targets array, where repokit_config.py reads the plain keys.
+test-command = "node --test tests/core/*.test.ts && python -P -m pytest tests/ -q && npx tsc -p plugin --noEmit && claude plugin validate ./plugin"
 
 # Keep the plugin manifest's "version" in step with version.py: every sync,
 # --bump, --set and --phase writes it too (git-repokit-common v0.3.2+), and

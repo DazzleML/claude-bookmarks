@@ -6,7 +6,7 @@
 // the transcript. The program runs that read the transcript stay in register.tsx, where
 // the validator reads their commands, and reach the back-fill as a port (userRows).
 
-import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, type PromptRef } from '../core/prompts/prompt-store.ts'
+import { PROMPTS_KEPT, appendOnce, backfillLine, backfilledKey, footnotesKey as footnotesKeyOf, mergeBackfill, parseBackfill, promptTextBase as promptTextBaseOf, promptsKey as promptsKeyOf, type Backfill, type PromptRef } from '../core/prompts/prompt-store.ts'
 import { pruneStore, type Seen } from '../core/store-prune.ts'
 import { SEEN_KEY } from '../core/store-keys.ts'
 import { shard, withinBudget, type PromptText } from '../core/prompts/text-store.ts'
@@ -163,14 +163,30 @@ export async function backfillPrompts(ports: PromptsPorts) {
     ports.log('[bm] backfill: neither PowerShell nor sh + grep ran; prompts list starts when the mod loaded')
     return
   }
-  const { found, texts, footnotes } = parseBackfill(rows.stdout)
+  const backfill = parseBackfill(rows.stdout)
+  const merged = await applyBackfill(ports, backfill, !!rows.isStdoutTruncated)
+  ports.log(backfillLine(backfill.found.length, rows.via, rows.ms, rows.stdout.length, !!rows.isStdoutTruncated, merged.length))
+}
+
+/**
+ * What a read of the transcript leaves in the store: the prompts merged into the list in
+ * file order, the footnotes, the prompts' text in the cache and its pieces. The grep
+ * back-fill and the loader's pass (handlers/transcript.ts, slice F) both end here, so the
+ * prompts list has one writer whichever read it was. A cut-off read is left unmarked, so
+ * a later session start tries again.
+ */
+export async function applyBackfill(ports: PromptsPorts, { found, texts, footnotes, notPrompts }: Backfill, truncated: boolean): Promise<PromptRef[]> {
   const cache = await promptTexts(ports)
   for (const [uuid, text] of texts) cache.set(uuid, text)
   await ports.storeSet(await footnotesKey(ports), footnotes.slice(-PROMPTS_KEPT))
-  const merged = mergeBackfill(found, await keptPrompts(ports))
+  const kept = await keptPrompts(ports)
+  // A stored row the reader read and judged not a prompt leaves the list; say which, once,
+  // so a wrong judgment can be seen in the log rather than as a missing prompt.
+  const retired = notPrompts ? kept.filter(p => notPrompts.has(p.uuid)) : []
+  if (retired.length) ports.log(`[bm] prompts list: ${retired.length} stored row(s) the transcript holds as not prompts retired: ${retired.map(p => `${p.uuid.slice(0, 8)} "${p.head.slice(0, 40)}"`).join('; ')}`)
+  const merged = mergeBackfill(found, kept, PROMPTS_KEPT, notPrompts)
   await ports.storeSet(await promptsKey(ports), merged)
   await savePromptTexts(ports)
-  // A cut-off read is left unmarked, so a later session start tries again.
-  if (!rows.isStdoutTruncated) await ports.storeSet(doneKey, true)
-  ports.log(backfillLine(found.length, rows.via, rows.ms, rows.stdout.length, !!rows.isStdoutTruncated, merged.length))
+  if (!truncated) await ports.storeSet(backfilledKey(BACKFILL_VERSION, await ports.sessionId()), true)
+  return merged
 }

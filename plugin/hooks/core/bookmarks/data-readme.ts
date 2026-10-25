@@ -32,36 +32,26 @@ const KIND_WORDS: Record<(typeof DATA_LAYOUT)[number]['kind'], string> = {
   generated: 'generated -- rewritten by the plugin; edits are overwritten',
 }
 
-/** The README's text for `writer` (the plugin's name and version). Deterministic for a writer. */
-export function dataReadme(writer: string): string {
-  const lines = [
-    `${README_MARK}`,
-    `<!-- writer: ${writer} -->`,
-    '',
-    '# Your bookmarks',
-    '',
-    'This folder is where the claude-bookmarks plugin for Claude Code keeps what you make in it: bookmarks, marks, pins and the notes that go with them. It is yours, in your own folder and never under Claude Code\'s own configuration folder, which Claude Code cleans. The plugin reads and writes here; nothing else is needed to read it -- the JSON is plain, the notes are Markdown, and `sessions/INDEX.md` is a map of all of it that opens in Obsidian or any Markdown viewer.',
-    '',
-    '## What is here',
-    '',
-    '| Path | What | Kind |',
-    '|---|---|---|',
-    ...DATA_LAYOUT.map(e => `| \`${e.path}\` | ${e.what} | ${KIND_WORDS[e.kind]} |`),
-    '',
-    '## What to back up',
-    '',
-    'Everything under `sessions/` is authored: the bookmark files and the notes are what you and Claude made, and nothing rebuilds them. `backups/` holds the plugin\'s own copies from format migrations; keep it as long as you might want to go back. `prompttext/` and `debug/` are caches: deleting them loses nothing you cannot get back. The index and this file are generated.',
-    '',
-    '## Formats',
-    '',
-    'Each bookmark file carries a `version`. A newer plugin migrates an older file at the start of a conversation, after copying the original into a run folder under `backups/`; an older plugin leaves a newer file read-only rather than write it. `/bm-check` inside Claude Code reports the state of every file here without changing anything.',
-    '',
-    'A reinstall of the plugin under another marketplace name starts Claude Code\'s plugin store afresh and resets the plugin\'s `/config` options; this folder is unaffected.',
-    '',
-    `Written by ${writer}. Documentation: https://github.com/DazzleML/claude-bookmarks/blob/main/docs/usage.md`,
-    '',
-  ]
-  return lines.join('\n')
+/**
+ * The README's prose lives in the plugin's own folder, not here (djdarcy, 2026-10-20: text the
+ * plugin writes to disk is a file a person can edit; a missing file is a bug, never filled from
+ * code). The template's three placeholders: `{{mark}}` (README_MARK, kept in code because
+ * readmeNeedsWrite matches on it), `{{writer}}`, `{{layout_table}}` (the rows of DATA_LAYOUT).
+ */
+export const README_TEMPLATE = 'templates/data-readme.md'
+
+/** The layout as table rows, joined with the template's own newline (a CRLF checkout keeps its endings). */
+export function layoutTable(newline = '\n'): string {
+  return DATA_LAYOUT.map(e => `| \`${e.path}\` | ${e.what} | ${KIND_WORDS[e.kind]} |`).join(newline)
+}
+
+/** The README's text for `writer` (the plugin's name and version), rendered from `template` (the file README_TEMPLATE names). Deterministic for a writer and a template; a replacement is a function, so a `$` in a value is never special. */
+export function dataReadme(writer: string, template: string): string {
+  const newline = template.includes('\r\n') ? '\r\n' : '\n'
+  return template
+    .replace(/\{\{mark\}\}/g, () => README_MARK)
+    .replace(/\{\{writer\}\}/g, () => writer)
+    .replace(/\{\{layout_table\}\}/g, () => layoutTable(newline))
 }
 
 /** Whether a start should (re)write the README: missing, or written by another writer. */

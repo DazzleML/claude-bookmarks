@@ -2,6 +2,17 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { PromptsPaneState } from '../../plugin/hooks/core/prompts/prompts-pane-state.ts'
 
+test("Esc clears an active filter once and keeps the pane; a second Esc, or a close that is not the person's, closes", () => {
+  const s = new PromptsPaneState()
+  assert.equal(s.escClears(true), false)
+  s.setFilter('zebra')
+  assert.equal(s.escClears(false), false)
+  assert.equal(s.filter, 'zebra')
+  assert.equal(s.escClears(true), true)
+  assert.equal(s.filter, '')
+  assert.equal(s.escClears(true), false)
+})
+
 test('the filter: set, unchanged is no change, cleared', () => {
   const p = new PromptsPaneState()
   assert.equal(p.filter, '')

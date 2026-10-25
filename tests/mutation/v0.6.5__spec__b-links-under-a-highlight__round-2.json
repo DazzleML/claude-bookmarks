@@ -1,0 +1,13 @@
+{
+  "target": "slice B round 2: highlight.ts markedLineMarkdown and the view's markedReplyLine; plus round 1's survivors M3 and M8 re-run after their killers (words ending where a link begins are tagged; an anchored reply's marked line keeps pressableLinks)",
+  "generation": "mode 1: fresh-context mid-engineer, zero tools, the excerpts and round 1's list inline; 2026-10-21. M5 recorded equivalent, not re-run.",
+  "mutations": [
+    {"id": "N1", "file": "plugin/hooks/core/marks/highlight.ts", "original": "const outside = end <= start || at >= stop", "mutated": "const outside = end <= start || at > stop", "note": "boundary: snippet starting exactly at link end treated as overlapping"},
+    {"id": "N2", "file": "plugin/hooks/core/marks/highlight.ts", "original": "const labelStart = start + 1", "mutated": "const labelStart = start", "note": "label start includes the opening bracket"},
+    {"id": "N3", "file": "plugin/hooks/core/marks/highlight.ts", "original": "const end = at + c.snippet.length", "mutated": "const end = at + c.snippet.length - 1", "note": "snippet end off by one, shortens bolded span and slice"},
+    {"id": "N4", "file": "plugin/hooks/core/marks/highlight.ts", "original": "const LINK = /\\[([^\\]]*)\\]\\(([^)\\s]+)\\)/g", "mutated": "const LINK = /\\[(.*)\\]\\(([^)\\s]+)\\)/g", "note": "label group made greedy so multiple links merge into one match"},
+    {"id": "N5", "file": "plugin/hooks/views/marked-message.tsx", "original": "text={links ? links.markText(md) : md}", "mutated": "text={md}", "note": "markText transform skipped when links available"},
+    {"id": "M3", "file": "plugin/hooks/core/marks/highlight.ts", "original": "const outside = end <= start || at >= stop", "mutated": "const outside = end < start || at >= stop", "note": "round 1 survivor: boundary adjacent to link start no longer outside"},
+    {"id": "M8", "file": "plugin/hooks/views/marked-message.tsx", "original": "{...(links ? { pressableLinks: links.pressable, onLinkPress: (link: { href: string }) => links.onPress(link.href) } : {})}", "mutated": "{...(links ? { onLinkPress: (link: { href: string }) => links.onPress(link.href) } : {})}", "note": "round 1 survivor: pressableLinks prop dropped"}
+  ]
+}

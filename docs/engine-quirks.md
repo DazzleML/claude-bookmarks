@@ -138,7 +138,9 @@ A click presses the button, but with a draft in the input box the band never get
 
 **Why:** Claude Code grants a pane's focus request only while the band isn't holding the keyboard, and it never considers *who* asked, even when the person's own press on the same plugin's band opened the pane. Traced in Claude Code's internals: `ui.open` knows a request came from a person's press, but uses that only to decide where the pane goes. A retry a moment later is refused too.
 
-**What we do:** the band takes the next key itself. It redraws as the row of letters (`jump: reading (Enter)  a: …  b: …`), and the pane stays open beside it as a readable list. In prompt mode the band takes digits, `j`/`k` and the arrows, and the pane shows the number and a `▶` on the prompt.
+**What we do:** the band takes the next key itself. It redraws as the row of letters (`jump: reading (Enter)  a: …  b: …`), and the pane stays open beside it as a readable list. For a prompt or bookmark number the band draws a text field of its own (since 0.6.27; `core/band/routes.ts` chooses it, and "Typing a list number" in `/config` can bring back the older row of digit buttons), so Backspace, `/words` and `*N` work as in the pane's own field, and the pane shows the number and a `▶` on the row. The capability row `focus.paneFromBand` (`engine/select.ts`) is where a build that could hand the band's pane the keyboard would be chosen instead.
+
+A typed command such as `/bm-prompts` from an empty input box does get a focused pane, and so would a keybinding to `command:bm-prompts` in `keybindings.json`, which runs from the input box too: Claude Code grants the focus "only while the prompt has the keys over an empty composer" (the typings, `PaneOpenArgs.focus`).
 
 **Proper fix:** grant the focus when a person's press on a plugin's band opens that same plugin's pane, or let `$.ui.focus` move the keyboard between a plugin's own band and pane.
 
@@ -169,6 +171,13 @@ A click presses the button, but with a draft in the input box the band never get
 - prompts the plugin hasn't seen drawn are dimmed in the prompts pane.
 
 **Limits of that fallback:** `[` writes only what Claude Code holds, and your terminal's scrollback has a size limit (Windows Terminal keeps 9,001 lines by default).
+
+**Pathways** (the plugin's capability table, `history.reach`; `/bm-env` says which runs):
+
+- *Ideal:* a build that follows `logicalParentUuid` on resume; none yet.
+- *Workaround:* the clipboard phrase and the search route above; what stock Claude Code gets.
+- *Patched:* a build whose history patch makes pre-compaction rows real rows (it sets `DCC_PATCH_H`); the jump lands, and a scroll still refused there is worded as such, not as a compaction.
+- *Current:* the workaround.
 
 **Proper fix:** follow `logicalParentUuid` on resume, or load older history in pages as you scroll back. Opening the full session file outside Claude Code is planned (issue #16).
 
@@ -216,9 +225,21 @@ A message redrawn off screen for the first time since load (a bookmark link mint
 
 **Proper fix:** let `Button` take `color` and `bold` at rest, as it already does on hover.
 
+### A long button label wraps, and a pane knows its own width — Workaround
+
+**What you notice:** a prompts-pane row shows as much of the prompt as the pane is wide, cut with an ellipsis, however wide the pane is dragged (0.6.10).
+
+**Why:** a `Button` label longer than the pane wraps onto more rows, and a `Text` child with `wrap="truncate-end"` inside a `Button` is not honoured, so nothing the view draws can ask the terminal to cut a row (0.6.9 tried, and every row showed its whole prompt wrapped). The plugin's test kit cannot see this: it renders a tree, not columns, so a claim about the terminal's cut is a live check. What the engine does give is the width: the `Pane` render hook's `e.props.bodyColumns`.
+
+**What we do:** the view cuts each row to `bodyColumns` less its number column, with an ellipsis as the last character (`fitLine` in `core/bookmarks/transcript-lines.ts`), and draws it as a plain label. A row that should wrap on purpose (a lines-per-entry setting) can be cut to lines × width instead and let the terminal wrap it, in the row shape whose number column is its own `Box`.
+
+**Proper fix:** honour `wrap` on a `Text` inside a `Button`, or give `Button` a `wrap` of its own.
+
 ### Hover can reveal, but can't animate or notify — Limit
 
 Hover styles and reveals are applied by Claude Code itself: no plugin code runs, and a hover effect "settles, never loops". So a scrolling marquee on hover isn't possible, while a hover card showing the full text is.
+
+**A multi-line button highlights one line on hover** (seen 2026-10-22, the prompts list at two lines per row): the hover highlight covers the terminal line under the pointer, not the button's whole label, and nothing in the plugin can widen it. In the capability table this is `hover.multiline`, with no path: *Ideal* is the engine highlighting every line of the button; *Current* is one line.
 
 ## Running and loading
 
@@ -264,7 +285,27 @@ A command run from a key (a `command:` binding) is drawn for a moment under a `p
 
 ### Engine calls stay in the hooks module's own file — Limit
 
-`claude plugin validate` follows `$` only into functions declared in the same file as the hooks, never across an import, and wants every engine call spelled `$.noun.event(...)` at its call site. Moving the debug log into `engine/debug-log.ts` with `$` passed in failed validation (measured 2026-10-12, Claude Code 2.1.296): "$ is passed to "log", imported from "./engine/debug-log": $ is followed only into a function declared in this same file, never across an import". So `register.tsx` keeps every function that touches the engine; what can leave it is code that does not take `$`: pure rules (`core/`), and drawing helpers that take the resolved elements and plain data.
+`claude plugin validate` follows `$` only into functions declared in the same file as the hooks, never across an import, and wants every engine call spelled `$.noun.event(...)` at its call site. Moving the debug log into `engine/debug-log.ts` with `$` passed in failed validation (measured 2026-10-12, Claude Code 2.1.296): "$ is passed to "log", imported from "./engine/debug-log": $ is followed only into a function declared in this same file, never across an import". So `register.tsx` keeps every function that touches the engine; what can leave it is code that does not take `$`: pure rules (`core/`), and drawing helpers that take the resolved elements and plain data. Within the file, a helper that takes `$` and returns a closure over an engine call (`toastVia($)` returning `text => $.ui.toast(text)`) passes (measured 2026-10-22, Claude Code 2.1.308), so the ports every builder spells the same way can be written once.
+
+### A saved setting of the wrong type stops the plugin loading — Limit
+
+Claude Code checks the plugin's saved settings (`pluginConfigs` in `~/.claude/settings.json`) against the field types in `plugin.json` before the plugin's code runs. A value that doesn't fit, such as a string saved for a true/false field, refuses the load with "options do not fit plugin.json userConfig", and the plugin's commands become unknown (measured 2026-10-24, Claude Code 2.1.310: the folds changed from a `hidden`/`shown` choice to true/false, and a saved `"keysShown": "hidden"` kept the plugin from loading until it was changed to `false`). So a setting that has shipped never changes its type; a new form gets a new field name, and the old one is left to read as unknown.
+
+### A plugin's choice row always opens a picker — Limit
+
+In `/config`, a plugin's string field with `options` is drawn as a row that opens a picker screen; the in-place `‹ value ›` cycler is drawn only for Claude Code's own rows (2.1.310 marks every plugin choice row `pickToCommit`). A plugin's true/false field is drawn as a toggle that `Enter` flips in place, so the plugin's folds are true/false rows.
+
+### A field's text is the person's; the plugin can't set it reliably — Workaround
+
+An `Input`'s `value` is "the text the field holds when drawn; the person's typing replaces it until the hook draws another" (the typings, `InputProps.value`), and there is no prop for the cursor. Measured live on 2026-10-25 with the band's number field (2.1.310): a number the plugin wrote into a field the person had typed in kept the old cursor, so the next key landed mid-number (`1j5`); written into a freshly drawn field, it read back as nothing once the person typed. So the band's field holds only what the person types. A number the plugin sets (a step's) lives in the plugin's state and is shown as the empty field's dim placeholder; each time the plugin changes it, a new field is drawn under a new key and the ring moved onto it.
+
+### A focused band field swallows the arrow keys — Workaround
+
+A band `Input` holding the ring takes printable keys and Backspace, and drops the arrows, Home, End, Delete and Page Up/Down without an event (the 2.1.310 bundle's band key handler, read 2026-10-25). Keybindings are resolved first, though, so `"up": "abovePrompt:previous"` and `"down": "abovePrompt:next"` in the `AbovePromptInput` context move the ring off the field like `Shift+Tab` and `Tab`. The band draws its step buttons on either side of its field, and its `ui.focus` hook reads a move onto one as a step and puts the ring back. A patched build could report the swallowed keys to the plugin instead (the capability row `keys.fieldArrows`).
+
+### A plugin's own focus move isn't reported to its own hook — Limit
+
+`$.ui.focus` from the plugin moves the ring, but the plugin's own `ui.focus` hook never sees that move; it sees the person's. So a plugin that tracks where its ring is records its own successful moves itself (`handlers/band.ts` `focusBand`). Before it did, the band thought its ring was still where the person last put it, and the first Up off the band's field moved the ring instead of stepping (2026-10-25, 2.1.310).
 
 ### Testing the plugin with Claude Code's own test kit — Workaround
 
@@ -279,6 +320,9 @@ What a test has to supply, learned the same day:
 - Most answers are `{ value }`; `ui.focus` and `ui.scroll` answer the result itself (`{}` or `{ deny }`).
 - A plugin's own `$.ui.focus` (moving the band's focus ring onto a button) is not routed to the test's hooks: it fails with "no implementation for ui.focus" whatever the test registers. The plugin's state has changed by then, so a test checks what was drawn and lets that call throw. The same holds for the plugin's own `$.ui.scroll` (a jump): a test checks what happened before it, with a control that shows the path ran (measured 2026-10-12 on a footnote jump).
 - The kit has no snapshot matcher and a test cannot read files, so the goldens are written inline.
+- Paths reach the test's file hooks in the engine's own form, and that form depends on the platform. The harness's world lives at Windows paths (`C:/test-home`, `C:/test-project`); on Windows the engine hands them over with backslashes, and off Windows it does not read `C:/` as absolute and resolves it against the plugin's folder, so a call arrives as `/<plugin folder>/C:/test-home/...`. A test that compares paths uses the harness's `pathKey`, which writes both forms the same way. Measured 2026-10-24 on 2.1.308 under WSL Ubuntu, where 66 of 145 kit tests failed until the harness keyed paths this way; the kit suite now passes on Linux and Windows, and CI runs it on both.
+- `console.log` in a kit test does not reach the kit's report; to see a value, a probe test fails on purpose with it in the assertion (`expect(value).toEqual({})`).
+- A `Markdown` (or any element) with `onLinkPress` or another press handler needs a `key`, "its address, what e.element carries at ui.press": without one the engine skips the whole render hook ("bookmarks's ui.render hook was skipped: HooksError ...") and the message draws as if the plugin had nothing to say. The kit reports it in its failure summary; a live session would only show the highlight missing. Measured 2026-10-21 on 2.1.303, drawing a marked line as Markdown on a reply with bookmark links.
 
 ## Patched builds: trying the proper fix early
 

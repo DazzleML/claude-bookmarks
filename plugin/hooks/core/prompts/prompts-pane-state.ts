@@ -23,6 +23,12 @@ export class PromptsPaneState {
     this.words = words
     return true
   }
+  /** Esc with a filter active (#28): the first Esc clears the filter and keeps the pane (true); the second, or any close that is not the person's, closes it (false). The rule the ui.close hook held (U60). */
+  escClears(byPerson: boolean): boolean {
+    if (!byPerson || !this.words) return false
+    this.words = ''
+    return true
+  }
 
   get unfolded(): ReadonlySet<number> {
     return this.open

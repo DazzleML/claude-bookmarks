@@ -54,7 +54,8 @@ test('the kept text is searched past the excerpt, and a smaller budget drops it 
   const w = world(on, { session: SID, store: STORE, files: TEXT_FILES })
   on('config.set', {}, async (_h, e) => ({ value: e.value }))
   const pane = await filteredPane($ as never, '/zebra')
-  expect((await pane.findAll({ type: 'Button' })).map(b => b.text)).toEqual([' 1) first prompt: set up the plugin'])
+  // The row draws the kept text whole (U64), so the match shows the zebra too.
+  expect((await pane.findAll({ type: 'Button' })).map(b => b.text)).toEqual([' 1) first prompt: set up the plugin, and much later a zebra'])
   await $.config.set({ key: 'bookmarks.promptTextBudget', value: 10, previous: 2_000_000, provider: { plugin: 'bookmarks', tier: 'mod' }, origin: { kind: 'composer' } } as never)
   await pane.input({ key: 'prompt-number', text: '/zebr', kind: 'change' }).catch(() => undefined)
   expect((await pane.findAll({ type: 'Text' })).map(t => t.text).filter(t => t?.startsWith('/'))).toEqual(['/zebr: 0 of 3 match'])

@@ -95,7 +95,7 @@ test('band: field draws the field alone', { options: { band: 'field' } }, async 
 // Every command that opens a list or a letter pane, with lists off: no pane, the band's
 // own row for the key (the band row's title tells which).
 for (const [cmd, title] of [['p', 'prompt #'], ['b', 'bookmark #'], ['m', 'mark as:'], ["'", 'jump:']] as const) {
-  test(`panes off: ${cmd} takes its key in the band and opens no pane`, { options: { panes: 'off' } }, async ($, on) => {
+  test(`panes off: ${cmd} takes its key in the band and opens no pane`, { options: { panes: 'off', listInput: 'buttons' } }, async ($, on) => {
     const w = world(on, { store: STORE, session: SID })
     const band = await mount($)
     await band.input({ key: 'band-cmd-0', text: cmd }).catch(() => undefined)
@@ -103,3 +103,34 @@ for (const [cmd, title] of [['p', 'prompt #'], ['b', 'bookmark #'], ['m', 'mark 
     expect((await texts(band))[1]).toBe(title)
   })
 }
+
+// Two lines of perform's open case the v0.6.3 sweep found unpinned (M2, M8). The group's
+// title is a Text in the bookmarks row (the kit reports no key for a Text, so by its words:
+// 'yours', then "Claude's" after l); the log line is read from the debug file.
+const LOG = `C:/test-home/claude/bookmarks/debug/${SID}.log`
+
+test('b opens the bookmarks list on your own group, however far l had moved it', async ($, on) => {
+  world(on, { store: STORE, session: SID })
+  const band = await mount($)
+  await band.input({ key: 'band-cmd-0', text: 'b' }).catch(() => undefined)
+  expect((await texts(band)).includes('yours')).toBe(true)
+  await band.press({ key: 'band-num-l' }).catch(() => undefined)
+  expect((await texts(band)).includes("Claude's")).toBe(true)
+  await band.press({ key: 'band-num-q' }).catch(() => undefined)
+  const field = (await band.findAll({ type: 'Input' }))[0]?.key ?? 'band-cmd-0'
+  await band.input({ key: field, text: 'b' }).catch(() => undefined)
+  expect((await texts(band)).includes('yours')).toBe(true)
+})
+
+test('the log names what pressed the pane open: the button, never the command line', async ($, on) => {
+  const w = world(on, { store: STORE, session: SID })
+  const band = await mount($)
+  await band.press({ key: 'chord-prompts' }).catch(() => undefined)
+  await w.clock.advance(1_000) // the debug file is written 500 ms after the line
+  await new Promise(r => setTimeout(r, 0))
+  // With chords on (the default) the button carries its borrowed action, and that is the name.
+  const line = (w.file(LOG) ?? '').split('\n').find(l => l.includes('pressed the band Button'))
+  expect(line).toBeTruthy()
+  expect(line!.includes('chord for app:')).toBe(true)
+  expect(line!.includes('band command line')).toBe(false)
+})

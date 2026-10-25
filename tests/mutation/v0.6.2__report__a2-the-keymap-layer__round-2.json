@@ -1,0 +1,50 @@
+{
+  "mutations": [
+    {
+      "id": "M6",
+      "file": "plugin/hooks/core/band/keymap.ts",
+      "original": "    const finalKeys = kept.length > 0 ? kept : [...c.keys].filter(k => !taken.has(k) || taken.get(k) === c.id)",
+      "mutated": "    const finalKeys = kept.length > 0 ? kept : [...c.keys]",
+      "note": "round 2: the fallback no longer filters taken keys",
+      "verdict": "killed",
+      "core_red": [
+        "a clash on the command line goes to the first command in table order; the line and a list may share a key"
+      ],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M9",
+      "file": "plugin/hooks/core/band/keymap.ts",
+      "original": "      else if (/^[0-9]$/.test(k.key)) problems.push(",
+      "mutated": "      else if (/^[1-9]$/.test(k.key)) problems.push(",
+      "note": "round 2: 0 accepted as a list key",
+      "verdict": "killed",
+      "core_red": [
+        "the list keys are renamed by position; a digit, a field prefix and a clash are refused"
+      ],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M12",
+      "file": "plugin/hooks/core/band/keymap.ts",
+      "original": "    for (const p of l.panes) listTaken.set(`${p}:${finalKey}`, l.label)",
+      "mutated": "    for (const p of l.panes) listTaken.set(`${p}:${key}`, l.label)",
+      "note": "round 2: the wanted key recorded instead of the kept one after a clash",
+      "verdict": "killed",
+      "core_red": [
+        "the list keys are renamed by position; a digit, a field prefix and a clash are refused"
+      ],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "106"
+    }
+  ]
+}

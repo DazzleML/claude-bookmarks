@@ -14,7 +14,7 @@ import { sameMessage } from '../kit/message-id.ts'
 import type { Mark, Marks } from '../marks/marks.ts'
 import { sameBase, type NoteBase } from './note.ts'
 import {
-  addOrRelabel, claim, idOf, isRecord, prune, recordById, remove, share,
+  addOrRelabel, claim, idOf, isRecord, prune, recordById, recordsOn, remove, share,
   type Mint, type RecordId, type Register, type Retention, type Slot, type Tombstone,
 } from './register-file.ts'
 
@@ -54,6 +54,8 @@ export type Op =
   | { op: 'clearMarks'; owner: AnchorOwner; letters: string[] }
   /** A letter brought back to a record in its history, by `n`, never by position. */
   | { op: 'bringBack'; owner: AnchorOwner; letter: string; n: number; at: number }
+  /** `D` + letter: the letter's current record leaves the file and the history (the delete gesture's second verb; the keys design, unit 5). */
+  | { op: 'forget'; owner: AnchorOwner; letter: string }
   /** The note's base set on its primary record after the note is written: what a later read-back compares against (unit 9). */
   | { op: 'noteBase'; id: RecordId; base: NoteBase }
   | { op: 'union'; other: Register }
@@ -68,6 +70,8 @@ export type Applied = {
   /** clearMarks: the letters that had a current record, and those that did not. */
   cleared?: string[]
   missing?: string[]
+  /** forget: whether the record left a tombstone (something still refers to it) or went outright. */
+  tombstoned?: boolean
   /** True when the register is unchanged (a prune with nothing to prune, a union that adds nothing). */
   unchanged?: boolean
 }
@@ -157,6 +161,34 @@ export function applyOp(reg: Register, op: Op, now: number): OpResult {
       if (!record) return { error: `#${op.n} is gone from the register (removed)` }
       const history = [{ n: op.n, at: op.at }, ...slot.history.filter(h => h.n !== op.n)].slice(0, LETTER_HISTORY_CAP)
       return { register: withSlots(reg, op.owner, { ...slots, [op.letter]: { current: op.n, history } }, now), record }
+    }
+    case 'forget': {
+      // `D` + letter (the keys design, unit 5; djdarcy, 2026-10-20): the letter's current record
+      // leaves the file and the letter's history. Outright -- no tombstone -- when nothing refers
+      // to it: the letter's only entry, named by no other slot, no record made from its place
+      // (promote mints a bookmark on the same message), no `rel` pointing at it. Otherwise it
+      // leaves the tombstone `remove` would, so a union with an older copy and the order of the
+      // remaining history stay right. This is the one stated exception, by his word, to
+      // "nothing is deleted from the file's history of events" (register-file.ts).
+      const slots = reg.slots?.[op.owner] ?? {}
+      const slot = slots[op.letter]
+      if (!slot || slot.current === null) return { error: `${op.letter} has no current mark to forget` }
+      const n = slot.current
+      const history = slot.history.filter(h => h.n !== n)
+      const next = { ...slots }
+      if (history.length === 0) delete next[op.letter]
+      else next[op.letter] = { current: null, history }
+      const rec = reg.perma.find(r => r.n === n)
+      if (!rec) return { register: withSlots(reg, op.owner, next, now) } // already gone from the file: the slot alone is mended
+      const namedElsewhere = Object.entries(reg.slots ?? {}).some(([owner, letters]) =>
+        Object.entries(letters ?? {}).some(([letter, s]) => !(owner === op.owner && letter === op.letter) && s.history.some(h => h.n === n)))
+      // `rel.to` names a record by its uuid; nothing writes `rel` yet, and its first writer fixes the form this follows.
+      const referred = reg.perma.some(r => r !== rec && (r.rel ?? []).some(x => x.to === rec.uuid))
+      const referenced = history.length > 0 || namedElsewhere || referred || recordsOn(reg, rec.uuid).length > 0
+      const perma = reg.perma.filter(r => r !== rec)
+      if (!referenced) return { register: withSlots({ ...reg, perma }, op.owner, next, now), removed: rec, tombstoned: false }
+      const tomb: Tombstone = { uuid: rec.uuid, n, createdAt: rec.createdAt, owner: op.owner, label: rec.label, removedAt: now, removedBy: 'user' }
+      return { register: withSlots({ ...reg, perma, tombstones: [...reg.tombstones, tomb] }, op.owner, next, now), removed: rec, tombstoned: true }
     }
     case 'union':
       return union(reg, op.other, now)
@@ -251,6 +283,7 @@ export function union(a: Register, b: Register, now: number): Applied {
   const perma = [...base.perma]
   const tombstones = [...base.tombstones]
   let changed = false
+  const pushed = new Set<AnchorRecord>()
   for (const t of other.tombstones) if (!tombstones.some(x => sameTomb(x, t))) { tombstones.push(t); changed = true }
   for (const r of other.perma) {
     const i = perma.findIndex(x => isRecord(x, idOf(r)) || isRecord(r, idOf(x)))
@@ -261,7 +294,7 @@ export function union(a: Register, b: Register, now: number): Applied {
     const tomb = tombstones.find(t => isRecord(r, { ...(t.n !== undefined ? { n: t.n } : {}), uuid: t.uuid, createdAt: t.createdAt, owner: t.owner }))
     if (tomb && tombAt(tomb) >= lastTouched(r)) continue
     perma.push(r)
-    changed = true
+    pushed.add(r)
   }
   // A tombstone later than a kept record removes it on this side too.
   const kept = perma.filter(r => {
@@ -270,6 +303,14 @@ export function union(a: Register, b: Register, now: number): Applied {
     if (gone) changed = true
     return !gone
   })
+  // A letter's record (tier `mark`) the other copy pushed in that no slot on this side names
+  // is an orphan: a mark forgotten outright here (no tombstone, by design) that the older
+  // copy still holds. Slots never merge, so the base's slots decide (the keys design, unit 5,
+  // 2026-10-20). A push that is dropped again is no change.
+  const named = new Set<number>()
+  for (const letters of Object.values(base.slots ?? {})) for (const s of Object.values(letters ?? {})) for (const h of s.history) named.add(h.n)
+  const live = kept.filter(r => !(pushed.has(r) && tierOf(r) === 'mark' && r.n !== undefined && !named.has(r.n)))
+  if (live.some(r => pushed.has(r))) changed = true
   const nextN = Math.max(base.nextN ?? -Infinity, other.nextN ?? -Infinity)
   const pins: Register['pins'] = { ...(base.pins ?? {}) }
   for (const [owner, list] of Object.entries(other.pins ?? {}) as [AnchorOwner, string[]][]) {
@@ -282,7 +323,7 @@ export function union(a: Register, b: Register, now: number): Applied {
   return {
     register: {
       ...base,
-      perma: kept,
+      perma: live,
       tombstones,
       ...(Number.isFinite(nextN) ? { nextN } : {}),
       ...(Object.keys(pins).length > 0 ? { pins } : {}),

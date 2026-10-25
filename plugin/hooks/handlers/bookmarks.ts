@@ -20,8 +20,8 @@ import {
   type Manifest, type Migration,
 } from '../core/bookmarks/migrations.ts'
 import { checkReport, drawLine, STORE_CAP, type CheckInput } from '../core/bookmarks/check.ts'
-import { dataReadme, readmeNeedsWrite } from '../core/bookmarks/data-readme.ts'
-import type { Mark, Marks } from '../core/marks/marks.ts'
+import { dataReadme, README_TEMPLATE, readmeNeedsWrite } from '../core/bookmarks/data-readme.ts'
+import { isMarkLetter, type Mark, type Marks } from '../core/marks/marks.ts'
 import { rowPlace } from '../core/bookmarks/transcript-lines.ts'
 import { forwardSlashes } from '../core/kit/paths.ts'
 import { short } from '../core/kit/message-id.ts'
@@ -241,7 +241,14 @@ export async function ensureReadme(ports: BookmarksPorts): Promise<void> {
     const writer = `${ports.pluginName} ${await ports.pluginVersion()}`
     const existing = (await ports.fsExists(path)) ? await ports.fsRead(path) : undefined
     if (!readmeNeedsWrite(existing, writer)) return
-    await ports.fsWrite(path, dataReadme(writer))
+    // The prose is the plugin's template file; a missing one is a packaging bug and is said so,
+    // never filled from code (djdarcy, 2026-10-20).
+    const template = await ports.pluginFile(README_TEMPLATE)
+    if (template === undefined) {
+      ports.logAlways(`[bm] data folder: README.md not written: the plugin's ${README_TEMPLATE} is missing (a packaging bug; nothing else is affected)`)
+      return
+    }
+    await ports.fsWrite(path, dataReadme(writer, template))
     ports.log(`[bm] data folder: README.md ${existing === undefined ? 'written' : 'rewritten'} by ${writer}`)
   } catch (err) {
     ports.logAlways(`[bm] data folder: README.md not written: ${String(err)}`)
@@ -359,6 +366,21 @@ export async function clearMarksOp(ports: BookmarksPorts, letters: string[]): Pr
   }
   const r = await commitOp(ports, { op: 'clearMarks', owner: 'user', letters })
   return 'error' in r ? r : {}
+}
+
+/** `D` + letter (handlers/marks.ts forgetLetter): the letter's current record leaves the file and the history (register-ops.ts `forget`); with no data root the store's marks hold no records, so the letter is cleared. */
+export async function forgetOp(ports: BookmarksPorts, letter: string): Promise<{ error?: string; tombstoned?: boolean }> {
+  if (!(await ports.dataRoot())) return clearMarksOp(ports, [letter])
+  const r = await commitOp(ports, { op: 'forget', owner: 'user', letter })
+  return 'error' in r ? r : { tombstoned: r.tombstoned }
+}
+
+/** `d` after a number in the bookmarks list: the record leaves the person's list and a tombstone keeps its place, as the tool's remove does. */
+export async function removeBookmark(ports: BookmarksPorts, target: AnchorRecord) {
+  const r = await commitOp(ports, { op: 'remove', id: idOf(target), removedBy: 'user' })
+  if ('error' in r) return void ports.toast(r.error, 8000)
+  ports.log(`[bm] bookmark removed by the person: ${short(target.uuid)} "${target.label}" (tombstoned)`, true)
+  ports.toast(`removed bookmark: ${target.label.slice(0, 40)}`)
 }
 
 // --- Pins: the person's pinned prompts, in the register since 0.5.4 ----------------------
@@ -625,6 +647,32 @@ async function writeExport(ports: BookmarksPorts, register: BookmarkRegister, re
   return exportPath
 }
 
+// Replies whose links were already logged and queued (a reply is drawn many times).
+// Cleared per conversation (newConversation): until U60 commit B it was never cleared.
+const anchorRowsLogged = new Set<string>()
+/** A reply carrying bookmark links, the first time this conversation draws it: log the counts and queue its prose anchors. */
+export function noteAnchoredReply(ports: BookmarksPorts, requestId: string, links: ReturnType<typeof markdownLinks>): void {
+  if (anchorRowsLogged.has(requestId)) return
+  anchorRowsLogged.add(requestId)
+  const anchors = links.filter(l => l.kind === 'anchor')
+  ports.log(`[bm] reply ${short(requestId)}: ${anchors.length} bookmark link(s), ${links.filter(l => l.kind === 'file').length} file link(s)`)
+  queueProseAnchors(ports, anchors)
+}
+/** A new conversation: the replies seen belong to the one before. */
+export function newConversation(): void {
+  anchorRowsLogged.clear()
+}
+
+// A perma record's link is drawn without the bookmark glyph (#21).
+export async function permaTest(ports: BookmarksPorts): Promise<(href: string) => boolean> {
+  const reg = await loadRegister(ports)
+  return (href: string) => {
+    const a = parseAnchor(href)
+    const r = a && findRecord(reg, a.uuid)
+    return r ? tierOf(r) === 'perma' : false
+  }
+}
+
 // A bookmark link written by hand (or by an older session) is a bookmark too: once drawn,
 // any anchor the register does not know is resolved by uuid and recorded with
 // `by: 'prose'`. Off the render path (a clock tick), one attempt per uuid per load.
@@ -714,7 +762,7 @@ export async function arriveAtBookmark(ports: BookmarksPorts, record: { uuid: st
 // /bm-promote <letter> (moved from register.tsx's registration, 0.4.94).
 export async function promoteCommand(ports: BookmarksPorts, args: string | undefined) {
   const letter = (args ?? '').trim()
-  if (!/^[a-z`]$/.test(letter)) {
+  if (!isMarkLetter(letter, true)) {
     ports.toast('/bm-promote <letter>: promote that mark into a bookmark')
     return
   }

@@ -176,7 +176,7 @@ test('M control: without a session start, a re-mounted pane keeps the footnote u
   expect(after).toEqual(UNFOLDED)
 })
 
-test('2 go with nothing typed closes the list and brings the bar back (settle, esc)', async ($, on) => {
+test('2 go with nothing typed closes the list and brings the bar back (settle, esc)', { options: { listInput: 'buttons' } }, async ($, on) => {
   const w = world(on, { session: SID, store: STORE, panes: [{ id: 'bm-pane' }] })
   const band = await mount($, BAND)
   await band.input({ key: 'band-cmd-0', text: 'p' }).catch(() => undefined)
@@ -186,7 +186,7 @@ test('2 go with nothing typed closes the list and brings the bar back (settle, e
   expect((await band.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['chord-mark', 'chord-jump', 'chord-prompts', 'chord-read', 'chord-help'])
 })
 
-test('4 a submitted prompt ends the band waiting for a number', async ($, on) => {
+test('4 a submitted prompt ends the band waiting for a number', { options: { listInput: 'buttons' } }, async ($, on) => {
   world(on, { session: SID, store: STORE })
   on('prompt.submit' as never, {} as never, (async (_h: unknown, e: object) => e) as never)
   const band = (await $.ui.mount(BAND as never)) as unknown as Ui

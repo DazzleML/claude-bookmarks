@@ -42,6 +42,10 @@ export type DiagnosticsPorts = LogPorts & {
   dccPatchH: () => Promise<string | undefined>
   dccPatches: () => Promise<string | undefined>
   echoState: () => Promise<string>
+  /** The chosen capability path per gap, one line (engine/select.ts pathsLine over the signals read at start). */
+  capabilityPaths: () => string
+  /** The loader's pass: rows, bytes read, chunks, running or done (handlers/transcript.ts). */
+  loaderStatus: () => string
 }
 
 /** What the view tracker (handlers/view-tracker.ts) needs: the lists it orders, the settings it reads, and for the pane's follow, a timer, the pane's state and a scroll in it. */
@@ -74,6 +78,8 @@ export type NavigationPorts = {
   /** The head drawn for a message since load, if it was drawn. */
   drawnHead: (uuid: string) => string | undefined
   markHead: (uuid: string) => string | undefined
+  /** The capability path that runs for a gap on this build (engine/select.ts, U59): a refused jump words itself by it. */
+  pathFor: (gap: 'history.reach') => string
   /** Where the person is leaving from: the view before the pane, else the view now. */
   leavingFrom: () => Promise<{ uuid: string; block: 'start' | 'end' } | undefined>
   /** PanePosition's: a jump drops the way back; the restore reads and clears. */
@@ -97,6 +103,13 @@ export type BandCorePorts = {
   now: () => Promise<number>
   after: (ms: number, fn: () => void) => { cancel: () => void }
   every: (ms: number, fn: () => unknown) => { cancel: () => void }
+  /** The key tables the person's keymap makes (core/settings-state.ts keymap). */
+  tables: () => import('../core/band/keys.ts').Tables
+  /** Where the band takes a list number: its own field or its digit buttons (core/band/routes.ts listInputTarget, the setting and the capability path). */
+  listInput: () => 'band-field' | 'band-buttons'
+  /** The band field's key now (`band-num-field-<n>`), and a fresh one: the field is drawn anew under it, holding the band's number. */
+  bandFieldKey: () => Promise<string>
+  renewBandField: () => Promise<string>
   // The band's focus probe (focusBand, bandProbeKey, watchBand):
   focus: (requestId: string, key: string) => Promise<{ deny?: unknown } | object>
   diagState: (when: string) => Promise<unknown>
@@ -134,7 +147,11 @@ export type ListPorts = {
   prompts: () => Promise<readonly { uuid: string }[]>
   bookmarkList: () => Promise<readonly import('../core/bookmarks/anchor.ts').AnchorRecord[]>
   jumpToPromptNumber: (typed: string, via: string) => Promise<unknown>
+  /** The prompts list's `/words` filter, as the pane's own field sets it; true when the filter changed. */
+  setPromptFilter: (query: string) => boolean
   jumpToBookmarkNumber: (typed: string, via: string) => Promise<unknown>
+  /** `d` after a number in the bookmarks list: that bookmark leaves the list (handlers/bookmarks.ts removeBookmark). */
+  removeBookmarkNumber: (typed: string) => Promise<unknown>
   togglePin: (typed: string) => Promise<unknown>
   groupStep: (dir: -1 | 1) => Promise<unknown>
   /** /bm-bookmarks': which bookmarks group the list shows (0, the first). */
@@ -202,6 +219,24 @@ export type PromptsPorts = {
   userRows: (path: string) => Promise<{ via: 'powershell' | 'sh'; ms: number; stdout: string; isStdoutTruncated?: boolean } | undefined>
 }
 
+/** What the loader's pass (handlers/transcript.ts, slice F) needs: the conversation and its file, a chunk of it by offset (the one program register.tsx runs for it), the data root for the index and the replies' pieces, the prompts' text cache to seed from, the clock, and the back-fill's publisher. */
+export type TranscriptPorts = {
+  sessionId: () => Promise<string>
+  transcriptPath: () => Promise<string | undefined>
+  fileSize: (path: string) => Promise<number | undefined>
+  /** Up to CHUNK_BYTES of the file from `offset`, as the program returned them; undefined when no program could run. */
+  readChunk: (path: string, offset: number) => Promise<{ stdout: string; via: 'sh' | 'powershell' } | undefined>
+  dataRoot: () => Promise<string | undefined>
+  fsExists: (path: string) => Promise<boolean>
+  fsRead: (path: string) => Promise<string>
+  fsWrite: (path: string, text: string) => Promise<unknown>
+  promptTexts: () => Promise<ReadonlyMap<string, string>>
+  after: (ms: number, fn: () => void) => { cancel: () => void }
+  log: (line: string) => void
+  /** The prompts and footnotes into the store, as the grep back-fill did (handlers/prompts.ts applyBackfill). */
+  publish: (backfill: import('../core/prompts/prompt-store.ts').Backfill, truncated: boolean) => Promise<unknown>
+}
+
 /** Finding a message in the transcript by uuid or by a verbatim fragment (register.tsx's resolveTarget). */
 export type ResolveOutcome =
   | { kind: 'one'; row: import('../core/bookmarks/transcript-lines.ts').TranscriptRow; via: string; ms: number }
@@ -218,6 +253,8 @@ export type BookmarksPorts = {
   cut: (text: string, n: number) => string
   expectRedraw: (why: string) => void
   dataRoot: () => Promise<string | undefined>
+  /** One of the plugin's own files by its path relative to the plugin folder ($.plugin.root): its text, or undefined when it is missing (a packaging bug the caller reports). */
+  pluginFile: (relative: string) => Promise<string | undefined>
   sessionId: () => Promise<string>
   cwd: () => Promise<string>
   /** The conversation's title: its /rename name as the start event gave it (register.tsx's `sessionTitle`, set at session.start), else the first prompt's head; written into the register header on save (unit 6). */
@@ -281,6 +318,8 @@ export type MarksPorts = {
   setMark: (letter: string, mark: import('../core/marks/marks.ts').Mark) => Promise<{ error?: string }>
   /** Letters cleared: the slot's current becomes null, its history kept; the record stays. */
   clearMarks: (letters: string[]) => Promise<{ error?: string }>
+  /** `D` + letter: the letter's current record leaves the file and the history (handlers/bookmarks.ts forgetOp); `tombstoned` says whether a tombstone kept its place. */
+  forgetMark: (letter: string) => Promise<{ error?: string; tombstoned?: boolean }>
   /** The reading position's way back, this conversation's (core/store-keys.ts readingStateKey). */
   readingStateStored: () => Promise<unknown>
   storeReadingState: (state: unknown) => Promise<unknown>
@@ -297,7 +336,12 @@ export type CommandLinePorts = BandPorts & {
   jumpToMark: (letter: string) => Promise<unknown>
   readingToggle: () => Promise<unknown>
   promoteLetter: (letter: string) => Promise<unknown>
+  /** `d` + letter and `D` + letter (handlers/marks.ts clearLetter, forgetLetter). */
+  clearLetter: (letter: string) => Promise<unknown>
+  forgetLetter: (letter: string) => Promise<unknown>
   jumplistMove: (dir: -1 | 1) => Promise<unknown>
+  /** The key tables the person's keymap makes (core/settings-state.ts keymap). */
+  tables: () => import('../core/band/keys.ts').Tables
 }
 
 // Ownership of shared state (notes/meta/2026-10-12__22-48-40, one owner, read-only ports).
@@ -323,15 +367,19 @@ export type CommandLinePorts = BandPorts & {
 //                                             0.4.102)
 //   conversationId (the conversation the    register.tsx sameConversation sameConversationSoon (read-only)
 //     plugin works for, Q261014-01)
-//   anchorRowsLogged (replies whose links   register.tsx, the reply       --
-//     were logged and queued)                 render hook
+//   capabilitySignals (the build and the    register.tsx session.start    pathFor (navPorts), capabilityPaths
+//     patch markers, read once; U59)         (the one writer)              (diagnosticsPorts), read-only
 //   settings (SettingsState: the /config    core/settings-state.ts        every reader through currentSettings(),
 //     values, theme, resolution, palette)     (register's load, the two     style(); /bm-config (resolved)
 //                                             config.set hooks; 0.4.104)
-//   registerCache, proseQueued              handlers/bookmarks.ts         --
+//   registerCache, proseQueued,             handlers/bookmarks.ts         newConversation (anchorRowsLogged
+//     anchorRowsLogged (replies whose                                       only; the reply render hook via
+//     links were logged and queued)                                         noteAnchoredReply)
 //   debug channels (DebugChannels)          handlers/log.ts (writers:     log, the screen channel, the view
 //                                             read, set); the Logger's    tracker (held), /bm-debug (on)
 //                                             (0.4.95), one in register.tsx
+//   pass (the loader's state for this        handlers/transcript.ts        startPass, appendLive, newConversation;
+//     conversation, slice F)                  (the one writer)              read by resolveLoaded, loaderStatus
 //   promptTextCache, promptTextSave,        handlers/prompts.ts (the      --
 //     storedPromptTextDropped                 back-fill fills it there too,
 //                                             since 0.4.101)

@@ -27,6 +27,10 @@ export type BandModel = {
   count: number
   groupTitle: string
   listKeys: readonly { key: string; button: string; operation: Operation }[]
+  /** Where a list number is typed (core/band/routes.ts): the band's own field, or a digit button per key. */
+  listInput: 'band-field' | 'band-buttons'
+  /** The band field's key (`band-num-field-<n>`): a new one draws a fresh field, its cursor at the end. */
+  fieldKey: string
   /** The idle bar, from the key table; empty when the band is a field only. */
   bar: readonly { id: string; label: string; key: string; hotkey?: string; action?: string }[]
   cmdRev: number
@@ -44,6 +48,9 @@ export type BandActions = {
   digit: (digit: string) => Promise<unknown>
   dot: () => Promise<unknown>
   go: () => Promise<unknown>
+  /** The band's own field for a list number: its text so far, and Enter. */
+  fieldInput: (typed: string) => Promise<unknown>
+  fieldSubmit: (typed: string) => Promise<unknown>
   runCommandLine: (typed: string, kind: 'input' | 'submit') => Promise<unknown>
   perform: (key: string, id: string, action: string | undefined) => Promise<unknown>
 }
@@ -95,14 +102,42 @@ export function bandView(elements: Elements, theirs: RenderChildren, m: BandMode
         )),
       ]
     } else {
-      // A prompt number, one digit Button per key: a field's typing or Enter can't
-      // scroll ("not person-initiated", 2026-10-05 17:20 and 2026-10-07 07:10), a
-      // Button press can.
       const bookmarks = m.mode === 'bookmarks'
-      const byKey = (k: string) => m.listKeys.find(l => l.key === k)!
+      // The step buttons are found by what they do, not by their letter, so a keymap's
+      // choice of keys (#36) still draws them either side of `go`.
+      const step = (dir: -1 | 1) => m.listKeys.find(l => l.operation.op === 'step' && l.operation.dir === dir)!
       const listKeyButton = (l: (typeof m.listKeys)[number]) => (
         <Button key={`band-num-${l.key}`} hotkey={l.key} label={l.button} plain {...s.button('legend')} onPress={() => a.listKey(l.operation)} />
       )
+      const otherListKeys = m.listKeys
+        .filter(l => l.operation.op !== 'step')
+        .flatMap(l => {
+          const op = l.operation
+          return op.op === 'group' && op.dir === -1
+            ? [listKeyButton(l), <Text key="band-num-group" {...s.text('legend')}>{m.groupTitle}</Text>]
+            : [listKeyButton(l)]
+        })
+      if (m.listInput === 'band-field' && Input) {
+        // The band's own field (input routing, 2026-10-25; core/band/routes.ts). A field
+        // takes every printable key and Backspace, and its handler returns its promise, so a
+        // jump from it counts as the person's (the 2026-10-09 rule; the digit buttons below
+        // rested on the misread it corrected). The step buttons sit either side so a focus
+        // move off the field lands on one: the ui.focus hook steps the list and keeps the
+        // ring on the field (Tab, or Up/Down with the AbovePromptInput binding, docs/keys.md).
+        keys = [
+          <Text key="band-num-title" {...s.text('legend')}>{bookmarks ? 'bookmark' : 'prompt'}</Text>,
+          listKeyButton(step(-1)),
+          // The field holds only what the person types. A number the plugin set (a step's) is
+          // shown dim as its placeholder: a fresh, empty field is drawn for it (renewField).
+          <Input key={m.fieldKey} label="#" autoFocus submitLabel="go"
+            placeholder={m.typed !== '' ? m.typed : bookmarks ? `1-${m.count}` : `1-${m.count}, /words, *N`}
+            onInput={(typed: string) => a.fieldInput(typed)}
+            onSubmit={(typed: string) => a.fieldSubmit(typed)} />,
+          listKeyButton(step(1)),
+          ...otherListKeys,
+        ]
+      } else {
+      // A prompt number, one digit Button per key (listInput: buttons, the way before 0.6.27).
       keys = [
         <Text key="band-num-title" {...s.text('legend')}>{bookmarks ? 'bookmark #' : 'prompt #'}</Text>,
         <Text key="band-num-typed" {...s.text('emphasis')}>{m.typed || '_'}</Text>,
@@ -115,20 +150,14 @@ export function bandView(elements: Elements, theirs: RenderChildren, m: BandMode
         ...(bookmarks ? [] : [<Button key="band-num-dot" label="." plain {...s.button('legend')} onPress={() => a.dot()} />]),
         // `go` sits between k and j, so an arrow always has a neighbour to move to:
         // the ui.focus hook turns that move into k (previous) or j (next).
-        listKeyButton(byKey('k')),
+        listKeyButton(step(-1)),
         <Button key="band-num-go" label="go (Enter)" plain onPress={() => a.go()} />,
-        listKeyButton(byKey('j')),
+        listKeyButton(step(1)),
         // The rest of this list's keys, from the same table as its hint (core/band/keys.ts
         // LIST_KEYS); the bookmarks group's name sits between its h and l.
-        ...m.listKeys
-          .filter(l => l.key !== 'j' && l.key !== 'k')
-          .flatMap(l => {
-            const op = l.operation
-            return op.op === 'group' && op.dir === -1
-              ? [listKeyButton(l), <Text key="band-num-group" {...s.text('legend')}>{m.groupTitle}</Text>]
-              : [listKeyButton(l)]
-          }),
+        ...otherListKeys,
       ]
+      }
     }
     return (
       <Box flexDirection="column">

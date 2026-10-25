@@ -15,9 +15,6 @@ import { bandOnly, closeAll, handOff, openFor, showHelp } from './band.ts'
 // only until the handler returns; a fire-and-forget `void` lost it, 2026-10-09). So the
 // keys below act directly; the once-per-version probe that used to decide this is gone.
 
-// Generated from the router's table (core/band/keys.ts), so every key is named once.
-const CMD_HINT = lineHint()
-
 // Owned here: one command at a time.
 // Since 0.4.83 it holds when the running command started: a command that never settles
 // (an engine call that does not answer) frees the field after CMD_STUCK_MS instead of
@@ -42,7 +39,7 @@ export async function runCommandLine(ports: CommandLinePorts, typed: string, via
   try {
     ports.log(`[bm] band command line ${via}: "${ports.cut(typed, 40)}"`, true)
     // What the keys mean lives in the router's table (core/band/keys.ts); perform does it.
-    await perform(ports, route(typed, { pane: 'none' }).operation, 'field')
+    await perform(ports, route(typed, { pane: 'none' }, ports.tables()).operation, 'field')
   } finally {
     if (cmdBusy === started) cmdBusy = undefined
   }
@@ -70,6 +67,15 @@ export async function perform(ports: CommandLinePorts, operation: Operation, via
       if (operation.pane === 'bookmarks') await ports.setBandGroup(0) // start on the person's own bookmarks
       // Lists off (the `panes` setting): the band takes the key with no pane beside it.
       if (ports.settings().panes === 'off') return void (await bandOnly(ports, operation.pane))
+      // A pressed button on the pane it opened closes it: the button is a toggle (the keys
+      // design 2026-10-20, unit 4). Never the typed key (djdarcy at the gate: "the BUTTON on
+      // the BAND should have a toggle feature, but elsewhere I think it would be more of an
+      // annoyance"): `<leader> p` may be the start of `<leader> p 12`. Open means the
+      // plugin's own mode AND the pane on screen, since the mode atom starts at 'list' and
+      // closing the pane leaves it, so the mode alone would read a fresh session as open.
+      if (via !== 'field' && (await ports.paneMode()) === operation.pane && (await ports.panes()).some(p => p.id === ports.paneId)) {
+        return void (await closeAll(ports, via))
+      }
       // A pressed button opens the pane as the chords always did; the band's own keys
       // are the fallback openFor sets up when the pane can't take the keyboard.
       if (via !== 'field') return void (await openFor(ports, operation.pane, via))
@@ -93,6 +99,16 @@ export async function perform(ports: CommandLinePorts, operation: Operation, via
       await ports.promoteLetter(operation.letter)
       owedAfterAction(ports)
       return
+    case 'delete':
+      await ports.clearCommandLine()
+      await ports.clearLetter(operation.letter)
+      owedAfterAction(ports)
+      return
+    case 'forget':
+      await ports.clearCommandLine()
+      await ports.forgetLetter(operation.letter)
+      owedAfterAction(ports)
+      return
     case 'jumplist':
       // `<leader> ←` / `→` are wanted too; whether an arrow reaches this field is #23.
       await ports.clearCommandLine()
@@ -109,6 +125,6 @@ export async function perform(ports: CommandLinePorts, operation: Operation, via
       return
     default:
       await ports.clearCommandLine()
-      ports.toast(CMD_HINT)
+      ports.toast(lineHint(ports.tables()))
   }
 }

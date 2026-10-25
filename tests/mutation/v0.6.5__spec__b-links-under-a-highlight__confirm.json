@@ -1,0 +1,7 @@
+{
+  "target": "slice B: the round-2 survivor N4 re-run after its killer (two links on a line are two spans; words first found in the first href are inside it)",
+  "generation": "the round-2 mutant N4 as generated (mode 1); no new generation (the two-round cap)",
+  "mutations": [
+    {"id": "N4", "file": "plugin/hooks/core/marks/highlight.ts", "original": "const LINK = /\\[([^\\]]*)\\]\\(([^)\\s]+)\\)/g", "mutated": "const LINK = /\\[(.*)\\]\\(([^)\\s]+)\\)/g", "note": "label group made greedy so multiple links merge into one match"}
+  ]
+}

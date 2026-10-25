@@ -1,0 +1,11 @@
+{
+  "target": "plugin/hooks/core/bookmarks/check.ts (the orphan mark-record note), unit A5.3",
+  "generation": "mode 1: fresh-context mid-engineer, zero tools, the block inline; 2026-10-21",
+  "mutations": [
+    {"id": "M1", "file": "plugin/hooks/core/bookmarks/check.ts", "original": "const unnamed = r.reg.perma.filter(p => (p.tier ?? 'bookmark') === 'mark' && p.n !== undefined && !named.has(p.n))", "mutated": "const unnamed = r.reg.perma.filter(p => (p.tier ?? 'bookmark') === 'mark' && p.n !== undefined && named.has(p.n))", "note": "Set membership negated: reports named records instead of unnamed"},
+    {"id": "M2", "file": "plugin/hooks/core/bookmarks/check.ts", "original": "const unnamed = r.reg.perma.filter(p => (p.tier ?? 'bookmark') === 'mark' && p.n !== undefined && !named.has(p.n))", "mutated": "const unnamed = r.reg.perma.filter(p => (p.tier ?? 'bookmark') === 'mark' && !named.has(p.n))", "note": "Dropped conjunct p.n !== undefined (records with no number now counted)"},
+    {"id": "M3", "file": "plugin/hooks/core/bookmarks/check.ts", "original": "const unnamed = r.reg.perma.filter(p => (p.tier ?? 'bookmark') === 'mark' && p.n !== undefined && !named.has(p.n))", "mutated": "const unnamed = r.reg.perma.filter(p => (p.tier ?? 'bookmark') === 'perma' && p.n !== undefined && !named.has(p.n))", "note": "Wrong tier constant: 'mark' changed to 'perma'"},
+    {"id": "M4", "file": "plugin/hooks/core/bookmarks/check.ts", "original": "if (unnamed.length > 0) say('note', `${r.name}.json holds ${unnamed.length} letter record(s)", "mutated": "if (unnamed.length > 0) say('warn', `${r.name}.json holds ${unnamed.length} letter record(s)", "note": "Level 'note' changed to 'warn', altering the warning count"},
+    {"id": "M5", "file": "plugin/hooks/core/bookmarks/check.ts", "original": "if (unnamed.length > 0) say('note', `${r.name}.json holds ${unnamed.length} letter record(s)", "mutated": "if (unnamed.length > 1) say('note', `${r.name}.json holds ${unnamed.length} letter record(s)", "note": "Comparison flip: a single orphan is no longer reported"}
+  ]
+}

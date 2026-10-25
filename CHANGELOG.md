@@ -6,6 +6,206 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.27] - 2026-10-25
+
+### Changed
+
+- After `Ctrl+] p` or `Ctrl+] b`, the band takes the number in a text field of its own instead of a row of digit buttons. You can correct what you type with Backspace, even with an empty input box, and `/words` filters the prompts list and `*21` pins prompt 21 from the band, as they already did in the pane's own field. `j`/`k` and `Tab`/`Shift+Tab` still step the list; after a step the field is empty again with the number shown dim in it, and `12j` steps from 12.
+- Up and Down can step the list too, with one entry in `~/.claude/keybindings.json` (`docs/keys.md` has it). The plugin never writes that file.
+- "Typing a list number" in `/config` brings back the digit buttons (`buttons`) if you prefer them; `auto` is the default.
+
+### Fixed
+
+- Typing `/` after `Ctrl+] p` no longer ends the band and lands the text in your input box.
+
+## [0.6.26] - 2026-10-24
+
+### Changed
+
+- The plugin's automated tests now pass on Linux as well as Windows, and every push checks the plugin on both. Until now the plugin tests could only pass on Windows, so a problem specific to Linux would have gone unnoticed.
+
+## [0.6.25] - 2026-10-24
+
+### Changed
+
+- The plugin's settings are folded away in `/config` by default, since the defaults are meant to need no changing: one row, **▸ Bookmarks**, shows until you press `Enter` on it, and then the settings appear below it. The key rows and the debugging rows each sit behind a fold of their own inside it. A fold is a true/false row that `Enter` flips in place, with no picker to open, and its arrow shows its state (`▸` folded, `▾` open). Everything you have set still applies while folded.
+- The three debugging settings now read "Debug: echo by default", "Debug: conversation text in the log" and "Debug: how much text a line quotes", and sit together at the end of the list.
+
+## [0.6.24] - 2026-10-24
+
+### Changed
+
+- The keys documentation covers what the 0.6 line added. `docs/keys.md` gains "Choosing your own keys" (the rows in `/config`, how a value is written, which keys a button can be pressed with, what is refused and why, and how to change the leader) and lists `d` and `D` on the band, `c` and number-then-`d` in the bookmarks list, and that a bar button closes the pane it opened while its key never does. `docs/usage.md` describes deleting a mark with `d` and `D`, the keymap rows under Settings, and the bookmarks list's new keys; the README's Configuration table lists the key rows.
+- With this, the 0.6 line's keys work is complete: one key table drives the band, its help, its hints and the lists (0.6.1); a keymap layer applies your choices to it (0.6.2); a bar button toggles its pane (0.6.3); `d` and `D` clear and forget a mark (0.6.4); and the keys are yours to choose in `/config` (0.6.23).
+
+## [0.6.23] - 2026-10-24
+
+### Added
+
+- Choose the band's keys in `/config`. A row, "Keys: show the key rows", unfolds one row per band command (mark, jump, prompts, the reading position, bookmarks, promote, clear and forget a mark, back, forward, close, help) and one for the keys in a list. A row takes the command's keys separated by spaces (`Space` spells the space key) and `hidden` at the end takes its button off the bar; an empty row keeps the default. The band's buttons, the help, the hints and the lists' keys all follow. A change that would give two commands the same key, or use a key the band never receives (an arrow, Tab, Enter), is refused with the reason, and a value set by hand in settings.json that cannot be used keeps the default and is named in the debug log. The rows stay folded until you open them.
+- A "Keys: the leader" row says which chord opens the band, read from `~/.claude/keybindings.json`, and how to change it there: the leader is a Claude Code keybinding, so the row itself is never set.
+
+## [0.6.22] - 2026-10-23
+
+### Fixed
+
+- The prompts list no longer shows, as its newest rows, old messages the person never typed. Three "Goal set" messages Claude Code queued on 2026-10-12 had been captured live as prompts back then; the whole-conversation read holds them as non-prompt rows, and since 0.6.18 every read moved them to the end of the list, where they read as tonight's prompts and a click on one scrolled the view back to October. A stored row the read has seen and judged not a prompt now leaves the list, and the debug log says which; a stored row the read has never seen is kept, so nothing the file did not judge is dropped.
+- Footnotes are kept across sessions again. Since 0.6.18 the whole-conversation read resumed from an index that held the prompts but not the footnotes, and each publish replaced the stored footnotes with only those in the newly read part of the file, so the list thinned out at every start (one conversation: 56 footnotes in the file, 1 in the list). The index keeps them now; every existing index is rebuilt once, a background read of the whole conversation, after which they are back.
+- A goal you set with `/goal` shows as a footnote under the prompt before it. Claude Code records setting a goal only as a queued "Goal set: ..." message, which the list read as nothing (or, captured live, as a prompt); it is now the `/goal <condition>` footnote. Commands Claude Code runs itself and writes as system rows (`/goal clear`, `/rename`, `/branch`, `/fork`, `/cd`, `/feedback`) are footnotes too, from the next session start.
+- The CI workflow was invalid since 0.6.8 and no job ran on a push: the plugin job set its config directory from the `runner` context in a job-level `env`, which GitHub does not allow ("Unrecognized named-value: 'runner'"). The directory is now set from a step. The plugin job (validate and the kit suite on the runner) runs for the first time on the next push.
+
+## [0.6.21] - 2026-10-22
+
+### Added
+
+- A hand-run checklist for the keys work of this line (`tests/checklists/v0.6.20__Feature__the-keymap-the-toggle-and-deleting-a-mark.md`): the pane fields and the band reading one key table, the band-button toggle, `d` and `D` on a mark, hot reload, all against a scratch data folder; the `/config` keymap rows and their docs are listed as pending.
+
+### Changed
+
+- The keys probe (`tests/one-offs/probe_literal_keys_outside_table.py`) carries its hand classification: every literal key comparison outside the key table is printed with its class and reason, and the run ends with the count of keys a surface holds on its own (0 today). A line the table does not know is counted on the safe side until someone reads it.
+
+## [0.6.20] - 2026-10-22
+
+### Added
+
+- A plugin test for the whole-conversation read: a conversation file larger than one 4 MB piece, with a prompt cut in two at the piece boundary, is read in two pieces, the second starting exactly where the first ended, and the cut prompt is still counted once.
+
+## [0.6.19] - 2026-10-22
+
+### Fixed
+
+- The whole-conversation read now runs on Windows: 0.6.18's read needed `sh`, which Claude Code does not find on a Windows machine even with Git Bash installed, so it never started. A PowerShell script shipped with the plugin (`hooks/scripts/read-chunk.ps1`) reads each piece of the file by byte offset instead, and the read advances by the bytes it received rather than re-reading a line split across two pieces.
+
+## [0.6.18] - 2026-10-22
+
+### Added
+
+- The whole-conversation loader runs. Where `sh` is available the plugin reads the conversation file once, in the background and in 4 MB pieces, keeps every prompt and reply in memory, and from then on finds the message a bookmark or a link names without searching the file again; an index under `~/claude/bookmarks/transcript/` and the replies' text under `replytext/` let the next load resume where the last one stopped. `/bm-env` reports the read: rows, bytes, pieces, running or done. Without `sh` nothing changes: the per-request search and the one-time back-fill stand, and the capability table says so (`transcript.chunks`).
+
+### Fixed
+
+- Prompts whose pasted text happens to contain the strings the old back-fill filtered on (`"type":"tool_result"`, `"isMeta":true`) now reach the prompts list from the file read: the loader parses every line instead of grepping it (7% of one long conversation's prompts were missing).
+
+## [0.6.17] - 2026-10-22
+
+### Changed
+
+- Internal, no visible change yet: the core of the whole-conversation loader. A pure reader is fed the transcript in chunks of any size and keeps one row for every prompt and reply with its line and byte range, carrying a line split across chunks; a pure index remembers a pass (the rows without their text, the byte watermark, the conversation) so the next load resumes instead of re-reading. Nothing is wired to it yet; the wiring and the public text follow. Measured on the way: the old back-fill's text filter drops queued prompts whose pasted text quotes a marker string (7% of one long conversation's prompts); the loader keeps them.
+
+## [0.6.16] - 2026-10-22
+
+### Added
+
+- The capability paths have a table and a chooser: for each engine feature the plugin stands in for (a jump past a compaction after a resume, the keyboard's return to the input box, the band losing the keyboard, a plugin-defined shortcut, the hover highlight on a two-line row), the plugin now works out at start which path runs on this build (the proper API, a patched build's route, the stock workaround, or the plain behaviour) and `/bm-env` says so per feature, with the reason.
+
+### Changed
+
+- When a jump is refused because nothing is drawn for the message, the toast's wording follows the path: on stock it still suggests a compaction; on a build with the history patch it says the patch is present and offers the same search route without the guess. The log line names the path.
+
+## [0.6.15] - 2026-10-22
+
+### Changed
+
+- The prompts list's group headings ("★ pinned", "all prompts") have a palette role of their own, `heading`, drawn as a dim blue-gray (darker on a light theme) so they read as headings without standing out. A trial value: the colour overrides setting can replace it (`{"heading": {"color": "subtle", "dimColor": false}}`), as for any role.
+
+## [0.6.14] - 2026-10-22
+
+### Added
+
+- A setting, "Lines per row in the lists" (1 to 5, default 2), for how many lines each prompt in the prompts list and each mark in the jump list may take. A line breaks at a space when the word at its edge would fit on the next line, and cuts through a token no line could hold (a path, a slug); the last line ends in an ellipsis when the text runs on. A second line sits under the text rather than under the number, so the number column stays a column. Set 1 for the one-line rows of 0.6.10.
+
+## [0.6.13] - 2026-10-22
+
+### Changed
+
+- Internal, no visible change: the third round of moves out of the hooks module. Where a focus move in the band lands (an arrow off the go button steps the list; a chord button focused while the band is idle keeps the ring on the command field) and what a reply carrying bookmark links logs and queues now live in the core and the bookmarks handler, with their own tests.
+
+### Fixed
+
+- When the process moves to another conversation (a resume), the plugin now also forgets which replies' links it had already logged, what the previous conversation had on screen, and the title its start event carried. Before, the set of logged replies grew for the life of the process and the screen reports of the previous conversation could pass for the new one's.
+
+## [0.6.12] - 2026-10-22
+
+### Changed
+
+- Internal, no visible change: the second round of moves out of the hooks module. What the plugin decides about each message the session appends, the colour split of a marked prompt, the prompts pane's centring retries and Esc rule, the "#n" lookup behind pin, jump and remove, the help that fits the band and the band's bar, the pattern a jump greps for, and the diagnostic lines now live in the plugin's core modules with their own tests. The hooks module keeps the engine calls and the wiring.
+
+## [0.6.11] - 2026-10-22
+
+### Changed
+
+- Internal, no visible change: the borrowed keyboard actions behind the band's chords, the list of Claude Code builds they were checked on, the mark letters and the bookmarks pane's groups now live in the plugin's core modules beside the code that uses them, instead of in the hooks module. The first of a series of such moves.
+
+## [0.6.10] - 2026-10-22
+
+### Fixed
+
+- 0.6.9 made the prompts pane unusable: every row showed its whole prompt wrapped over many lines, and a pinned prompt's text ran into the rows below it, because the row trusted the terminal to cut it at the pane's edge and the terminal wraps instead. A row is now cut by the plugin to the pane's own width (the width the pane reports when it is drawn), with an ellipsis, so a widened pane shows more of each prompt and a narrow one shows less, one line per prompt either way. The jump pane's rows and its reading-position row are cut the same way.
+
+## [0.6.9] - 2026-10-22
+
+### Fixed
+
+- A widened prompts pane left a quarter of its width empty: every row stopped at about sixty characters however wide the pane was dragged. A row now shows as much of the prompt as the pane is wide, cut at the edge with an ellipsis, and a narrow pane still cuts cleanly without squeezing the number column. The whole text is the one the `/words` filter already keeps; a prompt whose text is not kept (a conversation past the "Prompt text kept for the filter" budget) shows its first sixty characters as before. The jump pane's rows and its reading-position row fill their width the same way; they used to be cut at forty and thirty-two characters.
+
+## [0.6.8] - 2026-10-22
+
+### Changed
+
+- For contributors, no change to the plugin itself: CI now has a second job that installs the Claude Code CLI on the runner (pinned to the version the plugin is verified against), validates the plugin and the repository's marketplace file the way the engine reads them, and runs the plugin's own test suite; the runner needs no sign-in for any of it. The strict type check is the one check that stays local, in the pre-push hook: it needs declarations the engine writes only when it loads the plugin in a live session, which a runner never does ([#5](https://github.com/DazzleML/claude-bookmarks/issues/5)).
+
+## [0.6.7] - 2026-10-22
+
+### Changed
+
+- For contributors, no change to the plugin itself: the pre-push git hook now runs this repository's own checks before a push (the core suite under Node, the version tests, the strict type check and `claude plugin validate ./plugin`) instead of the Python-package defaults it was built for, which here ran only the nine version tests. The kit suite is left out of the hook for speed; run it yourself (CI does not run it yet). CONTRIBUTING says so, and the repository's project record names the language as TypeScript.
+
+## [0.6.6] - 2026-10-21
+
+### Changed
+
+- Internal, no visible change: the text of the `README.md` the plugin writes into its data folder now lives in a template file inside the plugin (`templates/data-readme.md`), with the layout table filled in from the code, instead of as strings in the code. The README you get is identical to before, byte for byte. If the template is ever missing from an installed copy of the plugin, the start says so in the conversation and writes no README, rather than inventing one.
+
+## [0.6.5] - 2026-10-21
+
+### Fixed
+
+- A link on a highlighted line kept neither its colour nor its click: the marked line of a reply was drawn as plain text, so for as long as the highlight showed a link on it was just words. A marked line that carries a link is now drawn as markdown inside the band, so the link keeps its colour, its underline and its click, and the plugin's own bookmark links on it still jump; the marked words keep their bold `«a»` tag wherever the tag cannot break the link (when the words are a link's own text, the tag goes inside the link's label). A marked line with no link is drawn exactly as before.
+
+## [0.6.4] - 2026-10-21
+
+### Added
+
+- Deleting a mark from the band, no confirmation asked, a toast saying what happened: `d` then a letter clears that letter (it points at nothing; its history is kept, so the earlier place is still listed and can be brought back), and `D` then a letter forgets the letter's current record as well. A record nothing else refers to -- the letter's only entry, no bookmark made from it -- is removed outright; otherwise it leaves a tombstone so the rest of the letter's history and a merge with another copy of your bookmarks stay in order. `D` is uppercase and typed after the leader; which letter does which is the keymap's to change, like any key. The reading position's backtick counts as a letter to both.
+- `d` after a number in the bookmarks list (the band's row or the list's `#` field) removes that bookmark from your list, the same way Claude's tool removes one: it leaves a tombstone.
+- `/bm-check` notes a letter record that no letter names (an orphan a mark forgotten on another copy can leave behind); it reports and changes nothing. Merging two copies of a bookmark file no longer brings such a record back from the older copy.
+
+## [0.6.3] - 2026-10-20
+
+### Added
+
+- A button on the band closes the pane it opened: press `prompts` while the prompts list is open and the list closes; the same for `mark`, `jump` and `bookmarks`. The button is a toggle; the typed key is not (`<leader> p` with the list open leaves it open, since `<leader> p 12` may be on its way), and with lists off (the `panes` setting) nothing changes. Open means the plugin's own pane and that pane on screen, so a fresh conversation's first press always opens.
+
+## [0.6.2] - 2026-10-20
+
+### Added
+
+- Internal, no visible change yet: the keymap layer behind choosing your own keys ([#36](https://github.com/DazzleML/claude-bookmarks/issues/36)). A keymap is one value per command -- its keys in order, `Space` spelling the space, `hidden` as a last word to take the command's button off the bar, an empty value meaning the default -- plus one value for the list keys in the table's order. Applied to the plugin's key table it gives the band, the hints, the help and the panes the person's keys; a key that cannot work (an arrow name, two characters, a digit in a list) or that two commands claim is reported by name and the default kept for that command, so no command can be left unreachable. A command's bar button answers the keyboard only when one of its keys is a digit or a lowercase letter, which is what Claude Code's buttons take; any other key is typed after the leader. Where the keymap is set (the `/config` rows) comes in a later version; until then every surface draws exactly as before.
+
+## [0.6.1] - 2026-10-20
+
+### Changed
+
+- Internal, no visible change: the keys a list pane's own `#` field reads (`q` to close, `/words` to filter, `*N` to pin) now come from the plugin's one key table, where the band's keys already live, instead of being spelled out in the pane itself; the band's number row finds its `k`/`j` step buttons by what they do rather than by their letter. This is the ground the coming keymap stands on: a key you change in one place reaches the panes too. The hint, the help and the band row draw exactly as before.
+
+## [0.6.0] - 2026-10-20
+
+The 0.5.x line settled what the bookmark files hold and where they live. 0.6.x is the rest of the foundations: the keys, the input layers, the old issues, and the tidy-up around them.
+
+### Fixed
+
+- A mark set on a line of a reply that contains *italics* was drawn as a quoted line at the top of the reply instead of on its own paragraph. The words you select are copied from the reply as drawn, with the italics' markers gone, and the match against the reply's text knew about bold, code and links but not italics, so no line matched and the mark fell back to the top. Italics now match like bold does; a lone `*` (as in `2 * 3`) and an underscore inside a word (as in `a_001`) are left alone.
+
 ## [0.5.12] - 2026-10-17
 
 ### Added
@@ -1093,7 +1293,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.5.12...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.27...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

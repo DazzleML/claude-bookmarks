@@ -1,6 +1,55 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LINE_COMMANDS, bandButtons, helpLines, helpShort, lineHint, lineKeys, listHint, parseListNumber, route } from '../../plugin/hooks/core/band/keys.ts'
+import { CHORD_ACTIONS, LINE_COMMANDS, LIST_KEYS, bandButtons, bandFocusRoute, barFor, fieldKeysFor, fieldRest, helpFor, helpLines, helpShort, lineHint, lineKeys, listHint, listKeysFor, parseListNumber, route } from '../../plugin/hooks/core/band/keys.ts'
+
+// The AbovePrompt focus rules (U60 commit B), which no kit test raises: they came from two
+// incidents of 2026-10-07 (a second Ctrl+] marking `a`; the arrows wanted in the list).
+test('an arrow off go in list mode steps the list and keeps the ring on go; a chord focus while idle stays on the command field', () => {
+  const list = { byPerson: true, ring: 'band-num-go', mode: 'list', cmdRev: 3 }
+  assert.deepEqual(bandFocusRoute({ ...list, element: 'band-num-k' }), { element: 'band-num-go', step: -1 })
+  assert.deepEqual(bandFocusRoute({ ...list, element: 'band-num-j' }), { element: 'band-num-go', step: 1 })
+  assert.deepEqual(bandFocusRoute({ ...list, element: 'band-num-k', byPerson: false }), { element: 'band-num-k' }, 'the engine moving the ring is not an arrow')
+  assert.deepEqual(bandFocusRoute({ ...list, element: 'band-num-k', ring: 'band-num-1' }), { element: 'band-num-k' }, 'only off go')
+  assert.deepEqual(bandFocusRoute({ byPerson: true, ring: undefined, mode: 'idle', element: 'chord-mark', cmdRev: 3 }), { element: 'band-cmd-3', kept: true })
+})
+
+// Input routing, unit 3b (2026-10-25): the band's own field has the step buttons either
+// side; a person's move off the field onto one steps the list and keeps the ring on the field.
+test('a move off the band field onto a step button steps the list and keeps the ring on the field, in both lists', () => {
+  // The field is drawn as band-num-field-<n>; the hook renews it after the step (field: true).
+  const field = { byPerson: true, ring: 'band-num-field-4', mode: 'list', cmdRev: 0 }
+  assert.deepEqual(bandFocusRoute({ ...field, element: 'band-num-k' }), { element: 'band-num-field-4', step: -1, field: true })
+  assert.deepEqual(bandFocusRoute({ ...field, element: 'band-num-j' }), { element: 'band-num-field-4', step: 1, field: true })
+  assert.deepEqual(bandFocusRoute({ ...field, mode: 'bookmarks', element: 'band-num-j' }), { element: 'band-num-field-4', step: 1, field: true })
+  assert.deepEqual(bandFocusRoute({ ...field, element: 'band-num-j', byPerson: false }), { element: 'band-num-j' }, 'the engine moving the ring is not a step')
+  assert.deepEqual(bandFocusRoute({ ...field, element: 'band-num-s' }), { element: 'band-num-s' }, 'only the step buttons step')
+  // A keymap that gives the steps n and p: the buttons are band-num-p and band-num-n.
+  assert.deepEqual(bandFocusRoute({ ...field, element: 'band-num-n', stepKeys: { prev: 'band-num-p', next: 'band-num-n' } }), { element: 'band-num-field-4', step: 1, field: true })
+  assert.deepEqual(bandFocusRoute({ ...field, element: 'band-num-j', stepKeys: { prev: 'band-num-p', next: 'band-num-n' } }), { element: 'band-num-j' })
+})
+
+test("a chord focus while the band is busy, or not the person's, and a plain move pass through", () => {
+  assert.deepEqual(bandFocusRoute({ byPerson: true, ring: undefined, mode: 'list', element: 'chord-mark', cmdRev: 3 }), { element: 'chord-mark' })
+  assert.deepEqual(bandFocusRoute({ byPerson: false, ring: undefined, mode: 'idle', element: 'chord-mark', cmdRev: 3 }), { element: 'chord-mark' })
+  assert.deepEqual(bandFocusRoute({ byPerson: true, ring: 'band-cmd-0', mode: 'idle', element: 'band-cmd-0', cmdRev: 0 }), { element: 'band-cmd-0' })
+  assert.deepEqual(bandFocusRoute({ byPerson: true, ring: undefined, mode: 'idle', element: undefined, cmdRev: 0 }), { element: undefined })
+})
+
+// The band render hook's two pure choices (U60): the help that fits the window, and the bar.
+test('helpFor gives the full help when it fits the window plus one row, else the short form', () => {
+  const now = { leader: 'The leader', chords: true, panes: true }
+  const full = helpLines(now)
+  assert.deepEqual(helpFor(now, full.length + 1), full)
+  assert.deepEqual(helpFor(now, full.length), helpShort(now))
+})
+
+test('barFor: no bar with the field-only band; with chords on each chord button carries its action', () => {
+  assert.deepEqual(barFor({ band: 'field', chords: 'on' }, CHORD_ACTIONS), [])
+  const bar = barFor({ band: 'full', chords: 'on' }, CHORD_ACTIONS)
+  assert.equal(bar.length, bandButtons({ chords: true }).length)
+  assert.equal(bar.find(b => b.id === 'mark')?.action, CHORD_ACTIONS.mark)
+  assert.equal(barFor({ band: 'full', chords: 'off' }, CHORD_ACTIONS).some(b => b.action !== undefined), false)
+})
 
 test('a typed list number: a prompt, an unfold, or a footnote', () => {
   assert.deepEqual(parseListNumber('3'), { n: 3 })
@@ -58,12 +107,23 @@ test("the command line routes today's commands to the same operations", () => {
   assert.deepEqual(route('Pc', none).operation, { op: 'promote', letter: 'c' })
   assert.deepEqual(route('o', none).operation, { op: 'jumplist', dir: -1 })
   assert.deepEqual(route('i', none).operation, { op: 'jumplist', dir: 1 })
+  // The delete gesture (unit 5): d clears, D forgets; the case is the whole difference, as the keymap may swap them.
+  assert.deepEqual(route('da', none).operation, { op: 'delete', letter: 'a' })
+  assert.deepEqual(route('Da', none).operation, { op: 'forget', letter: 'a' })
+  assert.deepEqual(route('d', { pane: 'bookmarks' }).operation, { op: 'remove' })
+  assert.equal(route('d', { pane: 'list' }).operation.op, 'hint', 'a prompt has no remove')
 })
 
 test('P alone waits for its letter; a bad letter gives a hint, not an action', () => {
   assert.deepEqual(route('P', none), { operation: { op: 'wait' }, needsMore: true })
   assert.equal(route('P9', none).operation.op, 'hint')
   assert.equal(route("'9", none).operation.op, 'hint')
+  assert.deepEqual(route('d', none), { operation: { op: 'wait' }, needsMore: true })
+  assert.equal(route('D9', none).operation.op, 'hint')
+  assert.equal(route('d9', none).operation.op, 'hint')
+  // The reading position (`) is a letter to both verbs, as it is to P.
+  assert.deepEqual(route('d`', none).operation, { op: 'delete', letter: '`' })
+  assert.deepEqual(route('D`', none).operation, { op: 'forget', letter: '`' })
 })
 
 test('an unknown first key gives the generated hint', () => {
@@ -101,8 +161,27 @@ test('a list pane takes digits, j/k, Enter, and its own keys', () => {
   assert.deepEqual(route('j', list).operation, { op: 'step', dir: 1 })
   assert.deepEqual(route('Enter', list), { operation: { op: 'go' }, needsMore: false })
   assert.deepEqual(route('s', list).operation, { op: 'pin' })
-  assert.equal(route('/', list).operation.op, 'hint', '`/words` belongs to the pane field, not a band key')
+  assert.equal(route('/', list).operation.op, 'filter', '`/words` is the pane field\'s own key, in the table since unit A1 of the keys design')
   assert.equal(route('h', list).operation.op, 'hint', 'groups are the bookmarks pane only')
+})
+
+// Unit A1 of the keys design (2026-10-20): the pane field's own prefixes live in the table so a
+// keymap reaches them, but never on the band's number row or in the hint.
+test("the pane field's keys are in the table, scoped to the field, and out of the band row and the hint", () => {
+  const list = { pane: 'list' as const }
+  assert.deepEqual(fieldKeysFor('list').map(k => k.key), ['/', '*'])
+  assert.deepEqual(fieldKeysFor('bookmarks').map(k => k.key), [])
+  assert.ok(!listKeysFor('list').some(k => k.key === '/' || k.key === '*'), 'the band row never draws a field key')
+  assert.ok(!listHint('list').includes('/') && !listHint('list').includes('*'), 'the hint never names a field key')
+  assert.deepEqual(route('/', list).operation, { op: 'filter' })
+  assert.deepEqual(route('*', list).operation, { op: 'pin' })
+  assert.deepEqual(route('q', list).operation, { op: 'close' })
+  assert.equal(fieldRest('/band', 'list', 'filter'), 'band')
+  assert.equal(fieldRest('*21', 'list', 'pin'), '21')
+  assert.equal(fieldRest('*21', 'list', 'filter'), undefined)
+  assert.equal(fieldRest('21', 'list', 'pin'), undefined)
+  assert.equal(fieldRest('/x', 'bookmarks', 'filter'), undefined, 'the bookmarks pane has no filter key')
+  for (const k of LIST_KEYS) assert.equal(route(k.key, { pane: k.panes[0]! }).operation.op, k.route().operation.op, k.key)
 })
 
 test('the bookmarks pane has groups and no pin', () => {
@@ -118,7 +197,7 @@ test('Esc closes, in any context', () => {
 
 test("each list pane's hint is generated from its own keys", () => {
   assert.equal(listHint('list'), 'number + Enter jump · j next · k previous · s pin · q close · Esc close')
-  assert.equal(listHint('bookmarks'), 'number + Enter jump · j next · k previous · h previous group · l next group · c claim · q close · Esc close')
+  assert.equal(listHint('bookmarks'), 'number + Enter jump · j next · k previous · h previous group · l next group · c claim · d remove · q close · Esc close')
 })
 
 test('q closes, at rest and in a list (Q261012-09)', () => {

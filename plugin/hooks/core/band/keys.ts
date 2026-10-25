@@ -10,6 +10,7 @@
 // buttons had become.
 //
 // Pure: no engine imports. The adapter in register.tsx performs the operation.
+import { isMarkLetter } from '../marks/marks.ts'
 
 export type Pane = 'none' | 'list' | 'mark' | 'jump' | 'bookmarks'
 
@@ -18,17 +19,24 @@ export type Operation =
   | { op: 'jump-mark'; letter: string }
   | { op: 'reading' }
   | { op: 'promote'; letter: string }
+  // The delete gesture's two verbs on a letter (the keys design, unit 5): clear it (its history kept), or forget its record.
+  | { op: 'delete'; letter: string }
+  | { op: 'forget'; letter: string }
   | { op: 'jumplist'; dir: -1 | 1 }
   | { op: 'digit'; digit: string }
   | { op: 'step'; dir: -1 | 1 }
   | { op: 'go' }
   | { op: 'pin' }
   | { op: 'claim' }
+  // `d` in the bookmarks list: the numbered bookmark leaves the list (a tombstone keeps its place); a bookmark's only verb.
+  | { op: 'remove' }
   | { op: 'group'; dir: -1 | 1 }
   | { op: 'close' }
   | { op: 'help' }
   | { op: 'wait' }
   | { op: 'hint'; reason: string }
+  // Typed in a list pane's own field only (`field` keys below): the filter's prefix (#28).
+  | { op: 'filter' }
 
 // `needsMore`: the operation waits for another key (a letter after `P`, a number in a
 // list), so whatever runs after it must leave the keyboard where it is (the after-action
@@ -46,7 +54,33 @@ export type Routed = { operation: Operation; needsMore: boolean }
 // "optional fast keys"), carried only while the chords setting is on (djdarcy, 01:30:
 // kept, optional, "an easy enable/disable so their removal can be tested").
 export type Chord = 'mark' | 'jump' | 'prompts' | 'read'
-type LineCommand = {
+
+// Engine keybinding actions the chords borrow (docs/engine-quirks.md, "A plugin can't
+// define its own keyboard shortcut"). None should have a handler mounted while the built-in diff mod
+// is enabled; the version check in session.start is how we notice when a new build
+// might have changed that.
+// A third borrowed action (2026-10-04, user: "ctrl-x p" for the recent-prompts pane,
+// then 1-9): `ctrl+x p` in keybindings.json. The engine's own docs use it as their
+// example of a Button `action`; another diff-viewer toggle, idle in a conversation.
+// A fourth (2026-10-04, user: "Ctrl+x space" for the reading position). Scrolls the
+// diff panel's file list, so idle in a conversation like the other three. `ctrl+x x`,
+// djdarcy's first idea, is Claude Code's own chord for closing a pane.
+// The borrowed engine action each chord command's button carries while chords are on.
+// (Moved from register.tsx under /move-code, U60, 2026-10-22; the four comments as they were.)
+export const CHORD_ACTIONS: Record<Chord, string> = {
+  mark: 'app:toggleDiffNoiseFilter',
+  jump: 'app:toggleDiffPreSession',
+  prompts: 'app:cycleDiffBase',
+  read: 'app:diffFileListDown',
+}
+
+// Claude Code builds the borrowed-action chords were verified on. The start-up tripwire
+// (register.tsx) toasts on any other build, because a new build could give a borrowed
+// action a handler of its own; /bm-env names them. Add a build here after re-verifying.
+// (The one definition since 0.4.91: 0.4.45 had copied it, leaving two to keep in step.)
+export const VERIFIED_CLIENTS = ['2.1.288', '2.1.289', '2.1.290']
+
+export type LineCommand = {
   id: string
   keys: readonly string[]
   then?: 'letter' | 'mark-letter' | 'number'
@@ -91,7 +125,7 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
     route: next =>
       next === undefined
         ? waiting({ op: 'open', pane: 'jump' })
-        : /^[a-z]$/.test(next)
+        : isMarkLetter(next)
           ? done({ op: 'jump-mark', letter: next })
           : done({ op: 'hint', reason: lineHint() }),
   },
@@ -136,9 +170,43 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
     route: next =>
       next === undefined
         ? waiting({ op: 'wait' })
-        : /^[a-z`]$/.test(next)
+        : isMarkLetter(next, true)
           ? done({ op: 'promote', letter: next })
           : done({ op: 'hint', reason: 'P then a mark letter (a-z) promotes that mark into a bookmark' }),
+  },
+  // The delete gesture (the keys design, unit 5; djdarcy 2026-10-20: d/D, no confirmation):
+  // `d` + letter clears the letter, its history kept; `D` + letter forgets its current record
+  // too. `D` is uppercase, so it is typed after the leader and has no bar key -- fitting for
+  // the destructive one. Which letter is which is the keymap's to change, like any key.
+  {
+    id: 'delete',
+    keys: ['d'],
+    then: 'mark-letter',
+    label: 'clear mark',
+    button: 'clear',
+    shown: false,
+    help: 'clear mark a-z: the letter points at nothing, its history is kept',
+    route: next =>
+      next === undefined
+        ? waiting({ op: 'wait' })
+        : isMarkLetter(next, true)
+          ? done({ op: 'delete', letter: next })
+          : done({ op: 'hint', reason: 'd then a mark letter (a-z) clears that mark; its history is kept' }),
+  },
+  {
+    id: 'forget',
+    keys: ['D'],
+    then: 'mark-letter',
+    label: 'forget mark',
+    button: 'forget',
+    shown: false,
+    help: 'forget mark a-z: its record goes too (outright when nothing else refers to it)',
+    route: next =>
+      next === undefined
+        ? waiting({ op: 'wait' })
+        : isMarkLetter(next, true)
+          ? done({ op: 'forget', letter: next })
+          : done({ op: 'hint', reason: 'D then a mark letter (a-z) forgets that mark and its record' }),
   },
   { id: 'back', keys: ['o'], label: 'back', button: 'back', shown: false, help: 'back to where the last jump left from', route: () => done({ op: 'jumplist', dir: -1 }) },
   { id: 'forward', keys: ['i'], label: 'forward', button: 'forward', shown: false, help: 'forward again', route: () => done({ op: 'jumplist', dir: 1 }) },
@@ -153,8 +221,11 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
 const keyName = (k: string) => (k === ' ' ? 'Space' : k)
 
 // The command line's hint, generated from the table: every key once, with what follows.
-export function lineHint(): string {
-  const parts = LINE_COMMANDS.map(c => {
+// Every reader below takes the tables it reads (`DEFAULT_TABLES` unless a keymap, #36,
+// supplied others through core/band/keymap.ts), so the band, the panes and the help agree
+// on whatever keys the person chose.
+export function lineHint(tables: Tables = DEFAULT_TABLES): string {
+  const parts = tables.line.map(c => {
     const keys = c.keys.map(keyName).join(' or ')
     const then = c.then === 'letter' || c.then === 'mark-letter' ? ' + letter' : c.then === 'number' ? ' + number' : ''
     return `${keys}${then} (${c.label})`
@@ -164,8 +235,12 @@ export function lineHint(): string {
 
 // A list pane's keys (the prompts and bookmarks lists), in the order of their hint.
 // `button`: how the band's number row draws it (the band-mode row is generated from this
-// table too, so it cannot offer a key the hint does not name).
-type ListKey = { key: string; label: string; button: string; panes: readonly Pane[]; route: () => Routed }
+// table too, so it cannot offer a key the hint does not name). `field`: a key typed only
+// in the pane's own `#` field, as the prefix of what follows -- the filter's `/` (#28,
+// djdarcy 2026-10-12: "Pane field only") and the pin's `*` -- never on the band's number
+// row and never in the hint (the field's placeholder says them); it is in the table so a
+// keymap (#36) reaches it like any other key (the keys design, 2026-10-20, unit 1).
+export type ListKey = { key: string; label: string; button: string; panes: readonly Pane[]; field?: true; route: () => Routed }
 export const LIST_KEYS: readonly ListKey[] = [
   { key: 'j', label: 'next', button: 'j↓', panes: ['list', 'bookmarks'], route: () => waiting({ op: 'step', dir: 1 }) },
   { key: 'k', label: 'previous', button: 'k↑', panes: ['list', 'bookmarks'], route: () => waiting({ op: 'step', dir: -1 }) },
@@ -173,31 +248,56 @@ export const LIST_KEYS: readonly ListKey[] = [
   { key: 'h', label: 'previous group', button: 'h◂', panes: ['bookmarks'], route: () => waiting({ op: 'group', dir: -1 }) },
   { key: 'l', label: 'next group', button: '▸l', panes: ['bookmarks'], route: () => waiting({ op: 'group', dir: 1 }) },
   { key: 'c', label: 'claim', button: 'c claim', panes: ['bookmarks'], route: () => waiting({ op: 'claim' }) },
+  // The numbered bookmark leaves the list (the keys design, unit 5): typed after its number in the band's row or the pane's field.
+  { key: 'd', label: 'remove', button: 'd remove', panes: ['bookmarks'], route: () => waiting({ op: 'remove' }) },
   { key: 'q', label: 'close', button: 'q close', panes: ['list', 'bookmarks'], route: () => done({ op: 'close' }) },
+  { key: '/', label: 'filter', button: '/ filter', panes: ['list'], field: true, route: () => waiting({ op: 'filter' }) },
+  { key: '*', label: 'pin prefix', button: '* pin', panes: ['list'], field: true, route: () => waiting({ op: 'pin' }) },
 ]
-// A pane's list keys, as the band draws them.
-export function listKeysFor(pane: Pane): readonly ListKey[] {
-  return LIST_KEYS.filter(l => l.panes.includes(pane))
+// The two tables every reader works from. The defaults are the tables above; a keymap
+// (core/band/keymap.ts) derives another pair from them, and a caller that has one passes
+// it to each reader.
+export type Tables = { line: readonly LineCommand[]; list: readonly ListKey[] }
+export const DEFAULT_TABLES: Tables = { line: LINE_COMMANDS, list: LIST_KEYS }
+
+// The bar's hotkey for a command: the first of its keys the engine takes as a Button
+// hotkey -- one digit or one lowercase letter ("anything else is refused", and Shift+w is
+// "w": plugin/.claude-plugin/types/claude-code/index.d.ts, Button.hotkey). `'`, Space,
+// `?` and an uppercase key are typed in the field; their buttons are click-only.
+export function barHotkey(keys: readonly string[]): string | undefined {
+  return keys.find(k => /^[a-z0-9]$/.test(k))
 }
-// The prompts filter (#28) is typed as `/words` in the prompts pane's own number field
-// (djdarcy, 2026-10-12: "Pane field only"): `/` is not a letter or digit, so it can never
-// be a band key, and it is not listed here.
+
+// A pane's list keys, as the band draws them: the field-only keys are not among them.
+export function listKeysFor(pane: Pane, tables: Tables = DEFAULT_TABLES): readonly ListKey[] {
+  return tables.list.filter(l => l.panes.includes(pane) && !l.field)
+}
+// A pane's field-only keys: the prefixes its `#` field reads.
+export function fieldKeysFor(pane: Pane, tables: Tables = DEFAULT_TABLES): readonly ListKey[] {
+  return tables.list.filter(l => l.panes.includes(pane) && l.field === true)
+}
+// What follows a field key in the pane's `#` field, when `typed` starts with the key that
+// routes to `op` (`/words` -> `words`; `*21` -> `21`), else undefined.
+export function fieldRest(typed: string, pane: Pane, op: 'filter' | 'pin', tables: Tables = DEFAULT_TABLES): string | undefined {
+  const k = fieldKeysFor(pane, tables).find(l => l.route().operation.op === op)
+  return k && typed.startsWith(k.key) ? typed.slice(k.key.length) : undefined
+}
 
 // Route what was typed in a context. `typed` is the whole command line for the band with
 // no pane (a command and maybe its argument), or a single key in a list pane.
-export function route(typed: string, ctx: { pane: Pane }): Routed {
+export function route(typed: string, ctx: { pane: Pane }, tables: Tables = DEFAULT_TABLES): Routed {
   if (typed === '') return waiting({ op: 'wait' })
   if (typed === '\u001b' || typed === 'Escape') return done({ op: 'close' })
   if (ctx.pane === 'list' || ctx.pane === 'bookmarks') {
     if (/^[0-9]$/.test(typed)) return waiting({ op: 'digit', digit: typed })
     if (typed === '\r' || typed === 'Enter') return done({ op: 'go' })
-    const k = LIST_KEYS.find(l => l.key === typed && l.panes.includes(ctx.pane))
+    const k = tables.list.find(l => l.key === typed && l.panes.includes(ctx.pane))
     if (k) return k.route()
-    return waiting({ op: 'hint', reason: listHint(ctx.pane) })
+    return waiting({ op: 'hint', reason: listHint(ctx.pane, tables) })
   }
   const first = typed[0]!
-  const cmd = LINE_COMMANDS.find(c => c.keys.includes(first))
-  if (!cmd) return done({ op: 'hint', reason: lineHint() })
+  const cmd = tables.line.find(c => c.keys.includes(first))
+  if (!cmd) return done({ op: 'hint', reason: lineHint(tables) })
   return cmd.route(typed.length > 1 ? typed[1] : undefined)
 }
 
@@ -214,15 +314,15 @@ export function parseListNumber(typed: string): ListNumber | undefined {
   return { n, k: Number(m[2]) }
 }
 
-export function listHint(pane: Pane): string {
-  const keys = LIST_KEYS.filter(l => l.panes.includes(pane)).map(l => `${l.key} ${l.label}`)
+export function listHint(pane: Pane, tables: Tables = DEFAULT_TABLES): string {
+  const keys = listKeysFor(pane, tables).map(l => `${l.key} ${l.label}`)
   return ['number + Enter jump', ...keys, 'Esc close'].join(' · ')
 }
 
 // Every key the command line routes, for tests and for a surface that draws one button
 // per command.
-export function lineKeys(): string[] {
-  return LINE_COMMANDS.flatMap(c => [...c.keys])
+export function lineKeys(tables: Tables = DEFAULT_TABLES): string[] {
+  return tables.line.flatMap(c => [...c.keys])
 }
 
 // The band's bar: one button per shown command, in table order. Its key is the command's
@@ -232,14 +332,67 @@ export function lineKeys(): string[] {
 // what the keys are, and `?` says the rest (it replaced `' m ␣ p b P o i`, which named
 // keys without saying what they did).
 export type BandButton = { id: string; key: string; label: string; hotkey?: string; chord?: Chord }
-export function bandButtons(opts: { chords: boolean }): BandButton[] {
-  return LINE_COMMANDS.filter(c => c.shown).map(c => {
-    const letter = c.keys.find(k => /^[A-Za-z0-9]$/.test(k))
+/** The help the band draws: the full lines when they fit the band's window (one line per command plus one), else the short form. The band must fit its window: taller, it scrolls, and the keyboard probe (showHelp) focuses `close`, which scrolls it back to the top (log 2026-10-12 18:02-18:09). (The band render hook's rule, moved here under U60.) */
+export function helpFor(now: { leader: string; chords: boolean; panes: boolean }, maxRows: number, tables: Tables = DEFAULT_TABLES): string[] {
+  const full = helpLines(now, tables)
+  return full.length + 1 <= maxRows ? full : helpShort(now, tables)
+}
+
+/** The bar's buttons as the band draws them: none with the field-only band; else each command's button with its hotkey and, while chords are on, the borrowed engine action its chord presses. */
+export function barFor(settings: { band: 'full' | 'field'; chords: 'on' | 'off' }, actions: Record<Chord, string>, tables: Tables = DEFAULT_TABLES): { id: string; label: string; key: string; hotkey?: string; action?: string }[] {
+  return settings.band === 'full'
+    ? bandButtons({ chords: settings.chords === 'on' }, tables).map(b => ({ id: b.id, label: b.label, key: b.key, ...(b.hotkey ? { hotkey: b.hotkey } : {}), ...(b.chord ? { action: actions[b.chord] } : {}) }))
+    : []
+}
+
+/** Where a focus move in the band lands, and what it means (the AbovePrompt ui.focus hook's two rules, moved here under U60; the hook reads the state and acts). */
+export type BandFocus = { element: string | undefined; step?: -1 | 1; kept?: true; /** The step came off the band's field: the hook renews the field and keeps the ring there. */ field?: true }
+export function bandFocusRoute(f: {
+  byPerson: boolean
+  ring: string | undefined
+  mode: string
+  element: string | undefined
+  cmdRev: number
+  /** The step buttons' keys beside the band's field (`band-num-<key>`), from the person's keymap; k and j by default. */
+  stepKeys?: { prev: string; next: string }
+}): BandFocus {
+  // While the band is idle, the person's focus moves stay on the command field. After
+  // a command the band keeps the keyboard (a plugin can't hand it back; Esc does), so
+  // a second Ctrl+] moved the ring onto the `mark` button, Space pressed it, and Enter
+  // marked `a` (djdarcy, 2026-10-07; log 08:10:23). Clicks and chords still press the
+  // buttons; only the ring is kept on the field.
+  // The arrows in the band's prompt mode: they move the ring (they can't be hotkeys),
+  // so a move off `go` onto its neighbour is read as a step through the pane's list,
+  // k (previous: Up, Left, Shift+Tab) or j (next: Down, Right, Tab), and the ring
+  // stays on `go` for Enter (djdarcy, 2026-10-07: "we'd of course also want to add
+  // <up> <down> if possible").
+  if (f.byPerson && f.ring === 'band-num-go' && f.mode === 'list' && (f.element === 'band-num-k' || f.element === 'band-num-j')) {
+    return { element: 'band-num-go', step: f.element === 'band-num-k' ? -1 : 1 }
+  }
+  // The same on the band's own field (input routing, 2026-10-25, unit 3b): the step buttons
+  // sit either side of it, so a move off the field (Tab, Shift+Tab, or Up/Down with the
+  // AbovePromptInput binding in docs/keys.md) lands on one, steps the list, and the ring
+  // stays on the field for the next key. Both lists step here.
+  const steps = f.stepKeys ?? { prev: 'band-num-k', next: 'band-num-j' }
+  // The field is drawn as `band-num-field-<n>` (handlers/band.ts renewField); the hook draws
+  // a fresh one after the step, so `element` here is where the ring was.
+  if (f.byPerson && f.ring?.startsWith('band-num-field') && (f.mode === 'list' || f.mode === 'bookmarks') && (f.element === steps.prev || f.element === steps.next)) {
+    return { element: f.ring, step: f.element === steps.prev ? -1 : 1, field: true }
+  }
+  if (f.byPerson && f.element?.startsWith('chord-') && f.mode === 'idle') {
+    return { element: `band-cmd-${f.cmdRev}`, kept: true }
+  }
+  return { element: f.element }
+}
+
+export function bandButtons(opts: { chords: boolean }, tables: Tables = DEFAULT_TABLES): BandButton[] {
+  return tables.line.filter(c => c.shown).map(c => {
+    const hotkey = barHotkey(c.keys)
     return {
       id: c.id,
       key: c.keys[0]!,
       label: c.button,
-      ...(letter ? { hotkey: letter } : {}),
+      ...(hotkey ? { hotkey } : {}),
       ...(opts.chords && c.chord ? { chord: c.chord } : {}),
     }
   })
@@ -247,31 +400,33 @@ export function bandButtons(opts: { chords: boolean }): BandButton[] {
 
 // The help `?` shows: every command with its keys and what it does, the list keys, and
 // the switches as they are now. One string per line.
-export function helpLines(now: { leader: string; chords: boolean; panes: boolean }): string[] {
+export function helpLines(now: { leader: string; chords: boolean; panes: boolean }, tables: Tables = DEFAULT_TABLES): string[] {
   const keysOf = (c: LineCommand) => {
     const then = c.then === 'letter' || c.then === 'mark-letter' ? ' + letter' : c.then === 'number' ? ' + number' : ''
     return `${c.keys.map(keyName).join(' or ')}${then}`
   }
-  const width = Math.max(...LINE_COMMANDS.map(c => keysOf(c).length))
+  const width = Math.max(...tables.line.map(c => keysOf(c).length))
+  const filterKey = fieldKeysFor('list', tables).find(k => k.route().operation.op === 'filter')?.key ?? '/'
   return [
     `${now.leader}, then:`,
-    ...LINE_COMMANDS.map(c => `  ${keysOf(c).padEnd(width)}  ${c.help}`),
+    ...tables.line.map(c => `  ${keysOf(c).padEnd(width)}  ${c.help}`),
     'In the prompts list:',
-    `  ${listHint('list')}; type /words in its # field to filter, N.k for a footnote`,
+    `  ${listHint('list', tables)}; type ${filterKey}words in its # field to filter, N.k for a footnote`,
     'In the bookmarks list:',
-    `  ${listHint('bookmarks')}`,
+    `  ${listHint('bookmarks', tables)}`,
     `Chords (mark, jump, prompts, read on their own keybindings): ${now.chords ? 'on' : 'off'}. Lists in a pane: ${now.panes ? 'on' : 'off'}. Both in /config.`,
   ]
 }
 
 // The same help in four lines, for a band too short for one line per command: each line
 // wraps to the band's width instead of adding rows the band would have to scroll.
-export function helpShort(now: { leader: string; chords: boolean; panes: boolean }): string[] {
-  const full = helpLines(now)
+export function helpShort(now: { leader: string; chords: boolean; panes: boolean }, tables: Tables = DEFAULT_TABLES): string[] {
+  const full = helpLines(now, tables)
+  const filterKey = fieldKeysFor('list', tables).find(k => k.route().operation.op === 'filter')?.key ?? '/'
   return [
-    `${now.leader}, then: ${lineHint().replace(/^bm: /, '').split('  ').join(' · ')}`,
-    `Prompts list: ${listHint('list')}; /words in its # field filters, N.k is a footnote`,
-    `Bookmarks list: ${listHint('bookmarks')}`,
+    `${now.leader}, then: ${lineHint(tables).replace(/^bm: /, '').split('  ').join(' · ')}`,
+    `Prompts list: ${listHint('list', tables)}; ${filterKey}words in its # field filters, N.k is a footnote`,
+    `Bookmarks list: ${listHint('bookmarks', tables)}`,
     full.at(-1)!,
   ]
 }

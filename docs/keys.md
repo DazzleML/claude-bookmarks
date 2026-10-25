@@ -27,6 +27,8 @@ The band's field takes exactly one key (two for the ones that need a letter). An
 | `p` | see section 3 | Opens the prompts pane |
 | `b` | see section 3 | Opens the bookmarks pane |
 | `P` | a letter `a`-`z`, or `` ` `` | Promotes that mark (or the reading position) into a bookmark on your list; the link goes to your clipboard |
+| `d` | a letter `a`-`z` | Clears that mark: the letter points at nothing, and its history is kept |
+| `D` | a letter `a`-`z` | Forgets that mark: its record goes too, outright when nothing else refers to it |
 | `o` | | Back to where you were before the last jump |
 | `i` | | Forward again |
 | `?` | | Shows every command and list key, and how the band's switches are set, in the band; `Enter` or `Esc` closes it |
@@ -39,23 +41,42 @@ The band's field takes exactly one key (two for the ones that need a letter). An
 
 The same letter can mean something else once a list is open: after `p` or `b`, `j` and `k` move through the list (vim's down and up), so `j` is "jump" at the start of a command and "next" inside a list.
 
-These keys are fixed for now. Choosing your own -- a different key for a command, or hiding a button you never use -- is planned as a keymap ([#36](https://github.com/DazzleML/claude-bookmarks/issues/36)); until then, the [Optional fast keys](usage.md#optional-fast-keys) are the only keys you bind yourself.
+These are the default keys. You can choose your own, or take a button off the bar, in `/config`: see [Choosing your own keys](#choosing-your-own-keys).
+
+**A bar button closes the pane it opened.** Clicking `prompts` or `bookmarks` on the bar while its pane is open closes the pane. The key never does: `p` after the leader may be the start of `p 12`, so typing it with the pane open leaves the pane open.
 
 After any of these the keyboard stays on the band for the next command; `Esc` returns it to the input box. Arrow keys never reach the band ([#23](https://github.com/DazzleML/claude-bookmarks/issues/23)); a terminal mapping can type the leader and a key for you, see [Back and forward](usage.md#back-and-forward).
 
 ## 3. On the band with the prompts or bookmarks pane open
 
-After `p` or `b` the pane shows the list and the band takes the keys:
+After `p` or `b` the pane shows the list, and the band draws a `#` field of its own that takes the keys. It is an ordinary text field, so you can correct what you type:
 
 | Key | Does |
 |-----|------|
 | digits | Type a number; the pane's `#` field shows it and the list scrolls to it |
+| `Backspace` | Takes the last character off what you typed |
+| `/words` | Prompts only: filters the list, as in the pane's own field |
+| `*21`, then `Enter` | Prompts only: pins or unpins prompt 21 |
 | `Enter` | Jumps to the prompt or bookmark under the `▶` (or the typed number) |
-| `j` / `k` | Moves the `▶` down (older) / up (newer); the first press starts at the newest |
+| `j` / `k` | Moves the `▶` down (older) / up (newer); the first press starts at the newest. After a step the field is empty again, with the number shown dim in it; `12j` steps from 12 |
+| `Tab` / `Shift+Tab` | The same as `j` / `k` |
+| `Down` / `Up` | The same, once you add the binding below |
 | `s` | Prompts only: pins or unpins the prompt under the `▶`; the band stays open to pin more |
 | `h` / `l` | Bookmarks only: previous / next group (yours, Claude's, all) |
+| `c` | Bookmarks only: moves Claude's bookmark under the `▶` onto your list |
+| a number, then `d` | Bookmarks only: removes that bookmark from your list; the bookmarks file keeps a tombstone in its place |
 | `q` | Closes the pane (also typed alone in the pane's own `#` field) |
 | `Esc` | Closes the pane without jumping |
+
+**Up and Down in the band's field.** A text field in the band keeps the arrow keys to itself, so out of the box they do nothing there. One entry in `~/.claude/keybindings.json`, beside your leader's, makes them move off the field, which the band reads as a step:
+
+```json
+{ "context": "AbovePromptInput", "bindings": { "up": "abovePrompt:previous", "down": "abovePrompt:next" } }
+```
+
+Start a new session after adding it. The plugin never writes this file for you.
+
+**The digit buttons instead.** "Typing a list number" in `/config` (under **▸ Bookmarks**) set to `buttons` brings back the earlier band: one button per digit, no field. `auto`, the default, uses the field.
 
 ## 4. In a pane that holds the keyboard itself
 
@@ -102,6 +123,29 @@ The `/bm-` prefix is from the proof of concept and will change ([#7](https://git
 ## 7. For Claude
 
 Claude has one tool, `bookmark`, with the actions `add` (default), `relabel`, `remove`, `share` and `list`, on its own list or yours. It is not a key; it is how the `⚓` links in replies come to exist. See [What Claude's tool does](usage.md#what-claudes-tool-does).
+
+## Choosing your own keys
+
+Open `/config`, type `bookmarks` in its search box, press `Enter` on **Bookmarks** so it reads `true` (every setting of the plugin is folded behind it), then on **Keys: show the key rows**. One row appears for each command in section 2, one for the list keys in section 3, and a row for the leader. Press `Enter` on the fold again to put them away; the keys you chose stay as set.
+
+**A command's row** takes its keys separated by spaces, in the order the hint and the help should name them:
+
+| You type | Means |
+|---|---|
+| (empty) | The default keys, the ones in the tables above |
+| `x` | The command answers `x` instead |
+| `' x` | Either key; the bar's button presses with `x` |
+| `Space r` | `Space` spells the space key |
+| `m hidden` | The keys stay `m`, and the button leaves the bar (type the key to use the command) |
+| `o` on **Keys: back** | Any value puts the command's button on the bar, so back, forward and close, which have no button by default, gain one this way |
+
+**The bar's buttons** can be pressed from the keyboard only with one lowercase letter or one digit, a limit of Claude Code's buttons. A command whose keys are all something else (`'`, `?`, `P`, `Space`) still works typed after the leader, and its button is click-only.
+
+**The list row** renames the list keys by position, in this order: next, previous, pin, previous group, next group, claim, remove, close (default `j k s h l c d q`). The pane field's `/` (filter) and `*` (pin) stay as they are. A digit is refused there, since a digit is a number in a list.
+
+**What is refused, and why.** A change that would give two commands on the band the same key, use a key the band never receives (an arrow, `Tab`, `Enter`, `Esc`, `Backspace`), or leave a command with no key is refused in `/config` with the reason, and the keys stay as they were. A value set by hand in `settings.json` that cannot be used keeps the default for that command, and the debug log names it at the next start. The same key may mean one thing on the band and another in a list, as `j` already does.
+
+**The leader** is a Claude Code keybinding, not a plugin setting, so its row only says which chord is bound now. To change it, edit `~/.claude/keybindings.json` and bind your chord to `abovePrompt:focus` in the `Chat` context (the recipe is in [The leader key](usage.md#the-leader-key)), then start a new session.
 
 ## What may change
 

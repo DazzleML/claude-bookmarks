@@ -4,7 +4,7 @@
 // Run: claude plugin test plugin
 import { expect, test } from 'claude-code/testing'
 import { addOrRelabel, emptyRegister, parseRegister, serializeRegister } from '../hooks/core/bookmarks/register-file.ts'
-import { BAND_PROPS, world } from './harness.ts'
+import { BAND_PROPS, pathKey, world } from './harness.ts'
 
 type Engine = { session: { start: (e: object) => Promise<unknown> } }
 const SID = '11111111-2222-4333-8444-555555555555'
@@ -56,7 +56,7 @@ test('a v1 register is migrated at the start: snapshot first, a run folder with 
   // The status ladder is written in order: `started`, then `backed-up` once the copies are in, before the register is touched, then `done` (M14).
   const writes = w.calls.filter(c => c.event === 'fs.write').map(c => c.input as { path: string; text: string })
   const statusAt = (s: string) => writes.findIndex(x => x.path.replace(/\\/g, '/').endsWith('manifest.json') && x.path.includes('__v1-to-v3__') && x.text.includes(`"status": "${s}"`))
-  const registerWrite = writes.findIndex(x => x.path.replace(/\\/g, '/') === PATH && x.text.includes('"version": 3'))
+  const registerWrite = writes.findIndex(x => pathKey(x.path) === pathKey(PATH) && x.text.includes('"version": 3'))
   expect(statusAt('started')).toBeGreaterThanOrEqual(0)
   expect(statusAt('backed-up')).toBeGreaterThan(statusAt('started'))
   expect(registerWrite).toBeGreaterThan(statusAt('backed-up'))

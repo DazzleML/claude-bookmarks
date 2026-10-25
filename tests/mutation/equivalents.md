@@ -20,3 +20,33 @@ Guarded authority, not an allowlist: each group is keyed by the target file's co
 (The file changed since `66e79932a081`; the entry above is stale for this hash and is re-triaged when `migrateAtStart` is next in a sweep's scope.)
 
 - `e.kind !== 'file' || !e.name.endsWith('.json') || e.name === INDEX_JSON` -> `e.kind !== 'file' || !e.name.endsWith('.json')` in `rebuildIndex` -- **equivalent**: without the skip, `index.json` is read and handed to `parseRegister`, which refuses it (no `sessionId` string, no `perma` array) and returns undefined, so no entry is made and the two files written are byte-identical. The skip stays as a statement of intent and saves one parse. 2026-10-17, mode 1 (v0.5.10 sweep, M12).
+
+## plugin/hooks/core/band/keymap.ts @ 218ea0ee18e6
+
+- `if (UNUSABLE_NAMES.has(word))` -> `if (UNUSABLE_NAMES.has(key))` in `keyOf` -- **equivalent**: `key` differs from `word` only through `KEY_WORDS`, which maps `Space`/`space` to `' '`; no entry maps to an unusable name, so the two sets of inputs that reach the test are the same. Becomes a real difference only if a key word is ever added for an arrow or Enter, which the names set forbids by design. 2026-10-20, mode 1 (v0.6.2 sweep, M2).
+- `if (by !== undefined && by !== c.id)` -> `if (by !== undefined)` in `applyKeymap`'s clash filter -- **equivalent**: `taken` is filled for a command only after its own keys are decided, and `chosen` dedupes a value's words, so a command never meets its own id in the map; the `=== c.id` half is a belt the code never needs. The sibling filter on the fallback line has the same shape; the fallback itself is pinned (M6, killed in round 2). 2026-10-20, mode 1 (v0.6.2 sweep, M5).
+
+## plugin/hooks/handlers/command-line.ts @ 84b704e3cc08
+
+Both entries are kit-blind rather than equivalent: the behaviour is real and is held by a live checklist line (the A6 checklist), not by a test.
+
+- `if (operation.pane === 'list' || operation.pane === 'bookmarks') await ports.setBandNum('')` -> `&&` in `perform`'s open case -- **don't-care (kit-blind)**: a number is still typed when an open command arrives only through a chord keybinding pressed in the band's list mode; the field and the bar are drawn only while the band is idle, the kit presses drawn elements only, and `endBandMode` clears the number on every other path. Live check: `p`, a digit, then the prompts chord's keybinding; the number field reads `_`. 2026-10-20, mode 1 (v0.6.3 sweep, M1).
+## plugin/hooks/views/bookmarks-pane.tsx @ 2c11c2213b9c
+
+- `/^\d+$/.test(typed.slice(0, -1))` -> `/^\d*$/` in the `#` field's remove check -- **equivalent**: the same condition requires `typed.length > 1`, so the prefix is never empty and the two patterns accept the same inputs. 2026-10-21, mode 1 (v0.6.4 sweep, unit A5.2 round 2, N6).
+
+## plugin/hooks/core/marks/highlight.ts @ 3b637d08b551
+
+- `const labelEnd = labelStart + (m[1] ?? '').length` -> `+ 1`, in `markedLineMarkdown` -- **equivalent**: the words come from the plain line, which has no `]`, so a literal match in the raw line can never end one past the label (that character is the bracket); `inLabel` decides the same for every reachable input. 2026-10-21, mode 1 (v0.6.5 sweep, slice B, M5).
+
+## plugin/hooks/handlers/bookmarks.ts @ 9f4f67325ce5
+
+- `if (template === undefined) {` -> `if (!template) {` in `ensureReadme` -- **don't-care**: the two differ only for an empty template file, a packaging state the design never covered (missing was the case djdarcy named); an empty README written or a refusal are both defensible, and the kit cannot seed an empty template without a path it does not know. If an empty file ever shows up in practice, decide then and pin it. 2026-10-21, mode 1 (v0.6.6 sweep, slice C, M5).
+
+## plugin/hooks/core/bookmarks/check.ts @ 74d54eb0d884
+
+- `(p.tier ?? 'bookmark') === 'mark' && p.n !== undefined && !named.has(p.n)` -> the `p.n !== undefined` conjunct dropped, in the orphan-mark note -- **equivalent**: a letter's record is minted only in a numbered file (`setMark` refuses an unnumbered one), so no `mark` record lacks `n`; the conjunct narrows the type for `Set<number>.has`, and the mutant does not type-check. 2026-10-21, mode 1 (v0.6.4 sweep, unit A5.3, M2).
+
+## plugin/hooks/handlers/command-line.ts @ 84b704e3cc08 (continued)
+
+- `operation.pane === 'mark' ? 'band-mark-cancel' : undefined` -> arms swapped, in `perform`'s `handOff` call -- **don't-care (kit-blind)**: both arms end in `focusBand`, whose `$.ui.focus` is not routed to kit hooks and throws (harness note, measured 2026-10-12) before the arms can differ. The cancel press is what scrolls back after a mark's highlight; checked live. 2026-10-20, mode 1 (v0.6.3 sweep, M9).

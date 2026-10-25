@@ -121,6 +121,17 @@ export function checkReport(i: CheckInput): Line[] {
   }
   for (const sid of [...orphans].sort()) say('note', `store holds marks or pins for ${sid.slice(0, 8)} with no register: a register is made for it at the next start`)
 
+  // A letter's record (tier `mark`) that no letter names: an orphan a mark forgotten outright
+  // on another copy can leave in this one, or a hand edit. A union drops such a record when
+  // it arrives from the other copy (register-ops.ts); one already in a file stays until
+  // someone decides, and this only reports it (the keys design, unit 5).
+  for (const r of regs) {
+    const named = new Set<number>()
+    for (const letters of Object.values(r.reg.slots ?? {})) for (const s of Object.values(letters ?? {})) for (const h of s.history) named.add(h.n)
+    const unnamed = r.reg.perma.filter(p => (p.tier ?? 'bookmark') === 'mark' && p.n !== undefined && !named.has(p.n))
+    if (unnamed.length > 0) say('note', `${r.name}.json holds ${unnamed.length} letter record(s) no letter names (#${unnamed.map(p => p.n).join(', #')}): orphans a forgotten mark can leave on another copy; nothing points at them, and nothing is changed`)
+  }
+
   const warnings = out.filter(l => l.level === 'warn').length
   say(warnings > 0 ? 'warn' : 'ok', warnings > 0 ? `bm-check: ${warnings} warning(s); nothing was changed` : 'bm-check: nothing to report; nothing was changed')
   return out

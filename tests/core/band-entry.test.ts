@@ -1,6 +1,21 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { footnoteAt, listPosition, nextGroup, promptEntry, promptNumberComplete, stepNumber } from '../../plugin/hooks/core/band/band-entry.ts'
+import { centreDelays, footnoteAt, listPosition, nextGroup, pickNumbered, promptEntry, promptNumberComplete, stepNumber } from '../../plugin/hooks/core/band/band-entry.ts'
+
+// The pin, the bookmark jump and the bookmark remove each pick "#n or toast" the same way (U60).
+test('pickNumbered: the item a number names, or the toast for one that names none', () => {
+  const list = ['oldest', 'middle', 'newest']
+  assert.deepEqual(pickNumbered('2', list, 'prompt'), { n: 2, target: 'middle' })
+  assert.deepEqual(pickNumbered('4', list, 'prompt'), { error: 'no prompt #4 (1-3)' })
+  assert.deepEqual(pickNumbered(' x ', list, 'bookmark'), { error: 'no bookmark #x (1-3)' })
+  // An empty entry names the newest only where the caller says so (the pin from the band).
+  assert.deepEqual(pickNumbered('', list, 'prompt', true), { n: 3, target: 'newest' })
+  assert.deepEqual(pickNumbered('', list, 'prompt'), { error: 'no prompt # (1-3)' })
+})
+
+test('the centring retries wait 60, 60, 180 and 420 ms (what the code has always produced; the old comment said otherwise)', () => {
+  assert.deepEqual(centreDelays(), [60, 60, 180, 420])
+})
 
 test('a number is complete when no further digit could name a prompt, and only in the complete mode', () => {
   assert.equal(promptNumberComplete('3', 25, 'complete'), true)
@@ -39,6 +54,9 @@ test('what an entry in the prompts list means', () => {
   assert.deepEqual(promptEntry('*21', 30), { kind: 'pin', typed: '21' })
   assert.deepEqual(promptEntry('*', 30), { kind: 'pin', typed: '' })
   assert.deepEqual(promptEntry('/band redraw', 30), { kind: 'filter', words: 'band redraw' })
+  // A bare slash submitted with Enter clears the filter; it is not an invalid number
+  // (mutation sweep v0.6.1, M12: a truthiness check on the words would swallow it).
+  assert.deepEqual(promptEntry('/', 30), { kind: 'filter', words: '' })
   assert.deepEqual(promptEntry('3.', 30), { kind: 'unfold', n: 3 })
   assert.deepEqual(promptEntry('3.1', 30), { kind: 'footnote', n: 3, k: 1 })
   assert.deepEqual(promptEntry(' 7 ', 30), { kind: 'jump', n: 7 })

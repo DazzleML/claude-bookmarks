@@ -1,0 +1,12 @@
+{
+  "target": "slice C round 2: the render and the handler's template branch; M1 and M4 re-run after their killers (every {{mark}} replaced; CRLF rows checked against the literal); M7 re-specified with a unique anchor (the catch block shares the log prefix); N1 dropped as a duplicate of the killed M2",
+  "generation": "mode 1: fresh-context mid-engineer, zero tools, the excerpts and round 1's list inline; 2026-10-21",
+  "mutations": [
+    {"id": "N2", "file": "plugin/hooks/core/bookmarks/data-readme.ts", "original": "    .replace(/\\{\\{layout_table\\}\\}/g, () => layoutTable(newline))\n", "mutated": "    .replace(/\\{\\{layout_table\\}\\}/g, () => layoutTable())\n", "note": "layout table ignores detected newline, always LF on CRLF templates"},
+    {"id": "N3", "file": "plugin/hooks/core/bookmarks/data-readme.ts", "original": "| ${KIND_WORDS[e.kind]} |`", "mutated": "| ${e.kind} |`", "note": "table prints raw kind key instead of the KIND_WORDS display word"},
+    {"id": "N4", "file": "plugin/hooks/handlers/bookmarks.ts", "original": "    await ports.fsWrite(path, dataReadme(writer, template))\n", "mutated": "    await ports.fsWrite(path, template)\n", "note": "raw template written without placeholder substitution"},
+    {"id": "M1", "file": "plugin/hooks/core/bookmarks/data-readme.ts", "original": ".replace(/\\{\\{mark\\}\\}/g, () => README_MARK)", "mutated": ".replace(/\\{\\{mark\\}\\}/, () => README_MARK)", "note": "round 1 survivor: mark placeholder loses g flag"},
+    {"id": "M4", "file": "plugin/hooks/core/bookmarks/data-readme.ts", "original": ".join(newline)", "mutated": ".join('\\n')", "note": "round 1 survivor: table ignores template's CRLF newline"},
+    {"id": "M7", "file": "plugin/hooks/handlers/bookmarks.ts", "original": "ports.logAlways(`[bm] data folder: README.md not written: the plugin's ${README_TEMPLATE} is missing", "mutated": "ports.log(`[bm] data folder: README.md not written: the plugin's ${README_TEMPLATE} is missing", "note": "round 1 apply-failed (ambiguous anchor), now unique: the packaging-bug message downgraded from logAlways to log"}
+  ]
+}

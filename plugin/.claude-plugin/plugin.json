@@ -1,7 +1,7 @@
 {
   "name": "bookmarks",
   "displayName": "Bookmarks",
-  "version": "0.5.12",
+  "version": "0.6.27",
   "description": "Bookmarks and vim-style marks inside Claude Code conversations: mark a line, jump back, keep a reading position, browse your prompts, and let Claude cite earlier places as clickable links.",
   "author": {
     "name": "DazzleML",
@@ -27,6 +27,12 @@
     "claude-code"
   ],
   "userConfig": {
+    "settingsShown": {
+      "type": "boolean",
+      "title": "▸ Bookmarks",
+      "description": "true: the plugin's settings appear below (the prompts list, the band, the lists' rows, debugging, colours, and the keys behind their own row); false: folded away, and everything you set still applies",
+      "default": false
+    },
     "listOpensAt": {
       "type": "string",
       "title": "Prompts list opens at",
@@ -86,42 +92,10 @@
         "band"
       ]
     },
-    "debugDefault": {
-      "type": "string",
-      "title": "Debug echo by default",
-      "description": "Whether the plugin's log lines are echoed into a conversation that has not chosen; /bm-debug decides per conversation",
-      "default": "off",
-      "options": [
-        "off",
-        "on"
-      ]
-    },
-    "debugText": {
-      "type": "string",
-      "title": "Conversation text in the debug log",
-      "description": "auto: off in an installed plugin, always in one loaded from a folder; off: log lines name places by id only; with-debug: they also quote the conversation while this conversation's debugging is on; always: they always quote it",
-      "default": "auto",
-      "options": [
-        "auto",
-        "off",
-        "with-debug",
-        "always"
-      ]
-    },
-    "debugTextLength": {
-      "type": "string",
-      "title": "How much text a debug line quotes",
-      "description": "reference: a short excerpt, enough to find the place; full: the whole text",
-      "default": "reference",
-      "options": [
-        "reference",
-        "full"
-      ]
-    },
     "palette": {
       "type": "string",
       "title": "Colour overrides",
-      "description": "JSON, e.g. {\"here\": {\"color\": \"cyan\"}, \"markBand\": {\"backgroundColor\": \"#203040\"}}. Roles: here, pinned, footnote, legend, mark, markBand, used, unused, unreached, emphasis, search. A colour is a theme key (warning, subtle, ...), a terminal colour name or #rrggbb; anything else is ignored",
+      "description": "JSON, e.g. {\"here\": {\"color\": \"cyan\"}, \"markBand\": {\"backgroundColor\": \"#203040\"}}. Roles: here, pinned, footnote, legend, heading, mark, markBand, used, unused, unreached, emphasis, search. A colour is a theme key (warning, subtle, ...), a terminal colour name or #rrggbb; anything else is ignored",
       "default": ""
     },
     "footnotes": {
@@ -171,6 +145,153 @@
       "options": [
         "on",
         "off"
+      ]
+    },
+    "listInput": {
+      "type": "string",
+      "title": "Typing a list number",
+      "description": "auto: the best way this Claude Code build allows (today the band's own field); field: the band's own field, where Backspace, /words and * work; buttons: one key per digit, as before 0.6.27",
+      "default": "auto",
+      "options": [
+        "auto",
+        "field",
+        "buttons"
+      ]
+    },
+    "rowLines": {
+      "type": "number",
+      "title": "Lines per row in the lists",
+      "description": "How many lines each prompt in the prompts list, and each mark in the jump list, may take (1 to 5); the text is cut with an ellipsis at the end of the last line",
+      "default": 2,
+      "min": 1,
+      "max": 5
+    },
+    "keysShown": {
+      "type": "boolean",
+      "title": "▸ Keys: show the key rows",
+      "description": "true: the rows below set the band's keys, one per command, and the list keys; false: they are folded away (your keys stay as set)",
+      "default": false
+    },
+    "keyMark": {
+      "type": "string",
+      "title": "Keys: mark",
+      "description": "Keys for mark, separated by spaces (default: m); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyJump": {
+      "type": "string",
+      "title": "Keys: jump",
+      "description": "Keys for jump, separated by spaces (default: ' j); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyPrompts": {
+      "type": "string",
+      "title": "Keys: prompts",
+      "description": "Keys for prompts, separated by spaces (default: p); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyRead": {
+      "type": "string",
+      "title": "Keys: reading position",
+      "description": "Keys for reading position, separated by spaces (default: Space r); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyBookmarks": {
+      "type": "string",
+      "title": "Keys: bookmarks",
+      "description": "Keys for bookmarks, separated by spaces (default: b); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyPromote": {
+      "type": "string",
+      "title": "Keys: promote a mark",
+      "description": "Keys for promote a mark, separated by spaces (default: P); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyDelete": {
+      "type": "string",
+      "title": "Keys: clear a mark",
+      "description": "Keys for clear a mark, separated by spaces (default: d); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyForget": {
+      "type": "string",
+      "title": "Keys: forget a mark",
+      "description": "Keys for forget a mark, separated by spaces (default: D); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyBack": {
+      "type": "string",
+      "title": "Keys: back",
+      "description": "Keys for back, separated by spaces (default: o); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyForward": {
+      "type": "string",
+      "title": "Keys: forward",
+      "description": "Keys for forward, separated by spaces (default: i); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyClose": {
+      "type": "string",
+      "title": "Keys: close",
+      "description": "Keys for close, separated by spaces (default: q); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyHelp": {
+      "type": "string",
+      "title": "Keys: help",
+      "description": "Keys for help, separated by spaces (default: ?); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyList": {
+      "type": "string",
+      "title": "Keys: in a list",
+      "description": "The list keys in order: next previous pin previous-group next-group claim remove close (default: j k s h l c d q); empty = the defaults",
+      "default": ""
+    },
+    "keyLeader": {
+      "type": "string",
+      "title": "Keys: the leader",
+      "description": "The leader is a Claude Code keybinding (abovePrompt:focus in ~/.claude/keybindings.json), not set here",
+      "default": ""
+    },
+    "debugShown": {
+      "type": "boolean",
+      "title": "▸ Debug: show the debug rows",
+      "description": "true: the rows below set what the debug log echoes and quotes; false: they are folded away (what you set stays)",
+      "default": false
+    },
+    "debugDefault": {
+      "type": "string",
+      "title": "Debug: echo by default",
+      "description": "Whether the plugin's log lines are echoed into a conversation that has not chosen; /bm-debug decides per conversation",
+      "default": "off",
+      "options": [
+        "off",
+        "on"
+      ]
+    },
+    "debugText": {
+      "type": "string",
+      "title": "Debug: conversation text in the log",
+      "description": "auto: off in an installed plugin, always in one loaded from a folder; off: log lines name places by id only; with-debug: they also quote the conversation while this conversation's debugging is on; always: they always quote it",
+      "default": "auto",
+      "options": [
+        "auto",
+        "off",
+        "with-debug",
+        "always"
+      ]
+    },
+    "debugTextLength": {
+      "type": "string",
+      "title": "Debug: how much text a line quotes",
+      "description": "reference: a short excerpt, enough to find the place; full: the whole text",
+      "default": "reference",
+      "options": [
+        "reference",
+        "full"
       ]
     }
   },

@@ -1,0 +1,152 @@
+{
+  "mutations": [
+    {
+      "id": "M1",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "if (operation.pane === 'list' || operation.pane === 'bookmarks') await ports.setBandNum('')",
+      "mutated": "if (operation.pane === 'list' && operation.pane === 'bookmarks') await ports.setBandNum('')",
+      "note": "or->and: band number never cleared when opening list or bookmarks",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "111"
+    },
+    {
+      "id": "M2",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "if (operation.pane === 'bookmarks') await ports.setBandGroup(0)",
+      "mutated": "if (operation.pane !== 'bookmarks') await ports.setBandGroup(0)",
+      "note": "flipped comparison: group reset on wrong panes",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "111"
+    },
+    {
+      "id": "M3",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "if (ports.settings().panes === 'off') return void (await bandOnly(ports, operation.pane))",
+      "mutated": "if (ports.settings().panes !== 'off') return void (await bandOnly(ports, operation.pane))",
+      "note": "inverted panes-off guard: band-only path taken when lists are on",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "a press on the bar does what its key does: prompts opens the list",
+        "panes off: p takes its key in the band and opens no pane",
+        "panes off: b takes its key in the band and opens no pane",
+        "panes off: m takes its key in the band and opens no pane",
+        "panes off: ' takes its key in the band and opens no pane",
+        "p in the band opens the prompts pane and the band takes a number",
+        "the chord-prompts button pressed twice opens its pane, then closes it",
+        "the chord-mark button pressed twice opens its pane, then closes it",
+        "a fresh conversation: the prompts button opens the list and closes nothing",
+        "with the lists off, the prompts button pressed twice opens nothing and closes nothing"
+      ],
+      "kit_pass": "101"
+    },
+    {
+      "id": "M4",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "if (ports.settings().panes === 'off') return void (await bandOnly(ports, operation.pane))",
+      "mutated": "if (ports.settings().panes === 'off') return void (await handOff(ports, operation.pane))",
+      "note": "neighbouring call swap: bandOnly replaced by handOff",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "panes off: p takes its key in the band and opens no pane",
+        "panes off: b takes its key in the band and opens no pane",
+        "panes off: m takes its key in the band and opens no pane",
+        "panes off: ' takes its key in the band and opens no pane",
+        "with the lists off, the prompts button pressed twice opens nothing and closes nothing"
+      ],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "if (via !== 'field' && (await ports.paneMode()) === operation.pane && (await ports.panes()).some(p => p.id === ports.paneId)) {",
+      "mutated": "if (via !== 'field' && (await ports.paneMode()) === operation.pane) {",
+      "note": "dropped conjunct: toggle-close ignores whether the pane is actually on screen",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "a press on the bar does what its key does: prompts opens the list",
+        "a fresh conversation: the prompts button opens the list and closes nothing"
+      ],
+      "kit_pass": "109"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "if (via !== 'field' && (await ports.paneMode()) === operation.pane && (await ports.panes()).some(p => p.id === ports.paneId)) {",
+      "mutated": "if (via === 'field' && (await ports.paneMode()) === operation.pane && (await ports.panes()).some(p => p.id === ports.paneId)) {",
+      "note": "flipped via check: typed key toggles closed instead of the button",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "q in a list closes the pane and brings the bar back (Q261012-09)",
+        "the chord-prompts button pressed twice opens its pane, then closes it",
+        "the chord-mark button pressed twice opens its pane, then closes it",
+        "the typed key never toggles: p in the field with the prompts pane open leaves it open",
+        "2 go with nothing typed closes the list and brings the bar back (settle, esc)"
+      ],
+      "kit_pass": "106"
+    },
+    {
+      "id": "M7",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "return void (await closeAll(ports, via))\n      }",
+      "mutated": "return void (await openFor(ports, operation.pane, via))\n      }",
+      "note": "toggle branch re-opens instead of closing",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "the chord-prompts button pressed twice opens its pane, then closes it",
+        "the chord-mark button pressed twice opens its pane, then closes it"
+      ],
+      "kit_pass": "109"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "if (via !== 'field') return void (await openFor(ports, operation.pane, via))",
+      "mutated": "if (via === 'field') return void (await openFor(ports, operation.pane, via))",
+      "note": "flipped: buttons fall through to handOff and typed field uses openFor",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "111"
+    },
+    {
+      "id": "M9",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "operation.pane === 'mark' ? 'band-mark-cancel' : undefined",
+      "mutated": "operation.pane === 'mark' ? undefined : 'band-mark-cancel'",
+      "note": "swapped ternary arms: cancel button given to wrong panes",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "111"
+    },
+    {
+      "id": "M10",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "case 'open':\n      await ports.clearCommandLine()\n      if (operation.pane === 'list'",
+      "mutated": "case 'open':\n      if (operation.pane === 'list'",
+      "note": "removed clearCommandLine at start of open: typed text left in field",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "setting the reading position after scrolling away from a kept-open pane does not jump back (Q261015-01)"
+      ],
+      "kit_pass": "110"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "111"
+    }
+  ]
+}

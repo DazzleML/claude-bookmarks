@@ -4,13 +4,16 @@
 // the numbering, grouping and rows are worked out here, with the hook's local names.
 import type { EngineInterface } from 'claude-code'
 import { ownerOf, type AnchorOwner, type AnchorRecord } from '../core/bookmarks/anchor.ts'
-import { promptNumberComplete } from '../core/band/band-entry.ts'
+import { fieldInput } from '../core/band/field-input.ts'
+import type { Tables } from '../core/band/keys.ts'
 import { bookmarkWho, groupHeader, numberNewestFirst, numberWidth, pointerFor, unreached } from '../core/prompts/list-model.ts'
 import type { PaneStyles } from './prompts-pane.tsx'
 
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
 
 export type BookmarksPaneModel = {
+  /** The key tables the person's keymap makes (core/settings-state.ts keymap). */
+  tables: Tables
   /** Every bookmark of this conversation, in the order minted. */
   all: readonly AnchorRecord[]
   groups: readonly { owner: AnchorOwner | 'all'; title: string }[]
@@ -29,6 +32,8 @@ export type BookmarksPaneModel = {
 export type BookmarksPaneActions = {
   arrive: (r: AnchorRecord) => Promise<unknown>
   go: (typed: string) => Promise<unknown>
+  /** `<number>d`: that bookmark leaves the list. */
+  remove: (typed: string) => Promise<unknown>
   close: () => Promise<unknown>
 }
 
@@ -96,8 +101,12 @@ export function bookmarksPaneView(elements: Elements, m: BookmarksPaneModel, a: 
           {...(fromBand !== undefined ? { value: fromBand } : {})}
           autoFocus
           onInput={(typed: string) => {
-            if (typed === 'q') return void a.close()
-            if (promptNumberComplete(typed, all.length)) void go(typed)
+            // What the text means is the list field's contract (core/band/field-input.ts),
+            // shared with the band's own field; the pane only runs the step.
+            const step = fieldInput(typed, 'bookmarks', all.length, m.tables)
+            if (step.op === 'close') return void a.close()
+            if (step.op === 'remove') return void a.remove(step.number)
+            if (step.op === 'text' && step.go !== undefined) void go(step.go)
           }}
           onSubmit={(typed: string) => void go(typed)}
         />

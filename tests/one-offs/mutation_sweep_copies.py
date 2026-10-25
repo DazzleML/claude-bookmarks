@@ -9,11 +9,13 @@ A mutant is killed when either suite reports a failure. Survivors are re-verifie
 
 usage: python sweep.py <spec.json> <report.json>
 """
-import json, os, re, shutil, subprocess, sys
+import json, os, re, shutil, subprocess, sys, tempfile
 
 REPO = r"C:\code\claude-projects\claude-bookmarks"
 HERE = os.path.dirname(os.path.abspath(__file__))
-COPY = os.path.join(HERE, "tree")
+# The per-mutant copy lives under the system temp dir, never in the repository tree
+# (it was tests/one-offs/tree until 2026-10-20, which left a stray folder after each run).
+COPY = os.path.join(tempfile.gettempdir(), "claude-bookmarks-sweep-tree")
 
 
 def fresh_copy():
@@ -42,7 +44,9 @@ def run(cmd):
 
 
 def verdict():
-    core = run("node --test tests/core/register-file.test.ts")
+    # The focused core suite: SWEEP_CORE names the test files (space-separated paths under
+    # tests/core), else the register-file suite this script was first written for.
+    core = run("node --test " + os.environ.get("SWEEP_CORE", "tests/core/register-file.test.ts"))
     core_red = re.findall(r"^not ok \d+ - (.+)$", core, re.M)
     core_total = re.search(r"^# tests (\d+)", core, re.M)
     if not core_total:

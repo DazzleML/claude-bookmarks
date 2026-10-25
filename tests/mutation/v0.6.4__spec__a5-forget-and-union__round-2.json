@@ -1,0 +1,15 @@
+{
+  "target": "plugin/hooks/core/bookmarks/register-ops.ts (the forget case; union's orphan rule), unit A5.1, round 2 after three killers (a cleared letter is refused; a stale slot is mended; a bookmark from the other copy arrives) and the rel compare narrowed to the uuid (M7 retired with its line)",
+  "generation": "mode 1: fresh-context mid-engineer, zero tools, the excerpts and round 1's list inline; 2026-10-21. M1, M5, M10 re-run from round 1.",
+  "mutations": [
+    {"id": "N1", "file": "plugin/hooks/core/bookmarks/register-ops.ts", "original": "removedAt: now, removedBy: 'user' }", "mutated": "removedAt: 0, removedBy: 'user' }", "note": "tombstone removedAt zeroed"},
+    {"id": "N2", "file": "plugin/hooks/core/bookmarks/register-ops.ts", "original": "return { register: withSlots({ ...reg, perma }, op.owner, next, now), removed: rec, tombstoned: false }", "mutated": "return { register: withSlots(reg, op.owner, next, now), removed: rec, tombstoned: false }", "note": "outright path leaves record in perma"},
+    {"id": "N3", "file": "plugin/hooks/core/bookmarks/register-ops.ts", "original": "tombstones: [...reg.tombstones, tomb] }", "mutated": "tombstones: [tomb] }", "note": "tombstones spread dropped, prior tombstones lost"},
+    {"id": "N4", "file": "plugin/hooks/core/bookmarks/register-ops.ts", "original": "removed: rec, tombstoned: true }", "mutated": "removed: rec, tombstoned: false }", "note": "tombstoned flag wrong on tombstone path"},
+    {"id": "N5", "file": "plugin/hooks/core/bookmarks/register-ops.ts", "original": "for (const letters of Object.values(base.slots ?? {})) for (const s of Object.values(letters ?? {})) for (const h of s.history) named.add(h.n)", "mutated": "for (const letters of Object.values(other.slots ?? {})) for (const s of Object.values(letters ?? {})) for (const h of s.history) named.add(h.n)", "note": "named built from other.slots instead of base.slots"},
+    {"id": "N6", "file": "plugin/hooks/core/bookmarks/register-ops.ts", "original": "  if (live.some(r => pushed.has(r))) changed = true\n", "mutated": "", "note": "changed flag no longer set when pushed records survive"},
+    {"id": "M1", "file": "plugin/hooks/core/bookmarks/register-ops.ts", "original": "if (!slot || slot.current === null) return { error: `${op.letter} has no current mark to forget` }", "mutated": "if (!slot) return { error: `${op.letter} has no current mark to forget` }", "note": "round 1 survivor: forgetting a cleared letter no longer errors"},
+    {"id": "M5", "file": "plugin/hooks/core/bookmarks/register-ops.ts", "original": "if (!rec) return { register: withSlots(reg, op.owner, next, now) }", "mutated": "if (!rec) return { error: `${op.letter} has no record` }", "note": "round 1 survivor: the mend-the-slot path replaced by an error"},
+    {"id": "M10", "file": "plugin/hooks/core/bookmarks/register-ops.ts", "original": "const live = kept.filter(r => !(pushed.has(r) && tierOf(r) === 'mark' && r.n !== undefined && !named.has(r.n)))", "mutated": "const live = kept.filter(r => !(pushed.has(r) && r.n !== undefined && !named.has(r.n)))", "note": "round 1 survivor: the orphan rule loses the tier conjunct"}
+  ]
+}

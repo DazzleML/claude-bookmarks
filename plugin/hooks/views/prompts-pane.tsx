@@ -6,18 +6,22 @@
 // names follow the hook's, so the JSX reads as it did there.
 import type { EngineInterface } from 'claude-code'
 import { filterPrompts, matchLegend } from '../core/prompts/filter.ts'
-import { promptNumberComplete } from '../core/band/band-entry.ts'
+import { fieldInput } from '../core/band/field-input.ts'
+import type { Tables } from '../core/band/keys.ts'
 import {
   footnoteDisplay, footnotesByPrompt, foldedLabel, numberLabel as numberLabelAt, numberNewestFirst, numberWidth,
   pinnedRowsOf, pointerFor, unreached, type FootnoteMode,
 } from '../core/prompts/list-model.ts'
 import type { FootnoteRef } from '../core/prompts/prompt-rows.ts'
 import type { PromptRef } from '../core/prompts/prompt-store.ts'
+import { fitLines, lineOf } from '../core/bookmarks/transcript-lines.ts'
 import type { Role, Style } from '../core/palette.ts'
 
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
 
 export type PromptsPaneModel = {
+  /** The key tables the person's keymap makes (core/settings-state.ts keymap). */
+  tables: Tables
   all: readonly PromptRef[]
   kept: readonly FootnoteRef[]
   footnoteMode: FootnoteMode
@@ -33,6 +37,10 @@ export type PromptsPaneModel = {
   fromBand: string | undefined
   /** The prompt nearest the view. */
   here: string | undefined
+  /** The pane body's width in columns (the engine's `bodyColumns`); a row is cut to it. */
+  columns: number
+  /** How many lines a row may take (the `rowLines` setting, U70). */
+  lines: number
 }
 
 // Each action returns its promise (see views/band.tsx); setFilter answers at once whether
@@ -104,12 +112,24 @@ export function promptsPaneView(elements: Elements, m: PromptsPaneModel, a: Prom
   type NumberedPrompt = (typeof numbered)[number]
   const targetN = fromBand ? Number(fromBand) : undefined
   const pointer = pointerFor(fromBand, targetN)
+  // A row's text is the prompt's whole text on one line when it is kept (the filter's
+  // text), else its 60-character head, cut to the pane's width less the number column,
+  // so a widened pane fills with more of the prompt and a narrow one never wraps (U64;
+  // djdarcy, 2026-10-15). The cut is the plugin's, by `columns`: live, a long Button label
+  // wraps, and a Text's truncate-end inside a Button is not honoured (2026-10-22).
+  // A row may take `lines` lines (the rowLines setting, U70): the label carries hard lines, each
+  // cut to the width, so the terminal's word wrap never adds one. A plain row indents its
+  // continuation lines by the prefix's width so they sit under the text; a Box row's Button
+  // already sits beside its prefix, so its continuation lines need none.
+  const rowText = (r: NumberedPrompt, prefixWidth: number, indent: number) =>
+    fitLines(lineOf(texts.get(r.uuid) ?? r.head), m.columns - 1 - prefixWidth, m.lines, indent)
   const promptRow = (r: NumberedPrompt, group: string) => {
     const isHere = r.uuid === here
     const dim = unreached(drawnFour, r.uuid) && !isHere
     const press = () => a.pressPrompt(r)
     if (!pinSet.has(r.uuid) && !isHere) {
-      return <Button key={`${group}-${r.uuid}`} label={`${pointer(r.n)}${numberLabel(r.n)}${r.head}`} plain {...(dim && r.n !== targetN ? buttonStyle('unreached') : {})} onPress={press} />
+      const prefix = `${pointer(r.n)}${numberLabel(r.n)}`
+      return <Button key={`${group}-${r.uuid}`} label={`${prefix}${rowText(r, prefix.length, prefix.length)}`} plain {...(dim && r.n !== targetN ? buttonStyle('unreached') : {})} onPress={press} />
     }
     // `245★) `: a gold star inside the number, so it reads as the row's marker, not
     // part of the prompt (djdarcy, 2026-10-05, over a background band and a star
@@ -124,7 +144,7 @@ export function promptsPaneView(elements: Elements, m: PromptsPaneModel, a: Prom
           {pinSet.has(r.uuid) && <Text {...style('pinned')}>★</Text>}
           <Text {...(dim ? style('unreached') : {})} {...(isHere ? style('here') : {})}>{') '}</Text>
         </Box>
-        <Button key={`${group}-${r.uuid}`} label={r.head} plain {...(dim ? buttonStyle('unreached') : {})} onPress={press} />
+        <Button key={`${group}-${r.uuid}`} label={rowText(r, pointer(r.n).length + width + (pinSet.has(r.uuid) ? 1 : 0) + 2, 0)} plain {...(dim ? buttonStyle('unreached') : {})} onPress={press} />
       </Box>
     )
   }
@@ -140,12 +160,13 @@ export function promptsPaneView(elements: Elements, m: PromptsPaneModel, a: Prom
           {...(fromBand !== undefined ? { value: fromBand } : {})}
           autoFocus
           onInput={(typed: string) => {
-            // `q` closes the pane, as in the band (Q261012-09).
-            if (typed === 'q') return void a.close()
-            // `/words` filters the list (#28); clearing the slash clears the filter.
-            const query = typed.startsWith('/') ? typed.slice(1) : ''
-            if (a.setFilter(query)) return
-            if (promptNumberComplete(typed, all.length)) void go(typed)
+            // What the text means is the list field's contract (core/band/field-input.ts),
+            // shared with the band's own field; the pane only runs the step.
+            const step = fieldInput(typed, 'list', all.length, m.tables)
+            if (step.op === 'close') return void a.close()
+            if (step.op !== 'text') return
+            if (a.setFilter(step.filter ?? '')) return
+            if (step.go !== undefined) void go(step.go)
           }}
           onSubmit={(typed: string) => void go(typed)}
         />
@@ -161,9 +182,9 @@ export function promptsPaneView(elements: Elements, m: PromptsPaneModel, a: Prom
         </Text>
       )}
       {matchLine && <Text {...style('legend')}>{`/${paneFilter}: ${matchLine}`}</Text>}
-      {pinnedRows.length > 0 && <Text {...style('legend')}>★ pinned</Text>}
+      {pinnedRows.length > 0 && <Text {...style('heading')}>★ pinned</Text>}
       {pinnedRows.map(r => promptRow(r, 'pin'))}
-      {pinnedRows.length > 0 && <Text {...style('legend')}>all prompts</Text>}
+      {pinnedRows.length > 0 && <Text {...style('heading')}>all prompts</Text>}
       {numbered.filter(r => listed.has(r.uuid)).flatMap(r => [promptRow(r, 'p'), ...footnoteRows(r.n)])}
       {footnoteRows(0)}
     </Box>

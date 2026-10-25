@@ -181,25 +181,33 @@ The known limits, briefly; **[docs/troubleshooting.md](docs/troubleshooting.md)*
 
 ## Configuration
 
-Open `/config` and find the plugin's settings under its name. A change takes effect at once; `/bm-config` prints every setting, its value and where the value came from.
+Open `/config` and find the plugin's one row, **▸ Bookmarks**, reading `false`: every setting is folded away behind it, since the defaults are meant to need no changing. Press `Enter` on it and it turns `true` in place: the rows below appear, the key rows and the debug rows behind folds of their own inside it. Press `Enter` again to fold them away; everything you set still applies. A change takes effect at once; `/bm-config` prints every setting, its value and where the value came from.
 
 | Setting | Values (default first) | What it does |
 |---|---|---|
+| ▸ Bookmarks | `false`, `true` | The fold over every row below: folded by default; your settings apply either way |
 | Prompts list opens at | `nearest`, `newest` | Where the prompts list opens: centred on the prompt nearest your view, or at the newest |
 | Prompts list follows the view | `when-idle`, `always`, `never` | Whether the list scrolls to keep the yellow row showing as you scroll the conversation (`when-idle`: not while you type a number) |
 | Closeness for the earlier prompt | `0.6` (0 to 1) | How much of the screen an earlier exchange must hold to count as nearest |
 | Footnotes in the prompts list | `folded`, `shown`, `hidden` | Your slash commands, `!` shell commands and interruptions, listed as `N.k` under the prompt they followed: folded behind `… N footnotes`, always listed, or never |
 | Prompt text kept for the filter (bytes) | `2000000` (0 = unlimited) | How much of your prompts the `/words` filter searches, newest first; past the budget the oldest prompts are matched only on the short excerpt the list shows |
+| Lines per row in the lists | `2` (1 to 5) | How many lines each prompt in the prompts list, and each mark in the jump list, may take; the text is cut with an ellipsis at the end of the last line, and a second line sits under the text, not under the number |
 | Prompts or bookmarks list after you pick a row | `close`, `stay` | Whether the list closes after you click a row (or type its number and `Enter`), or stays open for the next pick |
 | A list while you type | `stay`, `close` | Whether an open list stays while you type in the input box |
 | The band | `full`, `field` | The command field with the labelled commands and `?`, or the field alone |
 | Chords on their own keybindings | `on`, `off` | Whether mark, jump, prompts and read also answer the optional chords bound to their borrowed actions |
 | Lists in a pane | `on`, `off` | Whether the prompts and bookmarks lists open in a pane, or `p`/`b` take a number in the band with no pane |
+| Typing a list number | `auto`, `field`, `buttons` | How the band takes a prompt or bookmark number: in a text field of its own, where Backspace, `/words` and `*N` work (`auto`, the default, and `field`), or one button per digit as before 0.6.27 |
 | Keyboard after an action | `input`, `band` | Where the keyboard should go after an action (`input` waits on Claude Code allowing it) |
-| Debug echo by default | `off`, `on` | Whether the debug log is echoed into conversations that have not chosen (`/bm-debug` decides per conversation) |
-| Conversation text in the debug log | `auto`, `off`, `with-debug`, `always` | Whether debug lines quote the conversation; `auto` is off in an installed plugin, always in one loaded from a folder |
-| How much text a debug line quotes | `reference`, `full` | A short excerpt to find the place, or the whole text |
-| Colour overrides | JSON, empty by default | A role's colour, background, dim or bold, e.g. `{"here": {"color": "cyan"}}`; roles: `here`, `pinned`, `footnote`, `legend`, `mark`, `markBand`, `used`, `unused`, `unreached`, `emphasis`, `search`; a colour is a theme key (`warning`, `subtle`, ...), a terminal colour name or `#rrggbb` |
+| ▸ Debug: show the debug rows | `false`, `true` | The fold over the three debug rows below |
+| Debug: echo by default | `off`, `on` | Whether the debug log is echoed into conversations that have not chosen (`/bm-debug` decides per conversation) |
+| Debug: conversation text in the log | `auto`, `off`, `with-debug`, `always` | Whether debug lines quote the conversation; `auto` is off in an installed plugin, always in one loaded from a folder |
+| Debug: how much text a line quotes | `reference`, `full` | A short excerpt to find the place, or the whole text |
+| ▸ Keys: show the key rows | `false`, `true` | Unfolds the rows below, which choose the band's keys; the keys you set stay when folded |
+| Keys: mark, jump, prompts, ... help (one row each) | empty = the default keys | A command's keys, separated by spaces (`Space` for the space key), `hidden` last to take its button off the bar; a clash or a key the band never receives is refused with the reason ([Choosing your own keys](docs/keys.md#choosing-your-own-keys)) |
+| Keys: in a list | empty = `j k s h l c d q` | The list keys renamed by position: next, previous, pin, previous group, next group, claim, remove, close |
+| Keys: the leader | (shows the bound chord) | Says which chord opens the band; the leader is set in `~/.claude/keybindings.json`, not here |
+| Colour overrides | JSON, empty by default | A role's colour, background, dim or bold, e.g. `{"here": {"color": "cyan"}}`; roles: `here`, `pinned`, `footnote`, `legend`, `heading`, `mark`, `markBand`, `used`, `unused`, `unreached`, `emphasis`, `search`; a colour is a theme key (`warning`, `subtle`, ...), a terminal colour name or `#rrggbb` |
 
 Still constants, planned as settings ([#7](https://github.com/DazzleML/claude-bookmarks/issues/7)): how old a selection may be before a mark uses the top of the screen (75 seconds), where "back" from the bottom returns, whether a typed prompt number waits for `Enter`, the highlight's duration, and the pane sizes.
 
@@ -261,7 +269,7 @@ claude-bookmarks/
 
 4. **Jumps ask Claude Code to scroll.** A jump asks Claude Code to reveal the stored message. If the message isn't loaded (it's from before the last compaction and the session was restarted), Claude Code refuses, and the plugin falls back to the clipboard phrase.
 
-5. **The prompt list is back-filled once.** The first time the plugin sees a conversation, it reads the user prompts out of the session's transcript file with one shell command (`Select-String` on Windows, `grep` elsewhere), then keeps the list current as you type.
+5. **The prompt list is back-filled once.** The first time the plugin sees a conversation, it reads the user prompts out of the session's transcript file with one shell command (`Select-String` on Windows, `grep` elsewhere), then keeps the list current as you type. Where `sh` is available it also reads the whole conversation once, in the background and in pieces (`tail | head`), keeps an index of where each message sits so later loads resume instead of re-reading, and from then on answers "which message is this?" from memory; `/bm-env` shows how far that read has got.
 
 ## Contributing
 

@@ -63,13 +63,13 @@ test('in the band, 1 . 1 then go finds footnote 1.1', async ($, on) => {
   expect(w.toasts().some(t => t.startsWith('no footnote'))).toBe(false)
 })
 
-test('a footnote number that does not exist says so', async ($, on) => {
+test('a footnote number that does not exist says so', { options: { listInput: 'buttons' } }, async ($, on) => {
   const w = world(on, { session: SID, store: STORE })
   await typeInBand($ as never, ['band-num-1', 'band-num-dot', 'band-num-9', 'band-num-go'])
   expect(w.toasts()).toContain('no footnote 1.9')
 })
 
-test('in the band, 1 . then go unfolds #1', async ($, on) => {
+test('in the band, 1 . then go unfolds #1', { options: { listInput: 'buttons' } }, async ($, on) => {
   world(on, { session: SID, store: STORE })
   type Ui = { input: (t: object) => Promise<unknown>; press: (t: object) => Promise<unknown> }
   const band = (await $.ui.mount(BAND as never)) as unknown as Ui
@@ -97,7 +97,7 @@ test('unfolded footnotes fold again from their ▴ fold row', async ($, on) => {
 
 // Hidden rows, working keys (djdarcy, 2026-10-12: "Rows hidden, keys work"): `N.k` still
 // finds the footnote; `N.` cannot show anything, so it says where the setting is.
-test('hidden: 1 . 1 go still finds the footnote; 1 . go says footnotes are hidden', { options: { footnotes: 'hidden' } }, async ($, on) => {
+test('hidden: 1 . 1 go still finds the footnote; 1 . go says footnotes are hidden', { options: { footnotes: 'hidden', listInput: 'buttons' } }, async ($, on) => {
   const w = world(on, { session: SID, store: STORE })
   type Ui = { input: (t: object) => Promise<unknown>; press: (t: object) => Promise<unknown> }
   const band = (await $.ui.mount(BAND as never)) as unknown as Ui

@@ -1,11 +1,23 @@
 name: CI
 
-# The product is a Claude Code mod (TypeScript under .claude-plugin/, hooks/
-# and types/). This workflow runs the Python tooling checks (version.py and the
-# plugin manifest that must match it) and the pure core's tests, which need only
-# Node: it strips the types itself. `claude plugin validate` and `tsc` against
-# the engine's types run locally before pushing; moving them into CI needs the
-# Claude Code CLI on the runner, which is still an open question.
+# The product is a Claude Code plugin (TypeScript under plugin/). Two jobs:
+#
+#   tooling -- the version tooling (version.py and the plugin manifest that
+#              must match it), both manifests parse, and the pure core's
+#              tests, which need only Node: it strips the types itself.
+#   plugin  -- on Linux and Windows: the Claude Code CLI installed from npm at the version the
+#              plugin is verified against, then `claude plugin validate` on
+#              the plugin (its manifest and hooks module as the engine reads
+#              them) and on the repository (the marketplace file), and the
+#              kit suite (`claude plugin test`), which runs headlessly with
+#              no sign-in: measured 2026-10-22 against an empty config dir.
+#
+# Not here: the strict type check (`npx tsc -p plugin --noEmit`). It needs the
+# engine's generated declarations (plugin/.claude-plugin/types/, gitignored),
+# and the engine writes those only when it loads the plugin interactively,
+# never from `validate` or `test` (measured 2026-10-22 on a copy without the
+# folder). So the type check stays in the local pre-push hook, as #5 provides
+# for anything the runner cannot run.
 
 on:
   push:
@@ -41,3 +53,56 @@ jobs:
 
     - name: Core tests
       run: node --test tests/core/*.test.ts
+
+  plugin:
+    # Linux and Windows, so each proves the plugin on its own platform. Until 0.6.26 the
+    # kit suite failed on Linux (66 of 145, run 40133392990): the harness's Windows paths
+    # (C:/test-home/...) are not absolute to the engine there, which resolved them against
+    # the plugin's folder. The harness now keys paths the same on both (pathKey in
+    # plugin/tests/harness.ts); measured 145 of 145 on WSL Ubuntu and on Windows.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest ]
+    runs-on: ${{ matrix.os }}
+
+    # Bash on both (Git Bash on Windows), so the steps read the same on each.
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      # The client the plugin is verified against; bump on purpose, never float.
+      CLAUDE_CODE_VERSION: '2.1.308'
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Node
+      uses: actions/setup-node@v5
+      with:
+        node-version: '24'
+
+    # A config directory of the run's own, so nothing depends on the runner's home.
+    # Set from a step: a job-level `env` cannot read the `runner` context (GitHub
+    # rejected the file with "Unrecognized named-value: 'runner'", runs 39842630023
+    # and 39887529592, so no job ran on either push since this job was added).
+    - name: A config directory for this run
+      run: |
+        mkdir -p "$RUNNER_TEMP/claude-config"
+        echo "CLAUDE_CONFIG_DIR=$RUNNER_TEMP/claude-config" >> "$GITHUB_ENV"
+
+    - name: Install the Claude Code CLI
+      run: npm install -g @anthropic-ai/claude-code@${{ env.CLAUDE_CODE_VERSION }}
+
+    - name: Which build judged this run
+      run: claude --version
+
+    - name: Validate the plugin (manifest and hooks module, as the engine reads them)
+      run: claude plugin validate ./plugin
+
+    - name: Validate the repository as a marketplace
+      run: claude plugin validate .
+
+    - name: Kit suite
+      run: claude plugin test plugin

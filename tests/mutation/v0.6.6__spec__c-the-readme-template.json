@@ -1,0 +1,13 @@
+{
+  "target": "plugin/hooks/core/bookmarks/data-readme.ts (dataReadme, layoutTable) and plugin/hooks/handlers/bookmarks.ts (ensureReadme's template branch), slice C",
+  "generation": "mode 1: fresh-context mid-engineer, zero tools, the excerpts inline; 2026-10-21",
+  "mutations": [
+    {"id": "M1", "file": "plugin/hooks/core/bookmarks/data-readme.ts", "original": ".replace(/\\{\\{mark\\}\\}/g, () => README_MARK)", "mutated": ".replace(/\\{\\{mark\\}\\}/, () => README_MARK)", "note": "mark placeholder loses g flag; only first occurrence replaced"},
+    {"id": "M2", "file": "plugin/hooks/core/bookmarks/data-readme.ts", "original": ".replace(/\\{\\{writer\\}\\}/g, () => writer)", "mutated": ".replace(/\\{\\{writer\\}\\}/g, () => README_MARK)", "note": "writer placeholder replaced with mark"},
+    {"id": "M3", "file": "plugin/hooks/core/bookmarks/data-readme.ts", "original": "template.includes('\\r\\n') ? '\\r\\n' : '\\n'", "mutated": "template.includes('\\r\\n') ? '\\n' : '\\r\\n'", "note": "newline detection inverted"},
+    {"id": "M4", "file": "plugin/hooks/core/bookmarks/data-readme.ts", "original": ".join(newline)", "mutated": ".join('\\n')", "note": "table ignores template's CRLF newline"},
+    {"id": "M5", "file": "plugin/hooks/handlers/bookmarks.ts", "original": "if (template === undefined) {", "mutated": "if (!template) {", "note": "empty-string template now treated as missing"},
+    {"id": "M6", "file": "plugin/hooks/handlers/bookmarks.ts", "original": "const template = await ports.pluginFile(README_TEMPLATE)\n    if (template === undefined) {", "mutated": "const template = (await ports.pluginFile(README_TEMPLATE)) ?? ''\n    if (template === undefined) {", "note": "missing template falls back to empty string; refusal never fires and an empty README is written"},
+    {"id": "M7", "file": "plugin/hooks/handlers/bookmarks.ts", "original": "ports.logAlways(`[bm] data folder: README.md not written", "mutated": "ports.log(`[bm] data folder: README.md not written", "note": "packaging-bug message downgraded from logAlways to log"}
+  ]
+}

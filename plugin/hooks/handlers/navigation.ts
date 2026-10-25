@@ -6,6 +6,7 @@
 // PanePosition class's, reached through two ports.
 import { searchPhrase } from '../core/marks/marks.ts'
 import { sameMessage, short } from '../core/kit/message-id.ts'
+import { refusedJumpText } from '../core/kit/jump-messages.ts'
 import { jumplistKey } from '../core/store-keys.ts'
 import type { NavigationPorts } from '../engine/ports.ts'
 
@@ -107,19 +108,12 @@ export class Navigation {
       // the generic openings many prompts share ("RE:{", a pasted-content tag).
       const phrase = searchPhrase(text)
       const copied = phrase ? (await ports.copy(phrase)).isCopied : false
-      // Where to search: transcript mode's `/` only sees what the view holds, which after
-      // a compaction excludes earlier messages (2026-10-05: not found). `[` in transcript
-      // mode writes the FULL conversation to the terminal's scrollback, where the
-      // terminal's own find does reach them (user-verified, 2026-10-05).
-      const how = `press Ctrl+O, then [ (full conversation), then your terminal's Find (Ctrl+Shift+F or Cmd+F)`
-      ports.toast(
-        copied
-          ? `Can't jump there: that message isn't on screen (older than a compaction?). Copied "${phrase}": ${how} and paste.`
-          : `Can't jump there: that message isn't on screen (older than a compaction?). ${how} and search for ` +
-              `${phrase ? `"${phrase}"` : 'a few words of it'}.`,
-        12000,
-      )
-      ports.log(`[bm] jump refused; search phrase ${copied ? 'copied' : 'shown'}: "${phrase ?? ''}"`, true)
+      // The wording follows the path that runs for history.reach (U59): on stock the
+      // refusal means a compaction; on the patched build it cannot, and the text says so.
+      // Where to search: core/kit/jump-messages.ts.
+      const path = ports.pathFor('history.reach')
+      ports.toast(refusedJumpText(path, phrase, copied), 12000)
+      ports.log(`[bm] jump refused (history.reach: ${path}); search phrase ${copied ? 'copied' : 'shown'}: "${phrase ?? ''}"`, true)
     }
     ports.note(`scroll ${uuid} via ${via} -> ${verdict}`)
     ports.log(

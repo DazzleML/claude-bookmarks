@@ -3,8 +3,17 @@
 // what a typed entry means in the prompts list, when a number is complete, where j/k go,
 // and which group comes next. Moved from register.tsx under /move-code, comments as they
 // were. The state reads, the scrolls, the toasts and the timers stay there.
-import { parseListNumber } from './keys.ts'
+import { fieldRest, parseListNumber } from './keys.ts'
 import { numberFootnotes, type FootnoteRef } from '../prompts/prompt-rows.ts'
+import type { AnchorOwner } from '../bookmarks/anchor.ts'
+
+// The bookmarks pane's groups, cycled by the band's h/l (nextGroup below). Moved from
+// register.tsx under /move-code (U60, 2026-10-22).
+export const BOOKMARK_GROUPS: { owner: AnchorOwner | 'all'; title: string }[] = [
+  { owner: 'user', title: 'yours' },
+  { owner: 'claude', title: "Claude's" },
+  { owner: 'all', title: 'all' },
+]
 
 // When a typed prompt number jumps (a setting, #7): 'enter' waits for Enter, so the
 // person can check the number first; 'complete' jumps on the digit that makes it complete.
@@ -41,6 +50,13 @@ export function listPosition(typed: string, count: number, emptyIsNewest = false
 }
 
 /** What an entry in the prompts list means. */
+/** The item a typed number names in a newest-first list of `what`s, or the toast for a number that names none. The "find #n or toast" the pin, the bookmark jump and the bookmark remove each spelled out in register.tsx (U60). */
+export function pickNumbered<T>(typed: string, list: readonly T[], what: string, emptyIsNewest = false): { n: number; target: T } | { error: string } {
+  const n = listPosition(typed, list.length, emptyIsNewest)
+  const target = n === undefined ? undefined : list[n - 1]
+  return n !== undefined && target !== undefined ? { n, target } : { error: `no ${what} #${typed.trim()} (1-${list.length})` }
+}
+
 export type PromptEntry =
   | { kind: 'pin'; typed: string } // `*21` toggles the pin on #21, `*` on the newest; the pane stays open to pin more.
   | { kind: 'filter'; words: string } // `/words` with Enter: the filter (#28), as typing it does.
@@ -50,8 +66,11 @@ export type PromptEntry =
   | { kind: 'invalid'; typed: string }
 export function promptEntry(typed: string, count: number): PromptEntry {
   const t = typed.trim()
-  if (t.startsWith('*')) return { kind: 'pin', typed: t.slice(1) }
-  if (t.startsWith('/')) return { kind: 'filter', words: t.slice(1) }
+  // The prefixes are the pane field's own keys in the table (keys.ts LIST_KEYS, `field`).
+  const pin = fieldRest(t, 'list', 'pin')
+  if (pin !== undefined) return { kind: 'pin', typed: pin }
+  const words = fieldRest(t, 'list', 'filter')
+  if (words !== undefined) return { kind: 'filter', words }
   const parsed = parseListNumber(t)
   if (parsed?.unfold) return { kind: 'unfold', n: parsed.n }
   if (parsed?.k !== undefined) return { kind: 'footnote', n: parsed.n, k: parsed.k }
@@ -68,3 +87,12 @@ export function footnoteAt(promptIds: readonly string[], kept: readonly Footnote
 
 // Cycle the bookmarks pane's group from the band: yours -> Claude's -> all -> yours.
 export const nextGroup = (current: number, step: -1 | 1, groups: number): number => (current + step + groups) % groups
+
+// The waits, in ms, between the tries to centre the prompts pane on the nearest prompt after
+// it opens: the rows are not scrollable-to the instant after the first draw (DENY "no element
+// of its own is drawn under that key" at +7 ms, 2026-10-11) but are a few hundred ms later.
+// These are the gaps the code has produced since v0.4.0 (`60 * 2 ** n - (n === 0 ? 0 : 60)`:
+// 60, 60, 180, 420, cumulative 60, 120, 300, 720); the comment beside it had said 60, 180,
+// 420, 900. Pinned here as the code's own numbers (U60, 2026-10-22); changing them is a
+// behaviour change, not a move.
+export const centreDelays = (): readonly number[] => [0, 1, 2, 3].map(n => 60 * 2 ** n - (n === 0 ? 0 : 60))

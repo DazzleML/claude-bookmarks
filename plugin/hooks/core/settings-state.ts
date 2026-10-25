@@ -5,6 +5,8 @@
 // re-resolved every field; here the writes are named and a read is a lookup.
 import { resolve, type Resolved, type Settings } from './settings.ts'
 import { resolvePalette, type Palette } from './palette.ts'
+import { applyKeymap, keymapOf, type Problem } from './band/keymap.ts'
+import type { Tables } from './band/keys.ts'
 
 export class SettingsState {
   // The person's /config values (the `userConfig` in plugin.json), which Claude Code hands
@@ -15,16 +17,25 @@ export class SettingsState {
   private theme: string | undefined
   private resolution: Resolved | undefined
   private paletteCache: { key: string; palette: Palette } | undefined
+  // The key tables the person's keymap rows make (core/band/keymap.ts), and what in them
+  // could not be used (the default stands for that command). Made once per change.
+  private keymapCache: { tables: Tables; problems: Problem[] } | undefined
 
   /** The /config values Claude Code handed `register` at load. */
   loaded(options: Record<string, unknown>): void {
     this.machine = { ...options }
     this.resolution = undefined
+    this.keymapCache = undefined
   }
   /** One of this plugin's /config fields changed (`bookmarks.<field>`). */
   changed(field: string, value: unknown): void {
     this.machine = { ...this.machine, [field]: value }
     this.resolution = undefined
+    this.keymapCache = undefined
+  }
+  /** The key tables every reader of core/band/keys.ts takes, from the keymap rows, and the problems that left a default standing. */
+  keymap(): { tables: Tables; problems: Problem[] } {
+    return (this.keymapCache ??= applyKeymap(keymapOf(this.current() as unknown as Record<string, unknown>)))
   }
   /** The theme's name, from /config's `theme` row. */
   themeIs(name: string): void {

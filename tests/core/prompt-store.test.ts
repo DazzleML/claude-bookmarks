@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { appendOnce, backfillLine, backfilledKey, footnotesKey, mergeBackfill, parseBackfill, promptList, promptTextBase, promptsKey, transcriptGuess } from '../../plugin/hooks/core/prompts/prompt-store.ts'
+import { appendOnce, backfillLine, backfilledKey, footnotesKey, mergeBackfill, parseBackfill, promptList, promptTextBase, promptsKey, PROMPTS_KEPT, transcriptGuess } from '../../plugin/hooks/core/prompts/prompt-store.ts'
 
 const row = (uuid: string, text: string, extra: Record<string, unknown> = {}) => JSON.stringify({ type: 'user', uuid, message: { role: 'user', content: text }, ...extra })
 
@@ -48,6 +48,21 @@ test('the merge: file order, then live-only prompts, notices out, capped', () =>
   const kept = [{ uuid: 'b', head: 'two' }, { uuid: 'c', head: 'live only' }, { uuid: 'n', head: '[SYSTEM NOTIFICATION - NOT USER INPUT] x' }]
   assert.deepEqual(mergeBackfill(found, kept), [{ uuid: 'a', head: 'one' }, { uuid: 'b', head: 'two' }, { uuid: 'c', head: 'live only' }])
   assert.deepEqual(mergeBackfill(found, kept, 2), [{ uuid: 'b', head: 'two' }, { uuid: 'c', head: 'live only' }])
+})
+
+// 2026-10-23: three "Goal set" rows the engine queued on 2026-10-12 (attachments with
+// origin auto-continuation) were captured live as prompts back then; the file reader
+// holds them as non-prompt rows, so every merge re-appended them at the END of the list
+// as "live only", where they read as tonight's prompts #725-#727 and a click on one
+// scrolled the view to October. A stored row the file has read and judged not a prompt
+// is dropped; a stored row the file has never seen is kept (it may be newer than the read).
+test('the merge drops a stored row the transcript holds as not a prompt, and keeps one the transcript has never seen', () => {
+  const found = [{ uuid: 'a', head: 'one' }, { uuid: 'b', head: 'two' }]
+  const kept = [{ uuid: 'g', head: 'Goal set: make it so' }, { uuid: 'b', head: 'two' }, { uuid: 'c', head: 'live only, newer than the read' }]
+  const notPrompts = new Set(['g', 'r1', 'r2'])
+  assert.deepEqual(mergeBackfill(found, kept, PROMPTS_KEPT, notPrompts), [{ uuid: 'a', head: 'one' }, { uuid: 'b', head: 'two' }, { uuid: 'c', head: 'live only, newer than the read' }])
+  // Without the file's judgment nothing changes: the old rule stands.
+  assert.deepEqual(mergeBackfill(found, kept), [{ uuid: 'a', head: 'one' }, { uuid: 'b', head: 'two' }, { uuid: 'g', head: 'Goal set: make it so' }, { uuid: 'c', head: 'live only, newer than the read' }])
 })
 
 test('the back-fill line', () => {

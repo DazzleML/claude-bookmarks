@@ -1,0 +1,122 @@
+{
+  "mutations": [
+    {
+      "id": "N1",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "      await ports.clearLetter(operation.letter)\n      owedAfterAction(ports)",
+      "mutated": "      await ports.forgetLetter(operation.letter)\n      owedAfterAction(ports)",
+      "note": "delete case calls forgetLetter instead of clearLetter (handler-level swap)",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "d a clears the letter: it points at nothing, its history and its record stay"
+      ],
+      "kit_pass": "117"
+    },
+    {
+      "id": "N2",
+      "file": "plugin/hooks/handlers/command-line.ts",
+      "original": "      await ports.forgetLetter(operation.letter)\n      owedAfterAction(ports)",
+      "mutated": "      await ports.forgetLetter(operation.letter)",
+      "note": "forget case drops owedAfterAction",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "118"
+    },
+    {
+      "id": "N3",
+      "file": "plugin/hooks/handlers/band.ts",
+      "original": "    await ports.setBandNum('')\n  }",
+      "mutated": "  }",
+      "note": "remove op no longer clears the spent band number",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "118"
+    },
+    {
+      "id": "N4",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "  const r = await commitOp(ports, { op: 'forget', owner: 'user', letter })",
+      "mutated": "  const r = await commitOp(ports, { op: 'forget', owner: 'claude', letter })",
+      "note": "forgetOp commits with wrong owner",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "D a forgets the letter: one entry and nothing referring to it, so the record and the slot go without a tombstone"
+      ],
+      "kit_pass": "117"
+    },
+    {
+      "id": "N5",
+      "file": "plugin/hooks/handlers/bookmarks.ts",
+      "original": "{ op: 'remove', id: idOf(target), removedBy: 'user' }",
+      "mutated": "{ op: 'remove', id: idOf(target), removedBy: 'claude' }",
+      "note": "removeBookmark attributes removal to claude instead of the person",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "d after a number in the bookmarks row removes that bookmark: a tombstone keeps its place"
+      ],
+      "kit_pass": "117"
+    },
+    {
+      "id": "N6",
+      "file": "plugin/hooks/views/bookmarks-pane.tsx",
+      "original": "if (typed.length > 1 && /^\\d+$/.test(typed.slice(0, -1))",
+      "mutated": "if (typed.length > 1 && /^\\d*$/.test(typed.slice(0, -1))",
+      "note": "number prefix regex allows an empty number before the key",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "118"
+    },
+    {
+      "id": "M5",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "? done({ op: 'delete', letter: next })\n          : done({ op: 'hint', reason: 'd then",
+      "mutated": "? done({ op: 'delete', letter: next })\n          : done({ op: 'wait' })\n        || done({ op: 'hint', reason: 'd then",
+      "note": "round 1 survivor: delete row non-letter returns wait instead of hint",
+      "verdict": "killed",
+      "core_red": [
+        "P alone waits for its letter; a bad letter gives a hint, not an action"
+      ],
+      "kit_red": [],
+      "kit_pass": "118"
+    },
+    {
+      "id": "M6",
+      "file": "plugin/hooks/core/band/keys.ts",
+      "original": "id: 'forget',\n    keys: ['D'],\n    then: 'mark-letter',\n    label: 'forget mark',\n    button: 'forget',\n    shown: false,\n    help: 'forget mark a-z: its record goes too (outright when nothing else refers to it)',\n    route: next =>\n      next === undefined\n        ? waiting({ op: 'wait' })\n        : /^[a-z`]$/.test(next)",
+      "mutated": "id: 'forget',\n    keys: ['D'],\n    then: 'mark-letter',\n    label: 'forget mark',\n    button: 'forget',\n    shown: false,\n    help: 'forget mark a-z: its record goes too (outright when nothing else refers to it)',\n    route: next =>\n      next === undefined\n        ? waiting({ op: 'wait' })\n        : /^[a-z]$/.test(next)",
+      "note": "round 1 survivor: forget regex narrowed, drops backtick mark",
+      "verdict": "killed",
+      "core_red": [
+        "P alone waits for its letter; a bad letter gives a hint, not an action"
+      ],
+      "kit_red": [],
+      "kit_pass": "118"
+    },
+    {
+      "id": "M8",
+      "file": "plugin/hooks/handlers/marks.ts",
+      "original": "  await letterDone(ports, letter)\n  ports.log(`[bm] cleared mark",
+      "mutated": "  ports.log(`[bm] cleared mark",
+      "note": "round 1 survivor: clearLetter skips letterDone",
+      "verdict": "killed",
+      "core_red": [],
+      "kit_red": [
+        "after d a, the jump pane no longer lists a: the marks the panes draw follow the file"
+      ],
+      "kit_pass": "117"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "118"
+    }
+  ]
+}

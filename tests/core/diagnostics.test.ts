@@ -1,6 +1,18 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { configListedLine, dccLine, diagLine, idsReport, jumpTarget, keyLabel, notAppliedLine, parseDebugArgs, selectionKind, settingsRows } from '../../plugin/hooks/core/log/diagnostics.ts'
+import { configListedLine, dccLine, diagLine, editLine, focusLine, idsReport, jumpTarget, keyLabel, notAppliedLine, parseDebugArgs, parseOnOff, selectionKind, settingsRows } from '../../plugin/hooks/core/log/diagnostics.ts'
+
+// The keystroke-logging switch and the two diag lines the hooks write (moved from register.tsx, U60).
+test('parseOnOff: on, off, or a toggle; editLine and focusLine say what they saw', () => {
+  assert.equal(parseOnOff(' on ', false), true)
+  assert.equal(parseOnOff('off', true), false)
+  assert.equal(parseOnOff('', false), true)
+  assert.equal(parseOnOff('', true), false)
+  assert.equal(editLine('char', 12, 1, 0, 5000), '[diag] edit char: draft 12 -> +1, - ms since last')
+  assert.equal(editLine('ctrl+x', 12, 0, 4000, 5000), '[diag] edit ctrl+x: draft 12 -> +0, 1000 ms since last')
+  assert.equal(focusLine('AbovePrompt', 'band-num-go', 'person', undefined), '[diag] focus AbovePrompt -> band-num-go by person')
+  assert.equal(focusLine('Pane', undefined, 'engine', 'that site does not hold the keyboard'), '[diag] focus Pane -> (engine stop) by engine DENY that site does not hold the keyboard')
+})
 
 test('a keystroke\'s label: modifiers, char or the key name, paste without a key', () => {
   assert.equal(keyLabel({ key: 'a' }), 'char')

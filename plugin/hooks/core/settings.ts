@@ -25,7 +25,31 @@ export type NumberField = { kind: 'number'; min: number; max: number; default: n
 export type TextField = { kind: 'text'; default: string; title: string; description: string }
 export type Field = EnumField | BooleanField | NumberField | TextField
 
+// U70 (djdarcy, 2026-10-22): "letting users choose how many lines per entry is best. I suspect
+// a good default is "2 lines"". The default is his guess, dogfooded; the cap is the loop's.
+// A fold row's leading marker (djdarcy, 2026-10-24: "some sort of leading indicator to show
+// something is a fold group"): closed in the manifest's title, and the config.describe hook
+// draws it open while the fold is shown (core/settings-fold.ts foldLabel). Not `>`, which
+// reads as a second copy of the menu's own `❯` cursor.
+export const FOLD_CLOSED = '▸'
+export const FOLD_OPEN = '▾'
+
+export const ROW_LINES_DEFAULT = 2
+export const ROW_LINES_MAX = 5
+
 export const FIELDS = {
+  // The fold over every other row (core/settings-fold.ts), first so it heads the plugin's
+  // block in /config. djdarcy, 2026-10-24: "every option should be hidden by default".
+  // The folds are true/false rows because /config flips those in place with Enter; a
+  // plugin's choice row always opens a picker (2.1.310 sets pickToCommit on every one), so
+  // the ‹ › cycler the menu's own rows use is not open to a plugin.
+  settingsShown: {
+    kind: 'boolean',
+    default: false,
+    title: `${FOLD_CLOSED} Bookmarks`,
+    description:
+      "true: the plugin's settings appear below (the prompts list, the band, the lists' rows, debugging, colours, and the keys behind their own row); false: folded away, and everything you set still applies",
+  },
   listOpensAt: {
     kind: 'enum',
     values: ['nearest', 'newest'],
@@ -71,37 +95,12 @@ export const FIELDS = {
     title: 'Keyboard after an action',
     description: 'input: back to the input box once Claude Code allows a plugin to do it; band: stay in the band',
   },
-  debugDefault: {
-    kind: 'enum',
-    values: ['off', 'on'],
-    default: 'off',
-    title: 'Debug echo by default',
-    description: "Whether the plugin's log lines are echoed into a conversation that has not chosen; /bm-debug decides per conversation",
-  },
-  // djdarcy, 2026-10-12: "In the dev build it should always be on, and in the main build
-  // it should always be off by default unless the person turns the feature on" and
-  // "some instances we might want the full output and other times just enough to identify
-  // the location". `auto` is that rule: debugTextMode() reads it per build.
-  debugText: {
-    kind: 'enum',
-    values: ['auto', 'off', 'with-debug', 'always'],
-    default: 'auto',
-    title: 'Conversation text in the debug log',
-    description: "auto: off in an installed plugin, always in one loaded from a folder; off: log lines name places by id only; with-debug: they also quote the conversation while this conversation's debugging is on; always: they always quote it",
-  },
-  debugTextLength: {
-    kind: 'enum',
-    values: ['reference', 'full'],
-    default: 'reference',
-    title: 'How much text a debug line quotes',
-    description: 'reference: a short excerpt, enough to find the place; full: the whole text',
-  },
   // #27: a role's colour, background, dim or bold, as JSON; core/palette.ts validates it.
   palette: {
     kind: 'text',
     default: '',
     title: 'Colour overrides',
-    description: 'JSON, e.g. {"here": {"color": "cyan"}, "markBand": {"backgroundColor": "#203040"}}. Roles: here, pinned, footnote, legend, mark, markBand, used, unused, unreached, emphasis, search. A colour is a theme key (warning, subtle, ...), a terminal colour name or #rrggbb; anything else is ignored',
+    description: 'JSON, e.g. {"here": {"color": "cyan"}, "markBand": {"backgroundColor": "#203040"}}. Roles: here, pinned, footnote, legend, heading, mark, markBand, used, unused, unreached, emphasis, search. A colour is a theme key (warning, subtle, ...), a terminal colour name or #rrggbb; anything else is ignored',
   },
   // #33: the person's slash commands, `!` shell commands and interruptions, as N.k rows
   // under their prompt in the prompts list. The fold is the first ladder on the
@@ -150,7 +149,110 @@ export const FIELDS = {
     title: 'Lists in a pane',
     description: "on: the prompts and bookmarks lists open in a pane beside the conversation; off: p and b take a number in the band and jump, with no pane",
   },
+  // Where a list number is typed when the band holds the keyboard (the input-routing design,
+  // 2026-10-25; core/band/routes.ts). A new field, never a changed type (docs/engine-quirks.md,
+  // "A saved setting of the wrong type stops the plugin loading"): `auto` names the best
+  // pathway this build has, so a better one can become the default without a saved value
+  // changing meaning.
+  listInput: {
+    kind: 'enum',
+    values: ['auto', 'field', 'buttons'],
+    default: 'auto',
+    title: 'Typing a list number',
+    description: "auto: the best way this Claude Code build allows (today the band's own field); field: the band's own field, where Backspace, /words and * work; buttons: one key per digit, as before 0.6.27",
+  },
+  // U70: how much of each row the prompts and jump lists show. The pane's width is known, so
+  // lines are the one control that matters; the text is cut with an ellipsis at the end of
+  // the last line.
+  rowLines: {
+    kind: 'number',
+    min: 1,
+    max: ROW_LINES_MAX,
+    default: ROW_LINES_DEFAULT,
+    title: 'Lines per row in the lists',
+    description: 'How many lines each prompt in the prompts list, and each mark in the jump list, may take (1 to 5); the text is cut with an ellipsis at the end of the last line',
+  },
+  // The keymap (#36; the keys design, unit 3). djdarcy's fold look of 2026-10-24 chose rows
+  // behind a fold: `keysShown` hides the rows below it (a config.describe hook), so /config
+  // stays short until the person opens it. The names are core/band/keymap.ts KEY_FIELDS,
+  // LIST_FIELD and LEADER_FIELD (a core test holds them together). An empty row is the
+  // table's own keys; a value is keys separated by spaces, `Space` for the space key, and
+  // `hidden` last to take the button off the bar.
+  keysShown: {
+    kind: 'boolean',
+    default: false,
+    title: `${FOLD_CLOSED} Keys: show the key rows`,
+    description: 'true: the rows below set the band\'s keys, one per command, and the list keys; false: they are folded away (your keys stay as set)',
+  },
+  keyMark: keyRow('mark', 'm'),
+  keyJump: keyRow('jump', "' j"),
+  keyPrompts: keyRow('prompts', 'p'),
+  keyRead: keyRow('reading position', 'Space r'),
+  keyBookmarks: keyRow('bookmarks', 'b'),
+  keyPromote: keyRow('promote a mark', 'P'),
+  keyDelete: keyRow('clear a mark', 'd'),
+  keyForget: keyRow('forget a mark', 'D'),
+  keyBack: keyRow('back', 'o'),
+  keyForward: keyRow('forward', 'i'),
+  keyClose: keyRow('close', 'q'),
+  keyHelp: keyRow('help', '?'),
+  keyList: {
+    kind: 'text',
+    default: '',
+    title: 'Keys: in a list',
+    description: 'The list keys in order: next previous pin previous-group next-group claim remove close (default: j k s h l c d q); empty = the defaults',
+  },
+  keyLeader: {
+    kind: 'text',
+    default: '',
+    title: 'Keys: the leader',
+    description: 'The leader is a Claude Code keybinding (abovePrompt:focus in ~/.claude/keybindings.json), not set here',
+  },
+  // The debugging rows behind their own fold (djdarcy, 2026-10-24: a fold "for our debug
+  // options so they can be grouped together better", each leading with "Debug:"), last in
+  // the block so they read as one group.
+  debugShown: {
+    kind: 'boolean',
+    default: false,
+    title: `${FOLD_CLOSED} Debug: show the debug rows`,
+    description: 'true: the rows below set what the debug log echoes and quotes; false: they are folded away (what you set stays)',
+  },
+  debugDefault: {
+    kind: 'enum',
+    values: ['off', 'on'],
+    default: 'off',
+    title: 'Debug: echo by default',
+    description: "Whether the plugin's log lines are echoed into a conversation that has not chosen; /bm-debug decides per conversation",
+  },
+  // djdarcy, 2026-10-12: "In the dev build it should always be on, and in the main build
+  // it should always be off by default unless the person turns the feature on" and
+  // "some instances we might want the full output and other times just enough to identify
+  // the location". `auto` is that rule: debugTextMode() reads it per build.
+  debugText: {
+    kind: 'enum',
+    values: ['auto', 'off', 'with-debug', 'always'],
+    default: 'auto',
+    title: 'Debug: conversation text in the log',
+    description: "auto: off in an installed plugin, always in one loaded from a folder; off: log lines name places by id only; with-debug: they also quote the conversation while this conversation's debugging is on; always: they always quote it",
+  },
+  debugTextLength: {
+    kind: 'enum',
+    values: ['reference', 'full'],
+    default: 'reference',
+    title: 'Debug: how much text a line quotes',
+    description: 'reference: a short excerpt, enough to find the place; full: the whole text',
+  },
 } as const satisfies Record<string, Field>
+
+// One keymap row: a text field whose empty value is the command's default keys.
+function keyRow(what: string, defaults: string) {
+  return {
+    kind: 'text',
+    default: '',
+    title: `Keys: ${what}`,
+    description: `Keys for ${what}, separated by spaces (default: ${defaults}); Space spells the space key; end with hidden to take its button off the bar; empty = the default`,
+  } as const
+}
 
 export type FieldName = keyof typeof FIELDS
 type ValueOf<F> = F extends { kind: 'enum'; values: readonly (infer V)[] }

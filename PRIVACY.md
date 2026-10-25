@@ -17,6 +17,7 @@ The short version: the plugin runs inside Claude Code on your machine, reads the
 
 - **Marks, pinned prompts, reading positions, prompt lists and the jumplist**, per conversation, in Claude Code's plugin store: `~/.claude/plugins/store/bookmarks_inline-<id>.json`.
 - **Bookmarks**, in your own folder `~/claude/bookmarks/` (or under `CLAUDE_USER_DIR`): one JSON register per conversation under `sessions/`, and one markdown file per bookmarked message holding that message's text, so you can read and edit it.
+- **A cache of the conversation's text**, in the same folder: the text of your prompts under `prompttext/` (for the filter, up to the "Prompt text kept for the filter" budget), the text of Claude's replies under `replytext/` (up to 4 MB, newest first), and under `transcript/` an index of where each message sits in the conversation file, so the plugin can resume reading where it left off instead of reading the whole file again. All three are rebuilt from the conversation file when missing.
 - **A debug log** per conversation, `~/claude/bookmarks/debug/<session id>.log`, kept to its last 400 lines. It records key names and pane and jump events, never the text you type or the conversation's text.
 - **Your clipboard**, only when you ask: promoting a mark copies the bookmark's link; a jump that cannot be made copies a short phrase of the message so you can search for it.
 - **One environment variable**, `CONVO_BOOKMARKS_DEBUG`, inside the plugin's own process, when you type `/bm-debug on` or `off`. It disappears when Claude Code exits.
@@ -27,8 +28,8 @@ It writes nothing else: no configuration file, no settings file, no start-up fil
 
 To search the transcript, which can be larger than the plugin API will read at once, the plugin runs a search program already on your machine with the transcript's path and the search text as arguments:
 
-- on macOS, Linux and Git Bash on Windows: `sh` running `grep`;
-- on Windows without them: two PowerShell scripts shipped inside the plugin, `hooks/scripts/user-rows.ps1` and `hooks/scripts/grep-offsets.ps1`, started as `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <script>`.
+- on macOS, Linux and Git Bash on Windows: `sh` running `grep`, and, to read the whole conversation once in pieces, `sh` running `tail -c +<offset> <transcript> | head -c 4000000` (the offset and the path are arguments, never part of the command text);
+- on Windows: three PowerShell scripts shipped inside the plugin, `hooks/scripts/user-rows.ps1`, `hooks/scripts/grep-offsets.ps1` and `hooks/scripts/read-chunk.ps1` (the whole-conversation read, one piece of the file by byte offset), started as `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <script>` with the path, the search text or the offset as named parameters.
 
 Their output is read back by the plugin and goes nowhere else. Nothing else is executed, and nothing is installed.
 

@@ -29,8 +29,15 @@ export function appendOnce<T extends { uuid: string }>(kept: readonly T[], item:
   return [...kept, item].slice(-cap)
 }
 
-/** What a transcript read yields: the prompts in file order with their text, and the footnotes, each after the prompt it follows (`null` before the first). A line cut off at the output limit, or one that is not a row, is skipped. */
-export type Backfill = { found: PromptRef[]; texts: [string, string][]; footnotes: FootnoteRef[] }
+/**
+ * What a transcript read yields: the prompts in file order with their text, and the footnotes,
+ * each after the prompt it follows (`null` before the first). A line cut off at the output
+ * limit, or one that is not a row, is skipped. `notPrompts`, when the reader knows them: the
+ * uuids of rows it read and judged not to be prompts (the loader's replies, compaction
+ * summaries and other rows), so the merge can retire a stored row the live capture once took
+ * for a prompt (2026-10-23: the engine's "Goal set" queued messages of 2026-10-12).
+ */
+export type Backfill = { found: PromptRef[]; texts: [string, string][]; footnotes: FootnoteRef[]; notPrompts?: ReadonlySet<string> }
 export function parseBackfill(stdout: string): Backfill {
   const found: PromptRef[] = []
   const texts: [string, string][] = []
@@ -56,10 +63,16 @@ export function parseBackfill(stdout: string): Backfill {
   return { found, texts, footnotes }
 }
 
-/** Transcript order first, then anything the live capture holds that the file did not (prompts sent while the file was being read), minus rows that are not prompts; the oldest dropped past `cap`. */
-export function mergeBackfill(found: readonly PromptRef[], kept: readonly PromptRef[], cap = PROMPTS_KEPT): PromptRef[] {
+/**
+ * Transcript order first, then anything the live capture holds that the file did not (prompts
+ * sent while the file was being read), minus rows that are not prompts; the oldest dropped past
+ * `cap`. A stored row the reader has read and judged not a prompt (`notPrompts`) is dropped: the
+ * file is the judge of what it has read. A stored row the reader has never seen is kept, so a
+ * prompt the reader missed for any other reason is never lost here.
+ */
+export function mergeBackfill(found: readonly PromptRef[], kept: readonly PromptRef[], cap = PROMPTS_KEPT, notPrompts?: ReadonlySet<string>): PromptRef[] {
   const have = new Set(found.map(p => p.uuid))
-  return [...found, ...kept.filter(p => !have.has(p.uuid) && looksLikePrompt(p.head))].slice(-cap)
+  return [...found, ...kept.filter(p => !have.has(p.uuid) && looksLikePrompt(p.head) && !notPrompts?.has(p.uuid))].slice(-cap)
 }
 
 /** The back-fill's log line. */

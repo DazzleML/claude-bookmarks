@@ -14,40 +14,44 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { PaneMode, Row } from '../types'
 import {
-  markLinks, markdownLinks, parseAnchor, tierOf,
-  type AnchorOwner, type MarkerStyle,
+  markLinks, markdownLinks,
+  type MarkerStyle,
 } from './core/bookmarks/anchor'
-import { findRecord } from './core/bookmarks/register-file'
-import { headOf, jsonEscaped, resolveRows, rowsFromGrep, uuidPattern, type Resolution } from './core/bookmarks/transcript-lines'
+import { headOf, resolveRows, rowsFromGrep, targetPattern, type Resolution } from './core/bookmarks/transcript-lines'
 import { excerpt, type Channel } from './core/log/debug'
-import { bandButtons, helpLines, helpShort, listHint, listKeysFor, route, type Chord, type Operation, type Pane } from './core/band/keys'
+import { CHORD_ACTIONS, VERIFIED_CLIENTS, bandFocusRoute, barFor, helpFor, listHint, listKeysFor, route, type Operation, type Pane } from './core/band/keys'
 import type { Cause } from './core/band/after-action'
+import { LEADER_FIELD, isKeyRow, leaderChord, rowDenial, type Problem } from './core/band/keymap'
+import { FOLD_FIELDS, foldLabel, rowHidden } from './core/settings-fold'
 import { installedFromCache, type Settings } from './core/settings'
 import { SettingsState } from './core/settings-state'
 import type { Role, Style } from './core/palette'
-import { footnoteOf, looksLikePrompt, unwrapQueued, type FootnoteRef } from './core/prompts/prompt-rows'
+import { classifyAppend, type FootnoteRef } from './core/prompts/prompt-rows'
 import { short } from './core/kit/message-id'
 import { configDirOf, dataRootOf } from './core/kit/paths'
 import { ECHO_POLICY_KEY, readingStateKey } from './core/store-keys'
-import { diagLine, keyLabel } from './core/log/diagnostics'
-import { colorSplit, tagMarksMarkdown, tagMarksPlain } from './core/marks/highlight'
+import { diagLine, editLine, focusLine, keyLabel, parseOnOff } from './core/log/diagnostics'
+import { NO_SIGNALS, capabilityOf, choose, chooseAll, pathsLine, type Signals } from './engine/select'
+import { firstColorSplit, tagMarksMarkdown, tagMarksPlain } from './core/marks/highlight'
 import { ScreenModel } from './core/kit/screen-model'
-import { MarkCache, marksShowing, type Mark, type Marks } from './core/marks/marks'
-import { footnoteAt, listPosition, nextGroup, promptEntry } from './core/band/band-entry'
+import { MARK_LETTERS, MarkCache, READING_LETTER, marksShowing, type Mark, type Marks } from './core/marks/marks'
+import { BOOKMARK_GROUPS, footnoteAt, nextGroup, pickNumbered, promptEntry } from './core/band/band-entry'
+import { listInputTarget } from './core/band/routes'
 import { debugCommand } from './handlers/debug-command'
-import { anchoredReply, markedColumn, markedReply, type MarkStyles } from './views/marked-message'
+import { anchoredReply, markedPrompt, markedReply, type MarkStyles } from './views/marked-message'
 import { bandView } from './views/band'
 import { bookmarksPaneView } from './views/bookmarks-pane'
 import { marksPaneView } from './views/marks-pane'
 import { promptsPaneView } from './views/prompts-pane'
-import { VERIFIED_CLIENTS, configCommand, envCommand, idsCommand, jumpCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
-import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PromptsPorts, ResolveOutcome, ViewPorts } from './engine/ports'
+import { configCommand, envCommand, idsCommand, jumpCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
+import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PromptsPorts, ResolveOutcome, TranscriptPorts, ViewPorts } from './engine/ports'
 import { closeAll as bandCloseAll, endBandMode as bandEnd, settle as bandSettle, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
 import * as commandLine from './handlers/command-line'
 import * as marks_ from './handlers/marks'
 import * as bookmarks_ from './handlers/bookmarks'
 import * as prompts_ from './handlers/prompts'
+import * as transcript_ from './handlers/transcript'
 import * as log_ from './handlers/log'
 import { MarkState } from './core/marks/mark-state'
 import { Navigation } from './handlers/navigation'
@@ -68,33 +72,22 @@ const settings = new SettingsState()
 function currentSettings(): Settings {
   return settings.current()
 }
+// The key tables the person's keymap rows make (#36; core/band/keymap.ts), which every
+// reader of core/band/keys.ts takes: the band, its help, the panes' keys and the hints.
+function currentTables() {
+  return settings.keymap().tables
+}
+// What in the keymap could not be used, one line (the default stands for each).
+const keymapProblemsLine = (problems: readonly Problem[]) =>
+  `[bm] keymap: ${problems.map(p => `${p.command}${p.key !== undefined ? ` "${p.key}"` : ''}: ${p.reason}`).join('; ')}; the defaults stand for those`
 
 // The plugin's one pane id (prompts, bookmarks, mark and jump panes all open under it).
 const PANE = 'bm-pane'
 
-// Claude Code builds the borrowed-action chords (below) were verified on:
-// handlers/diagnostics-commands.ts VERIFIED_CLIENTS, the one list the start-up tripwire
-// and /bm-env both read.
-
-// Engine keybinding actions the chords borrow (docs/engine-quirks.md, "A plugin can't
-// define its own keyboard shortcut"). None should have a handler mounted while the built-in diff mod
-// is enabled; the version check in session.start is how we notice when a new build
-// might have changed that.
-const MARK_ACTION = 'app:toggleDiffNoiseFilter'
-const JUMP_ACTION = 'app:toggleDiffPreSession'
-// A third borrowed action (2026-10-04, user: "ctrl-x p" for the recent-prompts pane,
-// then 1-9): `ctrl+x p` in keybindings.json. The engine's own docs use it as their
-// example of a Button `action`; another diff-viewer toggle, idle in a conversation.
-const PROMPTS_ACTION = 'app:cycleDiffBase'
-// A fourth (2026-10-04, user: "Ctrl+x space" for the reading position). Scrolls the
-// diff panel's file list, so idle in a conversation like the other three. `ctrl+x x`,
-// djdarcy's first idea, is Claude Code's own chord for closing a pane.
-const READING_ACTION = 'app:diffFileListDown'
-// The reading position is kept as a mark under this key, so the highlight and the
-// band show it like any other; the panes list only a-z, so it never appears there.
-const READING = '`'
-
-const LETTERS = 'abcdefghijklmnopqrstuvwxyz'.split('')
+// The borrowed chord actions and the Claude Code builds they were verified on are
+// core/band/keys.ts CHORD_ACTIONS and VERIFIED_CLIENTS (the one list the start-up
+// tripwire and /bm-env both read); the mark letters and the reading position's key are
+// core/marks/marks.ts MARK_LETTERS and READING_LETTER (U60, 2026-10-22).
 
 const rows = atom({ plugin: 'bookmarks', key: 'rows' } as const, [])
 const paneMode = atom({ plugin: 'bookmarks', key: 'paneMode' } as const, 'list')
@@ -105,6 +98,8 @@ const pinsRev = atom({ plugin: 'bookmarks', key: 'pinsRev' } as const, 0)
 // the field is drawn under a new key and starts empty; and the prompt number's digits.
 const cmdRev = atom({ plugin: 'bookmarks', key: 'cmdRev' } as const, 0)
 const bandNum = atom({ plugin: 'bookmarks', key: 'bandNum' } as const, '')
+// The band field's generation (handlers/band.ts renewField): its key is band-num-field-<n>.
+const bandFieldRev = atom({ plugin: 'bookmarks', key: 'bandFieldRev' } as const, 0)
 // The bookmarks pane shows one group at a time, cycled from the band (djdarcy, 2026-10-09:
 // start on "their" bookmarks, a key cycles to Claude's, and a third group such as team
 // members' can join later). An ordered list, so a group is one entry, not a code path.
@@ -117,11 +112,6 @@ const viewRev = atom({ plugin: 'bookmarks', key: 'viewRev' } as const, 0)
 // Bumped when one of the plugin's /config fields changes, so the panes and the band,
 // which read settings while drawing, draw again.
 const settingsRev = atom({ plugin: 'bookmarks', key: 'settingsRev' } as const, 0)
-const BOOKMARK_GROUPS: { owner: AnchorOwner | 'all'; title: string }[] = [
-  { owner: 'user', title: 'yours' },
-  { owner: 'claude', title: "Claude's" },
-  { owner: 'all', title: 'all' },
-]
 
 
 // What is on screen, and when the plugin itself last caused a redraw: core/kit/screen-model.ts.
@@ -148,8 +138,8 @@ function marksPorts($: EngineInterface): MarksPorts {
     every: (ms, fn) => $.clock.every(ms, fn),
     expectRedraw,
     note,
-    log: (line, text) => log($, line, text ? { text: true } : undefined),
-    toast: (text, timeoutMs) => (timeoutMs ? $.ui.toast(text, { timeoutMs }) : $.ui.toast(text)),
+    log: logTextVia($),
+    toast: toastVia($),
     cut,
     selection: () => $.ui.selection(),
     allRows: () => allRows($),
@@ -166,10 +156,11 @@ function marksPorts($: EngineInterface): MarksPorts {
     loadMarks: () => loadMarks($),
     setMark: (letter, mark) => bookmarks_.setMarkOp(bookmarksPorts($), letter, mark),
     clearMarks: letters => bookmarks_.clearMarksOp(bookmarksPorts($), letters),
+    forgetMark: letter => bookmarks_.forgetOp(bookmarksPorts($), letter),
     readingStateStored: async () => $.store.get(readingStateKey(await $.session.id())),
     storeReadingState: async state => $.store.set(readingStateKey(await $.session.id()), state),
-    letters: LETTERS,
-    readingLetter: READING,
+    letters: MARK_LETTERS,
+    readingLetter: READING_LETTER,
   }
 }
 
@@ -261,6 +252,25 @@ function logPorts($: EngineInterface): LoggerPorts {
     folderBuild: !installedFromCache($.plugin.root),
   }
 }
+// The port closures every *Ports($) builder spells the same way (refactor-advisor 2026-10-22
+// row 8): one helper each, in this file, since the validator follows `$` only into functions
+// declared here (docs/engine-quirks.md, "Engine calls stay in the hooks module's own file").
+function toastVia($: EngineInterface) {
+  return (text: string, timeoutMs?: number) => (timeoutMs ? $.ui.toast(text, { timeoutMs }) : $.ui.toast(text))
+}
+function logTextVia($: EngineInterface) {
+  return (line: string, text?: boolean) => log($, line, text ? { text: true } : undefined)
+}
+function copyVia($: EngineInterface) {
+  return (text: string) => $.ui.copy({ text })
+}
+function scrollVia($: EngineInterface) {
+  return (uuid: string, block: 'start' | 'center' | 'end' | 'nearest') => $.ui.scroll({ to: { requestId: uuid }, block })
+}
+function bumpView($: EngineInterface) {
+  return update($, viewRev, v => v + 1)
+}
+
 function log($: EngineInterface, line: string, opts?: { always?: boolean; text?: boolean }) {
   logger.log(logPorts($), line, opts)
 }
@@ -306,6 +316,7 @@ async function sameConversation($: EngineInterface): Promise<void> {
   await bookmarks_.startRegister(bookmarksPorts($))
   await marks_.startMarks(marksPorts($))
   pruneThenBackfill($)
+  startLoader($)
   log($, `[bm] a new conversation: ${short(before)} -> ${short(id)}; what the one before left in memory is reset`)
 }
 // The store's prune, then this conversation's back-fill (done once per conversation, by its
@@ -335,6 +346,14 @@ function sameConversationSoon($: EngineInterface) {
 // are drawn before or after this reset is not known; paneGeometry is the pane's.
 async function resetConversationMemory() {
   for (const owner of [logger.files, promptsPane, band, panePosition, viewTracker]) await owner.newConversation()
+  // U60 commit B: three more parts a conversation leaves behind. The replies whose links
+  // were logged (handlers/bookmarks.ts), what was on screen (the reports belong to the
+  // transcript drawn before), and the title the start event carried (session.start sets
+  // the new one after this reset).
+  bookmarks_.newConversation()
+  transcript_.newConversation()
+  screen.newConversation()
+  sessionTitle = undefined
 }
 
 // Mark and Marks: core/marks/marks.ts.
@@ -498,10 +517,74 @@ async function grepTranscript($: EngineInterface, path: string, pattern: string)
 // prefix), or by a fragment of its text (earliest real message that contains it; several
 // are returned as candidates). The anchors DWP's resolver (2026-10-09). Its outcome type,
 // ResolveOutcome, is in engine/ports.ts since 0.4.64: handlers/bookmarks.ts names it too.
+// The loader's pass (handlers/transcript.ts, slice F): one background read of the whole
+// transcript in chunks, through the third program this plugin runs. `tail -c +N | head -c`
+// returns CHUNK_BYTES of the file from a byte offset; the path and the offset are argv
+// elements ("$1"/"$2"), never spliced into the command. sh only for now: a PowerShell
+// reader that emits raw bytes is the design's deferred unit; without sh the loader stays
+// off and the two readers above stand (the capability row `transcript.chunks`).
+function transcriptPorts($: EngineInterface): TranscriptPorts {
+  return {
+    sessionId: () => $.session.id(),
+    transcriptPath: () => transcriptPath($),
+    fileSize: async path => {
+      const s: unknown = await $.fs.stat(path, { resolve: true }).catch(() => undefined)
+      const size = (s as { size?: unknown } | undefined)?.size
+      return typeof size === 'number' ? size : undefined
+    },
+    readChunk: async (path, offset) => {
+      // PowerShell first on a Windows path (the engine does not find Git Bash's sh here:
+      // "Command 'sh' not found", 2026-10-22), as userRows does; sh second, everywhere.
+      if (/^[A-Za-z]:[\\/]/.test(path)) {
+        try {
+          const r = await $.process.run(
+            ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', `${$.plugin.root}/hooks/scripts/read-chunk.ps1`,
+              '-Path', path, '-Offset', String(offset), '-Count', '4000000'],
+            { timeoutMs: 60_000 },
+          )
+          if (r.exitCode === 0 || r.stdout) return { stdout: r.stdout, via: 'powershell' as const }
+          log($, `[bm] loader: powershell returned ${r.exitCode} with no output at byte ${offset}${r.stderr ? `: ${r.stderr.slice(0, 200)}` : ''}`)
+        } catch (err) {
+          log($, `[bm] loader: the PowerShell chunk read threw: ${String(err).slice(0, 300)}`)
+        }
+      }
+      try {
+        const r = await $.process.run(
+          ['sh', '-c', 'tail -c +"$1" "$2" | head -c 4000000', 'sh', String(offset + 1), path],
+          { timeoutMs: 60_000 },
+        )
+        if (r.exitCode === 0 || r.stdout) return { stdout: r.stdout, via: 'sh' as const }
+        log($, `[bm] loader: sh returned ${r.exitCode} with no output at byte ${offset}${r.stderr ? `: ${r.stderr.slice(0, 200)}` : ''}`)
+      } catch (err) {
+        // sh is not there, or the engine refused the run: say which, for the next diagnosis.
+        log($, `[bm] loader: the chunk read threw: ${String(err).slice(0, 300)}`)
+      }
+      return undefined
+    },
+    dataRoot: () => dataRoot($),
+    fsExists: path => $.fs.exists(path),
+    fsRead: path => $.fs.read(path),
+    fsWrite: (path, text) => $.fs.write(path, text),
+    promptTexts: () => prompts_.promptTexts(promptsPorts($)),
+    after: (ms, fn) => $.clock.after(ms, fn),
+    log: line => log($, line),
+    publish: (backfill, truncated) => prompts_.applyBackfill(promptsPorts($), backfill, truncated),
+  }
+}
+function startLoader($: EngineInterface) {
+  void transcript_.startPass(transcriptPorts($)).catch(err => log($, `[bm] loader failed to start: ${String(err)}`))
+}
+
 async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment?: string }): Promise<ResolveOutcome> {
+  // The loader's rows first (in memory, every message the pass has read); the grep below
+  // while the pass is incomplete, or when no program could read the file.
+  const loaded = transcript_.resolveLoaded(want)
+  if (loaded?.kind === 'one') return { kind: 'one', row: loaded.row, via: 'loader', ms: 0 }
+  if (loaded?.kind === 'many') return { kind: 'many', rows: loaded.rows, earliest: loaded.earliest, via: 'loader', ms: 0 }
+  if (loaded?.kind === 'none') return { kind: 'none', via: 'loader', ms: 0, reason: 'no message holds it' }
   const path = await transcriptPath($)
   if (!path) return { kind: 'none', reason: 'transcript not found' }
-  const pattern = want.uuid ? uuidPattern(want.uuid) : want.fragment ? jsonEscaped(want.fragment) : undefined
+  const pattern = targetPattern(want)
   if (!pattern) return { kind: 'none', reason: 'nothing to look for' }
   const g = await grepTranscript($, path, pattern)
   if (!g) return { kind: 'none', reason: 'neither sh + grep nor PowerShell ran' }
@@ -513,9 +596,6 @@ async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment
 
 // The store's prune and the back-fill are handlers/prompts.ts (pruneStoreNow,
 // backfillPrompts), over promptsPorts($); userRows above is their program run.
-
-// Who-caused-the-row stamps (session.append's `origin.kind`) that are never the person.
-const AUTOMATED_ORIGINS = new Set(['task-notification', 'scheduled-trigger', 'peer-send-message', 'coordinator', 'observer', 'observer-activity', 'auto-continuation', 'projects-relay', 'channel'])
 
 // The stored prompts that are prompts, then the rows captured live this session that the
 // store lacks (core/prompts/prompt-store.ts promptList). Rows kept before the list knew them for
@@ -547,12 +627,16 @@ async function conversationTitle($: EngineInterface): Promise<string | undefined
 // anchor press, the model's tool): handlers/bookmarks.ts, over bookmarksPorts($).
 function bookmarksPorts($: EngineInterface): BookmarksPorts {
   return {
-    log: (line, text) => log($, line, text ? { text: true } : undefined),
+    log: logTextVia($),
     logAlways: line => log($, line, { always: true }),
-    toast: (text, timeoutMs) => (timeoutMs ? $.ui.toast(text, { timeoutMs }) : $.ui.toast(text)),
+    toast: toastVia($),
     cut,
     expectRedraw,
     dataRoot: () => dataRoot($),
+    pluginFile: async relative => {
+      const path = `${$.plugin.root}/${relative}`
+      return (await $.fs.exists(path)) ? await $.fs.read(path) : undefined
+    },
     sessionId: () => $.session.id(),
     cwd: () => $.session.cwd(),
     title: () => conversationTitle($),
@@ -574,7 +658,7 @@ function bookmarksPorts($: EngineInterface): BookmarksPorts {
     allRows: () => allRows($),
     jumpTo: (uuid, via, label, words) => jumpTo($, uuid, via, label, words),
     loadMarks: () => loadMarks($),
-    copy: text => $.ui.copy({ text }),
+    copy: copyVia($),
     highlightWords: (letter, uuid, words) => marks_.showWords(marksPorts($), letter, uuid, words),
   }
 }
@@ -585,9 +669,6 @@ function bookmarksPorts($: EngineInterface): BookmarksPorts {
 const LINK_MARKERS: MarkerStyle = 'glyph'
 const LINK_LEGEND = true
 
-// Replies whose links were already logged and queued (a reply is drawn many times).
-const anchorRowsLogged = new Set<string>()
-
 // Every jump, the jumplist and the view's return: handlers/navigation.ts, over these ports.
 const navigation = new Navigation()
 function navPorts($: EngineInterface): NavigationPorts {
@@ -595,13 +676,14 @@ function navPorts($: EngineInterface): NavigationPorts {
     sessionId: () => $.session.id(),
     storeGet: key => $.store.get(key),
     storeSet: (key, value) => $.store.set(key, value),
-    scroll: (uuid, block) => $.ui.scroll({ to: { requestId: uuid }, block }),
-    copy: text => $.ui.copy({ text }),
-    toast: (text, timeoutMs) => (timeoutMs ? $.ui.toast(text, { timeoutMs }) : $.ui.toast(text)),
-    log: (line, text) => log($, line, text ? { text: true } : undefined),
+    scroll: scrollVia($),
+    copy: copyVia($),
+    toast: toastVia($),
+    log: logTextVia($),
     note,
     drawnHead: uuid => drawn.texts.get(uuid),
     markHead: uuid => markCache.headOf(uuid),
+    pathFor: gap => choose(capabilityOf(gap), capabilitySignals ?? NO_SIGNALS).path,
     leavingFrom: async () => panePosition.view ?? (await viewAnchor($)),
     paneJumped: () => panePosition.jumped(),
     takeRestore: () => panePosition.takeRestore(),
@@ -639,7 +721,7 @@ function viewPorts($: EngineInterface): ViewPorts {
     after: (ms, fn) => $.clock.after(ms, fn),
     listPaneOpen: async () => (await read($, paneMode)) === 'list' && (await $.ui.panes()).some(p => p.id === PANE),
     heldChannel: () => logger.channels.has('held'),
-    bumpView: () => update($, viewRev, v => v + 1),
+    bumpView: () => bumpView($),
     followHere: () => currentSettings().followHere,
     bandNumEmpty: async () => (await read($, bandNum)) === '',
     scrollPaneTo: key => $.ui.scroll({ in: PANE, to: { key }, block: 'nearest' }),
@@ -675,9 +757,8 @@ async function jumpToMark($: EngineInterface, letter: string, probe = false): Pr
 
 // --- The band's command line -----------------------------------------------------------
 // The band's command line (the field the leader lands on, and `perform`) is
-// handlers/command-line.ts.
-// The borrowed engine action each chord command's button carries while chords are on.
-const CHORD_ACTION: Record<Chord, string> = { mark: MARK_ACTION, jump: JUMP_ACTION, prompts: PROMPTS_ACTION, read: READING_ACTION }
+// handlers/command-line.ts. The borrowed action each chord button carries is
+// core/band/keys.ts CHORD_ACTIONS.
 
 // Draw the field anew, empty.
 async function clearCommandLine($: EngineInterface) {
@@ -729,12 +810,12 @@ async function loadPins($: EngineInterface): Promise<string[]> {
 // there is no such prompt. `known`: the list the caller already read (move audit F6).
 async function togglePin($: EngineInterface, typed: string, known?: PromptRef[]): Promise<boolean> {
   const all = known ?? (await prompts($))
-  const n = listPosition(typed, all.length, true)
-  const target = n === undefined ? undefined : all[n - 1]
-  if (!target) {
-    $.ui.toast(`no prompt #${typed.trim()} (1-${all.length})`)
+  const picked = pickNumbered(typed, all, 'prompt', true)
+  if ('error' in picked) {
+    $.ui.toast(picked.error)
     return false
   }
+  const { n, target } = picked
   const pins = await loadPins($)
   const pinned = pins.includes(target.uuid)
   const r = await bookmarks_.togglePinned(bookmarksPorts($), target.uuid, !pinned)
@@ -748,6 +829,25 @@ async function togglePin($: EngineInterface, typed: string, known?: PromptRef[])
   return true
 }
 
+// The prompts list's `/words` filter as a field sets it while the person types (the pane's
+// own `#` field, and the band's field since input routing): true when it changed.
+function setPromptFilter($: EngineInterface, query: string): boolean {
+  if (!promptsPane.setFilter(query)) return false
+  log($, `[bm] prompts filter: "${cut(query, 40)}"`, { text: true })
+  void bumpView($)
+  return true
+}
+
+// Where the band takes a list number (core/band/routes.ts): the band holds the keyboard,
+// so the pane's own field is never the answer here; a build that could hand the pane the
+// keyboard (focus.paneFromBand patched) would be read here and still type in the band
+// until that hand-off exists.
+function bandListInput(): 'band-field' | 'band-buttons' {
+  const handoff = choose(capabilityOf('focus.paneFromBand'), capabilitySignals ?? NO_SIGNALS).path
+  const r = listInputTarget({ paneHasKeyboard: false }, currentSettings().listInput, handoff)
+  return r.target === 'band-buttons' ? 'band-buttons' : 'band-field'
+}
+
 // What the entry means (pin, filter, unfold, footnote, jump): core/band/band-entry.ts promptEntry.
 async function jumpToPromptNumber($: EngineInterface, typed: string, via: string) {
   const all = await prompts($)
@@ -758,7 +858,7 @@ async function jumpToPromptNumber($: EngineInterface, typed: string, via: string
   }
   if (entry.kind === 'filter') {
     promptsPane.setFilter(entry.words)
-    await update($, viewRev, v => v + 1)
+    await bumpView($)
     return
   }
   if (entry.kind === 'unfold') {
@@ -766,7 +866,7 @@ async function jumpToPromptNumber($: EngineInterface, typed: string, via: string
     // but `N.` has nothing to show, so it says why.
     if (currentSettings().footnotes === 'hidden') return void $.ui.toast('Footnotes are hidden: "Footnotes in the prompts list" in /config shows them')
     promptsPane.toggleFold(entry.n)
-    await update($, viewRev, v => v + 1)
+    await bumpView($)
     return
   }
   if (entry.kind === 'footnote') {
@@ -804,15 +904,17 @@ async function bandGroupStep($: EngineInterface, step: -1 | 1) {
 }
 
 async function jumpToBookmarkNumber($: EngineInterface, typed: string, via: string) {
-  const all = await bookmarkList($)
-  const n = listPosition(typed, all.length)
-  const target = n === undefined ? undefined : all[n - 1]
-  if (!target) {
-    $.ui.toast(`no bookmark #${typed.trim()} (1-${all.length})`)
-    return
-  }
-  await arriveAtBookmark($, target, via)
+  const picked = pickNumbered(typed, await bookmarkList($), 'bookmark')
+  if ('error' in picked) return void $.ui.toast(picked.error)
+  await arriveAtBookmark($, picked.target, via)
   await settle($, 'bookmarks', 'jump')
+}
+
+// `d` after a number in the bookmarks list (the band's row or the pane's field): that bookmark leaves the list.
+async function removeBookmarkNumber($: EngineInterface, typed: string) {
+  const picked = pickNumbered(typed, await bookmarkList($), 'bookmark')
+  if ('error' in picked) return void $.ui.toast(picked.error)
+  await bookmarks_.removeBookmark(bookmarksPorts($), picked.target)
 }
 
 async function promoteLetter($: EngineInterface, letter: string) {
@@ -838,7 +940,7 @@ function bandPorts($: EngineInterface): BandPorts {
     closePaneUi: () => $.ui.close({ id: PANE }),
     expectRedraw,
     note,
-    log: (line, text) => log($, line, text ? { text: true } : undefined),
+    log: logTextVia($),
     paneGeometry: () => paneGeometry,
     paneAnchored: () => !!panePosition.anchor,
     restoreView: () => restoreView($),
@@ -846,9 +948,18 @@ function bandPorts($: EngineInterface): BandPorts {
     prompts: () => prompts($),
     bookmarkList: () => bookmarkList($),
     jumpToPromptNumber: (typed, via) => jumpToPromptNumber($, typed, via),
+    setPromptFilter: query => setPromptFilter($, query),
+    tables: currentTables,
+    listInput: bandListInput,
+    bandFieldKey: async () => band_.bandFieldKeyOf(await read($, bandFieldRev)),
+    renewBandField: async () => {
+      await update($, bandFieldRev, v => v + 1)
+      return band_.bandFieldKeyOf(await read($, bandFieldRev))
+    },
     jumpToBookmarkNumber: (typed, via) => jumpToBookmarkNumber($, typed, via),
+    removeBookmarkNumber: typed => removeBookmarkNumber($, typed),
     scrollPaneCentre: key => $.ui.scroll({ in: PANE, to: { key }, block: 'center' }),
-    toast: (text, timeoutMs) => (timeoutMs ? $.ui.toast(text, { timeoutMs }) : $.ui.toast(text)),
+    toast: toastVia($),
     togglePin: typed => togglePin($, typed),
     groupStep: dir => bandGroupStep($, dir),
     claimBookmark: uuid => bookmarks_.claimBookmark(bookmarksPorts($), uuid),
@@ -856,8 +967,8 @@ function bandPorts($: EngineInterface): BandPorts {
     after: (ms, fn) => $.clock.after(ms, fn),
     focus: (requestId, key) => $.ui.focus({ requestId, key }),
     loadMarks: () => loadMarks($),
-    letters: LETTERS,
-    readingLetter: READING,
+    letters: MARK_LETTERS,
+    readingLetter: READING_LETTER,
     every: (ms, fn) => $.clock.every(ms, fn),
     diagState: when => diagState($, when),
     setPaneMode: mode => update($, paneMode, () => mode as PaneMode),
@@ -871,7 +982,7 @@ function bandPorts($: EngineInterface): BandPorts {
         { isPlaced?: boolean; reason?: string } | undefined,
     openPaneFocused: title => $.ui.open({ id: PANE, title, focus: true, closeOnEscape: true }),
     setBandGroup: index => update($, bandGroup, () => index),
-    scroll: (uuid, block) => $.ui.scroll({ to: { requestId: uuid }, block }),
+    scroll: scrollVia($),
     setPendingCentre: uuid => promptsPane.centreOnNextDraw(uuid),
     selection: () => $.ui.selection(),
     setSelectionAtChord: sel => markState.setAtChord(sel),
@@ -887,7 +998,10 @@ function commandLinePorts($: EngineInterface): CommandLinePorts {
     jumpToMark: letter => jumpToMark($, letter),
     readingToggle: () => readingToggle($),
     promoteLetter: letter => promoteLetter($, letter),
+    clearLetter: letter => marks_.clearLetter(marksPorts($), letter),
+    forgetLetter: letter => marks_.forgetLetter(marksPorts($), letter),
     jumplistMove: dir => jumplistMove($, dir),
+    tables: () => currentTables(),
   }
 }
 async function settle($: EngineInterface, pane: Pane, cause: Cause, needsMore = false) {
@@ -949,8 +1063,15 @@ function diagnosticsPorts($: EngineInterface): DiagnosticsPorts {
     dccPatchH: () => $.env.get('DCC_PATCH_H'),
     dccPatches: () => $.env.get('DCC_PATCHES'),
     echoState: () => log_.echoStateLine(echoPorts($)),
+    capabilityPaths: () => pathsLine(chooseAll(capabilitySignals ?? NO_SIGNALS)),
+    loaderStatus: () => transcript_.loaderStatus(),
   }
 }
+
+// The capability signals (engine/select.ts, U59): the build and dcc-patcher's markers, read
+// once at session.start; the chooser is pure over them. The variable names are literal
+// here because the validator wants $.env.get's name at its call site.
+let capabilitySignals: Signals | undefined
 
 export const register: Register = (on, options) => {
   settings.loaded(options)
@@ -958,14 +1079,54 @@ export const register: Register = (on, options) => {
   // A change in /config to one of this plugin's fields: keep the values current and
   // redraw what reads them (settingsRev), whether or not Claude Code also reloads us.
   on('config.set', { key: /^bookmarks\./ }, async ($, e, next) => {
+    const field = e.key.slice('bookmarks.'.length)
+    // A keymap row (#36): refused before it is written when it would add a clash, a key the
+    // band never receives, or no usable key, with the reason; the Leader row always, with
+    // where the leader is bound (core/band/keymap.ts rowDenial).
+    const denial = rowDenial(field, e.value, currentSettings() as unknown as Record<string, unknown>)
+    if (denial) {
+      log($, `[bm] keymap: ${field} not set: ${denial}`)
+      return { deny: denial }
+    }
     const result = await next(e)
     if (!result.deny) {
-      settings.changed(e.key.slice('bookmarks.'.length), result.value)
+      settings.changed(field, result.value)
       // A smaller text budget frees memory and store now, not at the next prompt.
       if (e.key === 'bookmarks.promptTextBudget') await prompts_.savePromptTexts(promptsPorts($))
+      // The fold: the key rows show or hide in the open menu. A change reloads the plugin on
+      // 2.1.308, and the reload asks every row again (the fold look, 2026-10-24); the
+      // invalidate keeps the fold working on a build that does not reload.
+      if (FOLD_FIELDS.has(field)) {
+        log($, `[bm] fold: ${field} set to ${JSON.stringify(result.value)}; asking /config to redraw its rows`)
+        await $.ui.invalidate('config.describe')
+      }
+      if (isKeyRow(field)) {
+        const problems = settings.keymap().problems
+        if (problems.length) log($, keymapProblemsLine(problems))
+      }
       await update($, settingsRev, v => v + 1)
     }
     return result
+  })
+  // Every row of the plugin behind the Bookmarks fold, the key rows behind their own fold
+  // inside it (core/settings-fold.ts rowHidden; the fold look of 2026-10-24), and the Leader
+  // row's help text naming the chord the person bound in keybindings.json.
+  on('config.describe', { key: /^bookmarks\./ }, async ($, e, next) => {
+    const r = await next(e)
+    const field = e.key.slice('bookmarks.'.length)
+    const values = currentSettings() as unknown as Record<string, unknown>
+    const isHidden = rowHidden(field, values)
+    // A fold row leads with its state's marker (▸ closed, ▾ open).
+    const label = foldLabel(field, r.label, values)
+    if (field !== LEADER_FIELD) return { ...r, isHidden, label }
+    const dir = await configDir($)
+    const path = dir ? `${dir}/keybindings.json` : undefined
+    const text = path && (await $.fs.exists(path)) ? await $.fs.read(path).catch(() => undefined) : undefined
+    const chord = leaderChord(typeof text === 'string' ? text : undefined)
+    const description = chord
+      ? `Bound to ${chord} (abovePrompt:focus in ~/.claude/keybindings.json); change it there, not here`
+      : 'Not bound yet: bind a chord to abovePrompt:focus in ~/.claude/keybindings.json (docs/keys.md has the recipe)'
+    return { ...r, isHidden, label, description }
   })
   // The theme decides the mark band's light or dark value (#27).
   on('config.set', { key: 'theme' }, async ($, e, next) => {
@@ -991,8 +1152,8 @@ export const register: Register = (on, options) => {
     conversationId = await $.session.id()
     // The start event's type carries no title today (only the SessionStart hook input does); read it if a build adds it.
     const started = e as unknown as { session_title?: unknown }
-    sessionTitle = typeof started.session_title === 'string' ? started.session_title : undefined
     await resetConversationMemory()
+    sessionTitle = typeof started.session_title === 'string' ? started.session_title : undefined
     void $.config.list().then(rows => {
       const theme = rows.find(r => r.key === 'theme')?.value
       if (typeof theme === 'string') settings.themeIs(theme)
@@ -1015,10 +1176,23 @@ export const register: Register = (on, options) => {
     await marks_.startMarks(marksPorts($))
     // Not awaited: session start should not wait on a third of a second of PowerShell.
     pruneThenBackfill($)
+    startLoader($)
 
     // The tracking mechanism for the borrowed actions: say so whenever the build is
     // not one the chords were verified on.
     const v = await $.session.version()
+    capabilitySignals = {
+      version: v.version,
+      ...(v.base ? { base: v.base } : {}),
+      dccPatcher: await $.env.get('DCC_PATCHER'),
+      dccPatchH: await $.env.get('DCC_PATCH_H'),
+      dccPatches: await $.env.get('DCC_PATCHES'),
+    }
+    log($, `[bm] ${pathsLine(chooseAll(capabilitySignals))}`)
+    // A keymap value that cannot be used (set by hand in settings.json, or by an older
+    // version): named once here; the default stands for that command.
+    const keymapProblems = settings.keymap().problems
+    if (keymapProblems.length) log($, keymapProblemsLine(keymapProblems))
     if (!VERIFIED_CLIENTS.includes(v.base ?? v.version)) {
       $.ui.toast(
         `${$.plugin.name} ${await pluginVersion($)}: chords verified on Claude Code ` +
@@ -1055,7 +1229,7 @@ export const register: Register = (on, options) => {
     // Typing in the input box: the person has the keyboard back, no reminder owed.
     band.oweReminder(false)
     if (diag.logKeys) {
-      log($, `[diag] edit ${keyLabel(e.key)}: draft ${e.text.length} -> +${e.inputText.length}, ${diag.lastEditAt ? now - diag.lastEditAt : '-'} ms since last`)
+      log($, editLine(keyLabel(e.key), e.text.length, e.inputText.length, diag.lastEditAt, now))
     }
     diag.lastEditAt = now
     const mode = await read($, bandMode)
@@ -1073,27 +1247,27 @@ export const register: Register = (on, options) => {
   on('ui.focus', { component: 'AbovePrompt' }, async ($, e, next) => {
     // A focus move of the person's own onto the band starts a new command: no reminder owed.
     if (e.origin.kind === 'person') band.oweReminder(false)
-    // While the band is idle, the person's focus moves stay on the command field. After
-    // a command the band keeps the keyboard (a plugin can't hand it back; Esc does), so
-    // a second Ctrl+] moved the ring onto the `mark` button, Space pressed it, and Enter
-    // marked `a` (djdarcy, 2026-10-07; log 08:10:23). Clicks and chords still press the
-    // buttons; only the ring is kept on the field.
-    // The arrows in the band's prompt mode: they move the ring (they can't be hotkeys),
-    // so a move off `go` onto its neighbour is read as a step through the pane's list,
-    // k (previous: Up, Left, Shift+Tab) or j (next: Down, Right, Tab), and the ring
-    // stays on `go` for Enter (djdarcy, 2026-10-07: "we'd of course also want to add
-    // <up> <down> if possible").
-    if (e.origin.kind === 'person' && band.ring === 'band-num-go' && (await read($, bandMode)) === 'list' &&
-        (e.element === 'band-num-k' || e.element === 'band-num-j')) {
-      log($, `[bm] band arrow -> ${e.element === 'band-num-k' ? 'k (up)' : 'j (down)'}`)
-      await band_.bandStep(bandPorts($), e.element === 'band-num-k' ? -1 : 1)
-      return next({ ...e, element: 'band-num-go' })
+    // The two rules (an arrow off `go` steps the list; a chord focus while idle stays on
+    // the command field) and their history: core/band/keys.ts bandFocusRoute.
+    const focusMode = await read($, bandMode)
+    // The step buttons beside the band's field, by the keys the person's keymap gives them.
+    const stepKey = (dir: -1 | 1) => {
+      const l = listKeysFor(focusMode === 'bookmarks' ? 'bookmarks' : 'list', currentTables()).find(k => { const op = k.route().operation; return op.op === 'step' && op.dir === dir })
+      return `band-num-${l?.key ?? (dir === -1 ? 'k' : 'j')}`
     }
-    if (e.origin.kind === 'person' && e.element?.startsWith('chord-') && (await read($, bandMode)) === 'idle') {
-      const field = `band-cmd-${await read($, cmdRev)}`
+    const r = bandFocusRoute({ byPerson: e.origin.kind === 'person', ring: band.ring, mode: focusMode, element: e.element, cmdRev: await read($, cmdRev), stepKeys: { prev: stepKey(-1), next: stepKey(1) } })
+    if (r.step) {
+      log($, `[bm] band arrow -> ${r.step === -1 ? 'k (up)' : 'j (down)'}${r.field ? ' (from the band field)' : ''}`)
+      await band_.bandStep(bandPorts($), r.step)
+      // Off the band's field: the ring goes back to the field it was on (drawn), and a fresh
+      // empty field follows once drawn (handlers/band.ts renewFieldSoon).
+      if (r.field) band_.renewFieldSoon(bandPorts($))
+      return next({ ...e, element: r.element })
+    }
+    if (r.kept && r.element) {
       log($, `[bm] band focus kept on the command field (not ${e.element})`)
-      band.ringMoved(field)
-      return next({ ...e, element: field })
+      band.ringMoved(r.element)
+      return next({ ...e, element: r.element })
     }
     if (e.element) band.ringMoved(e.element)
     return next(e)
@@ -1101,11 +1275,11 @@ export const register: Register = (on, options) => {
 
   // The person closed the pane (its close mark, or Ctrl+X x): end the band's key mode too.
   on('ui.close', { id: PANE }, async ($, e, next) => {
-    // Esc with a filter active (#28): the first clears the filter, the second closes.
-    if (e.origin.kind === 'person' && promptsPane.filter) {
+    // Esc with a filter active (#28): the first clears the filter, the second closes
+    // (the rule is PromptsPaneState.escClears).
+    if (promptsPane.escClears(e.origin.kind === 'person')) {
       log($, '[bm] Esc cleared the prompts filter; the pane stays')
-      promptsPane.setFilter('')
-      await update($, viewRev, v => v + 1)
+      await bumpView($)
       return { deny: 'the prompts filter was cleared; Esc again closes the list' }
     }
     await endBandMode($)
@@ -1117,8 +1291,7 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'bm-diag-keys' }, async ($, e) => {
-    const arg = e.args.trim()
-    diag.logKeys = arg === 'on' ? true : arg === 'off' ? false : !diag.logKeys
+    diag.logKeys = parseOnOff(e.args, diag.logKeys)
     log($, `[diag] keystroke logging ${diag.logKeys ? 'ON' : 'OFF'}`)
     $.ui.toast(`bookmarks: keystroke logging ${diag.logKeys ? 'on' : 'off'}`)
     return {}
@@ -1134,8 +1307,7 @@ export const register: Register = (on, options) => {
   // Every focus move in the band or a pane, and whether it was refused.
   on('ui.focus', async ($, e, next) => {
     const r = await next(e)
-    const deny = r && typeof r === 'object' && 'deny' in r && r.deny ? ` DENY ${String(r.deny)}` : ''
-    log($, `[diag] focus ${e.component} -> ${e.element ?? '(engine stop)'} by ${e.origin.kind}${deny}`)
+    log($, focusLine(e.component, e.element, e.origin.kind, r && typeof r === 'object' && 'deny' in r ? r.deny : undefined))
     return r
   })
 
@@ -1147,42 +1319,21 @@ export const register: Register = (on, options) => {
     // reading; an append is one of the causes the redraw rule waits for (22:57Z: each of
     // Claude's replies flipped the yellow from #324 to the newest prompt).
     if (!e.agentId) expectRedraw('a message appended')
-    const isWanted = e.door === 'prompt' || e.door === 'response'
-    // A message typed while Claude was working arrives as an attachment named
-    // `queued_command`, its text wrapped in the engine's reminder prose (the transcript
-    // keeps the raw text in `attachment.prompt`, which this event does not carry). It is
-    // the person's prompt: unwrap it and keep it as one (djdarcy, 2026-10-11).
-    const queued = !e.agentId && e.message.type === 'attachment' && e.message.name === 'queued_command'
-    // Not the person's: the engine stamps who caused the row. A background task's notice,
-    // a scheduled firing, another session's message, a coordinator or observer: none is a
-    // prompt (djdarcy, 2026-10-12: the list shows "genuine user inputs, full stop"). A
-    // notice queued into a running turn is stamped `engine`, as the person's own queued
-    // message is; its text tells them apart (NOT_A_PROMPT, core/prompts/prompt-rows.ts).
-    const automated = AUTOMATED_ORIGINS.has(e.origin.kind)
-    if (!automated && (queued || (!e.agentId && isWanted && !e.message.isMeta))) {
-      const raw = e.message.content.map(block => (block.type === 'text' ? block.text : '')).join(' ')
-      const text = queued ? unwrapQueued(raw) : raw
-      if (looksLikePrompt(text)) {
-        // `text` (first 4000 chars) lets a selection mark check it landed in the right row.
-        // A queued message arrives by the `attachment` door; it is a prompt (0.4.0 stored it
-        // under the engine's door, so the list, which counts `prompt` rows, dropped every one).
-        const row: Row = { uuid: e.uuid, door: (queued ? 'prompt' : e.door) as Row['door'], head: headOf(text), text: text.slice(0, 4000) }
-        note(`append ${e.door} ${e.uuid} ${row.head.slice(0, 30)}`)
-        await update($, rows, list => [...(list as Row[]), row].slice(-500))
-        if (row.door === 'prompt') {
-          await prompts_.keepPrompt(promptsPorts($), { uuid: row.uuid, head: row.head })
-          await prompts_.keepPromptText(promptsPorts($), row.uuid, text)
-        }
+    // What the row is -- a prompt or response to keep, the prompt's text for the filter, a
+    // footnote, or nothing -- is core/prompts/prompt-rows.ts classifyAppend (the decisions
+    // and their comments moved there, U60); this hook keeps the stores, the redraw and the log.
+    const sorted = classifyAppend(e)
+    if (sorted.row) {
+      const row: Row = sorted.row
+      note(`append ${e.door} ${e.uuid} ${row.head.slice(0, 30)}`)
+      await update($, rows, list => [...(list as Row[]), row].slice(-500))
+      transcript_.appendLive({ uuid: row.uuid, role: row.door === 'prompt' ? 'user' : 'assistant', text: sorted.promptText ?? row.text ?? '' })
+      if (row.door === 'prompt' && sorted.promptText !== undefined) {
+        await prompts_.keepPrompt(promptsPorts($), { uuid: row.uuid, head: row.head })
+        await prompts_.keepPromptText(promptsPorts($), row.uuid, sorted.promptText)
       }
     }
-    // A footnote (#33): the person's slash command, `!` shell command or interruption,
-    // kept with the prompt it follows, as the back-fill keeps it. A row the person did not
-    // cause is no footnote either: a /loop firing runs a slash command (2026-10-15: 535 of
-    // the 671 stored footnotes were firings).
-    if (!automated && !e.agentId && !queued && e.door !== 'response') {
-      const fn = footnoteOf({ type: 'user', isMeta: e.message.isMeta, message: { content: e.message.content } })
-      if (fn) await prompts_.keepFootnote(promptsPorts($), { ...fn, uuid: e.uuid, after: (await keptPrompts($)).at(-1)?.uuid ?? null })
-    }
+    if (sorted.footnote) await prompts_.keepFootnote(promptsPorts($), { ...sorted.footnote, uuid: e.uuid, after: (await keptPrompts($)).at(-1)?.uuid ?? null })
     return stored
   })
 
@@ -1212,13 +1363,10 @@ export const register: Register = (on, options) => {
     // A prompt row drawn in colour, as a reply's marked line is (2026-10-09, for anchor
     // presses: "highlighted yellow like a mark"). The lines before the marked one keep
     // the engine's prompt styling; the marked line and the rest are drawn here.
-    const [first] = onRow
-    const colored = first && colorSplit(text, first[0], first[1].snippet)
+    const colored = firstColorSplit(text, onRow)
     if (colored) {
-      const elements = $.ui.resolve(e)
-      const { Text } = elements
       const engine = colored.before ? await next({ ...e, props: { ...e.props, text: colored.before } }) : null
-      return markedColumn(elements, colored, engine, colored.after && <Text>{colored.after}</Text>, markStyles())
+      return markedPrompt($.ui.resolve(e), colored, engine, markStyles())
     }
     const marked = tagMarksPlain(text, onRow)
     return marked === text ? next(e) : next({ ...e, props: { ...e.props, text: marked } })
@@ -1243,20 +1391,11 @@ export const register: Register = (on, options) => {
     // The drawing is views/marked-message.tsx (anchoredReply, markedReply); this hook
     // gathers what it draws.
     if (anchors.length > 0) {
-      if (!anchorRowsLogged.has(e.requestId)) {
-        anchorRowsLogged.add(e.requestId)
-        log($, `[bm] reply ${short(e.requestId)}: ${anchors.length} bookmark link(s), ${links.filter(l => l.kind === 'file').length} file link(s)`)
-        bookmarks_.queueProseAnchors(bookmarksPorts($), anchors)
-      }
+      // Once per reply per conversation: the log line and the prose-anchor queue (handlers/bookmarks.ts).
+      bookmarks_.noteAnchoredReply(bookmarksPorts($), e.requestId, links)
       // A perma record's link is drawn without the bookmark glyph (#21).
-      const reg = await bookmarks_.loadRegister(bookmarksPorts($))
-      const isPerma = (href: string) => {
-        const a = parseAnchor(href)
-        const r = a && findRecord(reg, a.uuid)
-        return r ? tierOf(r) === 'perma' : false
-      }
-      const [first] = marksHere
-      const colored = first && colorSplit(e.props.text, first[0], first[1].snippet)
+      const isPerma = await bookmarks_.permaTest(bookmarksPorts($))
+      const colored = firstColorSplit(e.props.text, marksHere)
       // A mark whose words don't sit on one line: the bold «a» form (core/marks/highlight.ts).
       const text = tagMarksMarkdown(e.props.text, marksHere)
       return anchoredReply(
@@ -1282,8 +1421,7 @@ export const register: Register = (on, options) => {
     // (keeps the reply's bullet and formatting); the part after is drawn with the
     // Markdown element. Any case this split could mangle falls through to the bold
     // rewrite below.
-    const [first] = marks
-    const colored = first && colorSplit(e.props.text, first[0], first[1].snippet)
+    const colored = firstColorSplit(e.props.text, marks)
     if (colored) {
       const engine = colored.before ? await next({ ...e, props: { ...e.props, text: colored.before } }) : null
       return markedReply($.ui.resolve(e), colored, engine, markStyles())
@@ -1422,20 +1560,16 @@ export const register: Register = (on, options) => {
     const done = (cause: Cause) => settle($, paneOf(mode), cause)
     const s = currentSettings()
     const now = { leader: 'The leader (Ctrl+] by default)', chords: s.chords === 'on', panes: s.panes === 'on' }
-    // The help must fit the band's window. Taller, it scrolls, and the keyboard probe
-    // (showHelp) -- the only way to learn that Esc took the keyboard back -- focuses
-    // `close`, which scrolls it back to the top; the arrows in the band scroll its
-    // window without moving the ring (log 2026-10-12 18:02-18:09: no focus move onto a
-    // help line). So a band too short for one line per command gets the short form.
-    const full = helpLines(now)
-    const help = full.length + 1 <= e.props.maxRows ? full : helpShort(now)
+    // The help that fits the band's window, and the bar: core/band/keys.ts helpFor and
+    // barFor (the rules moved there under U60; the arrows in the band scroll its window
+    // without moving the ring).
+    const tables = currentTables()
+    const help = helpFor(now, e.props.maxRows, tables)
     const bookmarks = mode === 'bookmarks'
     const count = mode === 'list' || bookmarks ? (bookmarks ? (await bookmarkList($)).length : (await prompts($)).length) : 0
-    const listKeys = listKeysFor(bookmarks ? 'bookmarks' : 'list').map(l => ({ key: l.key, button: l.button, operation: l.route().operation }))
+    const listKeys = listKeysFor(bookmarks ? 'bookmarks' : 'list', tables).map(l => ({ key: l.key, button: l.button, operation: l.route().operation }))
     const groupTitle = bookmarks ? (BOOKMARK_GROUPS[await read($, bandGroup)]?.title ?? '') : ''
-    const bar = s.band === 'full'
-      ? bandButtons({ chords: s.chords === 'on' }).map(b => ({ id: b.id, label: b.label, key: b.key, ...(b.hotkey ? { hotkey: b.hotkey } : {}), ...(b.chord ? { action: CHORD_ACTION[b.chord] } : {}) }))
-      : []
+    const bar = barFor(s, CHORD_ACTIONS, tables)
     return bandView(
       elements,
       theirs,
@@ -1443,9 +1577,11 @@ export const register: Register = (on, options) => {
       // each is read, and so redraws the band, only where it is drawn (a mode change
       // redraws through bandMode). Move audit F4.
       {
-        mode, shown: last, help, marks, letters: LETTERS, readingLetter: READING,
+        mode, shown: last, help, marks, letters: MARK_LETTERS, readingLetter: READING_LETTER,
         typed: mode === 'list' || bookmarks ? await read($, bandNum) : '',
         count, groupTitle, listKeys, bar,
+        listInput: bandListInput(),
+        fieldKey: mode === 'list' || bookmarks ? band_.bandFieldKeyOf(await read($, bandFieldRev)) : '',
         cmdRev: mode === 'idle' ? await read($, cmdRev) : 0,
       },
       {
@@ -1458,8 +1594,10 @@ export const register: Register = (on, options) => {
         digit: d => band_.bandDigit(bandPorts($), d),
         dot: () => band_.bandDot(bandPorts($)),
         go: () => band_.bandNumberGo(bandPorts($)),
+        fieldInput: typed => band_.bandFieldInput(bandPorts($), typed),
+        fieldSubmit: typed => band_.bandFieldSubmit(bandPorts($), typed),
         runCommandLine: (typed, kind) => runCommandLine($, typed, kind),
-        perform: (key, id, action) => perform($, route(key, { pane: 'none' }).operation, action ?? `button:${id}`),
+        perform: (key, id, action) => perform($, route(key, { pane: 'none' }, tables).operation, action ?? `button:${id}`),
       },
       { text: style, button: buttonStyle },
     )
@@ -1496,42 +1634,22 @@ export const register: Register = (on, options) => {
       // is open.
       const here = await promptHere($)
       viewTracker.drewHere(here)
-      // Centre the list on the nearest prompt once the rows below exist (set by
-      // openFor). A timer, since a render hook may not scroll; by then the draw is done.
-      // (The rows are views/prompts-pane.tsx's; openFor is handlers/band.ts's and sets
-      // the centre through its setPendingCentre port.)
+      // Centre the list on the nearest prompt once the rows below exist (set by openFor
+      // through its setPendingCentre port): handlers/band.ts centrePane, with the retries'
+      // waits in core/band/band-entry.ts centreDelays.
       const target = promptsPane.takeCentre()
-      if (target) {
-        // The rows are not scrollable-to the instant after the first draw (DENY "no
-        // element of its own is drawn under that key" at +7 ms, 2026-10-11) but are a
-        // few hundred ms later, when the follow scrolls succeed. Try at 60, 180, 420 and
-        // 900 ms after the draw and stop at the first that lands.
-        const attempt = (n: number) => {
-          $.clock.after(60 * 2 ** n - (n === 0 ? 0 : 60), () => {
-            void $.ui.scroll({ in: PANE, to: { key: `p-${target}` }, block: 'center' }).then(r => {
-              if (r.deny && n < 3) return attempt(n + 1)
-              log($, `[bm] prompts pane centred on ${short(target)} (nearest to the view) -> ${r.deny ? `DENY after ${n + 1} tries: ${r.deny}` : `ok (try ${n + 1})`}`)
-            })
-          })
-        }
-        attempt(0)
-      }
+      if (target) band_.centrePane(bandPorts($), target)
       return promptsPaneView(
         elements,
-        { all, kept, footnoteMode, unfolded: promptsPane.unfolded, drawnFour: drawn.firstFours, pinIds, texts, paneFilter: promptsPane.filter, fromBand, here },
+        { tables: currentTables(), all, kept, footnoteMode, unfolded: promptsPane.unfolded, drawnFour: drawn.firstFours, pinIds, texts, paneFilter: promptsPane.filter, fromBand, here, columns: e.props.bodyColumns, lines: currentSettings().rowLines },
         {
-          unfold: async n => { promptsPane.unfold(n); await update($, viewRev, v => v + 1) },
-          refold: async n => { promptsPane.refold(n); await update($, viewRev, v => v + 1) },
+          unfold: async n => { promptsPane.unfold(n); await bumpView($) },
+          refold: async n => { promptsPane.refold(n); await bumpView($) },
           footnote: (uuid, label) => pressPromptRow($, uuid, label),
           pressPrompt: r => pressPromptRow($, r.uuid, `prompt #${r.n}`, r.head),
           go: typed => jumpToPromptNumber($, typed, 'prompts pane'),
           close: () => closeAll($, 'prompts pane'),
-          setFilter: query => {
-            if (!promptsPane.setFilter(query)) return false
-            log($, `[bm] prompts filter: "${cut(query, 40)}"`, { text: true })
-            void update($, viewRev, v => v + 1)
-            return true
-          },
+          setFilter: query => setPromptFilter($, query),
         },
         styles,
       )
@@ -1543,10 +1661,11 @@ export const register: Register = (on, options) => {
       const groupIndex = await read($, bandGroup)
       return bookmarksPaneView(
         elements,
-        { all, groups: BOOKMARK_GROUPS, groupIndex, fromBand, drawnFour: drawn.firstFours, now: Date.now(), glyph: LINK_MARKERS === 'glyph', hint: listHint('bookmarks') },
+        { tables: currentTables(), all, groups: BOOKMARK_GROUPS, groupIndex, fromBand, drawnFour: drawn.firstFours, now: Date.now(), glyph: LINK_MARKERS === 'glyph', hint: listHint('bookmarks', currentTables()) },
         {
           arrive: r => pressBookmarkRow($, r),
           go: typed => jumpToBookmarkNumber($, typed, 'bookmarks pane'),
+          remove: typed => removeBookmarkNumber($, typed),
           close: () => closeAll($, 'bookmarks pane'),
         },
         styles,
@@ -1556,7 +1675,7 @@ export const register: Register = (on, options) => {
     const marks = markCache.all // the cache, never a file, in a render hook
     return marksPaneView(
       elements,
-      { mode, marks, letters: LETTERS, readingLetter: READING },
+      { mode, marks, letters: MARK_LETTERS, readingLetter: READING_LETTER, columns: e.props.bodyColumns, lines: currentSettings().rowLines },
       {
         press: l => (mode === 'mark' ? markThenSettle($, mode, l) : jumpToMarkThenSettle($, mode, l, true)),
         goToReading: async reading => {

@@ -8,14 +8,11 @@ import { configListedLine, dccLine, idsReport, jumpTarget, notAppliedLine, selec
 import { clock } from '../core/log/log-ring.ts'
 import { short } from '../core/kit/message-id.ts'
 import { debugTextMode } from '../core/settings.ts'
-import { describePathOrder } from '../engine/select.ts'
 import type { DiagnosticsPorts } from '../engine/ports.ts'
 
-// Claude Code builds the borrowed-action chords were verified on. The start-up tripwire
-// (register.tsx) toasts on any other build, because a new build could give a borrowed
-// action a handler of its own; /bm-env names them. Add a build here after re-verifying.
-// (The one definition since 0.4.91: 0.4.45 had copied it, leaving two to keep in step.)
-export const VERIFIED_CLIENTS = ['2.1.288', '2.1.289', '2.1.290']
+// The verified builds live beside the chord actions they vouch for (core/band/keys.ts
+// VERIFIED_CLIENTS, since U60); /bm-env names them.
+import { VERIFIED_CLIENTS } from '../core/band/keys.ts'
 
 export async function idsCommand(ports: DiagnosticsPorts): Promise<void> {
   const report = idsReport(await ports.prompts(), ports.rendered())
@@ -78,11 +75,13 @@ export async function envCommand(ports: DiagnosticsPorts): Promise<void> {
     `[bm] ${ports.pluginName} ${await ports.pluginVersion()} on Claude Code ${v} ` +
       `(chords verified on ${VERIFIED_CLIENTS.join(', ')}); session ${await ports.sessionId()}; ` +
       `captured ${promptCount} prompts, ${list.length - promptCount} replies; ${ports.rendered().size} drawn ids; ` +
-      describePathOrder(),
+      ports.capabilityPaths(),
     true,
   )
   // dcc-patcher's build signal (core/log/diagnostics.ts, dccLine).
   ports.log(dccLine(await ports.dccPatcher(), await ports.dccPatchH(), await ports.dccPatches(), await ports.echoState()), true)
+  // The loader's pass (slice F): what it has read, and whether it is still running.
+  ports.log(`[bm] ${ports.loaderStatus()}`, true)
 }
 
 // /bm-jump first | last | N | r<N> | uuid (moved from register.tsx's registration, 0.4.94).

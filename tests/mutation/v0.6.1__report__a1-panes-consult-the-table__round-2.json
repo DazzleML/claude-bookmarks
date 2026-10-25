@@ -1,0 +1,24 @@
+{
+  "mutations": [
+    {
+      "id": "M12",
+      "file": "plugin/hooks/core/band/band-entry.ts",
+      "original": "if (words !== undefined) return { kind: 'filter', words }",
+      "mutated": "if (words) return { kind: 'filter', words }",
+      "note": "round 2: the round-1 survivor, after the killing assertion (a bare / clears the filter)",
+      "verdict": "killed",
+      "core_red": [
+        "what an entry in the prompts list means"
+      ],
+      "kit_red": [],
+      "kit_pass": "106"
+    },
+    {
+      "id": "control",
+      "verdict": "survived",
+      "core_red": [],
+      "kit_red": [],
+      "kit_pass": "106"
+    }
+  ]
+}

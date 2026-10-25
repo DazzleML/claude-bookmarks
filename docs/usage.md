@@ -114,7 +114,7 @@ Claude Code remembers the last text you selected even after its highlight is gon
 
 **Pressing a letter that is already in use moves it**: the old mark under that letter is replaced, as in vim.
 
-**To delete marks:** `/bm-delmarks m`, `/bm-delmarks a b c`, or `/bm-delmarks all`. The reading position isn't a letter and stays.
+**To delete marks:** after the leader, `d` and a letter clears that mark (the letter points at nothing, and its history is kept, so `/bm-marks` still shows where it was), and `D` and a letter forgets it (its record goes too, outright when nothing else refers to it). Neither asks to confirm. Or type `/bm-delmarks m`, `/bm-delmarks a b c`, or `/bm-delmarks all`. The reading position isn't a letter and stays.
 
 **The highlight** stays for two minutes, or until you send your next prompt, whichever comes first. It only changes what is drawn on your screen: Claude never sees it, and the session file is not changed.
 
@@ -163,16 +163,21 @@ The reading position is kept apart from the letters: it never takes up a letter,
 ▶ 12) Our readme feels a bit weak
 ```
 
-The band takes the keys, and the pane shows where you are:
+The band takes the keys in a `#` field of its own, and the pane shows where you are:
 
 | Key | Does |
 |-----|------|
 | Digits | Type a prompt number; it shows in the pane's `#` field, and the list scrolls to that prompt, marked `▶` |
-| `j` / Down | Moves the `▶` one prompt down the list (older); the first press starts at the newest |
-| `k` / Up | Moves it one prompt up (newer) |
+| `Backspace` | Takes the last character off what you typed |
+| `/words` | Filters the list, as the pane's own field does |
+| `j` / `Tab` | Moves the `▶` one prompt down the list (older); the first press starts at the newest |
+| `k` / `Shift+Tab` | Moves it one prompt up (newer) |
+| `Down` / `Up` | The same as `j` / `k`, with the keybinding in [keys.md](keys.md#3-on-the-band-with-the-prompts-or-bookmarks-pane-open) |
 | `Enter` | Jumps to the prompt under the `▶` |
 | `s` | Pins or unpins the prompt under the `▶` (see [Pinned prompts](#pinned-prompts)) |
 | `Esc` | Closes without jumping |
+
+After a step the field is empty again, with the number shown dim in it, so the next key starts fresh; type a number before `j` (`12j`) to step from it. "Typing a list number" in `/config` set to `buttons` brings back the earlier row of digit buttons.
 
 The list includes prompts from before the plugin was loaded. The first time it sees a conversation, the plugin reads the prompts from the conversation's transcript file in one pass. After that it adds each prompt as you send it, including messages you typed while Claude was still working, which Claude Code queues and delivers mid-turn.
 
@@ -197,7 +202,7 @@ A pinned prompt shows a gold star inside its number, `245★) `, both in a **★
 
 ### Footnotes
 
-Some of what you type is not a prompt: a slash command (`/compact`, `/bm-pin 21`), a `!` shell command, an interruption (`Esc` while Claude is working). These are listed as **footnotes** under the prompt they followed, numbered `N.k`, so prompt numbers stay as they were:
+Some of what you type is not a prompt: a slash command (`/compact`, `/bm-pin 21`, `/goal ...`), a `!` shell command, an interruption (`Esc` while Claude is working). These are listed as **footnotes** under the prompt they followed, numbered `N.k`, so prompt numbers stay as they were:
 
 ```
   13) Then a recap and a what-next
@@ -213,7 +218,9 @@ Unfolded, the ellipsis becomes the footnotes themselves, `12.1 /compact`, `12.2 
 | Fold them again | Click the `▴ fold` row under them, or type `12.` again |
 | Jump to footnote 12.1 | Type `12.1` and `Enter` in the pane's `#` field, or on the band type `1` `2`, click the band's `.` button, `1`, `Enter` (a band key is one letter or digit, so `.` is a button there) |
 
-The "Footnotes in the prompts list" setting chooses `folded` (the default), `shown` (always unfolded) or `hidden`. With `hidden` the rows are gone but the numbers still work: `12.1` jumps to that footnote, and `12.` says the footnotes are hidden. Footnotes are read from the transcript once, with the prompts, and added live after that.
+The "Footnotes in the prompts list" setting chooses `folded` (the default), `shown` (always unfolded) or `hidden`. With `hidden` the rows are gone but the numbers still work: `12.1` jumps to that footnote, and `12.` says the footnotes are hidden. Footnotes are read from the transcript with the prompts and added live after that. A few commands Claude Code runs itself and records apart from your messages (`/goal clear`, `/rename`, `/branch`, `/cd`) are not seen live and appear from the next session start.
+
+A row shows as much of its prompt as fits the pane's width, over as many lines as the "Lines per row in the lists" setting allows (the default is 2; 1 to 5). The text is cut with an ellipsis at the end of the last line, and a second line sits under the text, not under the number, so the numbers stay a column. Widen the pane for more of each prompt per line; set 1 for the densest list. The jump list's rows follow the same setting.
 
 ### Filtering the list
 
@@ -257,7 +264,7 @@ Bookmarks come in two lists that never mix: **yours** and **Claude's**. Claude b
      (12m, you said it)
 ```
 
-The band takes the keys, as for prompts: digits type a number, `j`/`k` move the `▶`, `l`/`h` switch the group (the band shows which), `Enter` jumps and highlights the bookmark's words, `Esc` closes. Numbers are shared across the groups, so #3 is #3 in every view. `/bm-bookmarks` from an empty input box puts the keyboard in the pane itself.
+The band takes the keys, as for prompts: digits type a number, `j`/`k` move the `▶`, `l`/`h` switch the group (the band shows which), `Enter` jumps and highlights the bookmark's words, `c` moves Claude's bookmark under the `▶` onto your list, a number then `d` removes that bookmark from your list, `Esc` closes. Clicking the bar's `bookmarks` button (or `prompts`) while its pane is open closes the pane; the typed key never does. Numbers are shared across the groups, so #3 is #3 in every view. `/bm-bookmarks` from an empty input box puts the keyboard in the pane itself.
 
 ### Promote a mark into a bookmark
 
@@ -355,11 +362,11 @@ From an empty input box, a pane opened by a command takes the keyboard, so its o
 
 ## Settings
 
-The plugin's settings are in Claude Code's `/config`, at the bottom of its list, each row ending `· bookmarks`; type `bookmarks` in its search box to see only them. The README lists them all ([Configuration](../README.md#configuration)). A change takes effect at once. `/bm-config` prints each setting, its value, and where the value came from: `default`, or `/config` when you chose it.
+The plugin's settings are in Claude Code's `/config`, at the bottom of its list, each row ending `· bookmarks`; type `bookmarks` in its search box to see only them. They start folded away behind one row, **Bookmarks**, because the defaults are meant to need no changing: press `Enter` on it to turn it `true` and see them, and again to fold them; everything you set still applies while folded. The rows that choose the band's keys are folded once more, behind **Keys: show the key rows**, and the debugging rows behind **Debug: show the debug rows**; each opens and closes the same way, with `Enter`. Each takes the command's keys separated by spaces, with `hidden` last to take its button off the bar; a key that clashes or never reaches the band is refused with the reason. The whole syntax is in [Choosing your own keys](keys.md#choosing-your-own-keys). The README lists them all ([Configuration](../README.md#configuration)). A change takes effect at once. `/bm-config` prints each setting, its value, and where the value came from: `default`, or `/config` when you chose it.
 
-Two of them decide what the debug log may quote from the conversation. "Conversation text in the debug log" is `auto` by default: off in a plugin installed from a marketplace, always in one loaded from a folder (a developer's build). `with-debug` quotes only while the conversation's debugging is on (`/bm-debug on`), `always` and `off` mean what they say, and the `text` debug channel turns quoting on for one conversation whatever the setting. "How much text a debug line quotes" is `reference` (a short excerpt, enough to find the place) or `full`.
+Two of them decide what the debug log may quote from the conversation. "Debug: conversation text in the log" (behind **Debug: show the debug rows**) is `auto` by default: off in a plugin installed from a marketplace, always in one loaded from a folder (a developer's build). `with-debug` quotes only while the conversation's debugging is on (`/bm-debug on`), `always` and `off` mean what they say, and the `text` debug channel turns quoting on for one conversation whatever the setting. "How much text a debug line quotes" is `reference` (a short excerpt, enough to find the place) or `full`.
 
-Every colour the plugin draws has a role, and its default is one of Claude Code's theme keys wherever one fits, so it follows your theme: `here` (the prompt nearest your view), `pinned` (the pin star, the bookmark anchor), `mark` and `markBand` (a mark's words and the band behind its line; the band is pale on a light theme and navy on a dark one), `legend` (hints and titles), `used` and `unused` (mark letters taken and free), `unreached` (a prompt not drawn since the plugin loaded), `emphasis` (what you are typing), `footnote` (the prompts list's footnotes) and `search` (for a feature to come). "Colour overrides" takes JSON naming roles: `{"here": {"color": "cyan"}, "markBand": {"backgroundColor": "#203040"}}`. A colour is a theme key (`warning`, `subtle`, `suggestion`, ...), a terminal colour name (`cyan`, `yellowBright`) or `#rrggbb`; `dimColor` and `bold` take `true` or `false`. Anything else is ignored and the default stands.
+Every colour the plugin draws has a role, and its default is one of Claude Code's theme keys wherever one fits, so it follows your theme: `here` (the prompt nearest your view), `pinned` (the pin star, the bookmark anchor), `mark` and `markBand` (a mark's words and the band behind its line; the band is pale on a light theme and navy on a dark one), `legend` (hints and titles), `heading` (the prompts list's group headings, "★ pinned" and "all prompts": a dim blue-gray, darker on a light theme), `used` and `unused` (mark letters taken and free), `unreached` (a prompt not drawn since the plugin loaded), `emphasis` (what you are typing), `footnote` (the prompts list's footnotes) and `search` (for a feature to come). "Colour overrides" takes JSON naming roles: `{"here": {"color": "cyan"}, "markBand": {"backgroundColor": "#203040"}}`. A colour is a theme key (`warning`, `subtle`, `suggestion`, ...), a terminal colour name (`cyan`, `yellowBright`) or `#rrggbb`; `dimColor` and `bold` take `true` or `false`. Anything else is ignored and the default stands.
 
 ## What is kept, and where
 
