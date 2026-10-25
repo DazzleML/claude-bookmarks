@@ -4,7 +4,7 @@ What the plugin draws, as JSX. A view gets everything it shows already resolved 
 
 | File | Draws |
 |---|---|
-| `band.tsx` | The band: the one-line strip above the prompt, in its idle, help, jump, mark and number modes |
+| `band.tsx` | The band: the one-line strip above the prompt, in its idle, help, jump, mark and number modes; in number mode, the band's own `#` field between its step buttons, or the older digit buttons when the setting asks for them |
 | `prompts-pane.tsx` | The prompts pane: the numbered prompts, their footnotes, pins and the filter |
 | `bookmarks-pane.tsx` | The bookmarks pane |
 | `marks-pane.tsx` | The mark and jump panes |

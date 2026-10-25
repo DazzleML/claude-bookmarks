@@ -436,16 +436,18 @@ async function transcriptPath($: EngineInterface): Promise<string | undefined> {
   return undefined
 }
 
-// --- For reviewers: the only two places this plugin runs a program ----------------
-// userRows() and grepTranscript() below are the plugin's only $.process.run calls.
-// Why a program at all: the transcript is often larger than the 4 MiB that $.fs.read
-// accepts (it rejects above that), so the file is searched by a tool already on the
-// machine. What runs: `sh -c 'grep ...'` where sh and grep exist, else `powershell
-// -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <one of the two .ps1 files
-// shipped in hooks/scripts/>`. The transcript path and the search text are always
-// separate argv elements ("$1"/"$2" to sh, named -Path/-Pattern parameters to
-// PowerShell), never spliced into the command string, so selected or model-chosen
-// text cannot become a command. Output is read back here and parsed as JSON lines;
+// --- For reviewers: the three places this plugin runs a program --------------------
+// userRows() and grepTranscript() below, and readChunk in transcriptPorts() after them,
+// are the plugin's only $.process.run calls. Each reads the conversation's transcript and
+// nothing else. Why a program at all: the transcript is often larger than the 4 MiB that
+// $.fs.read accepts (it rejects above that), so the file is searched, or read in 4 MB
+// pieces by byte offset, by a tool already on the machine. What runs: `sh -c 'grep ...'`
+// or `sh -c 'tail -c +"$1" "$2" | head -c 4000000'` where sh exists, else `powershell
+// -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <one of the three .ps1 files
+// shipped in hooks/scripts/>`. The transcript path, the search text and the offset are
+// always separate argv elements ("$1"/"$2" to sh, named -Path/-Pattern/-Offset
+// parameters to PowerShell), never spliced into the command string, so selected or
+// model-chosen text cannot become a command. Output is read back here and parsed as JSON lines;
 // it is not sent anywhere, and the plugin opens no network connection. Each run is
 // capped at 60 seconds and at 4 MiB of output by the engine. See README "What it
 // runs, reads, writes and sends" and PRIVACY.md.
@@ -520,9 +522,10 @@ async function grepTranscript($: EngineInterface, path: string, pattern: string)
 // The loader's pass (handlers/transcript.ts, slice F): one background read of the whole
 // transcript in chunks, through the third program this plugin runs. `tail -c +N | head -c`
 // returns CHUNK_BYTES of the file from a byte offset; the path and the offset are argv
-// elements ("$1"/"$2"), never spliced into the command. sh only for now: a PowerShell
-// reader that emits raw bytes is the design's deferred unit; without sh the loader stays
-// off and the two readers above stand (the capability row `transcript.chunks`).
+// elements ("$1"/"$2"), never spliced into the command. On a Windows path,
+// hooks/scripts/read-chunk.ps1 is tried first (0.6.19: the engine does not find Git Bash's
+// sh there); without either the loader stays off and the two readers above stand (the
+// capability row `transcript.chunks`).
 function transcriptPorts($: EngineInterface): TranscriptPorts {
   return {
     sessionId: () => $.session.id(),

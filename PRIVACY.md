@@ -2,7 +2,7 @@
 
 **Plugin:** Bookmarks (`bookmarks`), published by DazzleML
 **Applies to:** version 0.3.4 and later, until this page changes
-**Last changed:** 2026-10-09
+**Last changed:** 2026-10-25
 
 The short version: the plugin runs inside Claude Code on your machine, reads the conversation Claude Code already keeps on your disk, writes its own small files next to it, and sends nothing anywhere. There is no account, no telemetry, no network connection and no third party.
 
@@ -15,8 +15,13 @@ The short version: the plugin runs inside Claude Code on your machine, reads the
 
 ## What it writes, and where
 
-- **Marks, pinned prompts, reading positions, prompt lists and the jumplist**, per conversation, in Claude Code's plugin store: `~/.claude/plugins/store/bookmarks_inline-<id>.json`.
-- **Bookmarks**, in your own folder `~/claude/bookmarks/` (or under `CLAUDE_USER_DIR`): one JSON register per conversation under `sessions/`, and one markdown file per bookmarked message holding that message's text, so you can read and edit it.
+- **Bookmarks, marks, the reading position and pinned prompts**, in your own folder `~/claude/bookmarks/` (or under `CLAUDE_USER_DIR`):
+  - one JSON register per conversation under `sessions/`, with a `.bak` copy;
+  - one markdown file per bookmarked message, holding that message's text, so you can read and edit it;
+  - an index of the conversations with bookmarks (`sessions/index.json`, `sessions/INDEX.md`);
+  - a `README.md` saying what each folder holds;
+  - under `backups/`, the original files, taken before a format migration changes them.
+- **Prompt lists, the jumplist and the reading position's way back**, per conversation, in Claude Code's plugin store: `~/.claude/plugins/store/bookmarks_inline-<id>.json`. Marks are kept there instead only when there is no data folder at all.
 - **A cache of the conversation's text**, in the same folder: the text of your prompts under `prompttext/` (for the filter, up to the "Prompt text kept for the filter" budget), the text of Claude's replies under `replytext/` (up to 4 MB, newest first), and under `transcript/` an index of where each message sits in the conversation file, so the plugin can resume reading where it left off instead of reading the whole file again. All three are rebuilt from the conversation file when missing.
 - **A debug log** per conversation, `~/claude/bookmarks/debug/<session id>.log`, kept to its last 400 lines. It records key names and pane and jump events, never the text you type or the conversation's text.
 - **Your clipboard**, only when you ask: promoting a mark copies the bookmark's link; a jump that cannot be made copies a short phrase of the message so you can search for it.
@@ -48,8 +53,8 @@ The plugin is a developer tool and is not intended for anyone under 18.
 ## Removing everything
 
 1. Uninstall the plugin (`/plugin uninstall bookmarks`, or remove it where you installed it from).
-2. Delete `~/.claude/plugins/store/bookmarks_inline-*.json` (your marks, pins, reading positions and jumplists).
-3. Delete `~/claude/bookmarks/` (your bookmarks, their exports and the debug logs).
+2. Delete `~/.claude/plugins/store/bookmarks_inline-*.json` (the prompt lists and jumplists).
+3. Delete `~/claude/bookmarks/` (your bookmarks, marks and pins, their exports, the backups, the cached text and the debug logs).
 
 Nothing remains after those three steps, because nothing was ever stored anywhere else.
 
