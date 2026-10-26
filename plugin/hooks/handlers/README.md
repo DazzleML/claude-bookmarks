@@ -12,6 +12,7 @@ What each feature does, one file per cluster, written against ports (`../engine/
 | `bookmarks.ts` | The bookmark register on disk, the `bookmark` tool Claude calls, promote and claim, the migrations at a start, the notes and the index, `/bm-check` |
 | `prompts.ts` | The prompt store: the session's prompts and footnotes, and their kept text for the filter |
 | `transcript.ts` | The whole-conversation loader's pass: one background read of the transcript in pieces, resumed from the index, kept current from the live capture, and published into the same store keys the back-fill fills |
+| `places.ts` | The place reader's pass: every file of the conversation (the transcript, the agents' files, the stored outputs, a continued conversation) read into places, the text in pieces under the data root, resumed from each file's watermark; started on demand, not at every start |
 | `log.ts` | The debug log: the echo into the conversation, the debug channels, the log files and the timeline |
 | `debug-command.ts` | `/bm-debug` |
 | `diagnostics-commands.ts` | `/bm-ids`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-config`, `/bm-env` |

@@ -21,6 +21,8 @@ export const DATA_LAYOUT: readonly { path: string; what: string; kind: 'authored
   { path: 'backups/<stamp>__v<from>-to-v<to>__<writer>__<sid8>/', what: 'the originals of one format migration, with a manifest.json listing them with hashes; kept', kind: 'backup' },
   { path: 'backups/<stamp>__pre-0.5__snapshot/', what: 'a plain copy of sessions/ taken once before the first migration on this machine', kind: 'backup' },
   { path: 'prompttext/', what: 'the text of your prompts the prompts list filters, in pieces; read again from the transcript when missing', kind: 'cache' },
+  { path: 'replytext/', what: 'the text of Claude\'s replies, newest first and up to 4 MB, for finding the message a link names; read again from the transcript when missing', kind: 'cache' },
+  { path: 'transcript/', what: 'where each message sits in the conversation file, so the plugin\'s read of it resumes instead of starting over; rebuilt when missing', kind: 'cache' },
   { path: 'debug/<session id>.log', what: 'the plugin\'s log, one file per conversation', kind: 'cache' },
   { path: 'README.md', what: 'this file', kind: 'generated' },
 ]

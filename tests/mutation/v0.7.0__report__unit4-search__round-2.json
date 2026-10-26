@@ -1,0 +1,93 @@
+[
+ {
+  "name": "none (control: must be green)",
+  "verdict": "control",
+  "red": []
+ },
+ {
+  "name": "M1 user preset inverted",
+  "verdict": "killed",
+  "red": [
+   "not ok 8 - the presets cover djdarcy's list, and a place can be in more than one",
+   "not ok 14 - toggles join: a place shows when any toggle that is on admits it",
+   "not ok 20 - a query with no words is a listing of the rows in scope, and reads no text"
+  ]
+ },
+ {
+  "name": "M2 claude preset drops prompt kind",
+  "verdict": "killed",
+  "red": [
+   "not ok 9 - Claude's dispatch to an agent is Claude's and the agent's; an event is a notice"
+  ]
+ },
+ {
+  "name": "M3 or to and in agents preset",
+  "verdict": "killed",
+  "red": [
+   "not ok 9 - Claude's dispatch to an agent is Claude's and the agent's; an event is a notice"
+  ]
+ },
+ {
+  "name": "M4 notices preset drops event",
+  "verdict": "killed",
+  "red": [
+   "not ok 9 - Claude's dispatch to an agent is Claude's and the agent's; an event is a notice"
+  ]
+ },
+ {
+  "name": "M5 FROM tool maps to wrong preset",
+  "verdict": "killed",
+  "red": [
+   "not ok 10 - from:tool means the outputs; from:tools the calls"
+  ]
+ },
+ {
+  "name": "M6 unclosed quote no longer consumed as a phrase",
+  "verdict": "killed",
+  "red": [
+   "not ok 11 - a quote left open takes the rest of the query as its phrase"
+  ]
+ },
+ {
+  "name": "M7 dotall flag dropped so multiline regex bodies fail to match",
+  "verdict": "survived",
+  "red": []
+ },
+ {
+  "name": "M8 empty m// pattern now treated as a word rather than regex",
+  "verdict": "survived",
+  "red": []
+ },
+ {
+  "name": "M9 g and y flags no longer stripped",
+  "verdict": "killed",
+  "red": [
+   "not ok 12 - a pattern written with g or y matches every text it should, not every other one"
+  ]
+ },
+ {
+  "name": "M10 failed accepts a value",
+  "verdict": "killed",
+  "red": [
+   "not ok 13 - failed takes no value: failed:yes is a word, not the rule"
+  ]
+ },
+ {
+  "name": "M11 negation flipped",
+  "verdict": "killed",
+  "red": [
+   "not ok 7 - scope rules are read out of the query; one inside a quoted phrase is literal text",
+   "not ok 10 - from:tool means the outputs; from:tools the calls",
+   "not ok 15 - typed rules narrow what the toggles show; rules of one kind are alternatives",
+   "not ok 16 - an exclusion wins over the toggles and over every include",
+   "not ok 17 - the pane's title shows the scope in effect",
+   "not ok 18 - a search finds the rows whose text matches, in row order, reading only pieces that hold a row in scope",
+   "not ok 20 - a query with no words is a listing of the rows in scope, and reads no text"
+  ]
+ },
+ {
+  "name": "M12 no-terms listing no longer sorted",
+  "verdict": "survived",
+  "red": []
+ }
+]

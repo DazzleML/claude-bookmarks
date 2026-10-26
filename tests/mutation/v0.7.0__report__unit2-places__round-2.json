@@ -1,0 +1,137 @@
+{
+ "control_red": 0,
+ "results": [
+  {
+   "id": "M1",
+   "file": "plugin/hooks/core/places/place.ts",
+   "original": "...(b.is_error === true ? { failed: true } : {})",
+   "mutated": "...(b.is_error ? { failed: true } : {})",
+   "note": "truthiness instead of exact true",
+   "verdict": "survived",
+   "red": []
+  },
+  {
+   "id": "M2",
+   "file": "plugin/hooks/core/places/place.ts",
+   "original": "at: at(results.length > 1 ? i : undefined), ...base,",
+   "mutated": "at: at(results.length > 0 ? i : undefined), ...base,",
+   "note": "single result gets part index",
+   "verdict": "killed",
+   "red": [
+    "not ok 11 - a record with one tool result carries no part, so a link minted from it stays the plain address"
+   ]
+  },
+  {
+   "id": "M3",
+   "file": "plugin/hooks/core/places/place.ts",
+   "original": "const SYSTEM_EVENTS = new Set(['compact_boundary', 'local_command', 'away_summary', 'turn_duration'])",
+   "mutated": "const SYSTEM_EVENTS = new Set(['compact_boundary', 'local_command', 'away_summary'])",
+   "note": "turn_duration dropped from events",
+   "verdict": "killed",
+   "red": [
+    "not ok 9 - every record is classified or skipped with a reason: the parts sum to the whole"
+   ]
+  },
+  {
+   "id": "M4",
+   "file": "plugin/hooks/core/places/place.ts",
+   "original": "const ATTACHMENT_EVENTS = new Set(['edited_text_file', 'goal_status'])",
+   "mutated": "const ATTACHMENT_EVENTS = new Set(['edited_text_file'])",
+   "note": "goal_status dropped",
+   "verdict": "killed",
+   "red": [
+    "not ok 12 - a goal set or checked is an event carrying its condition"
+   ]
+  },
+  {
+   "id": "M5",
+   "file": "plugin/hooks/core/places/place.ts",
+   "original": "if (o.origin.handback === true) return",
+   "mutated": "if (o.origin.handback !== true) return",
+   "note": "handback flip",
+   "verdict": "killed",
+   "red": [
+    "not ok 5 - another session's message and an agent's report are places, not prompts, with who sent them"
+   ]
+  },
+  {
+   "id": "M6",
+   "file": "plugin/hooks/core/places/place.ts",
+   "original": "if (ctx.agent && !o.isMeta && text.trim() !== '')",
+   "mutated": "if (ctx.agent && !o.isMeta)",
+   "note": "empty text dispatch guard removed",
+   "verdict": "killed",
+   "red": [
+    "not ok 13 - a user row with nothing but whitespace is skipped as empty, in the main file and in an agent file"
+   ]
+  },
+  {
+   "id": "M7",
+   "file": "plugin/hooks/core/places/place.ts",
+   "original": "event: output[1]!.startsWith('bash') ? 'shell-output' : 'command-output'",
+   "mutated": "event: output[1]!.startsWith('bash') ? 'command-output' : 'shell-output'",
+   "note": "swapped event names",
+   "verdict": "killed",
+   "red": [
+    "not ok 6 - notices and events are places; bookkeeping is skipped with its reason"
+   ]
+  },
+  {
+   "id": "M8",
+   "file": "plugin/hooks/core/places/place.ts",
+   "original": "const author: Author = ctx.agent ? 'agent' : 'claude'",
+   "mutated": "const author: Author = ctx.agent ? 'claude' : 'agent'",
+   "note": "author swapped",
+   "verdict": "killed",
+   "red": [
+    "not ok 7 - in an agent's file every place carries the file and the agent; its opening row is Claude's dispatch"
+   ]
+  },
+  {
+   "id": "M9",
+   "file": "plugin/hooks/core/places/place.ts",
+   "original": "const text = a.type === 'edited_text_file' ? String(a.filename ?? '') : String(a.condition ?? '')",
+   "mutated": "const text = a.type === 'edited_text_file' ? String(a.condition ?? '') : String(a.filename ?? '')",
+   "note": "swapped attachment text fields",
+   "verdict": "killed",
+   "red": [
+    "not ok 6 - notices and events are places; bookkeeping is skipped with its reason",
+    "not ok 12 - a goal set or checked is an event carrying its condition"
+   ]
+  },
+  {
+   "id": "M10",
+   "file": "plugin/hooks/core/places/place.ts",
+   "original": "(a.part ?? 0) === (b.part ?? 0)",
+   "mutated": "(a.part ?? 0) === (b.part ?? 1)",
+   "note": "samePlace part default mismatch",
+   "verdict": "killed",
+   "red": [
+    "not ok 14 - two addresses with no part both mean the first block, and match"
+   ]
+  },
+  {
+   "id": "M11",
+   "file": "plugin/hooks/core/places/place.ts",
+   "original": "if (!SYSTEM_EVENTS.has(sub)) return",
+   "mutated": "if (SYSTEM_EVENTS.has(sub)) return",
+   "note": "system events skipped instead",
+   "verdict": "killed",
+   "red": [
+    "not ok 6 - notices and events are places; bookkeeping is skipped with its reason",
+    "not ok 9 - every record is classified or skipped with a reason: the parts sum to the whole"
+   ]
+  },
+  {
+   "id": "M12",
+   "file": "plugin/hooks/core/places/place.ts",
+   "original": "return text.trim() === '' ? { skipped: 'user:empty' } : one(",
+   "mutated": "return text === '' ? { skipped: 'user:empty' } : one(",
+   "note": "dropped trim, whitespace-only becomes other",
+   "verdict": "killed",
+   "red": [
+    "not ok 13 - a user row with nothing but whitespace is skipped as empty, in the main file and in an agent file"
+   ]
+  }
+ ]
+}

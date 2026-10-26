@@ -1,0 +1,125 @@
+[
+ {
+  "id": "M1",
+  "file": "plugin/hooks/core/places/landing.ts",
+  "original": "new Set(['prompt', 'reply'])",
+  "mutated": "new Set(['prompt'])",
+  "note": "replies no longer count as messages",
+  "verdict": "killed",
+  "red": [
+   "not ok 1 - a prompt or a reply is landed on itself",
+   "not ok 2 - a reply that is the second block of its record (thinking, then text) is still landed on itself",
+   "not ok 3 - on stock, a tool call, its output or a thinking block lands on the turn's last message before it, and says what the row was",
+   "not ok 5 - an agent's row lands on the message that started the agent, through the Agent call its meta names",
+   "not ok 7 - a stored tool output lands where the tool result that refers to it would"
+  ]
+ },
+ {
+  "id": "M2",
+  "file": "plugin/hooks/core/places/landing.ts",
+  "original": "const isMain = (r: IndexedPlace) => r.at.file === undefined",
+  "mutated": "const isMain = (r: IndexedPlace) => r.at.file !== undefined",
+  "note": "main test inverted",
+  "verdict": "killed",
+  "red": [
+   "not ok 1 - a prompt or a reply is landed on itself",
+   "not ok 2 - a reply that is the second block of its record (thinking, then text) is still landed on itself",
+   "not ok 3 - on stock, a tool call, its output or a thinking block lands on the turn's last message before it, and says what the row was",
+   "not ok 4 - a build that can scroll to tool rows lands on the row itself",
+   "not ok 5 - an agent's row lands on the message that started the agent, through the Agent call its meta names",
+   "not ok 6 - an agent with no call found lands on its report when there is one, else outside",
+   "not ok 7 - a stored tool output lands where the tool result that refers to it would",
+   "not ok 8 - a row before any message, or no row at all, lands outside"
+  ]
+ },
+ {
+  "id": "M3",
+  "file": "plugin/hooks/core/places/landing.ts",
+  "original": "const m = messageBefore(rows, call)",
+  "mutated": "const m = messageBefore(rows, call - 1)",
+  "note": "start index off by one for the agent call lookup",
+  "verdict": "survived",
+  "red": []
+ },
+ {
+  "id": "M4",
+  "file": "plugin/hooks/core/places/landing.ts",
+  "original": "for (let j = i; j >= 0; j--) {",
+  "mutated": "for (let j = i - 1; j >= 0; j--) {",
+  "note": "messageBefore start excludes row i",
+  "verdict": "survived",
+  "red": []
+ },
+ {
+  "id": "M5",
+  "file": "plugin/hooks/core/places/landing.ts",
+  "original": "isMain(r) && r.kind === 'tool-call' && r.toolUseId === agent.call",
+  "mutated": "isMain(r) && r.kind === 'tool-call' && r.toolUseId !== agent.call",
+  "note": "toolUseId match flipped",
+  "verdict": "killed",
+  "red": [
+   "not ok 5 - an agent's row lands on the message that started the agent, through the Agent call its meta names",
+   "not ok 7 - a stored tool output lands where the tool result that refers to it would"
+  ]
+ },
+ {
+  "id": "M6",
+  "file": "plugin/hooks/core/places/landing.ts",
+  "original": "isMain(r) && r.kind === 'tool-call' && r.toolUseId === agent.call",
+  "mutated": "isMain(r) && r.toolUseId === agent.call",
+  "note": "kind condition dropped from call lookup",
+  "verdict": "survived",
+  "red": []
+ },
+ {
+  "id": "M7",
+  "file": "plugin/hooks/core/places/landing.ts",
+  "original": "r.kind === 'agent-report' && r.agent?.id === agent.id",
+  "mutated": "r.kind === 'agent-report'",
+  "note": "report lookup ignores agent id",
+  "verdict": "survived",
+  "red": []
+ },
+ {
+  "id": "M8",
+  "file": "plugin/hooks/core/places/landing.ts",
+  "original": " && !r.at.file?.startsWith('tool-result:'))",
+  "mutated": ")",
+  "note": "stored lookup no longer excludes tool-result files",
+  "verdict": "survived",
+  "red": []
+ },
+ {
+  "id": "M9",
+  "file": "plugin/hooks/core/places/landing.ts",
+  "original": "if (l.on !== 'outside') return l.on === 'message'",
+  "mutated": "if (l.on === 'outside') return l.on === 'message'",
+  "note": "recursion result condition flipped",
+  "verdict": "killed",
+  "red": [
+   "not ok 7 - a stored tool output lands where the tool result that refers to it would"
+  ]
+ },
+ {
+  "id": "M10",
+  "file": "plugin/hooks/core/places/landing.ts",
+  "original": "return `${/^[aeiou]/.test(r.kind) ? 'an' : 'a'} ${r.kind}`",
+  "mutated": "return `${/^[aeiou]/.test(r.kind) ? 'a' : 'an'} ${r.kind}`",
+  "note": "article choice swapped",
+  "verdict": "killed",
+  "red": [
+   "not ok 8 - a row before any message, or no row at all, lands outside"
+  ]
+ },
+ {
+  "id": "M11",
+  "file": "plugin/hooks/core/places/landing.ts",
+  "original": "`${describe(target)} before the first message` }",
+  "mutated": "`${describe(target)}, in this turn` }",
+  "note": "outside why text changed",
+  "verdict": "killed",
+  "red": [
+   "not ok 8 - a row before any message, or no row at all, lands outside"
+  ]
+ }
+]

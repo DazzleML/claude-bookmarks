@@ -29,7 +29,7 @@ export type Chosen = PathName | 'current'
 export const PATH_ORDER: readonly PathName[] = ['ideal', 'patched', 'workaround']
 
 /** The engine APIs the plugin stands in for (docs/engine-quirks.md names each). */
-export type Gap = 'history.reach' | 'focus.handoff' | 'focus.leftSite' | 'focus.paneFromBand' | 'keys.chord' | 'keys.fieldArrows' | 'hover.multiline' | 'transcript.chunks'
+export type Gap = 'history.reach' | 'focus.handoff' | 'focus.leftSite' | 'focus.paneFromBand' | 'keys.chord' | 'keys.fieldArrows' | 'hover.multiline' | 'transcript.chunks' | 'jump.toolRow' | 'jump.agentRow'
 
 /** What the start hook reads once: the build, and dcc-patcher's markers (`DCC_PATCH_H` is set by its history patch, `DCC_PATCHES` and `DCC_PATCHER` by its launcher). */
 export type Signals = { version: string; base?: string; dccPatcher?: string; dccPatchH?: string; dccPatches?: string }
@@ -103,6 +103,24 @@ export const CAPABILITIES: readonly Capability[] = [
     patched: null,
     workaround: 'the whole conversation read in 4 MB pieces through sh (tail | head); without sh the grep readers stand',
     verifiedOn: ['2.1.309'],
+  },
+  // The 0.7 groundwork design (2026-10-25, unit 5): a link names any row, but whether Claude Code
+  // can scroll to a tool row (it draws one under the call's toolu_ id, a folded group as
+  // collapsed-<uuid>) or into an agent's conversation is not measured yet (the design's U1).
+  // Until it is, a jump lands on the message the row belongs to (core/places/landing.ts).
+  {
+    gap: 'jump.toolRow',
+    missing: 'a scroll to a tool call, its output, or a thinking block (rows not drawn as a message)',
+    ideal: null,
+    patched: null,
+    workaround: 'the jump lands on the message the row belongs to: the last prompt or reply before it',
+  },
+  {
+    gap: 'jump.agentRow',
+    missing: "a scroll into an agent's own conversation (its file is not the main transcript)",
+    ideal: null,
+    patched: null,
+    workaround: "the jump lands on the message that dispatched the agent, or the agent's report",
   },
   {
     gap: 'hover.multiline',

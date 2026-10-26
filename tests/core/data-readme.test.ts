@@ -37,6 +37,14 @@ test('the README names every path of the layout with its kind, says what to back
   assert.ok(DATA_LAYOUT.some(e => e.path === 'README.md'))
 })
 
+test('the layout names every folder the plugin writes under its data root', () => {
+  // The whole-conversation loader (0.6.18) writes replytext/ and transcript/; 0.6.18 to 0.6.28
+  // shipped a data README that did not list them.
+  for (const folder of ['sessions/', 'backups/', 'prompttext/', 'replytext/', 'transcript/', 'debug/']) {
+    assert.ok(DATA_LAYOUT.some(e => e.path.startsWith(folder)), folder)
+  }
+})
+
 test('the render substitutes the three placeholders and nothing else; the table takes the template\'s own newline', () => {
   assert.equal(dataReadme('w 1', 'a {{writer}} b {{writer}}'), 'a w 1 b w 1')
   assert.equal(dataReadme('w', '{{mark}}'), README_MARK)

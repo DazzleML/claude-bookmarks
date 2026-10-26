@@ -1,0 +1,78 @@
+[
+ {
+  "name": "none (control: must be green)",
+  "verdict": "control",
+  "red": []
+ },
+ {
+  "name": "M1 user preset inverted",
+  "verdict": "killed",
+  "red": [
+   "not ok 8 - the presets cover djdarcy's list, and a place can be in more than one",
+   "not ok 9 - toggles join: a place shows when any toggle that is on admits it",
+   "not ok 15 - a query with no words is a listing of the rows in scope, and reads no text"
+  ]
+ },
+ {
+  "name": "M2 claude preset drops prompt kind",
+  "verdict": "survived",
+  "red": []
+ },
+ {
+  "name": "M3 or to and in agents preset",
+  "verdict": "survived",
+  "red": []
+ },
+ {
+  "name": "M4 notices preset drops event",
+  "verdict": "survived",
+  "red": []
+ },
+ {
+  "name": "M5 FROM tool maps to wrong preset",
+  "verdict": "survived",
+  "red": []
+ },
+ {
+  "name": "M6 unclosed quote no longer consumed as a phrase",
+  "verdict": "survived",
+  "red": []
+ },
+ {
+  "name": "M7 dotall flag dropped so multiline regex bodies fail to match",
+  "verdict": "survived",
+  "red": []
+ },
+ {
+  "name": "M8 empty m// pattern now treated as a word rather than regex",
+  "verdict": "survived",
+  "red": []
+ },
+ {
+  "name": "M9 g and y flags no longer stripped",
+  "verdict": "survived",
+  "red": []
+ },
+ {
+  "name": "M10 failed accepts a value",
+  "verdict": "survived",
+  "red": []
+ },
+ {
+  "name": "M11 negation flipped",
+  "verdict": "killed",
+  "red": [
+   "not ok 7 - scope rules are read out of the query; one inside a quoted phrase is literal text",
+   "not ok 10 - typed rules narrow what the toggles show; rules of one kind are alternatives",
+   "not ok 11 - an exclusion wins over the toggles and over every include",
+   "not ok 12 - the pane's title shows the scope in effect",
+   "not ok 13 - a search finds the rows whose text matches, in row order, reading only pieces that hold a row in scope",
+   "not ok 15 - a query with no words is a listing of the rows in scope, and reads no text"
+  ]
+ },
+ {
+  "name": "M12 no-terms listing no longer sorted",
+  "verdict": "survived",
+  "red": []
+ }
+]

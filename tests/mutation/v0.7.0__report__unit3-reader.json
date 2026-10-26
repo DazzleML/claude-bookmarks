@@ -1,0 +1,134 @@
+{
+ "control_red": 0,
+ "results": [
+  {
+   "id": "M1",
+   "file": "plugin/hooks/core/places/reader.ts",
+   "original": "} else if (last.length > carryCap) {",
+   "mutated": "} else if (last.length >= carryCap) {",
+   "note": "boundary: a carry exactly at the cap is dropped",
+   "verdict": "survived",
+   "red": []
+  },
+  {
+   "id": "M2",
+   "file": "plugin/hooks/core/places/reader.ts",
+   "original": "    idx.dropped += 1\n    cur.bytes += utf8Bytes(last)\n    cur.carry = ''\n    cur.dropping = true",
+   "mutated": "    idx.dropped += 1\n    cur.bytes += utf8Bytes(last)\n    cur.carry = ''\n    cur.dropping = false",
+   "note": "dropping flag never set after oversize carry, so the tail of the long line is parsed as a line",
+   "verdict": "survived",
+   "red": []
+  },
+  {
+   "id": "M3",
+   "file": "plugin/hooks/core/places/reader.ts",
+   "original": "      cur.bytes += utf8Bytes(p) + 1\n      cur.line += 1\n      cur.dropping = false\n      continue",
+   "mutated": "      cur.bytes += utf8Bytes(p)\n      cur.line += 1\n      cur.dropping = false\n      continue",
+   "note": "watermark misses the newline after the dropped line's tail",
+   "verdict": "survived",
+   "red": []
+  },
+  {
+   "id": "M4",
+   "file": "plugin/hooks/core/places/reader.ts",
+   "original": ".trim().slice(0, HEAD_CHARS)",
+   "mutated": ".slice(0, HEAD_CHARS)",
+   "note": "head not trimmed",
+   "verdict": "survived",
+   "red": []
+  },
+  {
+   "id": "M5",
+   "file": "plugin/hooks/core/places/reader.ts",
+   "original": "text.replace(/\\s+/g, ' ')",
+   "mutated": "text.replace(/ +/g, ' ')",
+   "note": "head whitespace normalisation reduced to spaces only",
+   "verdict": "survived",
+   "red": []
+  },
+  {
+   "id": "M6",
+   "file": "plugin/hooks/core/places/reader.ts",
+   "original": "if (idx.open.bytes > 0 && idx.open.bytes + size > PIECE_BYTES) seal(idx)",
+   "mutated": "if (idx.open.bytes + size > PIECE_BYTES) seal(idx)",
+   "note": "guard removed: an oversize first place seals an empty piece",
+   "verdict": "survived",
+   "red": []
+  },
+  {
+   "id": "M7",
+   "file": "plugin/hooks/core/places/reader.ts",
+   "original": "if (size > 0 && size + n > PIECE_BYTES) {",
+   "mutated": "if (size > 0 && size + n >= PIECE_BYTES + 1000000) {",
+   "note": "row pieces cut far too late",
+   "verdict": "survived",
+   "red": []
+  },
+  {
+   "id": "M8",
+   "file": "plugin/hooks/core/places/reader.ts",
+   "original": "if (saved.version !== PLACE_INDEX_VERSION) return",
+   "mutated": "if (saved.version === undefined) return",
+   "note": "version check weakened",
+   "verdict": "survived",
+   "red": []
+  },
+  {
+   "id": "M9",
+   "file": "plugin/hooks/core/places/reader.ts",
+   "original": "if (openLines.length < saved.open.lines) return",
+   "mutated": "if (openLines.length <= saved.open.lines) return",
+   "note": "boundary: an open piece with exactly the saved line count is rejected",
+   "verdict": "killed",
+   "red": [
+    "not ok 7 - the index saved and read back gives the same rows and the open piece to append to",
+    "not ok 10 - a second pass resumes from the saved watermarks: it reads only what was added since"
+   ]
+  },
+  {
+   "id": "M10",
+   "file": "plugin/hooks/core/places/reader.ts",
+   "original": "if (saved.session !== session) return { kind: 'rebuild', why: 'another conversation' }",
+   "mutated": "",
+   "note": "session check removed",
+   "verdict": "survived",
+   "red": []
+  },
+  {
+   "id": "M11",
+   "file": "plugin/hooks/handlers/places.ts",
+   "original": "const done = got === 0 || got < PLACES_CHUNK - 4",
+   "mutated": "const done = got === 0 || got < PLACES_CHUNK - 400000",
+   "note": "done detection threshold wrong, a shorter chunk is mistaken for continuing",
+   "verdict": "survived",
+   "red": []
+  },
+  {
+   "id": "M12",
+   "file": "plugin/hooks/handlers/places.ts",
+   "original": "if (size <= WHOLE_READ_MAX) text",
+   "mutated": "if (size < WHOLE_READ_MAX - 1000000) text",
+   "note": "whole-read bound lowered, mid-size outputs go chunked",
+   "verdict": "survived",
+   "red": []
+  },
+  {
+   "id": "M13",
+   "file": "plugin/hooks/handlers/places.ts",
+   "original": "if (p.idx.byKey.has(`tool-result:${r.name}|${r.name}|0`)) continue",
+   "mutated": "if (false) continue",
+   "note": "already-kept stored output no longer skipped",
+   "verdict": "survived",
+   "red": []
+  },
+  {
+   "id": "M14",
+   "file": "plugin/hooks/handlers/places.ts",
+   "original": "if (p.cursors.some(c => c.path === path) || !(await ports.fsExists(path))) continue",
+   "mutated": "if (!(await ports.fsExists(path))) continue",
+   "note": "already-queued continued file is queued again",
+   "verdict": "survived",
+   "red": []
+  }
+ ]
+}

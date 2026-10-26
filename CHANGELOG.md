@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-26
+
+The first release of the 0.7 line, which adds search, more lists in the prompts pane, and links to any row of a conversation. This one lays the groundwork; nothing new is switched on yet, so the plugin behaves as in 0.6.28 apart from the fix below.
+
+### Fixed
+
+- The README in the plugin's data folder lists every folder the plugin writes there. `replytext/` (the text of Claude's replies, kept for finding the message a link names) and `transcript/` (where each message sits in the conversation file, so a later read resumes) were missing; both are caches, and deleting them loses nothing.
+
+### Added
+
+- For contributors: the groundwork for 0.7's search and lists, tested but not yet called by the plugin.
+  - `core/places/` gives every row of a conversation one address: prompts, replies, thinking, tool calls and their outputs, other sessions' messages, agents' messages and reports, notices and events. It covers every file a conversation spans: the transcript, each agent's own file, stored tool outputs and a continued conversation.
+  - A reader takes a whole conversation in pieces and keeps an index it can resume from.
+  - `core/places/landing.ts` decides where a jump to any row lands.
+  - `core/search/` reads a search query (words, quoted phrases, regular expressions, and rules such as `from:`, `agent:`, `tool:` and `failed`) and finds the matching rows.
+- `/bm-env` lists two more entries in its table of what this Claude Code build can do: scrolling to a tool row, and scrolling to an agent's message. On stock Claude Code both fall back to the message the row belongs to.
+
 ## [0.6.28] - 2026-10-25
 
 Documentation only; the plugin behaves exactly as in 0.6.27.
@@ -1306,7 +1323,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.6.28...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.0...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

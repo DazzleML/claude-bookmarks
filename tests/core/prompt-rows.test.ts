@@ -196,6 +196,40 @@ test("another agent's teammate message is not a prompt", () => {
   assert.equal(looksLikePrompt('<teammate-message teammate_id="x">hello</teammate-message>'), false)
 })
 
+// Another session's or an agent's message, in the two shapes the transcript stores them
+// (measured 2026-10-25 over one session: 41 agent hand-backs and 20 cross-session messages,
+// every one flagged isMeta with origin.kind "peer", text opening "Another Claude session sent
+// a message"; tests/one-offs/thinking/probe_agent_messages_vs_prompt_filter.ts). Two guards
+// keep each out of the prompts list -- the row's isMeta flag and the text -- and each must
+// hold on its own, so a change in how Claude Code stamps one of them does not let the
+// message in (the 0.7 groundwork design, unit 1).
+const peerRow = (text: string, over: Record<string, unknown> = {}) => ({
+  type: 'user',
+  uuid: 'p-1',
+  isMeta: true,
+  isSidechain: false,
+  origin: { kind: 'peer', from: 'a54b4b9d2f1c8e6c3', name: 'help', handback: true },
+  message: { role: 'user', content: text },
+  ...over,
+})
+const HANDBACK = 'Another Claude session sent a message:\n<agent-message from="a54b4b9d2f1c8e6c3">\n[Subagent hand-back] The text below is the final report'
+const CROSS_SESSION = 'Another Claude session sent a message:\n<cross-session-message from="uds:\\\\.\\pipe\\LOCAL\\cc-msg-cf46" from-name="CCBookmarksTest__2026.10.3__1st-test">\nbookmarks-poc test session reply'
+
+test("another session's or an agent's message, as the transcript stores it, is not a prompt", () => {
+  assert.equal(promptTextOf(peerRow(HANDBACK)), undefined, 'an agent hand-back')
+  assert.equal(promptTextOf(peerRow(CROSS_SESSION)), undefined, 'a cross-session message')
+})
+
+test('the flag and the text each keep such a message out on their own', () => {
+  // The text alone: the same message without the isMeta flag.
+  assert.equal(promptTextOf(peerRow(HANDBACK, { isMeta: false })), undefined, 'text guard, hand-back')
+  assert.equal(promptTextOf(peerRow(CROSS_SESSION, { isMeta: false })), undefined, 'text guard, cross-session')
+  // The flag alone: a flagged row whose text has none of the wrapper words.
+  assert.equal(promptTextOf(peerRow('a reply from another session, unwrapped')), undefined, 'flag guard')
+  // And the control: the same unwrapped text, unflagged, is a prompt.
+  assert.equal(promptTextOf(peerRow('a reply from another session, unwrapped', { isMeta: false, origin: { kind: 'human' } })), 'a reply from another session, unwrapped')
+})
+
 test('a prompt that mentions those tags in passing is still a prompt', () => {
   assert.equal(looksLikePrompt('Why does <bash-input> show up in the list?'), true)
 })

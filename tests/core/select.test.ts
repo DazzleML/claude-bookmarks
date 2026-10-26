@@ -18,6 +18,8 @@ test('stock picks the workaround for every gap that has one, and current for the
     'keys.fieldArrows=workaround',
     'keys.chord=workaround',
     'transcript.chunks=workaround',
+    'jump.toolRow=workaround',
+    'jump.agentRow=workaround',
     'hover.multiline=current',
   ])
   for (const c of all) assert.ok(c.why.length > 0, c.gap)

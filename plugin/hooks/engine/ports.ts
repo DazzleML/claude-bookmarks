@@ -237,6 +237,21 @@ export type TranscriptPorts = {
   publish: (backfill: import('../core/prompts/prompt-store.ts').Backfill, truncated: boolean) => Promise<unknown>
 }
 
+/** What the place reader's pass (handlers/places.ts, the 0.7 groundwork's unit 3) needs: the conversation and its transcript, a folder's listing (its agents' files and stored outputs), a chunk of a file by offset (the same program the loader's pass runs), the data root for the pieces and the index, and the clock. */
+export type PlacesPorts = {
+  sessionId: () => Promise<string>
+  transcriptPath: () => Promise<string | undefined>
+  fileSize: (path: string) => Promise<number | undefined>
+  readChunk: (path: string, offset: number) => Promise<{ stdout: string; via: 'sh' | 'powershell' } | undefined>
+  fsList: (path: string) => Promise<readonly { name: string; kind: string }[]>
+  dataRoot: () => Promise<string | undefined>
+  fsExists: (path: string) => Promise<boolean>
+  fsRead: (path: string) => Promise<string>
+  fsWrite: (path: string, text: string) => Promise<unknown>
+  after: (ms: number, fn: () => void) => { cancel: () => void }
+  log: (line: string) => void
+}
+
 /** Finding a message in the transcript by uuid or by a verbatim fragment (register.tsx's resolveTarget). */
 export type ResolveOutcome =
   | { kind: 'one'; row: import('../core/bookmarks/transcript-lines.ts').TranscriptRow; via: string; ms: number }
@@ -380,6 +395,9 @@ export type CommandLinePorts = BandPorts & {
 //                                             (0.4.95), one in register.tsx
 //   pass (the loader's state for this        handlers/transcript.ts        startPass, appendLive, newConversation;
 //     conversation, slice F)                  (the one writer)              read by resolveLoaded, loaderStatus
+//   placesPass (the place reader's state    handlers/places.ts            startPlacesPass, newConversation;
+//     for this conversation: its index,       (the one writer)              read by placesStatus, placesIndex
+//     the file cursors; 0.7 unit 3)
 //   promptTextCache, promptTextSave,        handlers/prompts.ts (the      --
 //     storedPromptTextDropped                 back-fill fills it there too,
 //                                             since 0.4.101)

@@ -17,12 +17,14 @@ This folder is where the claude-bookmarks plugin for Claude Code keeps what you 
 | `backups/<stamp>__v<from>-to-v<to>__<writer>__<sid8>/` | the originals of one format migration, with a manifest.json listing them with hashes; kept | backup -- a copy the plugin took; keep it until you no longer need to go back |
 | `backups/<stamp>__pre-0.5__snapshot/` | a plain copy of sessions/ taken once before the first migration on this machine | backup -- a copy the plugin took; keep it until you no longer need to go back |
 | `prompttext/` | the text of your prompts the prompts list filters, in pieces; read again from the transcript when missing | cache -- rebuilt when missing |
+| `replytext/` | the text of Claude's replies, newest first and up to 4 MB, for finding the message a link names; read again from the transcript when missing | cache -- rebuilt when missing |
+| `transcript/` | where each message sits in the conversation file, so the plugin's read of it resumes instead of starting over; rebuilt when missing | cache -- rebuilt when missing |
 | `debug/<session id>.log` | the plugin's log, one file per conversation | cache -- rebuilt when missing |
 | `README.md` | this file | generated -- rewritten by the plugin; edits are overwritten |
 
 ## What to back up
 
-Everything under `sessions/` is authored: the bookmark files and the notes are what you and Claude made, and nothing rebuilds them. `backups/` holds the plugin's own copies from format migrations; keep it as long as you might want to go back. `prompttext/` and `debug/` are caches: deleting them loses nothing you cannot get back. The index and this file are generated.
+Everything under `sessions/` is authored: the bookmark files and the notes are what you and Claude made, and nothing rebuilds them. `backups/` holds the plugin's own copies from format migrations; keep it as long as you might want to go back. `prompttext/`, `replytext/`, `transcript/` and `debug/` are caches: deleting them loses nothing you cannot get back. The index and this file are generated.
 
 ## Formats
 

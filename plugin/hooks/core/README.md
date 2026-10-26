@@ -20,7 +20,9 @@ Each folder has its own README listing its files.
 | `kit/` | Shared building blocks: the screen model (which messages Claude Code reports on screen), the messages drawn since load, where the view was before a pane opened, message ids, the latest burst of reports, the plugin's folders, what a refused jump says, and the continuum (an ordered axis around a neutral zero, such as hidden < folded < shown) that several settings and the tiers are built on |
 | `log/` | The debug log's ring buffer and file names, the debug channels, the diagnostic commands' formatting |
 | `marks/` | Lettered marks: the store's shape, the highlight of a marked line, the selection at the mark chord |
+| `places/` | What a place in a conversation is: one address and one kind for every row, in any of a conversation's files, with the attributes a search scope reads |
 | `prompts/` | The prompts list: the stored prompts, footnotes, the filter, the kept prompt text, the prompt nearest the view, the pane's own state |
+| `search/` | Searching a conversation: the query (words, phrases, patterns, scope rules), the presets the toggles are made of, and the search that streams the pieces of text |
 | `transcript/` | The whole-conversation loader: the reader fed the transcript in pieces, and the index that lets the next load resume |
 
 At the top level: `settings.ts` (every setting, its default and how it resolves), `settings-state.ts` (the settings as they stand, owned in one place), `settings-fold.ts` (which `/config` rows the folds leave out, and how a fold row is labelled), `palette.ts` (colours by role), `store-keys.ts` (every key family the plugin keeps in Claude Code's plugin store) and `store-prune.ts` (what that store keeps).

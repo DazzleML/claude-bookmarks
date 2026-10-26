@@ -50,3 +50,32 @@ Both entries are kit-blind rather than equivalent: the behaviour is real and is 
 ## plugin/hooks/handlers/command-line.ts @ 84b704e3cc08 (continued)
 
 - `operation.pane === 'mark' ? 'band-mark-cancel' : undefined` -> arms swapped, in `perform`'s `handOff` call -- **don't-care (kit-blind)**: both arms end in `focusBand`, whose `$.ui.focus` is not routed to kit hooks and throws (harness note, measured 2026-10-12) before the arms can differ. The cancel press is what scrolls back after a mark's highlight; checked live. 2026-10-20, mode 1 (v0.6.3 sweep, M9).
+
+## plugin/hooks/core/places/place.ts @ 5d12c445b567
+
+- `...(b.is_error === true ? { failed: true } : {})` -> `...(b.is_error ? { failed: true } : {})` -- **don't-care**: Claude Code writes `is_error` as a JSON boolean (12,464 tool results in one conversation, none otherwise), so strict and truthy read the same on the real population; `=== true` stays as the stated contract. 2026-10-25, mode 1 (v0.7.0 sweep, unit 2, M1).
+
+## plugin/hooks/core/places/reader.ts @ a0a2e5db6615
+
+- `if (idx.open.bytes > 0 && idx.open.bytes + size > PIECE_BYTES) seal(idx)` -> the `idx.open.bytes > 0` conjunct dropped -- **equivalent**: `seal()` returns at once when the open piece has no lines. 2026-10-25, mode 1 (v0.7.0 sweep, unit 3, M6).
+
+## plugin/hooks/handlers/places.ts @ d82b2c8e2a6c
+
+- `got < PLACES_CHUNK - 4` -> `got < PLACES_CHUNK - 400000` -- **don't-care**: a short last chunk then reads as "not done", the next read returns 0 bytes and ends the file; the same places and watermarks, at the cost of one more program run per file. 2026-10-25, mode 1 (v0.7.0 sweep, unit 3, M11).
+- `if (size <= WHOLE_READ_MAX) text` -> `if (size < WHOLE_READ_MAX - 1000000) text` -- **equivalent**: a stored output read in chunks yields the same text as one read. 2026-10-25, mode 1 (v0.7.0 sweep, unit 3, M12).
+- the "already kept" skip of a stored output removed -- **don't-care**: `addPlace` refuses the duplicate; the cost is one read. 2026-10-25, mode 1 (v0.7.0 sweep, unit 3, M13).
+
+## plugin/hooks/core/search/query.ts @ 15b79f343311
+
+- `/^m\/(.*)$/s` -> the `s` flag dropped -- **equivalent**: a token is a run of non-whitespace and never holds a newline. 2026-10-25, mode 1 (v0.7.0 sweep, unit 4, M7).
+- `if (!m && pattern === '') return undefined` -> `if (pattern === '') return undefined` -- **don't-care**: `m//` then reads as the word `m//` instead of an empty pattern matching every text; nobody types it to mean either. 2026-10-25, mode 1 (v0.7.0 sweep, unit 4, M8).
+
+## plugin/hooks/core/places/landing.ts @ 48318f94ec03
+
+- `messageBefore(rows, call)` -> `messageBefore(rows, call - 1)`, and `for (let j = i; ...` -> `for (let j = i - 1; ...` -- **equivalent**: neither call site starts on a message (a message target returns earlier; the Agent call's row is a tool call). 2026-10-25, mode 1 (v0.7.0 sweep, unit 5, M3, M4).
+- the call lookup's `r.kind === 'tool-call'` dropped -- **equivalent**: the only other main row with the Agent call's id is its result, which always follows the call. 2026-10-25, mode 1 (unit 5, M6).
+- the stored lookup's `!r.at.file?.startsWith('tool-result:')` dropped -- **equivalent**: a stored-output place never carries `stored`. 2026-10-25, mode 1 (unit 5, M8).
+
+## plugin/hooks/core/search/search.ts @ 750b2301051e
+
+- the no-terms listing's `.sort((a, b) => a - b)` dropped -- **equivalent**: the place reader writes rows in piece order (a row's piece never decreases along the index), so the rows in scope flattened piece by piece are already in order. 2026-10-25, mode 1 (v0.7.0 sweep, unit 4, M12).
