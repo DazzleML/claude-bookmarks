@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-10-26
+
+### Changed
+
+- **The bookmark file's format moves to v5.** The pin records 0.7.1 wrote under `stars` are written under `pins`, one name for one thing. The screen is unchanged. A file is brought up to date the first time a session loads it, not only when a session starts, so a session that picked up the new plugin without restarting writes the new format at once. As before, a backup of each file is written first, under `bookmarks/backups/`. A file older than 0.7.1 goes to v5 in one step.
+- If a file cannot be brought up to date (it cannot be written, say), the conversation's bookmarks are shown but not saved, with a toast saying so, until the next start. Before, such a file could be written in its old shape.
+- The setting "Pins shown in a list" is stored as `pinScope` (it was `starScope` in 0.7.1); a value saved under the old name is read as the default, `here`.
+
 ## [0.7.1] - 2026-10-26
 
 ### Changed
@@ -1338,7 +1346,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.2...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

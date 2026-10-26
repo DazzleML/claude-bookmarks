@@ -804,11 +804,11 @@ async function openFor($: EngineInterface, mode: PaneMode, action: string) {
 // Since 0.5.4 the pins live in the register file (the data design, 2026-10-16: pins are
 // authored, so they are the person's and not Claude Code's housekeeping); the v1 -> v2
 // migration moves them out of the store (`pins:<sid>`, core/store-keys.ts) at the
-// conversation's start. Since 0.7.1 a pin is a star made in the prompts list (format v4,
-// core/bookmarks/stars.ts), shown as the starScope setting says. handlers/bookmarks.ts owns
+// conversation's start. Since 0.7.1 a pin records the list it was made in
+// (core/bookmarks/pins.ts), shown as the pinScope setting says. handlers/bookmarks.ts owns
 // the read and the toggle.
 async function loadPins($: EngineInterface): Promise<string[]> {
-  return bookmarks_.pinnedPrompts(bookmarksPorts($), currentSettings().starScope)
+  return bookmarks_.pinnedPrompts(bookmarksPorts($), currentSettings().pinScope)
 }
 
 // Toggles the pin on prompt #n (the newest when `typed` names none). Returns false when
@@ -823,7 +823,7 @@ async function togglePin($: EngineInterface, typed: string, known?: PromptRef[])
   const { n, target } = picked
   const pins = await loadPins($)
   const pinned = pins.includes(target.uuid)
-  const r = await bookmarks_.togglePinned(bookmarksPorts($), target.uuid, !pinned, currentSettings().starScope)
+  const r = await bookmarks_.togglePinned(bookmarksPorts($), target.uuid, !pinned, currentSettings().pinScope)
   if ('error' in r) {
     $.ui.toast(r.error, { timeoutMs: 8000 })
     return false

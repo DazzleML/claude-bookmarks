@@ -32,6 +32,8 @@ export type WorldOptions = {
   selection?: () => { requestId: string; text: string } | undefined
   // false: the plugin's template files are missing (a packaging bug); by default a stand-in answers.
   templates?: false
+  // A write to a path this names fails (throws), as a full disk or a locked file would; nothing is written there.
+  failWrite?: (path: string) => boolean
 }
 
 /** What the harness answers for plugin/templates/data-readme.md: the placeholders the real template uses, in a short page. */
@@ -143,6 +145,7 @@ export function world(on: unknown, options: WorldOptions = {}): World {
   })
   answer('fs.read', e => files[norm(e.path)] ?? (isTemplate(e.path) && options.templates !== false ? README_TEMPLATE_STANDIN : ''))
   answer('fs.write', e => {
+    if (options.failWrite?.(norm(e.path))) throw new Error(`write refused (test): ${norm(e.path)}`)
     files[norm(e.path)] = String(e.text ?? '')
     return undefined
   })

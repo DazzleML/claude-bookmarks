@@ -14,7 +14,7 @@ import { forwardSlashes } from '../kit/paths.ts'
 import { REGISTER_VERSION, type Register } from './register-file.ts'
 import { setMark } from './register-ops.ts'
 import type { AnchorOwner } from './anchor.ts'
-import type { Star } from './stars.ts'
+import type { Pin } from './pins.ts'
 
 /** The format this build writes. A file at CURRENT is loaded and never copied. */
 export const CURRENT = REGISTER_VERSION
@@ -64,7 +64,8 @@ export const v1to2: Migration = {
       ...(r.transcript ? { transcript: forwardSlashes(r.transcript) } : {}),
     }))
     const pinned = store[`pins:${ctx.sessionId}`]
-    const pins = Array.isArray(pinned) && pinned.length > 0 ? { pins: { user: pinned.filter((u): u is string => typeof u === 'string') } } : {}
+    // The v2 shape of pins: a map under the file's `pins` key, held in memory as `pinsV3`.
+    const pins = Array.isArray(pinned) && pinned.length > 0 ? { pinsV3: { user: pinned.filter((u): u is string => typeof u === 'string') } } : {}
     return {
       ...reg,
       version: 2,
@@ -116,8 +117,8 @@ export const v2to3: Migration = {
  *
  * Registered in 0.7.1 after a dry run over a copy of djdarcy's folder (18 registers, 8 pins
  * to 8 stars, nothing else changed; tests/one-offs/thinking/dryrun_v3_to_v4.ts), and his go,
- * 2026-10-26. Until a session starts on the new build, its files stay at v3 and show their
- * pins through `starsOf` (handlers/bookmarks.ts).
+ * 2026-10-26. In memory the map is `pinsV3` and the list `pins` (the pins-by-name design,
+ * 2026-10-26); a v4 file writes the list under `stars`, as 0.7.1 did.
  */
 export const v3to4: Migration = {
   from: 3,
@@ -125,21 +126,41 @@ export const v3to4: Migration = {
   format: 4,
   storeKeys: () => [],
   apply(reg) {
-    const stars: Star[] = [...(reg.stars ?? [])]
-    for (const [owner, list] of Object.entries(reg.pins ?? {}) as [AnchorOwner, unknown][]) {
+    const pins: Pin[] = [...(reg.pins ?? [])]
+    for (const [owner, list] of Object.entries(reg.pinsV3 ?? {}) as [AnchorOwner, unknown][]) {
       if (!Array.isArray(list)) continue
       for (const uuid of list) {
         if (typeof uuid !== 'string') continue
-        if (stars.some(s => s.owner === owner && s.from === 'prompts' && s.uuid === uuid && s.file === undefined && s.part === undefined)) continue
-        stars.push({ uuid, owner, from: 'prompts', at: reg.updatedAt })
+        if (pins.some(s => s.owner === owner && s.from === 'prompts' && s.uuid === uuid && s.file === undefined && s.part === undefined)) continue
+        pins.push({ uuid, owner, from: 'prompts', at: reg.updatedAt })
       }
     }
-    const { pins: _gone, ...rest } = reg
-    return { ...rest, version: 4, ...(stars.length > 0 ? { stars } : {}) }
+    const { pinsV3: _gone, ...rest } = reg
+    return { ...rest, version: 4, ...(pins.length > 0 ? { pins } : {}) }
   },
 }
 
-export const MIGRATIONS: readonly Migration[] = [v1to2, v2to3, v3to4]
+/**
+ * v4 -> v5: the pins' list moves from the file's `stars` key to `pins` (djdarcy, 2026-10-26:
+ * "We shouldn't need a new name each time we make an adjacent improvement to a feature"). The
+ * register in memory already holds it as `pins`, so the step is the version; `serializeRegister`
+ * writes the key the version names. Format 5: a v4 build reads `stars` only and would show none.
+ *
+ * Registered after two dry runs over copies of djdarcy's folder, 2026-10-26: its 18 v4 files,
+ * and the 18 v3 originals of their 0.7.1 backups through v3 -> v4 -> v5; 8 pins in, 8 out,
+ * nothing else changed (tests/one-offs/thinking/dryrun_migration.ts).
+ */
+export const v4to5: Migration = {
+  from: 4,
+  to: 5,
+  format: 5,
+  storeKeys: () => [],
+  apply(reg) {
+    return { ...reg, version: 5 }
+  },
+}
+
+export const MIGRATIONS: readonly Migration[] = [v1to2, v2to3, v3to4, v4to5]
 
 /** The store key families any step consumes (`pins:`, `marks:`), for finding conversations that live only in the store. */
 export const STORE_PREFIXES: readonly string[] = MIGRATIONS.map(m => m.storeKeys('')[0]!).filter(Boolean)

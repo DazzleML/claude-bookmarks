@@ -13,11 +13,11 @@ import {
   type Mint, type Register as BookmarkRegister, type Retention,
 } from '../core/bookmarks/register-file.ts'
 import { baseOf, ingest, primaryRecord, sameBase } from '../core/bookmarks/note.ts'
-import { isOn, type Star, type StarScope } from '../core/bookmarks/stars.ts'
+import { isOn, type Pin, type PinScope } from '../core/bookmarks/pins.ts'
 import { buildIndex, emptyIndex, entryOf, INDEX_JSON, INDEX_MD, parseIndex, renderIndexMarkdown, serializeIndex, upsert, type IndexEntry } from '../core/bookmarks/session-index.ts'
 import { applyOp, marksOf as marksFromRegister, type Op, type OpResult } from '../core/bookmarks/register-ops.ts'
 import {
-  applyMigrations, CURRENT, fnv1a64, hashText, planFor, runFolderName, SNAPSHOT_SUFFIX, snapshotFolderName, STORE_PREFIXES, v3to4,
+  applyMigrations, CURRENT, fnv1a64, hashText, planFor, runFolderName, SNAPSHOT_SUFFIX, snapshotFolderName, STORE_PREFIXES,
   type Manifest, type Migration,
 } from '../core/bookmarks/migrations.ts'
 import { checkReport, drawLine, STORE_CAP, type CheckInput } from '../core/bookmarks/check.ts'
@@ -51,7 +51,8 @@ const ANCHOR_MARK = '@'
 // register of the one before (0.4.65; tool.test.ts, "a new conversation reads its own").
 // `text` is the main file's text as last read or written, whatever it was: `commitOp`
 // compares the disk against it to know whether another writer (or a hand) got there first.
-let registerCache: { session: string; register: BookmarkRegister; text?: string } | undefined
+/** `readOnly`: a file below this build's version that could not be migrated at load; it is shown, never written. */
+let registerCache: { session: string; register: BookmarkRegister; text?: string; readOnly?: boolean } | undefined
 
 async function registerPath(ports: BookmarksPorts): Promise<string | undefined> {
   const root = await ports.dataRoot()
@@ -88,13 +89,51 @@ export async function loadRegister(ports: BookmarksPorts): Promise<BookmarkRegis
     // written -- a save here would drop what the newer build knows. Said once per load.
     ports.logAlways(`[bm] register: ${path} is version ${reg.version} (written by ${reg.writer}); this build reads version ${REGISTER_VERSION} and will not write it`)
     ports.toast(`bookmarks: this conversation's bookmark file was written by a newer build (format v${reg.version}); it is read-only here until the plugin is updated`, 8000)
+  } else if (reg.version < CURRENT) {
+    // Migrate on load (the pins-by-name design, 2026-10-26): a file below this build's version
+    // is brought up to date, with its backups, before anything uses it, so no old shape is
+    // ever read or written by a current build, whether this session started on the build or
+    // got it by a reload. Only a file read from its own path: one loaded from its .bak (the
+    // file itself torn) is not migrated, since the run would copy the torn text over the .bak.
+    const fromMain = text !== undefined && parseRegister(text) !== undefined
+    const migrated = fromMain ? await migrateOnLoad(ports, session, reg, text!) : undefined
+    if (migrated) return migrated
+    ports.logAlways(`[bm] register: ${path} is version ${reg.version} and was not migrated${fromMain ? '' : ' (it was read from its .bak)'}; it is read-only until the next start`)
+    ports.toast(`bookmarks: this conversation's bookmark file could not be brought up to date; it is read-only for now (see /bm-check)`, 8000)
+    registerCache = { session, register: reg, ...(text !== undefined ? { text } : {}), readOnly: true }
+    return reg
   }
   registerCache = { session, register: reg, ...(text !== undefined ? { text } : {}) }
   return reg
 }
 
+/**
+ * Migrates the session's own file at load, the way a session start does (the one-time
+ * snapshot first, then `migrateOne`'s run folder, manifest and .bak). Returns the migrated
+ * register, or undefined when there is no path to the current version or the run threw; the
+ * caller then holds the file read-only.
+ */
+async function migrateOnLoad(ports: BookmarksPorts, session: string, reg: BookmarkRegister, text: string): Promise<BookmarkRegister | undefined> {
+  const root = await ports.dataRoot()
+  if (!root) return undefined
+  const steps = planFor(reg.version)
+  if (steps.length === 0) return undefined
+  try {
+    if (!(await hasSnapshot(ports, root))) await takeSnapshot(ports, root)
+    await migrateOne(ports, root, session, reg, text, steps)
+    ports.logAlways(`[bm] migrate: ${session.slice(0, 8)} brought to version ${CURRENT} on load; the original is under ${backupsDir(root)}`)
+    return registerCache?.session === session ? registerCache.register : undefined
+  } catch (err) {
+    ports.logAlways(`[bm] migrate on load failed for ${session.slice(0, 8)}: ${String(err)}`)
+    return undefined
+  }
+}
+
 /** What the tool and the band say when a save was refused by the version guard. */
 const READ_ONLY_NOTE = 'not saved: this conversation\'s bookmark file was written by a newer build of the plugin and is read-only here; update the plugin'
+
+/** What a save says when the file is older than this build and its migration on load did not run. */
+const NOT_MIGRATED_NOTE = 'not saved: this conversation\'s bookmark file is from an older build and could not be brought up to date; it is read-only until the next start (see /bm-check)'
 
 /** The header fields refreshed on every save so a file is findable without renaming it (unit 6): the conversation's title and the project folder's name. */
 async function headerFields(ports: BookmarksPorts): Promise<{ title?: string; project?: string }> {
@@ -133,6 +172,10 @@ export async function commitOp(ports: BookmarksPorts, op: Op, opts?: { bookkeepi
     ports.logAlways(`[bm] register: not saved -- ${path} is version ${reg.version}, ahead of this build's ${REGISTER_VERSION}`)
     ports.toast(`bookmarks: not saved -- the bookmark file is from a newer build (format v${reg.version}); update the plugin`, 8000)
     return { error: READ_ONLY_NOTE }
+  }
+  if (registerCache?.session === session && registerCache.readOnly) {
+    ports.logAlways(`[bm] register: not saved -- ${path} is version ${reg.version} and could not be migrated on load`)
+    return { error: NOT_MIGRATED_NOTE }
   }
   let replayed = false
   if (await ports.fsExists(path)) {
@@ -384,34 +427,20 @@ export async function removeBookmark(ports: BookmarksPorts, target: AnchorRecord
   ports.toast(`removed bookmark: ${target.label.slice(0, 40)}`)
 }
 
-// --- Pins: the person's starred prompts, in the register since 0.5.4 -----------------------
-// Since 0.7.1 (format v4) a pin is a star made in the prompts list (core/bookmarks/stars.ts);
-// the v3-to-v4 migration turned every older pin into one. `scope` is the starScope setting:
-// `here` shows the stars made in the prompts list, `everywhere` a star on a prompt made in
-// any list.
+// --- Pins: the person's pinned prompts, in the register since 0.5.4 ------------------------
+// Since 0.7.1 a pin records the list it was made in (core/bookmarks/pins.ts). `scope` is the
+// pinScope setting: `here` shows the pins made in the prompts list, `everywhere` a pin on a
+// prompt made in any list.
 
-/** The pinned (starred) prompts of this conversation, by message uuid, in the order starred. */
-export async function pinnedPrompts(ports: BookmarksPorts, scope: StarScope): Promise<string[]> {
-  return pinnedOf(starsOf(await loadRegister(ports)), scope)
+/** The pinned prompts of this conversation, by message uuid, in the order pinned. */
+export async function pinnedPrompts(ports: BookmarksPorts, scope: PinScope): Promise<string[]> {
+  return pinnedOf((await loadRegister(ports)).pins, scope)
 }
 
-/**
- * A register's stars. A file still at v3 (not yet migrated: the migration runs at a session's
- * start, and a build that arrives by reload has not started one) shows its pins as the stars
- * the migration will make, through the migration's own step; nothing is written.
- * Compatibility count (2026-10-26): the 18 registers on plzwork, 5 with a pins key, and
- * badbox's; the first start of 0.7.1 on each machine migrates every register there, after
- * which this branch is unreachable. Remove it once badbox has run 0.7.1.
- */
-export function starsOf(reg: BookmarkRegister): Star[] | undefined {
-  if (reg.version >= 4) return reg.stars
-  return v3to4.apply(reg, {}, { sessionId: reg.sessionId, now: reg.updatedAt }).stars
-}
-
-/** The prompt uuids the person's stars mark in the prompts list: the main transcript's rows, each once. */
-export function pinnedOf(stars: readonly Star[] | undefined, scope: StarScope): string[] {
+/** The prompt uuids the person's pins mark in the prompts list: the main transcript's rows, each once. */
+export function pinnedOf(pins: readonly Pin[] | undefined, scope: PinScope): string[] {
   const out: string[] = []
-  for (const s of stars ?? []) {
+  for (const s of pins ?? []) {
     if (!isOn(s) || s.owner !== 'user' || s.file !== undefined || s.part !== undefined) continue
     if (scope === 'here' && s.from !== PROMPTS_LIST) continue
     if (!out.includes(s.uuid)) out.push(s.uuid)
@@ -419,17 +448,14 @@ export function pinnedOf(stars: readonly Star[] | undefined, scope: StarScope): 
   return out
 }
 
-/** The list name the prompts list's stars carry. */
+/** The list name the prompts list's pins carry. */
 export const PROMPTS_LIST = 'prompts'
 
-/** Pins (stars) or unpins a prompt for the person, as one committed operation. */
-export async function togglePinned(ports: BookmarksPorts, uuid: string, on: boolean, scope: StarScope): Promise<{ pinned: string[] } | { error: string }> {
-  // A file still at v3 keeps its pins as pins until its migration (the bridge of `starsOf`).
-  const v3 = (await loadRegister(ports)).version < 4
-  const op: Op = v3 ? { op: 'pin', owner: 'user', uuid, on } : { op: 'star', owner: 'user', place: { uuid }, from: PROMPTS_LIST, on, scope, at: await ports.now() }
-  const r = await commitOp(ports, op)
+/** Pins or unpins a prompt for the person, as one committed operation. */
+export async function togglePinned(ports: BookmarksPorts, uuid: string, on: boolean, scope: PinScope): Promise<{ pinned: string[] } | { error: string }> {
+  const r = await commitOp(ports, { op: 'pin', owner: 'user', place: { uuid }, from: PROMPTS_LIST, on, scope, at: await ports.now() })
   if ('error' in r) return r
-  return { pinned: pinnedOf(starsOf(r.register), scope) }
+  return { pinned: pinnedOf(r.register.pins, scope) }
 }
 
 // --- Migrations at a conversation's start (the data design, 2026-10-16, unit 4) -----------

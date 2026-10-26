@@ -42,7 +42,7 @@ test('/bm-check reports an older register, an orphan note folder, a half-done ru
   await run($, 'bm-check')
   const logs = w.logs()
   const has = (s: string) => logs.some(l => l.includes(s))
-  expect(has(`2 register file(s) under bookmarks/sessions; 1 at v4`)).toBe(true)
+  expect(has(`2 register file(s) under bookmarks/sessions; 1 at v5`)).toBe(true)
   expect(has(`WARN ${OLD}.json is v1, older than this build: it migrates at the next start`)).toBe(true)
   expect(has('WARN bookmarks/sessions/33333333-2222-4333-8444-555555555555/ holds notes but has no')).toBe(true)
   expect(has('note bookmarks/sessions/index.json is missing')).toBe(true)

@@ -18,17 +18,19 @@
 import { type AnchorOwner, type AnchorRecord, ownerOf, tierOf, uuid8 } from './anchor.ts'
 import { isDrawnId, matchesPrefix, sameMessage } from '../kit/message-id.ts'
 import { aliasesOf, noteOwners, noteTags } from './note.ts'
-import { isStar, type Star } from './stars.ts'
+import { isPin, type Pin } from './pins.ts'
 
 /**
  * The format this build writes. 1: the proof of concept's file. 2 (0.5.4): `sessionId` and
  * `transcript` once at the top with per-record overrides, `n`/`nextN`, pins in the file.
  * 3 (0.5.5): the letter marks and the reading position as records of tier `mark`, pointed
- * at by `slots`. 4 (0.7.1): the pins become stars, each with the list it was made in
- * (`stars`, core/bookmarks/stars.ts). An older file is migrated at its conversation's start
- * (core/bookmarks/migrations.ts).
+ * at by `slots`. 4 (0.7.1): each pin a record with the list it was made in, under the key
+ * `stars` (core/bookmarks/pins.ts). 5: the same list under `pins`, one name for one concept
+ * (the pins-by-name design, 2026-10-26). An older file is migrated at a session's start, and
+ * the session's own file also the first time a build loads it (core/bookmarks/migrations.ts;
+ * handlers/bookmarks.ts loadRegister).
  */
-export const REGISTER_VERSION = 4
+export const REGISTER_VERSION = 5
 
 /**
  * The format this build understands: the MINIMUM READER a file may ask for. `version` counts
@@ -41,10 +43,11 @@ export const REGISTER_VERSION = 4
  * with a higher `version` but a `format` it knows is read and written, unknown keys kept.
  * 1, 2, 3 coincide with the versions: each of the first three shapes needed its own reader
  * (v3's slots, say: a v2 build would put marks back in the store). 4 does too: a v3 build
- * reads only `pins` and would show none of the stars. A file without the field (written
- * before 0.5.12) reads as `format: version`.
+ * reads only `pins` and would show none of the stars. So does 5: a v4 build reads the list
+ * only under `stars`, and a save of its own would drop the list under `pins`. A file without
+ * the field (written before 0.5.12) reads as `format: version`.
  */
-export const REGISTER_FORMAT = 4
+export const REGISTER_FORMAT = 5
 
 /**
  * What a letter (or the reading position's key) points at: `current` is the record's `n`,
@@ -103,12 +106,21 @@ export type Register = {
   nextN?: number
   perma: AnchorRecord[]
   tombstones: Tombstone[]
-  /** Pinned prompts, per owner, by message uuid (format v2). */
-  pins?: Partial<Record<AnchorOwner, string[]>>
+  /**
+   * Formats v2 and v3 only: the pinned prompts, per owner, by message uuid, as the file's `pins`
+   * key held them then. Read for the migrations (v3to4 turns it into `pins` below) and written
+   * back only to a file of those versions; no other code reads it (the pins-by-name design,
+   * 2026-10-26).
+   */
+  pinsV3?: Partial<Record<AnchorOwner, string[]>>
   /** The letters and the reading position, per owner (format v3). Absent on a file not yet migrated: its marks are still in the store. */
   slots?: Partial<Record<AnchorOwner, Record<string, Slot>>>
-  /** Starred places, each with the list it was starred in (format v4, stars.ts); the v3 pins become stars from `prompts`. */
-  stars?: Star[]
+  /**
+   * Pinned places, each with the list it was pinned in (pins.ts). In the file: `pins` from
+   * format v5, `stars` at v4 (0.7.1's name); `serializeRegister` writes the key the file's own
+   * version uses, so a file is never written in a shape its version does not say.
+   */
+  pins?: Pin[]
 }
 
 export function emptyRegister(sessionId: string, writer: string, now: number, env?: { configDir?: string; cwd?: string; transcript?: string }): Register {
@@ -361,10 +373,25 @@ export function serializeRegister(reg: Register): string {
   const ordered: Record<string, unknown> = {}
   for (const k of REGISTER_KEYS) {
     if (k === 'perma') ordered.perma = reg.perma.map(r => orderRecord(r, reg))
-    else if ((reg as Record<string, unknown>)[k] !== undefined) ordered[k] = (reg as Record<string, unknown>)[k]
+    else if (k === 'pins' || k === 'stars') {
+      const v = pinsUnder(reg, k)
+      if (v !== undefined) ordered[k] = v
+    } else if ((reg as Record<string, unknown>)[k] !== undefined) ordered[k] = (reg as Record<string, unknown>)[k]
   }
-  keepUnknown(ordered, reg, REGISTER_KEYS)
+  keepUnknown(ordered, reg, IN_MEMORY_KEYS)
   return JSON.stringify(ordered, null, 2) + '\n'
+}
+
+/** Keys the register has in memory that are never written under their own name (`pinsV3` is written as `pins`). */
+const IN_MEMORY_KEYS: readonly string[] = [...REGISTER_KEYS, 'pinsV3']
+
+/**
+ * What the file's `pins` or `stars` key holds, by the file's own version: the map (`pinsV3`)
+ * under `pins` at v2 and v3, the list (`pins`) under `stars` at v4 and under `pins` from v5.
+ */
+function pinsUnder(reg: Register, key: 'pins' | 'stars'): unknown {
+  if (key === 'stars') return reg.version === 4 ? reg.pins : undefined
+  return reg.version >= 5 ? reg.pins : reg.version >= 4 ? undefined : reg.pinsV3
 }
 
 // The hoist (v2): a record's `sessionId` and `transcript` are written only when they differ
@@ -422,9 +449,10 @@ export function parseRegister(text: string): Register | undefined {
     // Records and tombstones come through as they are in the file, unknown keys included.
     perma: o.perma.filter((r: any) => r && typeof r.uuid === 'string' && typeof r.label === 'string').map(fill),
     tombstones: Array.isArray(o.tombstones) ? o.tombstones : [],
-    ...(o.pins && typeof o.pins === 'object' && !Array.isArray(o.pins) ? { pins: o.pins } : {}),
+    // `pins` by its shape: the map of v2 and v3, or the list of v5; v4 kept the list as `stars`.
+    ...(o.pins && typeof o.pins === 'object' && !Array.isArray(o.pins) ? { pinsV3: o.pins } : {}),
     ...(o.slots && typeof o.slots === 'object' && !Array.isArray(o.slots) ? { slots: o.slots } : {}),
-    ...(Array.isArray(o.stars) ? { stars: o.stars.filter(isStar) } : {}),
+    ...(Array.isArray(o.pins) ? { pins: o.pins.filter(isPin) } : Array.isArray(o.stars) ? { pins: o.stars.filter(isPin) } : {}),
   }
   // The file's own unknown keys ride along too; `serializeRegister` writes them back after the known ones.
   keepUnknown(reg as unknown as Record<string, unknown>, o, REGISTER_KEYS)

@@ -1,8 +1,9 @@
-// Stars in the prompts list (the 0.7 groundwork design, unit 6b): a pin is a star made in the
-// prompts list, written to the register (format v4) with `from: "prompts"`; the starScope
-// setting decides whether the list also shows stars made elsewhere. Run: claude plugin test plugin
+// Pins in the prompts list (the 0.7 groundwork design, unit 6b; renamed from stars by the
+// pins-by-name design, 2026-10-26): a pin records the list it was made in (`from: "prompts"`),
+// and the pinScope setting decides whether the list also shows pins made elsewhere.
+// Run: claude plugin test plugin
 import { expect, test } from 'claude-code/testing'
-import { emptyRegister, parseRegister, serializeRegister } from '../hooks/core/bookmarks/register-file.ts'
+import { emptyRegister, parseRegister, REGISTER_VERSION, serializeRegister } from '../hooks/core/bookmarks/register-file.ts'
 import { BAND_PROPS, world } from './harness.ts'
 
 const SID = '11111111-2222-4333-8444-555555555555'
@@ -31,26 +32,26 @@ async function openPane($: Mount): Promise<Pane> {
 }
 const stars = async (p: Pane) => (await p.findAll({ type: 'Text' })).filter(t => t.text === '★').length
 
-/** A v4 register holding one star on prompt 2, made in a list other than the prompts list. */
-const starredInSearch = () => serializeRegister({ ...emptyRegister(SID, 'bookmarks test', 0), stars: [{ uuid: PROMPTS[1]!.uuid, owner: 'user', from: 'search', at: 1 }] })
+/** A register at this build's version holding one pin on prompt 2, made in a list other than the prompts list. */
+const pinnedInSearch = () => serializeRegister({ ...emptyRegister(SID, 'bookmarks test', 0), pins: [{ uuid: PROMPTS[1]!.uuid, owner: 'user', from: 'search', at: 1 }] })
 
-test('*2 in the prompts field stars prompt 2 as a star made in the prompts list, and the row shows it', async ($, on) => {
+test('*2 in the prompts field pins prompt 2 as a pin made in the prompts list, and the row shows it', async ($, on) => {
   const w = world(on, { session: SID, store: STORE })
   const pane = await openPane($ as never)
   await pane.input({ key: 'prompt-number', text: '*2', kind: 'submit' }).catch(() => undefined)
   const reg = parseRegister(w.file(PATH) ?? '')!
-  expect(reg.version).toBe(4)
-  expect(reg.pins).toBe(undefined)
-  expect(reg.stars?.map(s => [s.uuid, s.owner, s.from, s.off])).toEqual([[PROMPTS[1]!.uuid, 'user', 'prompts', undefined]])
+  expect(reg.version).toBe(REGISTER_VERSION)
+  expect(reg.pinsV3).toBe(undefined)
+  expect(reg.pins?.map(s => [s.uuid, s.owner, s.from, s.off])).toEqual([[PROMPTS[1]!.uuid, 'user', 'prompts', undefined]])
   expect(await stars(pane)).toBeGreaterThan(0)
 })
 
-test('starScope here (the default): a star made in another list does not show in the prompts list', async ($, on) => {
-  world(on, { session: SID, store: STORE, files: { [PATH]: starredInSearch() } })
+test('pinScope here (the default): a pin made in another list does not show in the prompts list', async ($, on) => {
+  world(on, { session: SID, store: STORE, files: { [PATH]: pinnedInSearch() } })
   expect(await stars(await openPane($ as never))).toBe(0)
 })
 
-test('starScope everywhere: the same star shows in the prompts list', { options: { starScope: 'everywhere' } }, async ($, on) => {
-  world(on, { session: SID, store: STORE, files: { [PATH]: starredInSearch() } })
+test('pinScope everywhere: the same pin shows in the prompts list', { options: { pinScope: 'everywhere' } }, async ($, on) => {
+  world(on, { session: SID, store: STORE, files: { [PATH]: pinnedInSearch() } })
   expect(await stars(await openPane($ as never))).toBeGreaterThan(0)
 })

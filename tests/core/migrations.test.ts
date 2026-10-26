@@ -27,12 +27,13 @@ function v1Text(): string {
   return JSON.stringify(o, null, 2) + '\n'
 }
 
-test('the plan: a v1 file takes three steps to CURRENT, a v2 file two, a v3 file one; a current or newer file takes none', () => {
+test('the plan: a v1 file takes four steps to CURRENT, a v2 three, a v3 two, a v4 one; a current or newer file takes none', () => {
   assert.equal(CURRENT, REGISTER_VERSION)
-  assert.equal(CURRENT, 4)
-  assert.deepEqual(planFor(1).map(s => [s.from, s.to]), [[1, 2], [2, 3], [3, 4]])
-  assert.deepEqual(planFor(2).map(s => [s.from, s.to]), [[2, 3], [3, 4]])
-  assert.deepEqual(planFor(3).map(s => [s.from, s.to]), [[3, 4]])
+  assert.equal(CURRENT, 5)
+  assert.deepEqual(planFor(1).map(s => [s.from, s.to]), [[1, 2], [2, 3], [3, 4], [4, 5]])
+  assert.deepEqual(planFor(2).map(s => [s.from, s.to]), [[2, 3], [3, 4], [4, 5]])
+  assert.deepEqual(planFor(3).map(s => [s.from, s.to]), [[3, 4], [4, 5]])
+  assert.deepEqual(planFor(4).map(s => [s.from, s.to]), [[4, 5]])
   assert.deepEqual(planFor(CURRENT), [])
   assert.deepEqual(planFor(CURRENT + 1), [])
   assert.deepEqual([...STORE_PREFIXES], ['pins:', 'marks:'])
@@ -64,10 +65,10 @@ test('v2 -> v3: the store\'s marks become mark records and slots; the reading po
   assert.equal(marks[1]?.words, 'reading here', 'the latest selection on the message is its words')
   // Straight from v1 with both store keys: the same end state as two starts would give.
   const direct = applyMigrations(parseRegister(v1Text())!, planFor(1), { ...store, [`pins:${SESSION}`]: ['33333333-0000-4000-8000-000000000003'] }, { sessionId: SESSION, now: T0 + 2000 })
-  // Since 0.7.1 the plan goes on to v4: the pin taken from the store ends as a star from the prompts list.
-  assert.equal(direct.version, 4)
-  assert.equal(direct.pins, undefined)
-  assert.deepEqual(direct.stars?.map(s => [s.uuid, s.owner, s.from]), [['33333333-0000-4000-8000-000000000003', 'user', 'prompts']])
+  // The plan goes on to the current version: the pin taken from the store ends as a pin record from the prompts list.
+  assert.equal(direct.version, 5)
+  assert.equal(direct.pinsV3, undefined)
+  assert.deepEqual(direct.pins?.map(s => [s.uuid, s.owner, s.from]), [['33333333-0000-4000-8000-000000000003', 'user', 'prompts']])
   assert.deepEqual(direct.slots?.user?.a, v3.slots?.user?.a)
   assert.deepEqual(parseRegister(serializeRegister(direct)), direct, 'round-trips')
   // No marks in the store: slots exist and are empty, which is what says "migrated".
@@ -87,7 +88,8 @@ test('v1 -> v2: the hoist, the numbers in minting order, pins from the store; th
   assert.deepEqual(out.perma.map(r => [r.label, r.n]), [['first', 3], ['second', 1], ['third', 2], ['from another conversation', 4]], 'numbered in minting order, positions kept')
   assert.equal(out.nextN, 5)
   assert.equal(out.perma[0]?.transcript, T, 'the backslashed spelling is normalised')
-  assert.deepEqual(out.pins, { user: store[`pins:${SESSION}`] })
+  assert.deepEqual(out.pinsV3, { user: store[`pins:${SESSION}`] })
+  assert.deepEqual(JSON.parse(serializeRegister(out)).pins, { user: store[`pins:${SESSION}`] }, 'a v2 file writes the map under pins')
   assert.equal(out.rev, reg.rev + 1)
   assert.equal(out.updatedAt, T0 + 1000)
   assert.equal(out.tombstones.length, 1, 'tombstones ride along')
@@ -116,8 +118,9 @@ test('a migration is deterministic, and running the plan for an already-current 
   assert.deepEqual(a, b)
   assert.deepEqual(planFor(a.version), [])
   assert.equal(newerThanBuild(a), false)
-  // No pins in the store: no pins key at all.
+  // No pins in the store: no pins at all.
   assert.equal(a.pins, undefined)
+  assert.equal(a.pinsV3, undefined)
 })
 
 test('an empty v1 register (a store-only conversation) migrates to a v2 file with the pins and nothing else', () => {
@@ -126,7 +129,7 @@ test('an empty v1 register (a store-only conversation) migrates to a v2 file wit
   assert.equal(out.version, 2)
   assert.equal(out.nextN, 1)
   assert.equal(out.transcript, 'C:/x/y.jsonl', 'with no records, the hint names the transcript, slashes forward')
-  assert.deepEqual(out.pins, { user: ['aaaaaaaa-0000-4000-8000-000000000001'] })
+  assert.deepEqual(out.pinsV3, { user: ['aaaaaaaa-0000-4000-8000-000000000001'] })
   assert.equal(v1to2.storeKeys(OTHER)[0], `pins:${OTHER}`)
 })
 

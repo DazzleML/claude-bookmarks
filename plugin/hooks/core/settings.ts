@@ -161,11 +161,11 @@ export const FIELDS = {
     title: 'Typing a list number',
     description: "auto: the best way this Claude Code build allows (today the band's own field); field: the band's own field, where Backspace, /words and * work; buttons: one key per digit, as before 0.6.27",
   },
-  // Stars (the 0.7 groundwork design, unit 6; the gate's G-a, djdarcy 2026-10-25: "by default
+  // Pins (the 0.7 groundwork design, unit 6; the gate's G-a, djdarcy 2026-10-25: "by default
   // "only where made" but people should be able to choose everywhere too in the config").
-  // Every star records the list it was made in (core/bookmarks/stars.ts). The screen says "pin"
-  // and the file and code say "star" (djdarcy, 2026-10-26: `pins` in the file is v3's shape).
-  starScope: {
+  // Every pin records the list it was made in (core/bookmarks/pins.ts). Named `starScope` in
+  // 0.7.1; renamed with no carry-over, as no saved value existed (measured 2026-10-26).
+  pinScope: {
     kind: 'enum',
     values: ['here', 'everywhere'],
     default: 'here',

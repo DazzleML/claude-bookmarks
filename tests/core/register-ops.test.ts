@@ -149,17 +149,19 @@ test('union: on a rev tie the left-hand copy is the base; a tombstone at the ver
   assert.ok(!merged.perma.some(r => r.n === one.n), 'removed at the instant of its last touch: gone, not resurrected')
 })
 
-test('pins are a per-owner list in the register; pinning twice changes nothing', () => {
+test('pins are records in the register; pinning twice changes nothing; unpinning stamps the pin', () => {
+  // Since 0.7.1 a pin records its list (pins.ts); the full behaviour is in pins.test.ts.
   const d = diskRegister()
-  const p = commit(d, { op: 'pin', owner: 'user', uuid: u('a'), on: true }, T0 + 1)
-  assert.deepEqual(p.pins, { user: [u('a')] })
-  const twice = applyOp(p, { op: 'pin', owner: 'user', uuid: u('a'), on: true }, T0 + 2)
+  const pin = (on: boolean, at: number) => ({ op: 'pin' as const, owner: 'user' as const, place: { uuid: u('a') }, from: 'prompts', on, scope: 'here' as const, at })
+  const p = commit(d, pin(true, T0 + 1), T0 + 1)
+  assert.deepEqual(p.pins, [{ uuid: u('a'), owner: 'user', from: 'prompts', at: T0 + 1 }])
+  const twice = applyOp(p, pin(true, T0 + 2), T0 + 2)
   assert.ok(!('error' in twice) && twice.unchanged)
-  const off = commit(p, { op: 'pin', owner: 'user', uuid: u('a'), on: false }, T0 + 3)
-  assert.deepEqual(off.pins, { user: [] })
+  const off = commit(p, pin(false, T0 + 3), T0 + 3)
+  assert.deepEqual(off.pins, [{ uuid: u('a'), owner: 'user', from: 'prompts', at: T0 + 1, off: T0 + 3 }])
   const text = serializeRegister(p)
-  assert.ok(text.indexOf('"pins"') > text.indexOf('"tombstones"'), 'pins after tombstones in the file')
-  assert.deepEqual(parseRegister(text)?.pins, { user: [u('a')] })
+  assert.ok(text.indexOf(p.version >= 5 ? '"pins"' : '"stars"') > text.indexOf('"tombstones"'), 'pins after tombstones in the file')
+  assert.deepEqual(parseRegister(text)?.pins, p.pins)
 })
 
 // --- Slots (unit 5): the letters and the reading position as records pointed at by slots -----
