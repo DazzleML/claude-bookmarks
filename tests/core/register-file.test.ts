@@ -128,7 +128,7 @@ test('temporary: a permanent mark stays permanent; prune removes old temporaries
 test('the file is stable-ordered JSON that reads back equal', () => {
   const r = addOrRelabel(emptyRegister(SESSION, 'w', T0, { configDir: 'C:/Users/x/.claude', cwd: 'C:/code/p' }), mint, T0).register
   const text = serializeRegister(r)
-  assert.ok(text.startsWith('{\n  "version": 3,\n  "format": 3,\n  "sessionId": "' + SESSION))
+  assert.ok(text.startsWith('{\n  "version": 4,\n  "format": 4,\n  "sessionId": "' + SESSION))
   const keys = Object.keys(JSON.parse(text).perma[0])
   // v2: the record's number first; its sessionId is the file's and so not written (the hoist).
   assert.deepEqual(keys.slice(0, 5), ['n', 'uuid', 'owner', 'label', 'why'])
@@ -315,7 +315,8 @@ test('unknown keys survive the operations this build performs: relabel, share, c
 
 test('a file from a newer build is recognised by its format, not its version; this build\'s own and older files are not', () => {
   // No `format` (a file from before 0.5.12): the version stands in for it.
-  assert.equal(newerThanBuild(parseRegister(newerBuildFile(4))!), true)
+  assert.equal(newerThanBuild(parseRegister(newerBuildFile(5))!), true)
+  assert.equal(newerThanBuild(parseRegister(newerBuildFile(4))!), false)
   assert.equal(newerThanBuild(parseRegister(newerBuildFile(3))!), false)
   assert.equal(newerThanBuild(parseRegister(newerBuildFile(2))!), false)
   assert.equal(newerThanBuild(parseRegister(newerBuildFile(1))!), false)

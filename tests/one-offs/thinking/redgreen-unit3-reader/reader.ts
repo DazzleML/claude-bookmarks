@@ -70,7 +70,19 @@ export function newCursor(key: string, path: string, ctx: RowContext): FileCurso
 /** A place's key in the index: file, uuid and part, so one uuid in two files (a fork) is two places. */
 export const placeKey = (at: PlaceAddress): string => `${at.file ?? ''}|${at.uuid}|${at.part ?? 0}`
 
-const headOf = (text: string): string => text.replace(/\s+/g, ' ').trim().slice(0, HEAD_CHARS)
+/**
+ * A place's head: its first HEAD_CHARS characters with whitespace runs made one space. Built from
+ * a prefix that grows until it yields a full head (the same text as normalising the whole), and
+ * kept as a copy of its own: a slice keeps the string it was cut from alive, and the whole
+ * normalised text of every place stayed in memory through its head (measured: 54 MB of 73 MB on
+ * a 600 MB conversation, `tests/one-offs/thinking/measure_places_memory.ts`).
+ */
+export function headOf(text: string): string {
+  for (let n = HEAD_CHARS * 4; ; n *= 4) {
+    const h = text.slice(0, n).replace(/\s+/g, ' ').trim()
+    if (h.length >= HEAD_CHARS || n >= text.length) return JSON.parse(JSON.stringify(h.slice(0, HEAD_CHARS))) as string
+  }
+}
 
 /** Keep one place: its row in memory, its text in the open piece. A place already kept is left as it is. */
 export function addPlace(idx: PlaceIndex, p: Place): boolean {
@@ -188,12 +200,20 @@ export function conversationFiles(sessionDir: string, agentsListing: readonly { 
 
 /** An agent's type from its `.meta.json` (`agentType`), or undefined when the file is missing or unreadable. */
 export function agentTypeOf(metaText: string | undefined): string | undefined {
-  if (!metaText) return undefined
+  return agentMetaOf(metaText).type
+}
+
+/** What an agent's `.meta.json` says: its type, and the id of the Agent call that started it (`toolUseId`); either may be absent. */
+export function agentMetaOf(metaText: string | undefined): { type?: string; call?: string } {
+  if (!metaText) return {}
   try {
-    const t = JSON.parse(metaText)?.agentType
-    return typeof t === 'string' && t ? t : undefined
+    const m = JSON.parse(metaText)
+    return {
+      ...(typeof m?.agentType === 'string' && m.agentType ? { type: m.agentType } : {}),
+      ...(typeof m?.toolUseId === 'string' && m.toolUseId ? { call: m.toolUseId } : {}),
+    }
   } catch {
-    return undefined
+    return {}
   }
 }
 

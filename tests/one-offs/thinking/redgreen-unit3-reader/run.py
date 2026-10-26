@@ -41,7 +41,11 @@ MUTANTS = {
     "P3 agents' files not read": [("pass", "for (const a of agents) {", "for (const a of agents.slice(0, 0)) {")],
     "P4 stored outputs skipped": [("pass", "    for (const r of p.results) {", "    for (const r of p.results.slice(0, 0)) {")],
     "P5 finishedAt not set": [("pass", "    p.finishedAt = Date.now()\n", "")],
-    "P6 the agent type not read": [("pass", "const type = agentTypeOf(await readIfExists(ports, a.meta))", "const type: string | undefined = undefined")],
+    # Re-anchored 2026-10-26: unit 5 replaced agentTypeOf with agentMetaOf (the type and the starting call).
+    "P6 the agent's meta not read": [("pass", "const meta = agentMetaOf(await readIfExists(ports, a.meta))", "const meta = agentMetaOf(undefined)")],
+    # 2026-10-26, the head built from a prefix (the memory fix, measure_places_memory.ts):
+    "H1 the prefix never grown": [("reader", "if (h.length >= HEAD_CHARS || n >= text.length) return", "if (true) return")],
+    "H2 the head's whitespace not trimmed": [("reader", "const h = text.slice(0, n).replace(/\\s+/g, ' ').trim()", "const h = text.slice(0, n).replace(/\\s+/g, ' ')")],
 }
 
 (HERE / "places-reader.test.ts").write_text(TEST, encoding="utf-8")

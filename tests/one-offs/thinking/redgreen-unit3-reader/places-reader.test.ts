@@ -7,8 +7,22 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  addPlace, conversationFiles, feedFile, newCursor, newPlaceIndex, parsePlaceIndex, placeKey, seal, serializePlaceIndex, takeSealed, PIECE_BYTES,
+  addPlace, conversationFiles, feedFile, headOf, newCursor, newPlaceIndex, parsePlaceIndex, placeKey, seal, serializePlaceIndex, takeSealed, HEAD_CHARS, PIECE_BYTES,
 } from './reader.ts'
+
+test('a head is the text with its whitespace runs made one space, cut at HEAD_CHARS, however long the text and wherever the whitespace falls', () => {
+  // The definition the head had before it was built from a prefix (0.7.0): normalise the whole, then cut.
+  const whole = (t: string) => t.replace(/\s+/g, ' ').trim().slice(0, HEAD_CHARS)
+  const texts = [
+    '', '   ', 'short', '  lead and trail  ',
+    'x'.repeat(HEAD_CHARS * 10),
+    ' \n\t'.repeat(400) + 'words after a long run of whitespace',  // the first prefix holds no text
+    'a b'.repeat(200) + ' '.repeat(2000) + 'tail',
+    'y'.repeat(HEAD_CHARS - 1) + '\n\n\n' + 'z'.repeat(50),           // a run at the cut
+    'é'.repeat(HEAD_CHARS * 3) + '  ' + '😀'.repeat(10),
+  ]
+  for (const t of texts) assert.equal(headOf(t), whole(t), JSON.stringify(t.slice(0, 40)))
+})
 import { startPlacesPass, placesIndex, placesDone, newConversation, PLACES_CHUNK } from './places.ts'
 import type { PlacesPorts } from 'file:///C:/code/claude-projects/claude-bookmarks/plugin/hooks/engine/ports.ts'
 
@@ -224,7 +238,7 @@ test('the pass reads the transcript, every agent file and the stored outputs, ea
   const idx = placesIndex()!
   const by = (uuid: string) => idx.rows.find(r => r.at.uuid === uuid)!
   assert.deepEqual(by('p1').at, { session: 's1', uuid: 'p1' })
-  assert.deepEqual([by('d1').kind, by('d1').author, by('d1').at.file, by('d1').agent], ['prompt', 'claude', 'agent:a1', { id: 'a1', type: 'oracle' }])
+  assert.deepEqual([by('d1').kind, by('d1').author, by('d1').at.file, by('d1').agent], ['prompt', 'claude', 'agent:a1', { id: 'a1', type: 'oracle', call: 'toolu_a' }], "the agent's meta names its type and the Agent call that started it")
   assert.deepEqual([by('e1').author, by('e1').agent?.type], ['agent', 'oracle'])
   assert.deepEqual(by('f1').agent, { id: 'b2' }, 'an agent with no meta file still has its id')
   assert.deepEqual([by('big1.txt').kind, by('big1.txt').at.file], ['tool-result', 'tool-result:big1.txt'])

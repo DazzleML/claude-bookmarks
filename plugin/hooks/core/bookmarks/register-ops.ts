@@ -13,6 +13,7 @@ import { type AnchorOwner, type AnchorRecord, ownerOf, tierOf } from './anchor.t
 import { sameMessage } from '../kit/message-id.ts'
 import type { Mark, Marks } from '../marks/marks.ts'
 import { sameBase, type NoteBase } from './note.ts'
+import { setStar, unionStars, type StarFrom, type StarPlace, type StarScope } from './stars.ts'
 import {
   addOrRelabel, claim, idOf, isRecord, prune, recordById, recordsOn, remove, share,
   type Mint, type RecordId, type Register, type Retention, type Slot, type Tombstone,
@@ -48,6 +49,8 @@ export type Op =
   | { op: 'claim'; id: RecordId }
   | { op: 'prune'; retention: Retention }
   | { op: 'pin'; owner: AnchorOwner; uuid: string; on: boolean }
+  /** A star on a place in a list turned on or off (format v4, stars.ts); `scope` says which stars an off turns off. */
+  | { op: 'star'; owner: AnchorOwner; place: StarPlace; from: StarFrom; on: boolean; scope: StarScope; at: number }
   /** A letter (or the reading position's key) set on a place: the place's mark record found or made, the slot's current moved to it. */
   | { op: 'setMark'; owner: AnchorOwner; letter: string; place: MarkPlace; at: number }
   /** Letters cleared: each slot's current becomes null, its history kept (the delete gesture's first verb). */
@@ -133,6 +136,11 @@ export function applyOp(reg: Register, op: Op, now: number): OpResult {
       if (has === op.on) return { register: reg, unchanged: true }
       const pins = { ...(reg.pins ?? {}), [op.owner]: op.on ? [...list, op.uuid] : list.filter(u => u !== op.uuid) }
       return { register: { ...reg, pins, rev: reg.rev + 1, updatedAt: now } }
+    }
+    case 'star': {
+      const r = setStar(reg.stars, op.owner, op.place, op.from, op.on, op.scope, op.at)
+      if (!r.changed) return { register: reg, unchanged: true }
+      return { register: { ...reg, stars: r.stars, rev: reg.rev + 1, updatedAt: now } }
     }
     case 'setMark':
       return setMark(reg, op.owner, op.letter, op.place, op.at)
@@ -319,6 +327,9 @@ export function union(a: Register, b: Register, now: number): Applied {
     if (merged.length !== mine.length) { pins[owner] = merged; changed = true }
   }
   if (Number.isFinite(nextN) && nextN !== base.nextN) changed = true
+  // Stars (v4): one per owner, list and place, the later touch winning, so one turned off stays off.
+  const stars = unionStars(base.stars, other.stars)
+  if (stars.changed) changed = true
   if (!changed) return { register: base, unchanged: true }
   return {
     register: {
@@ -327,6 +338,7 @@ export function union(a: Register, b: Register, now: number): Applied {
       tombstones,
       ...(Number.isFinite(nextN) ? { nextN } : {}),
       ...(Object.keys(pins).length > 0 ? { pins } : {}),
+      ...(stars.stars.length > 0 ? { stars: stars.stars } : {}),
       rev: Math.max(a.rev, b.rev) + 1,
       updatedAt: now,
     },

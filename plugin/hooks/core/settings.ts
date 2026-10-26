@@ -161,6 +161,17 @@ export const FIELDS = {
     title: 'Typing a list number',
     description: "auto: the best way this Claude Code build allows (today the band's own field); field: the band's own field, where Backspace, /words and * work; buttons: one key per digit, as before 0.6.27",
   },
+  // Stars (the 0.7 groundwork design, unit 6; the gate's G-a, djdarcy 2026-10-25: "by default
+  // "only where made" but people should be able to choose everywhere too in the config").
+  // Every star records the list it was made in (core/bookmarks/stars.ts). The screen says "pin"
+  // and the file and code say "star" (djdarcy, 2026-10-26: `pins` in the file is v3's shape).
+  starScope: {
+    kind: 'enum',
+    values: ['here', 'everywhere'],
+    default: 'here',
+    title: 'Pins shown in a list',
+    description: 'here: a list shows the pins made in it; everywhere: a list shows a pin on any of its rows, wherever it was made',
+  },
   // U70: how much of each row the prompts and jump lists show. The pane's width is known, so
   // lines are the one control that matters; the text is cut with an ellipsis at the end of
   // the last line.

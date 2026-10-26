@@ -7,8 +7,22 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  addPlace, conversationFiles, feedFile, newCursor, newPlaceIndex, parsePlaceIndex, placeKey, seal, serializePlaceIndex, takeSealed, PIECE_BYTES,
+  addPlace, conversationFiles, feedFile, headOf, newCursor, newPlaceIndex, parsePlaceIndex, placeKey, seal, serializePlaceIndex, takeSealed, HEAD_CHARS, PIECE_BYTES,
 } from '../../plugin/hooks/core/places/reader.ts'
+
+test('a head is the text with its whitespace runs made one space, cut at HEAD_CHARS, however long the text and wherever the whitespace falls', () => {
+  // The definition the head had before it was built from a prefix (0.7.0): normalise the whole, then cut.
+  const whole = (t: string) => t.replace(/\s+/g, ' ').trim().slice(0, HEAD_CHARS)
+  const texts = [
+    '', '   ', 'short', '  lead and trail  ',
+    'x'.repeat(HEAD_CHARS * 10),
+    ' \n\t'.repeat(400) + 'words after a long run of whitespace',  // the first prefix holds no text
+    'a b'.repeat(200) + ' '.repeat(2000) + 'tail',
+    'y'.repeat(HEAD_CHARS - 1) + '\n\n\n' + 'z'.repeat(50),           // a run at the cut
+    'é'.repeat(HEAD_CHARS * 3) + '  ' + '😀'.repeat(10),
+  ]
+  for (const t of texts) assert.equal(headOf(t), whole(t), JSON.stringify(t.slice(0, 40)))
+})
 import { startPlacesPass, placesIndex, placesDone, newConversation, PLACES_CHUNK } from '../../plugin/hooks/handlers/places.ts'
 import type { PlacesPorts } from '../../plugin/hooks/engine/ports.ts'
 

@@ -200,6 +200,8 @@ Pin the prompts you want to come back to, and they stay at the top of the pane:
 
 A pinned prompt shows a gold star inside its number, `245★) `, both in a **★ pinned** group at the top of the pane (in the order you pinned them) and in its place in the full list. Pins are kept per conversation, like marks.
 
+Each pin remembers the list it was made in. The lists to come (search, and the pane's other views) will let you pin their rows too. "Pins shown in a list" in `/config` decides whether a list shows only the pins made in it (`here`, the default) or every pin on its rows, wherever it was made (`everywhere`).
+
 ### Footnotes
 
 Some of what you type is not a prompt: a slash command (`/compact`, `/bm-pin 21`, `/goal ...`), a `!` shell command, an interruption (`Esc` while Claude is working). These are listed as **footnotes** under the prompt they followed, numbered `N.k`, so prompt numbers stay as they were:

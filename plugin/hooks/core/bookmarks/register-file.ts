@@ -18,15 +18,17 @@
 import { type AnchorOwner, type AnchorRecord, ownerOf, tierOf, uuid8 } from './anchor.ts'
 import { isDrawnId, matchesPrefix, sameMessage } from '../kit/message-id.ts'
 import { aliasesOf, noteOwners, noteTags } from './note.ts'
+import { isStar, type Star } from './stars.ts'
 
 /**
  * The format this build writes. 1: the proof of concept's file. 2 (0.5.4): `sessionId` and
  * `transcript` once at the top with per-record overrides, `n`/`nextN`, pins in the file.
  * 3 (0.5.5): the letter marks and the reading position as records of tier `mark`, pointed
- * at by `slots`. An older file is migrated at its conversation's start
+ * at by `slots`. 4 (0.7.1): the pins become stars, each with the list it was made in
+ * (`stars`, core/bookmarks/stars.ts). An older file is migrated at its conversation's start
  * (core/bookmarks/migrations.ts).
  */
-export const REGISTER_VERSION = 3
+export const REGISTER_VERSION = 4
 
 /**
  * The format this build understands: the MINIMUM READER a file may ask for. `version` counts
@@ -38,10 +40,11 @@ export const REGISTER_VERSION = 3
  * people to upgrade"). A build refuses to write a file whose `format` is above this; a file
  * with a higher `version` but a `format` it knows is read and written, unknown keys kept.
  * 1, 2, 3 coincide with the versions: each of the first three shapes needed its own reader
- * (v3's slots, say: a v2 build would put marks back in the store). A file without the field
- * (written before 0.5.12) reads as `format: version`.
+ * (v3's slots, say: a v2 build would put marks back in the store). 4 does too: a v3 build
+ * reads only `pins` and would show none of the stars. A file without the field (written
+ * before 0.5.12) reads as `format: version`.
  */
-export const REGISTER_FORMAT = 3
+export const REGISTER_FORMAT = 4
 
 /**
  * What a letter (or the reading position's key) points at: `current` is the record's `n`,
@@ -104,6 +107,8 @@ export type Register = {
   pins?: Partial<Record<AnchorOwner, string[]>>
   /** The letters and the reading position, per owner (format v3). Absent on a file not yet migrated: its marks are still in the store. */
   slots?: Partial<Record<AnchorOwner, Record<string, Slot>>>
+  /** Starred places, each with the list it was starred in (format v4, stars.ts); the v3 pins become stars from `prompts`. */
+  stars?: Star[]
 }
 
 export function emptyRegister(sessionId: string, writer: string, now: number, env?: { configDir?: string; cwd?: string; transcript?: string }): Register {
@@ -330,7 +335,7 @@ function bump(reg: Register, now: number): Register {
 }
 
 // Fixed key order, so a hand edit and a program write diff cleanly.
-const REGISTER_KEYS = ['version', 'format', 'sessionId', 'transcript', 'configDir', 'cwd', 'title', 'project', 'rev', 'updatedAt', 'writer', 'nextN', 'perma', 'tombstones', 'pins', 'slots'] as const
+const REGISTER_KEYS = ['version', 'format', 'sessionId', 'transcript', 'configDir', 'cwd', 'title', 'project', 'rev', 'updatedAt', 'writer', 'nextN', 'perma', 'tombstones', 'pins', 'slots', 'stars'] as const
 const RECORD_KEYS = [
   'n', 'sessionId', 'uuid', 'idKind', 'owner', 'label', 'why', 'words', 'head', 'line', 'bytes', 'role', 'timestamp',
   'temporary', 'tier', 'createdAt', 'updatedAt', 'by', 'source', 'sharedFrom', 'transcript', 'tags', 'axes', 'rel', 'x', 'md',
@@ -419,6 +424,7 @@ export function parseRegister(text: string): Register | undefined {
     tombstones: Array.isArray(o.tombstones) ? o.tombstones : [],
     ...(o.pins && typeof o.pins === 'object' && !Array.isArray(o.pins) ? { pins: o.pins } : {}),
     ...(o.slots && typeof o.slots === 'object' && !Array.isArray(o.slots) ? { slots: o.slots } : {}),
+    ...(Array.isArray(o.stars) ? { stars: o.stars.filter(isStar) } : {}),
   }
   // The file's own unknown keys ride along too; `serializeRegister` writes them back after the known ones.
   keepUnknown(reg as unknown as Record<string, unknown>, o, REGISTER_KEYS)

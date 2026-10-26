@@ -27,11 +27,12 @@ function v1Text(): string {
   return JSON.stringify(o, null, 2) + '\n'
 }
 
-test('the plan: a v1 file takes two steps to CURRENT, a v2 file one; a current or newer file takes none', () => {
+test('the plan: a v1 file takes three steps to CURRENT, a v2 file two, a v3 file one; a current or newer file takes none', () => {
   assert.equal(CURRENT, REGISTER_VERSION)
-  assert.equal(CURRENT, 3)
-  assert.deepEqual(planFor(1).map(s => [s.from, s.to]), [[1, 2], [2, 3]])
-  assert.deepEqual(planFor(2).map(s => [s.from, s.to]), [[2, 3]])
+  assert.equal(CURRENT, 4)
+  assert.deepEqual(planFor(1).map(s => [s.from, s.to]), [[1, 2], [2, 3], [3, 4]])
+  assert.deepEqual(planFor(2).map(s => [s.from, s.to]), [[2, 3], [3, 4]])
+  assert.deepEqual(planFor(3).map(s => [s.from, s.to]), [[3, 4]])
   assert.deepEqual(planFor(CURRENT), [])
   assert.deepEqual(planFor(CURRENT + 1), [])
   assert.deepEqual([...STORE_PREFIXES], ['pins:', 'marks:'])
@@ -48,7 +49,7 @@ test('v2 -> v3: the store\'s marks become mark records and slots; the reading po
       '`': { uuid: '11111111-0000-4000-8000-000000000001', head: 'the a message', markedAt: T0 + 600, source: 'selection', snippet: 'reading here' },
     },
   }
-  const v3 = applyMigrations(v2, planFor(2), store, { sessionId: SESSION, now: T0 + 2000 })
+  const v3 = applyMigrations(v2, planFor(2).slice(0, 1), store, { sessionId: SESSION, now: T0 + 2000 })
   assert.equal(v3.version, 3)
   // Each step names the reader its result needs; the file asks for the highest (v2's 2, then v3's 3).
   assert.equal(v2.format, 2)
@@ -63,8 +64,10 @@ test('v2 -> v3: the store\'s marks become mark records and slots; the reading po
   assert.equal(marks[1]?.words, 'reading here', 'the latest selection on the message is its words')
   // Straight from v1 with both store keys: the same end state as two starts would give.
   const direct = applyMigrations(parseRegister(v1Text())!, planFor(1), { ...store, [`pins:${SESSION}`]: ['33333333-0000-4000-8000-000000000003'] }, { sessionId: SESSION, now: T0 + 2000 })
-  assert.equal(direct.version, 3)
-  assert.deepEqual(direct.pins, { user: ['33333333-0000-4000-8000-000000000003'] })
+  // Since 0.7.1 the plan goes on to v4: the pin taken from the store ends as a star from the prompts list.
+  assert.equal(direct.version, 4)
+  assert.equal(direct.pins, undefined)
+  assert.deepEqual(direct.stars?.map(s => [s.uuid, s.owner, s.from]), [['33333333-0000-4000-8000-000000000003', 'user', 'prompts']])
   assert.deepEqual(direct.slots?.user?.a, v3.slots?.user?.a)
   assert.deepEqual(parseRegister(serializeRegister(direct)), direct, 'round-trips')
   // No marks in the store: slots exist and are empty, which is what says "migrated".

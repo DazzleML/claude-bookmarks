@@ -14,7 +14,7 @@
 //   index.json       the header (version, each file's watermark, how many row pieces)
 //   index.<k>.jsonl  the rows, without their text
 import {
-  addToolResultFile, agentTypeOf, conversationFiles, feedFile, newCursor, newPlaceIndex, parsePlaceIndex, placesLine,
+  addToolResultFile, agentMetaOf, conversationFiles, feedFile, newCursor, newPlaceIndex, parsePlaceIndex, placesLine,
   seal, serializePlaceIndex, takeSealed, type FileCursor, type PlaceIndex,
 } from './reader.ts'
 import { agentFile } from 'file:///C:/code/claude-projects/claude-bookmarks/plugin/hooks/core/places/place.ts'
@@ -97,8 +97,8 @@ async function filesOf(ports: PlacesPorts, sid: string, transcript: string): Pro
   const { agents, results } = conversationFiles(sessionDir, await list(`${sessionDir}/subagents`), await list(`${sessionDir}/tool-results`))
   const cursors: FileCursor[] = [newCursor('', transcript, { session: sid })]
   for (const a of agents) {
-    const type = agentTypeOf(await readIfExists(ports, a.meta))
-    cursors.push(newCursor(agentFile(a.id), a.path, { session: sid, file: agentFile(a.id), agent: { id: a.id, ...(type ? { type } : {}) } }))
+    const meta = agentMetaOf(await readIfExists(ports, a.meta))
+    cursors.push(newCursor(agentFile(a.id), a.path, { session: sid, file: agentFile(a.id), agent: { id: a.id, ...meta } }))
   }
   return { cursors, results }
 }

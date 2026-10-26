@@ -13,10 +13,11 @@ import {
   type Mint, type Register as BookmarkRegister, type Retention,
 } from '../core/bookmarks/register-file.ts'
 import { baseOf, ingest, primaryRecord, sameBase } from '../core/bookmarks/note.ts'
+import { isOn, type Star, type StarScope } from '../core/bookmarks/stars.ts'
 import { buildIndex, emptyIndex, entryOf, INDEX_JSON, INDEX_MD, parseIndex, renderIndexMarkdown, serializeIndex, upsert, type IndexEntry } from '../core/bookmarks/session-index.ts'
 import { applyOp, marksOf as marksFromRegister, type Op, type OpResult } from '../core/bookmarks/register-ops.ts'
 import {
-  applyMigrations, CURRENT, fnv1a64, hashText, planFor, runFolderName, SNAPSHOT_SUFFIX, snapshotFolderName, STORE_PREFIXES,
+  applyMigrations, CURRENT, fnv1a64, hashText, planFor, runFolderName, SNAPSHOT_SUFFIX, snapshotFolderName, STORE_PREFIXES, v3to4,
   type Manifest, type Migration,
 } from '../core/bookmarks/migrations.ts'
 import { checkReport, drawLine, STORE_CAP, type CheckInput } from '../core/bookmarks/check.ts'
@@ -383,18 +384,52 @@ export async function removeBookmark(ports: BookmarksPorts, target: AnchorRecord
   ports.toast(`removed bookmark: ${target.label.slice(0, 40)}`)
 }
 
-// --- Pins: the person's pinned prompts, in the register since 0.5.4 ----------------------
+// --- Pins: the person's starred prompts, in the register since 0.5.4 -----------------------
+// Since 0.7.1 (format v4) a pin is a star made in the prompts list (core/bookmarks/stars.ts);
+// the v3-to-v4 migration turned every older pin into one. `scope` is the starScope setting:
+// `here` shows the stars made in the prompts list, `everywhere` a star on a prompt made in
+// any list.
 
-/** The pinned prompts of this conversation, by message uuid, in the order pinned. */
-export async function pinnedPrompts(ports: BookmarksPorts): Promise<string[]> {
-  return (await loadRegister(ports)).pins?.user ?? []
+/** The pinned (starred) prompts of this conversation, by message uuid, in the order starred. */
+export async function pinnedPrompts(ports: BookmarksPorts, scope: StarScope): Promise<string[]> {
+  return pinnedOf(starsOf(await loadRegister(ports)), scope)
 }
 
-/** Pins or unpins a prompt for the person, as one committed operation. */
-export async function togglePinned(ports: BookmarksPorts, uuid: string, on: boolean): Promise<{ pinned: string[] } | { error: string }> {
-  const r = await commitOp(ports, { op: 'pin', owner: 'user', uuid, on })
+/**
+ * A register's stars. A file still at v3 (not yet migrated: the migration runs at a session's
+ * start, and a build that arrives by reload has not started one) shows its pins as the stars
+ * the migration will make, through the migration's own step; nothing is written.
+ * Compatibility count (2026-10-26): the 18 registers on plzwork, 5 with a pins key, and
+ * badbox's; the first start of 0.7.1 on each machine migrates every register there, after
+ * which this branch is unreachable. Remove it once badbox has run 0.7.1.
+ */
+export function starsOf(reg: BookmarkRegister): Star[] | undefined {
+  if (reg.version >= 4) return reg.stars
+  return v3to4.apply(reg, {}, { sessionId: reg.sessionId, now: reg.updatedAt }).stars
+}
+
+/** The prompt uuids the person's stars mark in the prompts list: the main transcript's rows, each once. */
+export function pinnedOf(stars: readonly Star[] | undefined, scope: StarScope): string[] {
+  const out: string[] = []
+  for (const s of stars ?? []) {
+    if (!isOn(s) || s.owner !== 'user' || s.file !== undefined || s.part !== undefined) continue
+    if (scope === 'here' && s.from !== PROMPTS_LIST) continue
+    if (!out.includes(s.uuid)) out.push(s.uuid)
+  }
+  return out
+}
+
+/** The list name the prompts list's stars carry. */
+export const PROMPTS_LIST = 'prompts'
+
+/** Pins (stars) or unpins a prompt for the person, as one committed operation. */
+export async function togglePinned(ports: BookmarksPorts, uuid: string, on: boolean, scope: StarScope): Promise<{ pinned: string[] } | { error: string }> {
+  // A file still at v3 keeps its pins as pins until its migration (the bridge of `starsOf`).
+  const v3 = (await loadRegister(ports)).version < 4
+  const op: Op = v3 ? { op: 'pin', owner: 'user', uuid, on } : { op: 'star', owner: 'user', place: { uuid }, from: PROMPTS_LIST, on, scope, at: await ports.now() }
+  const r = await commitOp(ports, op)
   if ('error' in r) return r
-  return { pinned: r.register.pins?.user ?? [] }
+  return { pinned: pinnedOf(starsOf(r.register), scope) }
 }
 
 // --- Migrations at a conversation's start (the data design, 2026-10-16, unit 4) -----------

@@ -198,6 +198,7 @@ Open `/config` and find the plugin's one row, **▸ Bookmarks**, reading `false`
 | Chords on their own keybindings | `on`, `off` | Whether mark, jump, prompts and read also answer the optional chords bound to their borrowed actions |
 | Lists in a pane | `on`, `off` | Whether the prompts and bookmarks lists open in a pane, or `p`/`b` take a number in the band with no pane |
 | Typing a list number | `auto`, `field`, `buttons` | How the band takes a prompt or bookmark number: in a text field of its own, where Backspace, `/words` and `*N` work (`auto`, the default, and `field`), or one button per digit as before 0.6.27 |
+| Pins shown in a list | `here`, `everywhere` | Whether a list shows only the pins made in it (`here`, the default) or every pin on its rows, wherever it was made |
 | Keyboard after an action | `input`, `band` | Where the keyboard should go after an action (`input` waits on Claude Code allowing it) |
 | ▸ Debug: show the debug rows | `false`, `true` | The fold over the three debug rows below |
 | Debug: echo by default | `off`, `on` | Whether the debug log is echoed into conversations that have not chosen (`/bm-debug` decides per conversation) |

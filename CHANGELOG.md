@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-26
+
+### Changed
+
+- A pin now remembers the list it was made in, so the lists coming in 0.7 (search, and the prompts pane's other views) can let you pin their rows too. The prompts list looks and works as before: `*21`, `s` and `/bm-pin` pin and unpin, and pinned prompts stay at the top.
+- **The bookmark file's format moves to v4.** At a session's first start on 0.7.1, every bookmark file in your data folder is brought up to date: each pin becomes a pin record that says which list it came from. A backup of every file is written first, under `bookmarks/backups/`. Your bookmarks and marks are not changed. An older build of the plugin can still read a v4 file but will not write to it, so update the plugin on every machine you use.
+
+### Added
+
+- A setting, "Pins shown in a list" (`here` or `everywhere`). `here`, the default, shows in a list only the pins made in it; `everywhere` shows a pin on any of its rows, wherever it was made. Only the prompts list exists so far, so the two read the same today.
+
+### Fixed
+
+- For contributors: the conversation reader added in 0.7.0 held about four times the memory it needed (72.6 MB, now 18.7 MB, on a 600 MB conversation). Each row's short preview kept its whole text alive. It is not yet called by the plugin, so this changes nothing in a session today.
+
 ## [0.7.0] - 2026-10-26
 
 The first release of the 0.7 line, which adds search, more lists in the prompts pane, and links to any row of a conversation. This one lays the groundwork; nothing new is switched on yet, so the plugin behaves as in 0.6.28 apart from the fix below.
@@ -1323,7 +1338,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.1...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

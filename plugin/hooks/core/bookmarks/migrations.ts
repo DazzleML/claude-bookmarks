@@ -13,6 +13,8 @@
 import { forwardSlashes } from '../kit/paths.ts'
 import { REGISTER_VERSION, type Register } from './register-file.ts'
 import { setMark } from './register-ops.ts'
+import type { AnchorOwner } from './anchor.ts'
+import type { Star } from './stars.ts'
 
 /** The format this build writes. A file at CURRENT is loaded and never copied. */
 export const CURRENT = REGISTER_VERSION
@@ -105,7 +107,39 @@ export const v2to3: Migration = {
   },
 }
 
-export const MIGRATIONS: readonly Migration[] = [v1to2, v2to3]
+/**
+ * v3 -> v4: the pins become stars (the 0.7 groundwork design, unit 6). Each pinned uuid of an
+ * owner becomes a star on that message from the `prompts` list, which is where every v3 pin
+ * was made; `pins` goes. A pin carries no time, so its star takes the file's `updatedAt` from
+ * before the step (deterministic, and never later than the pin really was). Format 4: a v3
+ * build reads the pins only and would show none.
+ *
+ * Registered in 0.7.1 after a dry run over a copy of djdarcy's folder (18 registers, 8 pins
+ * to 8 stars, nothing else changed; tests/one-offs/thinking/dryrun_v3_to_v4.ts), and his go,
+ * 2026-10-26. Until a session starts on the new build, its files stay at v3 and show their
+ * pins through `starsOf` (handlers/bookmarks.ts).
+ */
+export const v3to4: Migration = {
+  from: 3,
+  to: 4,
+  format: 4,
+  storeKeys: () => [],
+  apply(reg) {
+    const stars: Star[] = [...(reg.stars ?? [])]
+    for (const [owner, list] of Object.entries(reg.pins ?? {}) as [AnchorOwner, unknown][]) {
+      if (!Array.isArray(list)) continue
+      for (const uuid of list) {
+        if (typeof uuid !== 'string') continue
+        if (stars.some(s => s.owner === owner && s.from === 'prompts' && s.uuid === uuid && s.file === undefined && s.part === undefined)) continue
+        stars.push({ uuid, owner, from: 'prompts', at: reg.updatedAt })
+      }
+    }
+    const { pins: _gone, ...rest } = reg
+    return { ...rest, version: 4, ...(stars.length > 0 ? { stars } : {}) }
+  },
+}
+
+export const MIGRATIONS: readonly Migration[] = [v1to2, v2to3, v3to4]
 
 /** The store key families any step consumes (`pins:`, `marks:`), for finding conversations that live only in the store. */
 export const STORE_PREFIXES: readonly string[] = MIGRATIONS.map(m => m.storeKeys('')[0]!).filter(Boolean)

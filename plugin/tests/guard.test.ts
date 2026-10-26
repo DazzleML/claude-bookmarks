@@ -33,7 +33,7 @@ async function call($: { tool: { call: (i: never) => Promise<unknown> } }, input
 }
 
 test('a register from a newer build is read in full and never written; the tool says so', async ($, on) => {
-  const before = registerText(4)
+  const before = registerText(5) // one above REGISTER_VERSION (4 since 0.7.1)
   const w = world(on, { session: SID, files: { [PATH]: before } })
   const listed = await call($ as never, { action: 'list' })
   expect((listed.claudes as unknown[]).length).toBe(1)

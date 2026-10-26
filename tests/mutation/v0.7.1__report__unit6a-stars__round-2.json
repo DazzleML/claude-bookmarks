@@ -1,0 +1,139 @@
+{
+  "control": "green",
+  "results": [
+    {
+      "id": "m1",
+      "verdict": "killed",
+      "red": [
+        "not ok 5 - off stamps the star instead of deleting it; on again clears the stamp; a toggle that changes nothing says so"
+      ],
+      "note": "truthiness vs undefined: off=0 would count as on",
+      "original": "export const isOn = (s: Star): boolean => s.off === undefined",
+      "mutated": "export const isOn = (s: Star): boolean => !s.off",
+      "file": "stars"
+    },
+    {
+      "id": "m2",
+      "verdict": "killed",
+      "red": [
+        "not ok 7 - when two copies meet, the later touch wins: a star turned off on one side stays off; one only on the other side comes in"
+      ],
+      "note": "on stars get infinite touch, never replaced",
+      "original": "const lastTouch = (s: Star): number => Math.max(s.at, s.off ?? -Infinity)",
+      "mutated": "const lastTouch = (s: Star): number => Math.max(s.at, s.off ?? Infinity)",
+      "file": "stars"
+    },
+    {
+      "id": "m3",
+      "verdict": "killed",
+      "red": [
+        "not ok 7 - when two copies meet, the later touch wins: a star turned off on one side stays off; one only on the other side comes in"
+      ],
+      "note": "boundary: ties now replace and report changed",
+      "original": "if (lastTouch(s) > lastTouch(out[i]!)) { out[i] = s; changed = true }",
+      "mutated": "if (lastTouch(s) >= lastTouch(out[i]!)) { out[i] = s; changed = true }",
+      "file": "stars"
+    },
+    {
+      "id": "m4",
+      "verdict": "killed",
+      "red": [
+        "not ok 7 - when two copies meet, the later touch wins: a star turned off on one side stays off; one only on the other side comes in"
+      ],
+      "note": "union adding a new star no longer flags changed",
+      "original": "if (i === undefined) { at.set(starKey(s), out.length); out.push(s); changed = true; continue }",
+      "mutated": "if (i === undefined) { at.set(starKey(s), out.length); out.push(s); continue }",
+      "file": "stars"
+    },
+    {
+      "id": "m5",
+      "verdict": "killed",
+      "red": [
+        "not ok 5 - off stamps the star instead of deleting it; on again clears the stamp; a toggle that changes nothing says so"
+      ],
+      "note": "turning on an off star is a no-op",
+      "original": "if (i >= 0 && isOn(list[i]!)) return { stars: list, changed: false }",
+      "mutated": "if (i >= 0) return { stars: list, changed: false }",
+      "file": "stars"
+    },
+    {
+      "id": "m6",
+      "verdict": "killed",
+      "red": [
+        "not ok 6 - off with here turns off only this list's star; off with everywhere turns off every star the owner has on the place"
+      ],
+      "note": "off ignores owner: turns off other owners' stars",
+      "original": "if (!isOn(s) || s.owner !== owner || starPlaceKey(s) !== at) continue",
+      "mutated": "if (!isOn(s) || starPlaceKey(s) !== at) continue",
+      "file": "stars"
+    },
+    {
+      "id": "m7",
+      "verdict": "killed",
+      "red": [
+        "not ok 1 - djdarcy's case: \\#5 starred in the prompts list and \\#8 in search; each list shows only its own by default, both everywhere"
+      ],
+      "note": "or-to-and in starredPlaces scope check",
+      "original": "for (const s of stars ?? []) if (isOn(s) && s.owner === owner && (scope === 'everywhere' || s.from === from)) out.add(starPlaceKey(s))",
+      "mutated": "for (const s of stars ?? []) if (isOn(s) && s.owner === owner && (scope === 'everywhere' && s.from === from)) out.add(starPlaceKey(s))",
+      "file": "stars"
+    },
+    {
+      "id": "m8",
+      "verdict": "killed",
+      "red": [
+        "not ok 2 - the same place starred in two lists is two stars, each knowing where it was made; another owner's star does not show"
+      ],
+      "note": "star identity drops the list, so different lists collide",
+      "original": "const starKey = (s: Pick<Star, 'owner' | 'from'> & StarPlace): string => `${s.owner}|${s.from}|${starPlaceKey(s)}`",
+      "mutated": "const starKey = (s: Pick<Star, 'owner' | 'from'> & StarPlace): string => `${s.owner}|${starPlaceKey(s)}`",
+      "file": "stars"
+    },
+    {
+      "id": "m9",
+      "verdict": "killed",
+      "red": [
+        "not ok 4 - what counts as a star read from a file: the four fields with their types, the optional ones typed when present"
+      ],
+      "note": "isStar rejects numeric off",
+      "original": "&& (s.off === undefined || typeof s.off === 'number')",
+      "mutated": "&& (s.off === undefined || typeof s.off === 'string')",
+      "file": "stars"
+    },
+    {
+      "id": "m10",
+      "verdict": "killed",
+      "red": [
+        "not ok 11 - v3 to v4: every pin becomes a star from the prompts list, at the file's last update; the pins go; format 4",
+        "not ok 12 - v3 to v4: a file with no pins gets no stars key; a pin already a star is not doubled; junk in the pins is skipped"
+      ],
+      "note": "flipped guard: no pins migrated",
+      "original": "if (!Array.isArray(list)) continue",
+      "mutated": "if (Array.isArray(list)) continue",
+      "file": "mig"
+    },
+    {
+      "id": "m11",
+      "verdict": "killed",
+      "red": [
+        "not ok 11 - v3 to v4: every pin becomes a star from the prompts list, at the file's last update; the pins go; format 4",
+        "not ok 12 - v3 to v4: a file with no pins gets no stars key; a pin already a star is not doubled; junk in the pins is skipped"
+      ],
+      "note": "star time not taken from file updatedAt",
+      "original": "stars.push({ uuid, owner, from: 'prompts', at: reg.updatedAt })",
+      "mutated": "stars.push({ uuid, owner, from: 'prompts', at: Date.now() })",
+      "file": "mig"
+    },
+    {
+      "id": "m12",
+      "verdict": "killed",
+      "red": [
+        "not ok 12 - v3 to v4: a file with no pins gets no stars key; a pin already a star is not doubled; junk in the pins is skipped"
+      ],
+      "note": "boundary: a single star is dropped",
+      "original": "return { ...rest, version: 4, ...(stars.length > 0 ? { stars } : {}) }",
+      "mutated": "return { ...rest, version: 4, ...(stars.length > 1 ? { stars } : {}) }",
+      "file": "mig"
+    }
+  ]
+}
