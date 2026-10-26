@@ -87,6 +87,24 @@ export function categoryOf(tool: string): ToolCategory {
   return CATEGORY[tool] ?? 'other'
 }
 
+/** The input fields that say what a call does, in the order looked for: the first one present names it. */
+const WHAT_FIELDS = ['description', 'command', 'file_path', 'path', 'pattern', 'query', 'url', 'prompt', 'skill', 'subject'] as const
+
+/**
+ * A tool call's line for a person: the tool and what it does (`Bash: List the files`, `Read:
+ * C:/x.ts`), from the first of WHAT_FIELDS the input has, on one line; the tool alone when none.
+ * It is the call's head in a list and the first line of its searchable text (2026-10-26: a
+ * link to a tool call showed its raw JSON as its head).
+ */
+export function toolLine(tool: string, input: unknown): string {
+  const o = input && typeof input === 'object' ? (input as Record<string, unknown>) : {}
+  for (const f of WHAT_FIELDS) {
+    const v = o[f]
+    if (typeof v === 'string' && v.trim() !== '') return `${tool}: ${v.replace(/\s+/g, ' ').trim()}`
+  }
+  return tool
+}
+
 /** System rows that are events a person can see and might look for; the rest are bookkeeping. */
 const SYSTEM_EVENTS = new Set(['compact_boundary', 'local_command', 'away_summary', 'turn_duration'])
 /** Attachments that are events; `queued_command` is handled as a prompt or a notice. */
@@ -184,7 +202,9 @@ export function classifyRecord(o: any, ctx: RowContext): Classified {
       else if (b?.type === 'thinking') { if (String(b.thinking ?? '').trim() !== '') found.push({ kind: 'thinking', author, text: String(b.thinking) }) }
       else if (b?.type === 'tool_use') {
         const tool = String(b.name ?? '')
-        found.push({ kind: 'tool-call', author, tool, category: categoryOf(tool), text: JSON.stringify(b.input ?? {}), ...(typeof b.id === 'string' ? { toolUseId: b.id } : {}) })
+        const input = b.input ?? {}
+        // A first line a person reads (the row's head: "Bash: what it does"), then the input whole, so a search finds anything in it.
+        found.push({ kind: 'tool-call', author, tool, category: categoryOf(tool), text: `${toolLine(tool, input)}\n${JSON.stringify(input)}`, ...(typeof b.id === 'string' ? { toolUseId: b.id } : {}) })
       } else if (b?.type !== 'redacted_thinking') found.push({ kind: 'other', author, text: textOf([b]) })
     }
     if (found.length === 0) return { skipped: 'assistant:empty' }

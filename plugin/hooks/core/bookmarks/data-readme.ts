@@ -23,6 +23,7 @@ export const DATA_LAYOUT: readonly { path: string; what: string; kind: 'authored
   { path: 'prompttext/', what: 'the text of your prompts the prompts list filters, in pieces; read again from the transcript when missing', kind: 'cache' },
   { path: 'replytext/', what: 'the text of Claude\'s replies, newest first and up to 4 MB, for finding the message a link names; read again from the transcript when missing', kind: 'cache' },
   { path: 'transcript/', what: 'where each message sits in the conversation file, so the plugin\'s read of it resumes instead of starting over; rebuilt when missing', kind: 'cache' },
+  { path: 'places/<session id>/', what: 'every row of one conversation (prompts, replies, tool calls and their output, agents\' messages) and its text, for search and for links to any row; written the first time you search or link to such a row; rebuilt when missing', kind: 'cache' },
   { path: 'debug/<session id>.log', what: 'the plugin\'s log, one file per conversation', kind: 'cache' },
   { path: 'README.md', what: 'this file', kind: 'generated' },
 ]

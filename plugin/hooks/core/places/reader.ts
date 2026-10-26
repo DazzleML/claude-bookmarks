@@ -26,7 +26,8 @@ export const PIECE_BYTES = 3_500_000
 export const CARRY_CAP = 8 * 1024 * 1024
 /** How much of a place's text its row keeps for drawing a list. */
 export const HEAD_CHARS = 160
-export const PLACE_INDEX_VERSION = 1
+/** 2 (0.7.3): a tool call's text starts with its tool line (`Bash: what it does`), so an index of 1 is rebuilt for the new heads. */
+export const PLACE_INDEX_VERSION = 2
 
 /** One place, without its text: what a list draws and a search narrows by. The text is in piece `piece`. */
 export type IndexedPlace = Omit<Place, 'text'> & { head: string; piece: number; bytes: number }

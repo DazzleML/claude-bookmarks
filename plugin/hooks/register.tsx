@@ -17,7 +17,8 @@ import {
   markLinks, markdownLinks,
   type MarkerStyle,
 } from './core/bookmarks/anchor'
-import { headOf, resolveRows, rowsFromGrep, targetPattern, type Resolution } from './core/bookmarks/transcript-lines'
+import { headOf, resolveRows, rowsFromGrep, targetPattern, type Resolution, type TranscriptRow } from './core/bookmarks/transcript-lines'
+import type { FoundPlace } from './core/places/resolve'
 import { excerpt, type Channel } from './core/log/debug'
 import { CHORD_ACTIONS, VERIFIED_CLIENTS, bandFocusRoute, barFor, helpFor, listHint, listKeysFor, route, type Operation, type Pane } from './core/band/keys'
 import type { Cause } from './core/band/after-action'
@@ -44,7 +45,7 @@ import { bookmarksPaneView } from './views/bookmarks-pane'
 import { marksPaneView } from './views/marks-pane'
 import { promptsPaneView } from './views/prompts-pane'
 import { configCommand, envCommand, idsCommand, jumpCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
-import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PromptsPorts, ResolveOutcome, TranscriptPorts, ViewPorts } from './engine/ports'
+import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PlacesPorts, PromptsPorts, ResolveOutcome, TranscriptPorts, ViewPorts } from './engine/ports'
 import { closeAll as bandCloseAll, endBandMode as bandEnd, settle as bandSettle, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
 import * as commandLine from './handlers/command-line'
@@ -52,6 +53,7 @@ import * as marks_ from './handlers/marks'
 import * as bookmarks_ from './handlers/bookmarks'
 import * as prompts_ from './handlers/prompts'
 import * as transcript_ from './handlers/transcript'
+import * as places_ from './handlers/places'
 import * as log_ from './handlers/log'
 import { MarkState } from './core/marks/mark-state'
 import { Navigation } from './handlers/navigation'
@@ -317,6 +319,7 @@ async function sameConversation($: EngineInterface): Promise<void> {
   await marks_.startMarks(marksPorts($))
   pruneThenBackfill($)
   startLoader($)
+  resumePlaces($)
   log($, `[bm] a new conversation: ${short(before)} -> ${short(id)}; what the one before left in memory is reset`)
 }
 // The store's prune, then this conversation's back-fill (done once per conversation, by its
@@ -352,6 +355,7 @@ async function resetConversationMemory() {
   // the new one after this reset).
   bookmarks_.newConversation()
   transcript_.newConversation()
+  places_.newConversation()
   screen.newConversation()
   sessionTitle = undefined
 }
@@ -578,13 +582,64 @@ function startLoader($: EngineInterface) {
   void transcript_.startPass(transcriptPorts($)).catch(err => log($, `[bm] loader failed to start: ${String(err)}`))
 }
 
-async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment?: string }): Promise<ResolveOutcome> {
+// The place reader (the 0.7 groundwork, unit 3; switched on by the search-pane-and-links design,
+// 2026-10-26, unit U-W): every file of the conversation -- the transcript, each agent's file,
+// the stored tool outputs -- read into places for search and for links to any row. Its program
+// reads are the loader's (`readChunk`). djdarcy's G-1: on demand (the first search, or the first
+// link the loader cannot resolve), and resumed at a start only where an index already exists.
+function placesPorts($: EngineInterface): PlacesPorts {
+  const t = transcriptPorts($)
+  return {
+    sessionId: t.sessionId,
+    transcriptPath: t.transcriptPath,
+    fileSize: t.fileSize,
+    readChunk: t.readChunk,
+    fsList: path => $.fs.list(path),
+    dataRoot: t.dataRoot,
+    fsExists: t.fsExists,
+    fsRead: t.fsRead,
+    fsWrite: t.fsWrite,
+    after: t.after,
+    log: line => log($, line),
+  }
+}
+/** The places, brought up to date; returns at once, the pass running in the background. */
+function ensurePlaces($: EngineInterface) {
+  void places_.ensurePlaces(placesPorts($)).catch(err => log($, `[bm] places: failed to start: ${String(err)}`))
+}
+/** At a start: resume the reader only for a conversation that already has an index (G-1). */
+function resumePlaces($: EngineInterface) {
+  void places_.hasPlacesIndex(placesPorts($))
+    .then(has => { if (has) ensurePlaces($) })
+    .catch(err => log($, `[bm] places: could not look for an index: ${String(err)}`))
+}
+
+/** A row found among the places, as the tool's row: its address and drawn id kept, no line or byte range. `otherwise`: the reason when nothing is found. */
+async function resolvePlaced($: EngineInterface, want: { uuid?: string; fragment?: string; file?: string; part?: number }, otherwise: string): Promise<ResolveOutcome> {
+  const t0 = Date.now()
+  const r = await places_.resolveInPlaces(placesPorts($), want)
+  const ms = Date.now() - t0
+  const asRow = (p: FoundPlace): TranscriptRow => ({
+    line: 0, byteStart: 0, byteEnd: 0, uuid: p.uuid, role: p.role, text: p.text,
+    ...(p.timestamp ? { timestamp: p.timestamp } : {}), ...(p.file !== undefined ? { file: p.file } : {}),
+    ...(p.part !== undefined ? { part: p.part } : {}), ...(p.drawn !== undefined ? { drawn: p.drawn } : {}),
+  })
+  if (r.kind === 'one') return { kind: 'one', row: asRow(r.place), via: 'places', ms }
+  if (r.kind === 'many') return { kind: 'many', rows: r.places.map(asRow), earliest: asRow(r.earliest), via: 'places', ms }
+  return { kind: 'none', via: 'places', ms, reason: r.reason === 'no row of the conversation holds it' ? otherwise : r.reason }
+}
+
+async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment?: string; file?: string; part?: number }): Promise<ResolveOutcome> {
+  // A link that names a row's file or block is a row the loader does not hold: the places.
+  if (want.file !== undefined || want.part !== undefined) return resolvePlaced($, want, 'the row is not in this conversation')
   // The loader's rows first (in memory, every message the pass has read); the grep below
   // while the pass is incomplete, or when no program could read the file.
   const loaded = transcript_.resolveLoaded(want)
   if (loaded?.kind === 'one') return { kind: 'one', row: loaded.row, via: 'loader', ms: 0 }
   if (loaded?.kind === 'many') return { kind: 'many', rows: loaded.rows, earliest: loaded.earliest, via: 'loader', ms: 0 }
-  if (loaded?.kind === 'none') return { kind: 'none', via: 'loader', ms: 0, reason: 'no message holds it' }
+  // No prompt or reply holds it: any other row of the conversation may (a tool call, its
+  // output, an agent's message), found by the place reader (the search-pane-and-links design, 2026-10-26).
+  if (loaded?.kind === 'none') return resolvePlaced($, want, 'no message holds it')
   const path = await transcriptPath($)
   if (!path) return { kind: 'none', reason: 'transcript not found' }
   const pattern = targetPattern(want)
@@ -593,7 +648,10 @@ async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment
   if (!g) return { kind: 'none', reason: 'neither sh + grep nor PowerShell ran' }
   const rows = rowsFromGrep(g.stdout)
   const r: Resolution = resolveRows(rows, want)
-  if (r.kind === 'none') return { kind: 'none', via: g.via, ms: g.ms, reason: g.isStdoutTruncated ? 'no match (output was cut at 4 MiB)' : 'no match' }
+  if (r.kind === 'none') {
+    const placed = await resolvePlaced($, want, g.isStdoutTruncated ? 'no match (output was cut at 4 MiB)' : 'no match')
+    return placed.kind === 'none' ? { ...placed, via: g.via, ms: g.ms } : placed
+  }
   return { ...r, via: g.via, ms: g.ms }
 }
 
@@ -1069,7 +1127,7 @@ function diagnosticsPorts($: EngineInterface): DiagnosticsPorts {
     dccPatches: () => $.env.get('DCC_PATCHES'),
     echoState: () => log_.echoStateLine(echoPorts($)),
     capabilityPaths: () => pathsLine(chooseAll(capabilitySignals ?? NO_SIGNALS)),
-    loaderStatus: () => transcript_.loaderStatus(),
+    loaderStatus: () => `${transcript_.loaderStatus()}; ${places_.placesStatus()}`,
   }
 }
 
@@ -1182,6 +1240,7 @@ export const register: Register = (on, options) => {
     // Not awaited: session start should not wait on a third of a second of PowerShell.
     pruneThenBackfill($)
     startLoader($)
+    resumePlaces($)
 
     // The tracking mechanism for the borrowed actions: say so whenever the build is
     // not one the chords were verified on.

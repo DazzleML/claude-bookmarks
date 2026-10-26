@@ -75,7 +75,10 @@ export function jumpTarget(arg: string, rows: readonly { uuid: string; door: 'pr
   if (target) return target
   // Not a captured row: try the raw id anyway, for an id known only from the
   // transcript file (paste a uuid from jq); Claude Code may refuse one never drawn.
-  if (/^[0-9a-f-]{36}$/.test(arg)) return { kind: 'raw', uuid: arg }
+  // Also the ids Claude Code draws other rows under: a tool row's `toolu_` id, and a folded
+  // group of tool rows as `collapsed-<uuid>` -- the live check of whether a jump can land on
+  // them (the search-pane-and-links design, 2026-10-26; jump.toolRow).
+  if (/^[0-9a-f-]{36}$/.test(arg) || /^toolu_[A-Za-z0-9]+$/.test(arg) || /^collapsed-[0-9a-f-]{36}$/.test(arg)) return { kind: 'raw', uuid: arg }
   return { kind: 'none', prompts: prompts.length }
 }
 

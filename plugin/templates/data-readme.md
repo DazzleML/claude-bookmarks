@@ -13,7 +13,7 @@ This folder is where the claude-bookmarks plugin for Claude Code keeps what you 
 
 ## What to back up
 
-Everything under `sessions/` is authored: the bookmark files and the notes are what you and Claude made, and nothing rebuilds them. `backups/` holds the plugin's own copies from format migrations; keep it as long as you might want to go back. `prompttext/`, `replytext/`, `transcript/` and `debug/` are caches: deleting them loses nothing you cannot get back. The index and this file are generated.
+Everything under `sessions/` is authored: the bookmark files and the notes are what you and Claude made, and nothing rebuilds them. `backups/` holds the plugin's own copies from format migrations; keep it as long as you might want to go back. `prompttext/`, `replytext/`, `transcript/`, `places/` and `debug/` are caches: deleting them loses nothing you cannot get back. The index and this file are generated.
 
 ## Formats
 

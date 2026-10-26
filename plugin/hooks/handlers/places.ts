@@ -18,6 +18,8 @@ import {
   seal, serializePlaceIndex, takeSealed, type FileCursor, type PlaceIndex,
 } from '../core/places/reader.ts'
 import { agentFile } from '../core/places/place.ts'
+import { findPlaces, foundPlace, fragmentQuery, textOf, type FoundPlace } from '../core/places/resolve.ts'
+import { piecesToRead, searchPlaces } from '../core/search/search.ts'
 import { utf8Bytes } from '../core/prompts/text-store.ts'
 import type { PlacesPorts } from '../engine/ports.ts'
 
@@ -45,6 +47,8 @@ type PlacesPass = {
   running: boolean
   results: { name: string; path: string }[]
   projectDir: string
+  /** Reads the next chunk; kept so a catch-up can set the pass going again. */
+  tick: () => Promise<void>
 }
 let placesPass: PlacesPass | undefined
 
@@ -150,7 +154,7 @@ export async function startPlacesPass(ports: PlacesPorts): Promise<void> {
       }
     }
   }
-  const p: PlacesPass = { sid, base, idx, cursors, at: 0, offset: cursors[0]!.bytes, chunks: 0, sinceSave: 0, startedAt: Date.now(), finishedAt: undefined, running: true, results, projectDir: slash(transcript).replace(/\/[^/]+$/, '') }
+  const p: PlacesPass = { sid, base, idx, cursors, at: 0, offset: cursors[0]!.bytes, chunks: 0, sinceSave: 0, startedAt: Date.now(), finishedAt: undefined, running: true, results, projectDir: slash(transcript).replace(/\/[^/]+$/, ''), tick: async () => {} }
   placesPass = p
 
   const finish = async () => {
@@ -218,5 +222,96 @@ export async function startPlacesPass(ports: PlacesPorts): Promise<void> {
       ports.log(`[bm] places: the pass stopped: ${String(err)}; it resumes from the last saved index`)
     }
   }
+  p.tick = tick
   ports.after(0, () => void tick())
+}
+
+/**
+ * The places a search or a link needs, as current as the conversation (the search-pane-and-
+ * links design, 2026-10-26, unit U-W; djdarcy's G-1: on demand). No pass yet: start one. A
+ * pass that finished: read on from each file's watermark, so what the conversation added since
+ * is found too, with any agent's file or stored output that has appeared. A pass still
+ * running: nothing to do. Never blocks the caller; `placesDone()` says when it has caught up.
+ */
+export async function ensurePlaces(ports: PlacesPorts): Promise<void> {
+  const sid = await ports.sessionId()
+  const p = placesPass
+  if (!p || p.sid !== sid) return startPlacesPass(ports)
+  if (p.running) return
+  const transcript = await ports.transcriptPath()
+  if (transcript) {
+    const now = await filesOf(ports, sid, transcript)
+    for (const c of now.cursors) if (!p.cursors.some(x => x.key === c.key)) p.cursors.push(c)
+    for (const r of now.results) if (!p.results.some(x => x.name === r.name)) p.results.push(r)
+  }
+  for (const c of p.cursors) c.done = false
+  p.at = 0
+  p.offset = p.cursors[0]!.bytes
+  p.running = true
+  p.finishedAt = undefined
+  ports.after(0, () => void p.tick())
+}
+
+/** Waits (by clock ticks, never blocking) until the pass is done or `ms` has passed; says whether it is done. */
+async function settled(ports: PlacesPorts, ms: number): Promise<boolean> {
+  const until = Date.now() + ms
+  while (!placesDone() && Date.now() < until) await new Promise<void>(r => ports.after(200, r))
+  return placesDone()
+}
+
+/** A piece's text: from disk, or from memory for the piece still open (not written until it seals or the index is saved). */
+async function pieceText(ports: PlacesPorts, p: PlacesPass, n: number): Promise<string | undefined> {
+  if (n === p.idx.open.n) return p.idx.open.lines.join('\n')
+  return p.base ? readIfExists(ports, `${p.base}/text.${n}.jsonl`) : undefined
+}
+
+export type PlacesResolution =
+  | { kind: 'one'; place: FoundPlace }
+  | { kind: 'many'; places: FoundPlace[]; earliest: FoundPlace }
+  | { kind: 'none'; reason: string }
+
+/**
+ * A link's row found among the places (the search-pane-and-links design, 2026-10-26, unit U-L):
+ * the rows the transcript loader does not hold -- a tool call or its output, an agent's message,
+ * a notice -- by uuid, by the `tool_use` id a tool row is drawn under, by address, or by a
+ * verbatim fragment of their text. Brings the places up to date first (on demand, G-1) and waits
+ * up to `waitMs` for the pass; a pass still running when that runs out answers from what it has.
+ * The wait is short because it is the calling hook's own time, and a hook has 10 s of it (the
+ * engine's HookBudget; a `$.clock` wait counts too): a first read of a long conversation takes
+ * longer, so the answer says it is still reading and a retry a moment later finds the row
+ * (measured live, 2026-10-26: a 30 s wait made the tool call fail with no answer).
+ */
+export async function resolveInPlaces(ports: PlacesPorts, want: { uuid?: string; fragment?: string; file?: string; part?: number }, waitMs = 6_000): Promise<PlacesResolution> {
+  await ensurePlaces(ports)
+  const done = await settled(ports, waitMs)
+  const p = placesPass
+  if (!p) return { kind: 'none', reason: 'the conversation could not be read' }
+  const rows = p.idx.rows
+  const pieces = new Map<number, string | undefined>()
+  const piece = async (n: number) => {
+    if (!pieces.has(n)) pieces.set(n, await pieceText(ports, p, n))
+    return pieces.get(n)
+  }
+  let hits: number[]
+  if (want.uuid) hits = findPlaces(rows, { uuid: want.uuid, ...(want.file !== undefined ? { file: want.file } : {}), ...(want.part !== undefined ? { part: want.part } : {}) })
+  else if (want.fragment) {
+    const q = fragmentQuery(want.fragment)
+    for (const n of piecesToRead(rows, q).keys()) await piece(n)
+    hits = searchPlaces(rows, q, n => pieces.get(n)).hits
+  } else return { kind: 'none', reason: 'nothing to look for' }
+  const found: FoundPlace[] = []
+  for (const i of hits) {
+    const text = textOf(rows[i]!, await piece(rows[i]!.piece))
+    if (text !== undefined) found.push(foundPlace(rows, i, text))
+  }
+  if (found.length === 0) return { kind: 'none', reason: done ? 'no row of the conversation holds it' : `not found yet: the conversation is still being read (${placesStatus()}); try again in a moment` }
+  if (found.length === 1) return { kind: 'one', place: found[0]! }
+  return { kind: 'many', places: found, earliest: found[0]! }
+}
+
+/** Whether this conversation already has a saved index (so a start resumes it: G-1, "resume where an index exists"). */
+export async function hasPlacesIndex(ports: PlacesPorts): Promise<boolean> {
+  const root = await ports.dataRoot()
+  if (!root) return false
+  return ports.fsExists(`${slash(root)}/bookmarks/places/${await ports.sessionId()}/index.json`)
 }

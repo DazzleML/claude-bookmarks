@@ -5,11 +5,11 @@
 // The register cache and the prose queue are owned here.
 
 import {
-  anchorHref, anchorMarkdown, anchorPath, markdownLinks, ownerOf, parseAnchor, tierOf,
-  type AnchorOwner, type AnchorRecord,
+  anchorHref, anchorMarkdown, anchorPath, markdownLinks, ownerOf, parseAnchor, placeOfRecord, tierOf,
+  type AnchorOwner, type AnchorRecord, type PlaceOf,
 } from '../core/bookmarks/anchor.ts'
 import {
-  emptyRegister, exportMarkdown, exportNotesOf, findRecord, idOf, listOf, newerThanBuild, parseFrontMatter, parseRegister, prune, recordsOn, REGISTER_VERSION, serializeRegister,
+  emptyRegister, exportMarkdown, exportNotesOf, findRecord, idOf, listOf, newerThanBuild, parseFrontMatter, parseRegister, prune, recordById, recordsOn, REGISTER_VERSION, serializeRegister,
   type Mint, type Register as BookmarkRegister, type Retention,
 } from '../core/bookmarks/register-file.ts'
 import { baseOf, ingest, primaryRecord, sameBase } from '../core/bookmarks/note.ts'
@@ -360,11 +360,11 @@ export async function claimBookmark(ports: BookmarksPorts, uuid: string): Promis
   const reg = await loadRegister(ports)
   const src = findRecord(reg, uuid, 'claude')
   if (!src) return { error: `no bookmark ${short(uuid)} on Claude's list` }
-  await ingestNote(ports, src.uuid)
+  await ingestNote(ports, src.uuid, placeOfRecord(src))
   const r = await commitOp(ports, { op: 'claim', id: idOf(src) })
   if ('error' in r) return r
   // A link is handed out (the band's toast, the tool's answer), so the record's file is written (unit 7).
-  if (r.saved) await writeExport(ports, r.register, { uuid: r.record!.uuid, sessionId: r.register.sessionId }, '', await ports.now())
+  if (r.saved) await writeExport(ports, r.register, { uuid: r.record!.uuid, sessionId: r.register.sessionId, ...placeOfRecord(r.record!) }, '', await ports.now())
   return { register: r.register, record: r.record!, added: r.added ?? false }
 }
 
@@ -630,7 +630,9 @@ export async function startRegister(ports: BookmarksPorts) {
 // markdown link a reply writes.
 type Minted = { record: AnchorRecord; added: boolean; saved: boolean; href?: string; markdown?: string; exportPath?: string; rev: number }
 async function mintBookmark(ports: BookmarksPorts, op: Extract<Op, { op: 'mint' | 'relabel' }>, messageText: string): Promise<Minted | { error: string }> {
-  await ingestNote(ports, op.op === 'mint' ? op.mint.uuid : op.id.uuid)
+  // The note of the record's own place (a tool row's note is not its reply's).
+  const before = op.op === 'mint' ? op.mint : recordById(await loadRegister(ports), op.id)
+  await ingestNote(ports, op.op === 'mint' ? op.mint.uuid : op.id.uuid, before ? placeOfRecord(before) : {})
   const r = await commitOp(ports, op)
   if ('error' in r) return r
   const { register, record, added } = r as { register: BookmarkRegister; record: AnchorRecord; added?: boolean }
@@ -650,13 +652,13 @@ async function mintBookmark(ports: BookmarksPorts, op: Extract<Op, { op: 'mint' 
 // base, and a label, why or tags edited in Obsidian becomes a relabel. It runs BEFORE the
 // action (a mint, a claim, a share), so the action is the later intent and wins over the
 // note where they meet; the note is then regenerated from the register by `writeExport`.
-async function ingestNote(ports: BookmarksPorts, uuid: string): Promise<void> {
+async function ingestNote(ports: BookmarksPorts, uuid: string, place: PlaceOf = {}): Promise<void> {
   const root = await ports.dataRoot()
   if (!root) return
   const register = await loadRegister(ports)
-  const main = primaryRecord(recordsOn(register, uuid))
+  const main = primaryRecord(recordsOn(register, uuid, place))
   if (!main) return
-  const path = anchorPath(root, register.sessionId, main.uuid)
+  const path = anchorPath(root, register.sessionId, main.uuid, place)
   if (!(await ports.fsExists(path))) return
   const got = ingest(parseFrontMatter(await ports.fsRead(path)), main.md?.base)
   if (!got.changes) {
@@ -672,13 +674,15 @@ async function ingestNote(ports: BookmarksPorts, uuid: string): Promise<void> {
 // whatever was written under the notes marker (a person's or Claude's notes, links, context:
 // pillar 3, #11). The note is written from the register's primary record and every record
 // on the message; the base it was written from is then committed to the record.
-async function writeExport(ports: BookmarksPorts, register: BookmarkRegister, record: Mint | { uuid: string; sessionId: string }, messageText: string, now: number) {
+async function writeExport(ports: BookmarksPorts, register: BookmarkRegister, record: Mint | { uuid: string; sessionId: string; file?: string; part?: number }, messageText: string, now: number) {
   const root = await ports.dataRoot()
   if (!root) return undefined
   const sessionId = 'sessionId' in record ? record.sessionId : register.sessionId
-  const exportPath = anchorPath(root, sessionId, record.uuid)
+  // A row that is not a prompt or a reply has its own note (the search-pane-and-links design, 2026-10-26).
+  const place: PlaceOf = { ...(record.file !== undefined ? { file: record.file } : {}), ...(record.part !== undefined ? { part: record.part } : {}) }
+  const exportPath = anchorPath(root, sessionId, record.uuid, place)
   const existing = (await ports.fsExists(exportPath)) ? await ports.fsRead(exportPath) : undefined
-  const main = primaryRecord(recordsOn(register, record.uuid))
+  const main = primaryRecord(recordsOn(register, record.uuid, place))
   if (!main) return exportPath
   // The base the note is (or stays) written from: a bookkeeping write, so `.bak` stays the
   // file before the action. A note that cannot be regenerated below still holds what it
@@ -692,14 +696,14 @@ async function writeExport(ports: BookmarksPorts, register: BookmarkRegister, re
   // A relabel or share has no message text in hand: read it from the transcript again,
   // and if that fails leave the file as it is rather than write an empty message.
   if (!messageText) {
-    const found = await ports.resolveTarget({ uuid: record.uuid })
+    const found = await ports.resolveTarget({ uuid: record.uuid, ...place })
     if (found.kind === 'one') messageText = found.row.text
     else if (existing) {
       await settleBase()
       return exportPath
     }
   }
-  const records = recordsOn(register, main.uuid)
+  const records = recordsOn(register, main.uuid, place)
   const minted = `${new Date(now).toISOString()} by ${main.by} (${main.source})`
   const header = await headerFields(ports)
   const writer = `${ports.pluginName} ${await ports.pluginVersion()}`
@@ -790,9 +794,16 @@ export async function onAnchorPress(ports: BookmarksPorts, href: string) {
   // reading position is left alone: it is the person's (djdarcy, 2026-10-09).
   // The words to highlight (and, on a refused jump, the phrase the fallback copies): the
   // link's `q`, else the register's record.
-  const words = a.words ?? (await loadRegister(ports)).perma.find(r => r.uuid === uuid)?.words
-  const deny = await ports.jumpTo(uuid, 'anchor press', `anchor ${short(uuid)}${a.line ? ` (line ${a.line})` : ''}`, words)
-  if (deny || !words) return
+  const place: PlaceOf = { ...(a.file !== undefined ? { file: a.file } : {}), ...(a.part !== undefined ? { part: a.part } : {}) }
+  const record = findRecord(await loadRegister(ports), uuid, undefined, place)
+  const words = a.words ?? record?.words
+  // A row that is not a prompt or a reply is jumped to by the id Claude Code draws it under (a
+  // tool row's `tool_use` id, an agent's Agent call: measured 2026-10-26), and is not
+  // highlighted, since only prompts and replies are drawn by this plugin.
+  const drawn = record?.drawn
+  const target = drawn ?? uuid
+  const deny = await ports.jumpTo(target, 'anchor press', `anchor ${short(uuid)}${a.part !== undefined ? ` part ${a.part}` : ''}${a.file ? ` in ${a.file}` : ''}${a.line ? ` (line ${a.line})` : ''}`, words)
+  if (deny || !words || drawn) return
   await highlightWords(ports, uuid, words)
   ports.log(`[bm] anchor words highlighted on ${short(uuid)}: "${ports.cut(words, 60)}"`, true)
 }
@@ -814,9 +825,10 @@ async function highlightWords(ports: BookmarksPorts, uuid: string, words: string
 }
 
 // Jump to a bookmark and highlight its words. Returns the scroll's refusal, if any.
-export async function arriveAtBookmark(ports: BookmarksPorts, record: { uuid: string; words?: string; label: string }, via: string): Promise<string | undefined> {
-  const deny = await ports.jumpTo(record.uuid, via, `bookmark ${short(record.uuid)}`, record.words)
-  if (!deny && record.words) await highlightWords(ports, record.uuid, record.words)
+export async function arriveAtBookmark(ports: BookmarksPorts, record: { uuid: string; words?: string; label: string; drawn?: string }, via: string): Promise<string | undefined> {
+  // A tool row's or an agent's record jumps to the id its row is drawn under, unhighlighted (as the anchor press).
+  const deny = await ports.jumpTo(record.drawn ?? record.uuid, via, `bookmark ${short(record.uuid)}`, record.words)
+  if (!deny && record.words && !record.drawn) await highlightWords(ports, record.uuid, record.words)
   return deny
 }
 
@@ -919,10 +931,10 @@ export async function bookmarkTool(ports: BookmarksPorts, e: unknown) {
     }
     if (action === 'share') {
       const to: AnchorOwner = owner === 'claude' ? 'user' : 'claude'
-      await ingestNote(ports, target.uuid)
+      await ingestNote(ports, target.uuid, placeOfRecord(target))
       const r = await commitOp(ports, { op: 'share', id: idOf(target), to })
       if ('error' in r) return answer(r)
-      await writeExport(ports, r.register, { uuid: target.uuid, sessionId: r.register.sessionId }, '', now)
+      await writeExport(ports, r.register, { uuid: target.uuid, sessionId: r.register.sessionId, ...placeOfRecord(target) }, '', now)
       ports.log(`[bm] bookmark shared ${owner} -> ${to}: ${short(target.uuid)} "${r.record!.label}"`, true)
       return answer({ ok: true, added: r.added, shared: describe(r.record!), note: `now on ${listName(to)} list too; the original stays` })
     }

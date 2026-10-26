@@ -39,6 +39,16 @@ export type AnchorRecord = {
   n?: number
   sessionId: string
   uuid: string
+  /**
+   * For a row that is not a prompt or a reply (a tool call or its output, an agent's message,
+   * a notice): the file it is in (`agent:<id>`, absent for the main transcript) and the block
+   * within its record (`part`). With `uuid`, the row's place (core/places/place.ts); a prompt's
+   * or a reply's record has neither (the search-pane-and-links design, 2026-10-26).
+   */
+  file?: string
+  part?: number
+  /** The id Claude Code draws the row under, when it is not `uuid`: a tool row's `tool_use` id, or the Agent call's for an agent's row. A jump goes there. */
+  drawn?: string
   /** `drawn` when the uuid is the engine's stand-in for a message (fifth group zeros), to be replaced by the real one when found. */
   idKind?: 'drawn'
   /** Whose list this is on. Absent on records from before 2026-10-09: read it as `by`. */
@@ -83,6 +93,9 @@ export type ParsedAnchor = {
   /** The full uuid when the link carried one, else the 8-character prefix. */
   uuid: string
   uuid8: string
+  /** The row's file and block, for a link to a row that is not a prompt or a reply (`f`, `p`). */
+  file?: string
+  part?: number
   line?: number
   bytes?: [number, number]
   words?: string
@@ -103,9 +116,24 @@ export function normalizeRoot(dataRoot: string): string {
   return dataRoot.replace(/\\/g, '/').replace(/\/+$/, '')
 }
 
+/** A record's place beyond its uuid: the file and block of a row that is not a prompt or a reply. */
+export type PlaceOf = { file?: string; part?: number }
+
+/** A record's place, only the fields it has: `{}` for a prompt's or a reply's record. */
+export const placeOfRecord = (r: PlaceOf): PlaceOf => ({ ...(r.file !== undefined ? { file: r.file } : {}), ...(r.part !== undefined ? { part: r.part } : {}) })
+
+/**
+ * The export's file name: `<uuid8>.md` for a message (and for a row in an agent's file, whose
+ * uuids are its own); `<uuid8>.p<part>.md` for one block of several in the main transcript, so a
+ * tool call's note is not its reply's (the search-pane-and-links design, 2026-10-26).
+ */
+export function exportName(uuid: string, place: PlaceOf = {}): string {
+  return place.part !== undefined && place.file === undefined ? `${uuid8(uuid)}.p${place.part}.md` : `${uuid8(uuid)}.md`
+}
+
 /** The export file's path under the data root (forward slashes, not URL-encoded). */
-export function anchorPath(dataRoot: string, sessionId: string, uuid: string): string {
-  return `${normalizeRoot(dataRoot)}/bookmarks/sessions/${sessionId}/${uuid8(uuid)}.md`
+export function anchorPath(dataRoot: string, sessionId: string, uuid: string, place: PlaceOf = {}): string {
+  return `${normalizeRoot(dataRoot)}/bookmarks/sessions/${sessionId}/${exportName(uuid, place)}`
 }
 
 /** A `file:` URL for a path: `C:/x y` -> `file:///C:/x%20y`; `/home/x` -> `file:///home/x`. */
@@ -120,13 +148,15 @@ export function fileUrl(path: string): string {
 }
 
 /** The anchor URL of a record. */
-export function anchorHref(record: Pick<AnchorRecord, 'sessionId' | 'uuid' | 'line' | 'bytes' | 'words'>, dataRoot: string): string {
+export function anchorHref(record: Pick<AnchorRecord, 'sessionId' | 'uuid' | 'line' | 'bytes' | 'words' | 'file' | 'part'>, dataRoot: string): string {
   const params = [`u=${record.uuid}`]
+  if (record.file !== undefined) params.push(`f=${encodeURIComponent(record.file)}`)
+  if (record.part !== undefined) params.push(`p=${record.part}`)
   if (record.line !== undefined) params.push(`l=${record.line}`)
   if (record.bytes) params.push(`b=${record.bytes[0]}-${record.bytes[1]}`)
   if (record.words) params.push(`q=${encodeURIComponent(record.words)}`)
   params.push(`v=${ANCHOR_VERSION}`)
-  return `${fileUrl(anchorPath(dataRoot, record.sessionId, record.uuid))}?${params.join('&')}`
+  return `${fileUrl(anchorPath(dataRoot, record.sessionId, record.uuid, record))}?${params.join('&')}`
 }
 
 /** The markdown link a reply writes for a record. */
@@ -134,7 +164,7 @@ export function anchorMarkdown(record: AnchorRecord, dataRoot: string, label = r
   return `[${label.replace(/[[\]]/g, ' ')}](${anchorHref(record, dataRoot)})`
 }
 
-const PATH_RE = /\/bookmarks\/sessions\/([0-9a-f-]{36})\/([0-9a-f]{8})\.md$/i
+const PATH_RE = /\/bookmarks\/sessions\/([0-9a-f-]{36})\/([0-9a-f]{8})(?:\.p\d+)?\.md$/i
 
 /**
  * Reads an anchor URL. Undefined for anything that is not one: not `file:`, no `u`, a `u`
@@ -154,6 +184,8 @@ export function parseAnchor(href: string): ParsedAnchor | undefined {
   let bytes: [number, number] | undefined
   let words: string | undefined
   let version: number | undefined
+  let file: string | undefined
+  let blockPart: number | undefined
   for (const part of tail.split('&')) {
     if (!part) continue
     const eq = part.indexOf('=')
@@ -179,6 +211,14 @@ export function parseAnchor(href: string): ParsedAnchor | undefined {
       case 'v':
         if (/^\d+$/.test(v)) version = Number(v)
         break
+      case 'f': {
+        const f = safeDecode(v)
+        if (/^(agent|tool-result|continued):/.test(f)) file = f
+        break
+      }
+      case 'p':
+        if (/^\d+$/.test(v)) blockPart = Number(v)
+        break
     }
   }
   if (!uuid) return undefined
@@ -186,7 +226,7 @@ export function parseAnchor(href: string): ParsedAnchor | undefined {
   const sessionId = m?.[1]?.toLowerCase()
   const fileUuid8 = m?.[2]?.toLowerCase()
   if (fileUuid8 && fileUuid8 !== uuid8(uuid)) return undefined
-  return { href, sessionId, uuid, uuid8: uuid8(uuid), line, bytes, words, version, legacyFragment: q < 0 }
+  return { href, sessionId, uuid, uuid8: uuid8(uuid), ...(file !== undefined ? { file } : {}), ...(blockPart !== undefined ? { part: blockPart } : {}), line, bytes, words, version, legacyFragment: q < 0 }
 }
 
 function safeDecode(s: string): string {

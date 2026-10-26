@@ -6,7 +6,7 @@
 // 103 files reconciled, no `other`).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { agentFile, categoryOf, classifyRecord, samePlace, type Classified, type Place, type RowContext } from '../../plugin/hooks/core/places/place.ts'
+import { agentFile, categoryOf, classifyRecord, samePlace, toolLine, type Classified, type Place, type RowContext } from '../../plugin/hooks/core/places/place.ts'
 
 const MAIN: RowContext = { session: 's-1' }
 const AGENT: RowContext = { session: 's-1', file: agentFile('a00eb2f6'), agent: { id: 'a00eb2f6', type: 'oracle' } }
@@ -32,7 +32,12 @@ test("Claude's text, thinking and tool calls are places of their own kinds; an e
   assert.equal(call.tool, 'Bash')
   assert.equal(call.category, 'shell')
   assert.equal(call.toolUseId, 'toolu_01')
-  assert.equal(call.text, '{"command":"ls"}', 'a call is searchable by its input')
+  assert.equal(call.text, 'Bash: ls\n{"command":"ls"}', 'a call reads as its tool and what it does, and is searchable by its whole input')
+  // The description wins over the command; a call with nothing to say is its tool alone.
+  assert.equal(toolLine('Bash', { command: 'ls -la', description: 'List  the\nfiles' }), 'Bash: List the files')
+  assert.equal(toolLine('Read', { file_path: 'C:/x.ts' }), 'Read: C:/x.ts')
+  assert.equal(toolLine('TodoWrite', { todos: [] }), 'TodoWrite')
+  assert.equal(toolLine('Bash', null), 'Bash')
 })
 
 test('a record with several blocks yields one place per block, told apart by part', () => {

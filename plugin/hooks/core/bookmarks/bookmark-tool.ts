@@ -113,4 +113,14 @@ export const describe = (r: AnchorRecord, root: string | undefined, linked = tru
 })
 
 /** A transcript row as the model sees it. */
-export const brief = (r: TranscriptRow) => ({ uuid: r.uuid, role: r.role, line: r.line, bytes: [r.byteStart, r.byteEnd], head: headOf(r.text), timestamp: r.timestamp })
+export const brief = (r: TranscriptRow) => ({
+  uuid: r.uuid,
+  // A row found among the places (a tool call or its output, an agent's message) has its address and drawn id, and no line.
+  ...(r.file !== undefined ? { file: r.file } : {}),
+  ...(r.part !== undefined ? { part: r.part } : {}),
+  ...(r.drawn !== undefined ? { drawn: r.drawn } : {}),
+  role: r.role,
+  ...(r.line > 0 ? { line: r.line, bytes: [r.byteStart, r.byteEnd] } : {}),
+  head: headOf(r.text),
+  timestamp: r.timestamp,
+})

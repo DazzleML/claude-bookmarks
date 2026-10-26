@@ -71,6 +71,10 @@ test('/bm-jump: a full uuid nobody captured is tried raw; anything else is nothi
   assert.deepEqual(jumpTarget('9', ROWS), { kind: 'none', prompts: 2 })
   assert.deepEqual(jumpTarget('r7', ROWS), { kind: 'none', prompts: 2 })
   assert.deepEqual(jumpTarget('zzz', ROWS), { kind: 'none', prompts: 2 })
+  // The ids Claude Code draws a tool row and a folded tool group under are tried raw too (the jump.toolRow live check).
+  assert.deepEqual(jumpTarget('toolu_01AbCdEf234', ROWS), { kind: 'raw', uuid: 'toolu_01AbCdEf234' })
+  assert.deepEqual(jumpTarget('collapsed-ffffffff-0000-4000-8000-000000000009', ROWS), { kind: 'raw', uuid: 'collapsed-ffffffff-0000-4000-8000-000000000009' })
+  assert.deepEqual(jumpTarget('toolu_', ROWS), { kind: 'none', prompts: 2 })
   assert.deepEqual(jumpTarget('', []), { kind: 'none', prompts: 0 })
 })
 

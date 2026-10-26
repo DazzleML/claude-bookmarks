@@ -22,6 +22,14 @@ export type TranscriptRow = {
   role: 'user' | 'assistant'
   text: string
   timestamp?: string
+  /**
+   * A row found among the places rather than by the loader or a grep (the search-pane-and-links
+   * design, 2026-10-26): its file and block when it is not a prompt or a reply, the id it is drawn
+   * under, and `line` 0 with no byte range, since the place reader keeps neither.
+   */
+  file?: string
+  part?: number
+  drawn?: string
 }
 
 export type GrepLine = { line: number; byteStart: number; json: string }
@@ -179,8 +187,11 @@ export const fitLines = (text: string, width: number, lines: number, indent = 0)
 export function rowPlace(row: TranscriptRow, transcript: string | undefined) {
   return {
     uuid: row.uuid,
-    line: row.line,
-    bytes: [row.byteStart, row.byteEnd] as [number, number],
+    ...(row.file !== undefined ? { file: row.file } : {}),
+    ...(row.part !== undefined ? { part: row.part } : {}),
+    ...(row.drawn !== undefined ? { drawn: row.drawn } : {}),
+    // A row from the places has no line or byte range: the record gets none rather than zeros.
+    ...(row.line > 0 ? { line: row.line, bytes: [row.byteStart, row.byteEnd] as [number, number] } : {}),
     head: headOf(row.text),
     transcript: transcript === undefined ? undefined : forwardSlashes(transcript),
     role: row.role,

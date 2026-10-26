@@ -23,7 +23,7 @@ test('a head is the text with its whitespace runs made one space, cut at HEAD_CH
   ]
   for (const t of texts) assert.equal(headOf(t), whole(t), JSON.stringify(t.slice(0, 40)))
 })
-import { startPlacesPass, placesIndex, placesDone, newConversation, PLACES_CHUNK } from '../../plugin/hooks/handlers/places.ts'
+import { ensurePlaces, hasPlacesIndex, startPlacesPass, placesIndex, placesDone, newConversation, PLACES_CHUNK } from '../../plugin/hooks/handlers/places.ts'
 import type { PlacesPorts } from '../../plugin/hooks/engine/ports.ts'
 
 const line = (o: unknown) => JSON.stringify(o)
@@ -146,8 +146,10 @@ test("an index of another version or another conversation is rebuilt, whatever i
   const [header, ...rows] = serializePlaceIndex(idx, [cur])
   const open = idx.open.lines.join('\n')
   assert.deepEqual(parsePlaceIndex(header, rows, open, 'other'), { kind: 'rebuild', why: 'another conversation' })
-  const v2 = JSON.stringify({ ...JSON.parse(header!), version: 2 })
-  assert.equal(parsePlaceIndex(v2, rows, open, 's').kind, 'rebuild')
+  // Another version, older or newer than this build's, is rebuilt.
+  const parsed = JSON.parse(header!) as { version: number }
+  for (const v of [parsed.version - 1, parsed.version + 1]) assert.equal(parsePlaceIndex(JSON.stringify({ ...parsed, version: v }), rows, open, 's').kind, 'rebuild', `version ${v}`)
+  assert.equal(parsePlaceIndex(header, rows, open, 's').kind, 'ok')
 })
 
 test('a conversation that continues in another session file is read on into it, once, and the pass finishes', async () => {
@@ -278,6 +280,39 @@ test('a second pass resumes from the saved watermarks: it reads only what was ad
   assert.ok(mainReads[0]! > 0, `the transcript is read from its watermark, not from byte 0 (${mainReads})`)
   assert.ok(placesIndex()!.rows.some(r => r.at.uuid === 'p2'))
   assert.equal(placesIndex()!.rows.length, 9)
+})
+
+test('a finished pass catches up on demand: what the conversation added since, a new agent file and a new stored output are read, nothing twice', async () => {
+  const files = conversation()
+  const f = await runPass(files)
+  assert.equal(placesDone(), true)
+  const before = placesIndex()!.rows.length
+  files.set('C:/proj/s1.jsonl', files.get('C:/proj/s1.jsonl')! + prompt('p3', 'later on') + '\n')
+  files.set('C:/proj/s1/subagents/agent-c3.jsonl', line({ type: 'assistant', uuid: 'g1', isSidechain: true, message: { role: 'assistant', content: [{ type: 'text', text: 'a later agent' }] } }) + '\n')
+  files.set('C:/proj/s1/tool-results/big2.txt', 'a later output')
+  const readsBefore = f.reads.length
+  await ensurePlaces(f.ports)
+  assert.equal(placesDone(), false, 'catching up')
+  await (f.ports as unknown as { drain: () => Promise<void> }).drain()
+  assert.equal(placesDone(), true)
+  const uuids = placesIndex()!.rows.map(r => r.at.uuid)
+  assert.ok(uuids.includes('p3') && uuids.includes('g1') && uuids.includes('big2.txt'), uuids.join(' '))
+  assert.equal(placesIndex()!.rows.length, before + 3, 'nothing read twice')
+  const mainReads = f.reads.slice(readsBefore).filter(r => r.startsWith('C:/proj/s1.jsonl@')).map(r => Number(r.split('@')[1]))
+  assert.ok(mainReads[0]! > 0, `the transcript is read on from its watermark (${mainReads})`)
+})
+
+test('a pass still running is left alone; with no pass, catching up starts one; a saved index is seen', async () => {
+  newConversation()
+  const files = conversation()
+  const f = fakePorts(files)
+  assert.equal(await hasPlacesIndex(f.ports), false)
+  await ensurePlaces(f.ports)
+  assert.equal(placesDone(), false)
+  await ensurePlaces(f.ports) // running: no second pass
+  await (f.ports as unknown as { drain: () => Promise<void> }).drain()
+  assert.equal(placesDone(), true)
+  assert.equal(await hasPlacesIndex(f.ports), true)
 })
 
 test('a file shorter than its watermark (rewritten) means the index is rebuilt from the start', async () => {

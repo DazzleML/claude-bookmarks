@@ -290,7 +290,8 @@ export type BookmarksPorts = {
   storeSet: (key: string, value: unknown) => Promise<unknown>
   storeDelete: (key: string) => Promise<unknown>
   storeKeys: () => Promise<readonly string[]>
-  resolveTarget: (want: { uuid?: string; fragment?: string }) => Promise<ResolveOutcome>
+  /** `file` and `part`: a row that is not a prompt or a reply, found among the places (the search-pane-and-links design, 2026-10-26). */
+  resolveTarget: (want: { uuid?: string; fragment?: string; file?: string; part?: number }) => Promise<ResolveOutcome>
   transcriptPath: () => Promise<string | undefined>
   allRows: () => Promise<readonly { uuid: string }[]>
   jumpTo: (uuid: string, via: string, label: string, words?: string) => Promise<string | undefined>

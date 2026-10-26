@@ -15,7 +15,7 @@
 // a save by this one. A file whose `version` is above REGISTER_VERSION is read in full and
 // never written (`newerThanBuild`); the handler says so once and keeps the file as it is.
 
-import { type AnchorOwner, type AnchorRecord, ownerOf, tierOf, uuid8 } from './anchor.ts'
+import { type AnchorOwner, type AnchorRecord, exportName, ownerOf, type PlaceOf, placeOfRecord, tierOf, uuid8 } from './anchor.ts'
 import { isDrawnId, matchesPrefix, sameMessage } from '../kit/message-id.ts'
 import { aliasesOf, noteOwners, noteTags } from './note.ts'
 import { isPin, type Pin } from './pins.ts'
@@ -157,6 +157,10 @@ export const recordById = (reg: Register, id: RecordId): AnchorRecord | undefine
 /** What a mint supplies; the register fills the rest. */
 export type Mint = {
   uuid: string
+  /** A row that is not a prompt or a reply: its file and block (AnchorRecord.file, part), and the id it is drawn under. */
+  file?: string
+  part?: number
+  drawn?: string
   /** Whose list: the person's or Claude's. */
   owner: AnchorOwner
   sharedFrom?: AnchorOwner
@@ -191,7 +195,8 @@ export function addOrRelabel(reg: Register, mint: Mint, now: number): AddResult 
   // The same message (a drawn id included), or a prefix a hand-written link carried: typed input, so matchesPrefix.
   // A letter's record (tier `mark`) and a bookmark on the same message are two records: a mark never relabels a bookmark, nor the reverse.
   const isMark = mint.tier === 'mark'
-  const existing = reg.perma.find(r => ownerOf(r) === mint.owner && (tierOf(r) === 'mark') === isMark && (sameMessage(r.uuid, mint.uuid) || matchesPrefix(r.uuid, mint.uuid)))
+  // The same place too: a tool call and the reply before it share a uuid but are two records.
+  const existing = reg.perma.find(r => ownerOf(r) === mint.owner && (tierOf(r) === 'mark') === isMark && (sameMessage(r.uuid, mint.uuid) || matchesPrefix(r.uuid, mint.uuid)) && samePlaceOf(r, mint))
   if (existing) {
     const record: AnchorRecord = {
       ...existing,
@@ -224,6 +229,9 @@ export function addOrRelabel(reg: Register, mint: Mint, now: number): AddResult 
     sessionId: reg.sessionId,
     ...(numbered ? { n: reg.nextN } : {}),
     uuid: mint.uuid,
+    ...(mint.file !== undefined ? { file: mint.file } : {}),
+    ...(mint.part !== undefined ? { part: mint.part } : {}),
+    ...(mint.drawn !== undefined ? { drawn: mint.drawn } : {}),
     // A drawn id (the engine's stand-in, fifth group zeros) is kept as what it is, so the
     // real uuid can replace it when the message is found in the transcript.
     ...(isDrawnId(mint.uuid) ? { idKind: 'drawn' as const } : {}),
@@ -256,13 +264,16 @@ export function addOrRelabel(reg: Register, mint: Mint, now: number): AddResult 
  * what was typed or linked: a full uuid, a drawn id (the same message by its first four
  * groups), or a prefix of 8+ characters.
  */
-export function findRecord(reg: Register, id: string, owner?: AnchorOwner): AnchorRecord | undefined {
+export function findRecord(reg: Register, id: string, owner?: AnchorOwner, place?: PlaceOf): AnchorRecord | undefined {
   // A letter's record (tier `mark`) is reached through the slots, never by message: a bookmark and
   // a mark on one message are two records, and this finds the bookmark (0.5.6; the promote path met the mark first).
-  const onList = (r: AnchorRecord) => (owner === undefined || ownerOf(r) === owner) && tierOf(r) !== 'mark'
-  return reg.perma.find(r => onList(r) && r.uuid.toLowerCase() === id.toLowerCase())
-    ?? reg.perma.find(r => onList(r) && matchesPrefix(r.uuid, id))
-    ?? reg.perma.find(r => onList(r) && id.length === 36 && sameMessage(r.uuid, id))
+  // With `place`, the record at that place; without it, the message's own record before a
+  // tool row's on the same uuid (the search-pane-and-links design, 2026-10-26).
+  const onList = (r: AnchorRecord) => (owner === undefined || ownerOf(r) === owner) && tierOf(r) !== 'mark' && (place === undefined || samePlaceOf(r, place))
+  const records = place === undefined ? [...reg.perma].sort((a, b) => Number(a.part !== undefined || a.file !== undefined) - Number(b.part !== undefined || b.file !== undefined)) : reg.perma
+  return records.find(r => onList(r) && r.uuid.toLowerCase() === id.toLowerCase())
+    ?? records.find(r => onList(r) && matchesPrefix(r.uuid, id))
+    ?? records.find(r => onList(r) && id.length === 36 && sameMessage(r.uuid, id))
 }
 
 /** One owner's list of bookmarks and permalinks, in minted order; a letter's record (tier `mark`) is reached through the slots, not listed. */
@@ -275,13 +286,15 @@ export function listOf(reg: Register, owner: AnchorOwner): AnchorRecord[] {
  * message, label, why and words; `sharedFrom` names where it came from. The original
  * stays. A copy that already exists is relabelled from the source.
  */
-export function share(reg: Register, uuid: string, from: AnchorOwner, to: AnchorOwner, now: number): AddResult | { error: string } {
-  const src = findRecord(reg, uuid, from)
+export function share(reg: Register, uuid: string, from: AnchorOwner, to: AnchorOwner, now: number, place?: PlaceOf): AddResult | { error: string } {
+  const src = findRecord(reg, uuid, from, place)
   if (!src) return { error: `no bookmark ${uuid8(uuid)} on ${from === 'claude' ? "Claude's" : "the person's"} list` }
   return addOrRelabel(
     reg,
     {
       uuid: src.uuid,
+      ...placeOfRecord(src),
+      ...(src.drawn !== undefined ? { drawn: src.drawn } : {}),
       owner: to,
       sharedFrom: from,
       label: src.label,
@@ -306,10 +319,10 @@ export function share(reg: Register, uuid: string, from: AnchorOwner, to: Anchor
  * tier and link -- and `sharedFrom` says it came from Claude. If the person already has
  * that message, their record stands and Claude's is left as it was.
  */
-export function claim(reg: Register, uuid: string, now: number): AddResult | { error: string } {
-  const src = findRecord(reg, uuid, 'claude')
+export function claim(reg: Register, uuid: string, now: number, place?: PlaceOf): AddResult | { error: string } {
+  const src = findRecord(reg, uuid, 'claude', place)
   if (!src) return { error: `no bookmark ${uuid8(uuid)} on Claude's list` }
-  const mine = findRecord(reg, uuid, 'user')
+  const mine = findRecord(reg, uuid, 'user', placeOfRecord(src))
   if (mine) return { register: reg, record: mine, added: false }
   const record: AnchorRecord = { ...src, owner: 'user', sharedFrom: 'claude', updatedAt: now }
   return { register: bump({ ...reg, perma: reg.perma.map(r => (r === src ? record : r)) }, now), record, added: true }
@@ -319,8 +332,8 @@ export function claim(reg: Register, uuid: string, now: number): AddResult | { e
  * Removes a bookmark from one list, on request: the record leaves `perma` and a tombstone
  * says who removed it and when. Nothing is deleted from the file's history of events.
  */
-export function remove(reg: Register, uuid: string, owner: AnchorOwner, removedBy: string, now: number): { register: Register; removed: AnchorRecord } | { error: string } {
-  const rec = findRecord(reg, uuid, owner)
+export function remove(reg: Register, uuid: string, owner: AnchorOwner, removedBy: string, now: number, place?: PlaceOf): { register: Register; removed: AnchorRecord } | { error: string } {
+  const rec = findRecord(reg, uuid, owner, place)
   if (!rec) return { error: `no bookmark ${uuid8(uuid)} on ${owner === 'claude' ? "Claude's" : "the person's"} list` }
   const tomb: Tombstone = { uuid: rec.uuid, ...(rec.n !== undefined ? { n: rec.n } : {}), createdAt: rec.createdAt, owner, label: rec.label, removedAt: now, removedBy }
   return { register: bump({ ...reg, perma: reg.perma.filter(r => r !== rec), tombstones: [...reg.tombstones, tomb] }, now), removed: rec }
@@ -349,7 +362,7 @@ function bump(reg: Register, now: number): Register {
 // Fixed key order, so a hand edit and a program write diff cleanly.
 const REGISTER_KEYS = ['version', 'format', 'sessionId', 'transcript', 'configDir', 'cwd', 'title', 'project', 'rev', 'updatedAt', 'writer', 'nextN', 'perma', 'tombstones', 'pins', 'slots', 'stars'] as const
 const RECORD_KEYS = [
-  'n', 'sessionId', 'uuid', 'idKind', 'owner', 'label', 'why', 'words', 'head', 'line', 'bytes', 'role', 'timestamp',
+  'n', 'sessionId', 'uuid', 'file', 'part', 'drawn', 'idKind', 'owner', 'label', 'why', 'words', 'head', 'line', 'bytes', 'role', 'timestamp',
   'temporary', 'tier', 'createdAt', 'updatedAt', 'by', 'source', 'sharedFrom', 'transcript', 'tags', 'axes', 'rel', 'x', 'md',
 ] as const
 
@@ -470,13 +483,22 @@ export function newer(a: Register, b: Register): Register {
 /** The export's own format version, independent of the register's: 2 since the note became an Obsidian note (lists, aliases, derived tags; unit 9). */
 export const EXPORT_VERSION = 2
 
-/** Every record on a message, on any list, a letter's (tier `mark`) left out: what the message's note describes. */
-export function recordsOn(reg: Register, uuid: string): AnchorRecord[] {
-  return reg.perma.filter(r => tierOf(r) !== 'mark' && (sameMessage(r.uuid, uuid) || matchesPrefix(r.uuid, uuid)))
+/**
+ * Every record on a message, on any list, a letter's (tier `mark`) left out: what the message's
+ * note describes. With `place`, only the records at that place (a tool call's records, not its
+ * reply's: the search-pane-and-links design, 2026-10-26); without it, every place on the message.
+ */
+export function recordsOn(reg: Register, uuid: string, place?: PlaceOf): AnchorRecord[] {
+  return reg.perma.filter(r => tierOf(r) !== 'mark' && (sameMessage(r.uuid, uuid) || matchesPrefix(r.uuid, uuid)) && (place === undefined || samePlaceOf(r, place)))
 }
 
-export function exportFileName(uuid: string): string {
-  return `${uuid8(uuid)}.md`
+/** Whether a record sits at a place: the same file and block, absent equal to absent (a message's record has neither). */
+export function samePlaceOf(r: PlaceOf, place: PlaceOf): boolean {
+  return (r.file ?? '') === (place.file ?? '') && (r.part ?? -1) === (place.part ?? -1)
+}
+
+export function exportFileName(uuid: string, place: PlaceOf = {}): string {
+  return exportName(uuid, place)
 }
 
 /** Everything after this line in an export is the reader's own and survives a rewrite. */

@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-10-26
+
+### Added
+
+- **Links to any row the chat draws.** Claude's `bookmark` tool can now link to a tool call, a tool's output or an agent's message, not only to a prompt or a reply. Name the row by a phrase from it or by its id. A click scrolls to that row, or to the folded group ("Ran 1 shell command") that holds it. Links to prompts and replies work as before and still highlight the words.
+- A bookmark on such a row keeps its note as `<id>.p<part>.md` beside the message notes, so two rows of one message never share a note.
+- `/bm-jump` accepts a tool call's id (`toolu_...`) and a folded group's id (`collapsed-...`).
+
+### Changed
+
+- To find those rows, the plugin now reads all of a conversation's files: the transcript, each agent's file and the tool outputs Claude Code stores beside it. The read starts the first time it is needed, runs in the background, and picks up where it left off at the next start. In a long conversation the first link can answer that the conversation is still being read; `/bm-env` shows the progress, and asking again later works.
+- What it reads is kept under `bookmarks/places/<session id>/`, about the size of the conversation's text, and is rebuilt when missing. `PRIVACY.md` and the plugin's listing describe the new reads and this folder.
+
 ## [0.7.2] - 2026-10-26
 
 ### Changed
@@ -1346,7 +1359,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.3...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

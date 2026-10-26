@@ -9,7 +9,7 @@
 // Pure: no I/O. The handler (handlers/bookmarks.ts commitOp) does the reading, the
 // comparison and the write.
 
-import { type AnchorOwner, type AnchorRecord, ownerOf, tierOf } from './anchor.ts'
+import { type AnchorOwner, type AnchorRecord, ownerOf, placeOfRecord, tierOf } from './anchor.ts'
 import { sameMessage } from '../kit/message-id.ts'
 import type { Mark, Marks } from '../marks/marks.ts'
 import { sameBase, type NoteBase } from './note.ts'
@@ -113,17 +113,18 @@ export function applyOp(reg: Register, op: Op, now: number): OpResult {
     case 'remove': {
       const rec = recordById(reg, op.id)
       if (!rec) return { error: `no bookmark ${describeId(op.id)}: already removed` }
-      return remove(reg, rec.uuid, ownerOf(rec), op.removedBy, now)
+      // The record's own place, so a tool row's record is never taken for its reply's (2026-10-26).
+      return remove(reg, rec.uuid, ownerOf(rec), op.removedBy, now, placeOfRecord(rec))
     }
     case 'share': {
       const rec = recordById(reg, op.id)
       if (!rec) return { error: `no bookmark ${describeId(op.id)} to share` }
-      return share(reg, rec.uuid, ownerOf(rec), op.to, now)
+      return share(reg, rec.uuid, ownerOf(rec), op.to, now, placeOfRecord(rec))
     }
     case 'claim': {
       const rec = recordById(reg, { ...op.id, owner: 'claude' })
       if (!rec) return { error: `no bookmark ${describeId({ ...op.id, owner: 'claude' })} to claim` }
-      return claim(reg, rec.uuid, now)
+      return claim(reg, rec.uuid, now, placeOfRecord(rec))
     }
     case 'prune': {
       const r = prune(reg, op.retention, now)
