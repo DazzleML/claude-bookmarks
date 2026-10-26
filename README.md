@@ -96,6 +96,7 @@ That's the whole setup. Every key in these docs is written as `Ctrl+]`. Until th
 - **Jumps** - `Ctrl+] '` and a letter scrolls back to that mark from anywhere in the conversation; the jump pane lists only the marks you have
 - **Reading position** - Select a line and press `Ctrl+] Space Space` to keep your place; press it again from anywhere to go there, and again to return to where you were
 - **Prompt history** - `Ctrl+] p` lists every prompt of the conversation, numbered from your first, including prompts from before the plugin was loaded; type a number, or browse with `j`/`k` or the arrows, then Enter to jump
+- **Search** - `Ctrl+] /` searches the whole conversation as you type: your prompts, Claude's replies and thinking, every tool call and its output, agents' and other sessions' messages. Toggles narrow it by kind; Enter goes to a result, highlighted, or to the tool's own row
 - **Bookmarks** - Permanent, addressable places in the conversation, kept as readable files in your own folder. Claude places them while it answers and cites them as links in its reply: click one to jump there with the words highlighted, ctrl-click to open the bookmark's file. Your bookmarks and Claude's are separate lists (`Ctrl+] b`); promote any mark into a bookmark with `Ctrl+] P` and its letter
 - **Back and forward** - `Ctrl+] o` returns to where you were before the last jump, `Ctrl+] i` goes forward again, like vim's jumplist
 - **Works while you type** - The leader works with a draft in the input box and while Claude is working; your draft is untouched

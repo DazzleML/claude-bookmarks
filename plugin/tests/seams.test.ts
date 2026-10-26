@@ -183,7 +183,7 @@ test('2 go with nothing typed closes the list and brings the bar back (settle, e
   const closesBefore = w.calls.filter(c => c.event === 'ui.close').length
   await band.press({ key: 'band-num-go' }).catch(() => undefined) // the view restore's own scroll throws in the kit
   expect(w.calls.filter(c => c.event === 'ui.close').length).toBe(closesBefore + 1)
-  expect((await band.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['chord-mark', 'chord-jump', 'chord-prompts', 'chord-read', 'chord-help'])
+  expect((await band.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['chord-mark', 'chord-jump', 'chord-read', 'chord-prompts', 'chord-search', 'chord-help'])
 })
 
 test('4 a submitted prompt ends the band waiting for a number', { options: { listInput: 'buttons' } }, async ($, on) => {
@@ -193,7 +193,7 @@ test('4 a submitted prompt ends the band waiting for a number', { options: { lis
   await band.input({ key: 'band-cmd-0', text: 'p' }).catch(() => undefined)
   expect((await band.findAll({ type: 'Text' })).some(t => t.text === 'prompt #')).toBe(true)
   await ($ as unknown as Engine).prompt.submit({ text: 'hello' })
-  expect((await band.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['chord-mark', 'chord-jump', 'chord-prompts', 'chord-read', 'chord-help'])
+  expect((await band.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['chord-mark', 'chord-jump', 'chord-read', 'chord-prompts', 'chord-search', 'chord-help'])
 })
 
 // The jumplist in memory belongs to one conversation (test-scenarios 2026-10-14__02-07-49,

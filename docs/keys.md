@@ -26,6 +26,7 @@ The band's field takes exactly one key (two for the ones that need a letter). An
 | `Space` or `r` | `Space` or `Enter` | Goes to the reading position, or back to where you were; with fresh selected text, sets it there |
 | `p` | see section 3 | Opens the prompts pane |
 | `b` | see section 3 | Opens the bookmarks pane |
+| `/` | see section 3 | Opens the search pane: the whole conversation, every kind of row ([Searching the conversation](usage.md#searching-the-conversation)) |
 | `P` | a letter `a`-`z`, or `` ` `` | Promotes that mark (or the reading position) into a bookmark on your list; the link goes to your clipboard |
 | `d` | a letter `a`-`z` | Clears that mark: the letter points at nothing, and its history is kept |
 | `D` | a letter `a`-`z` | Forgets that mark: its record goes too, outright when nothing else refers to it |
@@ -68,6 +69,16 @@ After `p` or `b` the pane shows the list, and the band draws a `#` field of its 
 | `q` | Closes the pane (also typed alone in the pane's own `#` field) |
 | `Esc` | Closes the pane without jumping |
 
+**In search,** the band's field is the query, so every letter is text and the list keys above are not keys there:
+
+| Key | Does |
+|-----|------|
+| letters, words, `"a phrase"`, `m/re/`, `in:tools` | The query; the results narrow as you type |
+| `Tab` / `Shift+Tab` (or `Down` / `Up` with the binding below) | Moves the `▶` down / up; the first step lands on 1, the newest |
+| `Enter` | Goes to the result under the `▶`, or the newest |
+| `#12`, then `Enter` | Goes to result 12 |
+| `*12`, then `Enter` | Pins or unpins result 12 |
+
 **Up and Down in the band's field.** A text field in the band keeps the arrow keys to itself, so out of the box they do nothing there. One entry in `~/.claude/keybindings.json`, beside your leader's, makes them move off the field, which the band reads as a step:
 
 ```json
@@ -99,6 +110,7 @@ A pane opened by a typed command from an **empty** input box takes the keyboard 
 | `/bm-goto` | Opens the jump pane |
 | `/bm-prompts` | Opens the prompts pane |
 | `/bm-bookmarks` | Opens the bookmarks pane |
+| `/bm-search [words]` | Opens the search pane, searching for the words when given |
 | `/bm-read` | Goes to the reading position, or back |
 | `/bm-promote a` | Promotes mark `a` into a bookmark on your list |
 | `/bm-pin [N]` | Pins or unpins prompt N (the newest without a number) |

@@ -10,7 +10,7 @@ import type { Role, Style } from '../core/palette.ts'
 
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
 
-export type BandMode = 'idle' | 'help' | 'jump' | 'mark' | 'list' | 'bookmarks'
+export type BandMode = 'idle' | 'help' | 'jump' | 'mark' | 'list' | 'bookmarks' | 'search'
 
 export type BandModel = {
   mode: BandMode
@@ -103,6 +103,7 @@ export function bandView(elements: Elements, theirs: RenderChildren, m: BandMode
       ]
     } else {
       const bookmarks = m.mode === 'bookmarks'
+      const search = m.mode === 'search'
       // The step buttons are found by what they do, not by their letter, so a keymap's
       // choice of keys (#36) still draws them either side of `go`.
       const step = (dir: -1 | 1) => m.listKeys.find(l => l.operation.op === 'step' && l.operation.dir === dir)!
@@ -117,7 +118,24 @@ export function bandView(elements: Elements, theirs: RenderChildren, m: BandMode
             ? [listKeyButton(l), <Text key="band-num-group" {...s.text('legend')}>{m.groupTitle}</Text>]
             : [listKeyButton(l)]
         })
-      if (m.listInput === 'band-field' && Input) {
+      if (search && Input) {
+        // The search list (the search-pane-and-links design, unit U-S): the field is the query,
+        // kept as typed (it is never drawn anew, so a step leaves the words in it); the step
+        // buttons either side move the ▶ through the results; `#N` or `*N` and Enter go or pin.
+        // No hotkeys on them: every letter typed belongs to the query.
+        const stepButton = (l: (typeof m.listKeys)[number]) => (
+          <Button key={`band-num-${l.key}`} label={l.button.replace(/^[a-z]/, '').replace(/[a-z]$/, '')} plain {...s.button('legend')} onPress={() => a.listKey(l.operation)} />
+        )
+        keys = [
+          <Text key="band-num-title" {...s.text('legend')}>search</Text>,
+          stepButton(step(-1)),
+          <Input key={m.fieldKey} label="/" autoFocus submitLabel="go"
+            placeholder={m.typed !== '' ? `#${m.typed}, Enter goes` : 'words; #N or *N, Enter'}
+            onInput={(typed: string) => a.fieldInput(typed)}
+            onSubmit={(typed: string) => a.fieldSubmit(typed)} />,
+          stepButton(step(1)),
+        ]
+      } else if (m.listInput === 'band-field' && Input) {
         // The band's own field (input routing, 2026-10-25; core/band/routes.ts). A field
         // takes every printable key and Backspace, and its handler returns its promise, so a
         // jump from it counts as the person's (the 2026-10-09 rule; the digit buttons below

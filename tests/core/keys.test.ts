@@ -63,18 +63,18 @@ const none = { pane: 'none' as const }
 
 test('the bar: one button per shown command, labelled once, ? last', () => {
   const bar = bandButtons({ chords: true })
-  assert.deepEqual(bar.map(b => b.label), ['mark', 'jump', 'prompts', 'read', '?'])
+  assert.deepEqual(bar.map(b => b.label), ['mark', 'jump', 'read', 'prompts', '/search', '?'])
   assert.equal(new Set(bar.map(b => b.label)).size, bar.length, 'nothing listed twice')
   for (const b of bar) assert.notEqual(route(b.key, none).operation.op, 'hint', `${b.label} presses a real command`)
 })
 
-test("a hotkey only where the engine takes one: not ', Space or ?", () => {
+test("a hotkey only where the engine takes one: not ', Space, / or ?", () => {
   const bar = bandButtons({ chords: true })
-  assert.deepEqual(Object.fromEntries(bar.map(b => [b.label, b.hotkey])), { mark: 'm', jump: 'j', prompts: 'p', read: 'r', '?': undefined })
+  assert.deepEqual(Object.fromEntries(bar.map(b => [b.label, b.hotkey])), { mark: 'm', jump: 'j', read: 'r', prompts: 'p', '/search': undefined, '?': undefined })
 })
 
 test('the four borrowed actions ride only while chords are on', () => {
-  assert.deepEqual(bandButtons({ chords: true }).filter(b => b.chord).map(b => b.chord), ['mark', 'jump', 'prompts', 'read'])
+  assert.deepEqual(bandButtons({ chords: true }).filter(b => b.chord).map(b => b.chord), ['mark', 'jump', 'read', 'prompts'])
   assert.deepEqual(bandButtons({ chords: false }).filter(b => b.chord), [])
 })
 

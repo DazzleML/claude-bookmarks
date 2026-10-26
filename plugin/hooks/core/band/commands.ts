@@ -21,6 +21,7 @@ export const COMMANDS: readonly (readonly [string, string])[] = [
   ['bm-prompts', 'Jump to a prompt: opens the prompts pane, then type its number'],
   ['bm-read', 'Reading position: go there, or back to where you were'],
   ['bm-bookmarks', 'List the bookmarks of this conversation; type a number and Enter to jump'],
+  ['bm-search', 'Search this conversation: every prompt, reply, tool call, output and agent message; /bm-search words starts with them'],
   ['bm-promote', 'Promote a mark into a bookmark: /bm-promote a'],
   ['bm-diag-keys', 'Diagnostics: log each keystroke in the input box (on | off | toggle)'],
   ['bm-debug', 'Echo the plugin\'s log lines into this conversation as dim rows (on | off | status), or turn debug channels on (channels | enable | disable); off by default'],

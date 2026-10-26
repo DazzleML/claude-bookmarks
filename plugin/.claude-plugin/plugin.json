@@ -1,7 +1,7 @@
 {
   "name": "bookmarks",
   "displayName": "Bookmarks",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "Bookmarks and vim-style marks inside Claude Code conversations: mark a line, jump back, keep a reading position, browse your prompts, and let Claude cite earlier places as clickable links.",
   "author": {
     "name": "DazzleML",
@@ -168,6 +168,81 @@
         "everywhere"
       ]
     },
+    "searchShown": {
+      "type": "boolean",
+      "title": "▸ Search: show the search rows",
+      "description": "true: the rows below set what the search pane opens on, its toggle row, and how a result is labelled and laid out; false: they are folded away (what you set stays)",
+      "default": false
+    },
+    "searchToggles": {
+      "type": "string",
+      "title": "Search: the row of toggles",
+      "description": "shown: the search pane draws a row of on/off toggles for what it searches (you, claude, tools, outputs, agents, ...); hidden: no row, and in:tools style words in the query still narrow it",
+      "default": "shown",
+      "options": [
+        "shown",
+        "hidden"
+      ]
+    },
+    "searchView": {
+      "type": "string",
+      "title": "Search: what it opens on",
+      "description": "all: every row; you+claude+sessions+tools+outputs: what the conversation shows on screen, other sessions' messages included; you+claude+sessions: the conversation and other sessions' messages; custom: the kinds you turn on in the rows below. The toggles change it while the pane is open",
+      "default": "all",
+      "options": [
+        "all",
+        "you+claude+sessions+tools+outputs",
+        "you+claude+sessions",
+        "custom"
+      ]
+    },
+    "searchWithYou": { "type": "boolean", "title": "Search: custom includes you", "description": "true: a search with \"what it opens on\" set to custom starts with you on; false: off", "default": true },
+    "searchWithClaude": { "type": "boolean", "title": "Search: custom includes claude", "description": "true: a search with \"what it opens on\" set to custom starts with claude on; false: off", "default": true },
+    "searchWithAgents": { "type": "boolean", "title": "Search: custom includes agents", "description": "true: a search with \"what it opens on\" set to custom starts with agents on; false: off", "default": false },
+    "searchWithSessions": { "type": "boolean", "title": "Search: custom includes sessions", "description": "true: a search with \"what it opens on\" set to custom starts with sessions on; false: off", "default": true },
+    "searchWithTools": { "type": "boolean", "title": "Search: custom includes tools", "description": "true: a search with \"what it opens on\" set to custom starts with tools on; false: off", "default": true },
+    "searchWithOutputs": { "type": "boolean", "title": "Search: custom includes outputs", "description": "true: a search with \"what it opens on\" set to custom starts with outputs on; false: off", "default": true },
+    "searchWithThinking": { "type": "boolean", "title": "Search: custom includes thinking", "description": "true: a search with \"what it opens on\" set to custom starts with thinking on; false: off", "default": false },
+    "searchWithNotices": { "type": "boolean", "title": "Search: custom includes notices", "description": "true: a search with \"what it opens on\" set to custom starts with notices on; false: off", "default": false },
+    "searchWithOther": { "type": "boolean", "title": "Search: custom includes other", "description": "true: a search with \"what it opens on\" set to custom starts with other on; false: off", "default": false },
+    "searchLabels": {
+      "type": "string",
+      "title": "Search: how a result says what it is",
+      "description": "words: you, claude, thinking, Bash, output, notice; short: the first letters of each (yo, cl, th, ou, no at 2; a tool keeps its name, an agent its type), on the result rows; the toggles keep their words",
+      "default": "words",
+      "options": [
+        "words",
+        "short"
+      ]
+    },
+    "searchShortLength": {
+      "type": "number",
+      "title": "Search: letters in a short kind",
+      "description": "How many letters a short kind keeps (1 to 6): 2 gives cl, ou, th; 3 gives cla, out, thi. Used while \"how a result says what it is\" is short",
+      "default": 2,
+      "min": 1,
+      "max": 6
+    },
+    "searchLayout": {
+      "type": "string",
+      "title": "Search: how a result is laid out",
+      "description": "stacked: the number and kind on one line, the text on the lines below, indented; inline: the text beside the kind. With one line per row, always inline",
+      "default": "stacked",
+      "options": [
+        "stacked",
+        "inline"
+      ]
+    },
+    "searchImplied": {
+      "type": "string",
+      "title": "Search: labels in a one-kind view",
+      "description": "implied: with one toggle on, a label that only repeats it is left out (claude alone: replies unlabelled, thinking still says so); always: every result keeps its label",
+      "default": "implied",
+      "options": [
+        "implied",
+        "always"
+      ]
+    },
     "rowLines": {
       "type": "number",
       "title": "Lines per row in the lists",
@@ -210,6 +285,12 @@
       "type": "string",
       "title": "Keys: bookmarks",
       "description": "Keys for bookmarks, separated by spaces (default: b); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keySearch": {
+      "type": "string",
+      "title": "Keys: search",
+      "description": "Keys for search, separated by spaces (default: /); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
       "default": ""
     },
     "keyPromote": {

@@ -13,7 +13,8 @@ import {
   type Mint, type Register as BookmarkRegister, type Retention,
 } from '../core/bookmarks/register-file.ts'
 import { baseOf, ingest, primaryRecord, sameBase } from '../core/bookmarks/note.ts'
-import { isOn, type Pin, type PinScope } from '../core/bookmarks/pins.ts'
+import { isOn, pinnedPlaces, type Pin, type PinPlace, type PinScope } from '../core/bookmarks/pins.ts'
+import { SEARCH_LIST } from '../core/search/results.ts'
 import { buildIndex, emptyIndex, entryOf, INDEX_JSON, INDEX_MD, parseIndex, renderIndexMarkdown, serializeIndex, upsert, type IndexEntry } from '../core/bookmarks/session-index.ts'
 import { applyOp, marksOf as marksFromRegister, type Op, type OpResult } from '../core/bookmarks/register-ops.ts'
 import {
@@ -456,6 +457,18 @@ export async function togglePinned(ports: BookmarksPorts, uuid: string, on: bool
   const r = await commitOp(ports, { op: 'pin', owner: 'user', place: { uuid }, from: PROMPTS_LIST, on, scope, at: await ports.now() })
   if ('error' in r) return r
   return { pinned: pinnedOf(r.register.pins, scope) }
+}
+
+/** The places the person's pins mark in the search list (pins.ts pinPlaceKey), as the pinScope setting shows them. */
+export async function searchPins(ports: BookmarksPorts, scope: PinScope): Promise<Set<string>> {
+  return pinnedPlaces((await loadRegister(ports)).pins, 'user', SEARCH_LIST, scope)
+}
+
+/** Pins or unpins a place for the person from the search list (the search-pane-and-links design, unit U-S): a tool row or an agent's message keeps its file and block. */
+export async function togglePlacePin(ports: BookmarksPorts, place: PinPlace, on: boolean, scope: PinScope): Promise<{ pinned: Set<string> } | { error: string }> {
+  const r = await commitOp(ports, { op: 'pin', owner: 'user', place, from: SEARCH_LIST, on, scope, at: await ports.now() })
+  if ('error' in r) return r
+  return { pinned: pinnedPlaces(r.register.pins, 'user', SEARCH_LIST, scope) }
 }
 
 // --- Migrations at a conversation's start (the data design, 2026-10-16, unit 4) -----------

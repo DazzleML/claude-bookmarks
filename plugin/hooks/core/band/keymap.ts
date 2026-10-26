@@ -145,9 +145,10 @@ export function applyKeymap(keymap: Keymap, base: Tables = DEFAULT_TABLES): { ta
 export const KEY_FIELDS: Readonly<Record<string, string>> = {
   mark: 'keyMark',
   jump: 'keyJump',
-  prompts: 'keyPrompts',
   read: 'keyRead',
+  prompts: 'keyPrompts',
   bookmarks: 'keyBookmarks',
+  search: 'keySearch',
   promote: 'keyPromote',
   delete: 'keyDelete',
   forget: 'keyForget',

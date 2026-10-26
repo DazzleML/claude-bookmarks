@@ -230,6 +230,49 @@ Type `/` and some words in the pane's `#` field to list only the prompts contain
 
 The filter searches the whole text of your prompts, not only the excerpt the list shows. That text is kept per conversation up to a budget, "Prompt text kept for the filter (bytes)", 2 MB by default, newest first; past it, older prompts are matched on their excerpt alone. `0` keeps everything, for a machine with room to spare. It is kept in your own folder, `~/claude/bookmarks/prompttext/` (beside the bookmarks), not in Claude Code's plugin storage, which has a small limit shared by everything the plugin keeps.
 
+## Searching the conversation
+
+`Ctrl+] /` (or the bar's `/search` button, or `/bm-search some words`) opens the search pane. It searches every row the conversation has, not only your prompts: Claude's replies and thinking, every tool call and its output, agents' messages, and messages from other sessions. With the field empty it lists them all, newest first.
+
+```
+/ loader_
+●all ·you ·claude ·agents ·sessions ·tools ·outputs ·thinking ·notices ·other
+everything: 4 of 1,284 places
+  1) claude: The loader is in src/loader.ts
+  2) output: src/loader.ts:51
+  3) Bash: grep -rn loader src
+  4) you: find the loader please
+```
+
+The band takes the keys, as for the lists: what you type in its field is the query, and the results narrow as you type. The results are numbered in their own list, 1 the newest at the top.
+
+| On the band, in search | Does |
+|------------------------|------|
+| words | Every word, in any order and any case |
+| `"a phrase"` | That exact text, case and all |
+| `m/pattern/i` | A regular expression |
+| `in:tools`, `from:claude`, `tool:Bash`, `agent:oracle`, `failed` | Narrows to those rows; `-in:thinking` leaves them out |
+| `Tab` / `Shift+Tab`, or the `↓` / `↑` buttons | Moves the `▶` down / up the results; the first step lands on 1 |
+| `Enter` | Goes to the result under the `▶` (the newest when there is none) |
+| `#12`, then `Enter` | Goes to result 12; the `▶` moves there as you type the number |
+| `*12`, then `Enter` | Pins or unpins result 12 (a `★` beside it); the band stays open to pin more |
+| `Esc` | Leaves the band; the pane stays |
+
+Every letter you type is part of the query, so `j`, `k` and `q` are not keys here. The pane's own row of toggles narrows by kind: click `tools` to see only tool calls, `you` and `claude` together for the conversation itself, `all` for everything again. The toggles combine with whatever `in:` words the query holds.
+
+Going to a result lands where Claude Code draws it. A prompt or a reply lands with your words highlighted; a tool call or its output lands on the tool's row, or on the folded "Ran 1 shell command" line that holds it; an agent's message lands on the Agent call that started it. The result you last went to stays in yellow, so you can see which one it was. A thinking block lands on its message, folded: ctrl+o shows it.
+
+The first search in a conversation reads all of its files, which in a long conversation takes a while; the pane says it is still reading and fills in as it goes. What it read is kept under `~/claude/bookmarks/places/`, so a later search, even after a restart, starts at once. The search settings sit in `/config` behind their own fold, "▸ Search: show the search rows", inside **▸ Bookmarks**:
+
+| Setting | Values |
+|---------|--------|
+| Search: what it opens on | `all` (the default); `you+claude+sessions+tools+outputs`, what the conversation shows on screen with other sessions' messages; `you+claude+sessions`; or `custom`, which shows one "Search: custom includes ..." row per kind to turn on or off. A toggle you press in the pane stands for the rest of the conversation. |
+| Search: the row of toggles | `shown` or `hidden` |
+| Search: how a result says what it is | `words` (you, claude, thinking, output), or `short`: each kind word cut to its first letters on the result rows (`cl`, `th`, `ou`); a tool keeps its name and an agent its type, and the toggle row keeps its words |
+| Search: letters in a short kind | 1 to 6, shown while the labels are `short`: 2 (the default) gives `cl`, 3 gives `cla` |
+| Search: labels in a one-kind view | `implied` (the default): with one toggle on, a label that only repeats it is left out, so `claude` alone lists replies with no `claude:` while a thinking block still says `thinking:`; a tool's name, an agent's type and a failed output always stay. `always` keeps every label. |
+| Search: how a result is laid out | `stacked` (the default): a long kind such as `mid-engineer · SubagentHandback` gets a line of its own with the text indented below, while short kinds such as `you` or `Bash` stay beside their text; or `inline`, every text beside its kind. With "Lines per row in the lists" at 1 it is always inline. |
+
 ## Bookmarks
 
 A mark is a letter you can reassign in a second. A **bookmark** is permanent: a durable address of one message in this conversation, kept in a readable file under your own folder, that still resolves in a later session and that a link can point at. Claude places bookmarks while it answers, and you can promote any mark into one.
@@ -292,7 +335,7 @@ The reading position is separate and is never moved by a jump. Arrow keys can't 
 
 ### What Claude's tool does
 
-Claude has a `bookmark` tool. It gives a verbatim fragment of the message (or its uuid) and a label, and gets back the markdown link to cite with. The tool resolves the fragment against the conversation's transcript (the earliest message that contains it; if several do, it asks rather than guessing), records the bookmark, writes its file, and returns the link. Its other actions: `relabel`, `remove`, `share`, `claim`, and `list` (both lists with their tiers; a link only for a record whose file exists). Every answer carries the record's number (`n`), the one the short reference will use. A `meta` parameter lets Claude keep `tags` (a list, nested with `/`) and its own notes (`x`) on a record; a relabel replaces the tags and merges the notes. The label is what the place says; the `why` is what it decides or why it matters.
+Claude has a `bookmark` tool. It gives a verbatim fragment of the message (or its uuid) and a label, and gets back the markdown link to cite with. The place can be any row the chat window draws: a prompt or a reply, a tool call (by a fragment of its command, or by its `toolu_` id), a tool's output, an agent's message. A link to a tool row lands on that row, or on the folded line that holds it, and its file is named `<id>.p<part>.md` so two rows of one message never share one. In a long conversation the first such link can answer that the conversation is still being read; asking again a moment later finds it. The tool resolves the fragment against the conversation's transcript (the earliest message that contains it; if several do, it asks rather than guessing), records the bookmark, writes its file, and returns the link. Its other actions: `relabel`, `remove`, `share`, `claim`, and `list` (both lists with their tiers; a link only for a record whose file exists). Every answer carries the record's number (`n`), the one the short reference will use. A `meta` parameter lets Claude keep `tags` (a list, nested with `/`) and its own notes (`x`) on a record; a relabel replaces the tags and merges the notes. The label is what the place says; the `why` is what it decides or why it matters.
 
 A record has a tier. Claude's own references are `perma` by default: a stable link it cites in its reply, drawn without the `⚓` so its references don't look like bookmarks you made. `bookmark` is a named place you will want to find again; that is the default when Claude bookmarks something for you, and Claude can make any of its references one by passing `tier: "bookmark"`. A bookmark never drops back to perma. `claim` moves one of Claude's records onto your list, with the same message, id and link; ask Claude to claim it for you.
 

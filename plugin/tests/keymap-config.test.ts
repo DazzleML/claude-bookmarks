@@ -37,6 +37,22 @@ const answerBase = (on: unknown) => {
   o('config.describe', {}, async (_h, e) => ({ label: e.label, description: e.description, isHidden: e.isHidden }))
 }
 
+// djdarcy, 2026-10-26: "we didn't fix the "3" versus "2" choice though?": the letters row only
+// shows for short labels, and /config was not asked to redraw when the labels changed, so it
+// never appeared. A row that shows others redraws the menu as a fold does.
+test('setting the labels or the view asks /config to redraw its rows, as a fold does', { options: { settingsShown: true, searchShown: true } }, async ($, on) => {
+  const w = world(on, { store: STORE, session: SID })
+  answerBase(on)
+  expect((await describe($, 'searchShortLength')).isHidden).toBe(true)
+  await set($, 'searchLabels', 'short').catch(() => undefined)
+  await set($, 'searchView', 'custom').catch(() => undefined)
+  const lines = (w.file(LOG) ?? '').split('\n')
+  expect(lines.some(l => l.includes('[bm] a row that shows others: searchLabels set to "short"; asking /config to redraw its rows'))).toBe(true)
+  expect(lines.some(l => l.includes('[bm] a row that shows others: searchView set to "custom"; asking /config to redraw its rows'))).toBe(true)
+  expect((await describe($, 'searchShortLength')).isHidden).toBe(false)
+  expect((await describe($, 'searchWithThinking')).isHidden).toBe(false)
+})
+
 test('a key row moves its button: mark set to x presses with x', { options: { keyMark: 'x' } }, async ($, on) => {
   world(on, { store: STORE, session: SID })
   expect(await hotkeyOf(await mount($), 'mark')).toBe('x')

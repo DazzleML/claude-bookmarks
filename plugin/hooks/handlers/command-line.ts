@@ -63,10 +63,11 @@ export async function perform(ports: CommandLinePorts, operation: Operation, via
       return
     case 'open':
       await ports.clearCommandLine()
-      if (operation.pane === 'list' || operation.pane === 'bookmarks') await ports.setBandNum('')
+      if (operation.pane === 'list' || operation.pane === 'bookmarks' || operation.pane === 'search') await ports.setBandNum('')
       if (operation.pane === 'bookmarks') await ports.setBandGroup(0) // start on the person's own bookmarks
-      // Lists off (the `panes` setting): the band takes the key with no pane beside it.
-      if (ports.settings().panes === 'off') return void (await bandOnly(ports, operation.pane))
+      // Lists off (the `panes` setting): the band takes the key with no pane beside it. Not
+      // search, whose results have nowhere else to be drawn.
+      if (ports.settings().panes === 'off' && operation.pane !== 'search') return void (await bandOnly(ports, operation.pane))
       // A pressed button on the pane it opened closes it: the button is a toggle (the keys
       // design 2026-10-20, unit 4). Never the typed key (djdarcy at the gate: "the BUTTON on
       // the BAND should have a toggle feature, but elsewhere I think it would be more of an

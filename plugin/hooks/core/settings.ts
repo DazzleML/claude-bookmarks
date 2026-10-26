@@ -172,6 +172,86 @@ export const FIELDS = {
     title: 'Pins shown in a list',
     description: 'here: a list shows the pins made in it; everywhere: a list shows a pin on any of its rows, wherever it was made',
   },
+  // The search pane's rows behind their own fold, as the keys and the debug rows are (djdarcy,
+  // 2026-10-26: "Is there a reason we didn't set this up as a proper foldable?").
+  searchShown: {
+    kind: 'boolean',
+    default: false,
+    title: `${FOLD_CLOSED} Search: show the search rows`,
+    description: 'true: the rows below set what the search pane opens on, its toggle row, and how a result is labelled and laid out; false: they are folded away (what you set stays)',
+  },
+  // The search pane's row of on/off toggles for what it searches (the scope design's F7,
+  // 2026-10-25: "a setting hides the row"); typed rules (in:tools, -agent:help) work either way.
+  searchToggles: {
+    kind: 'enum',
+    values: ['shown', 'hidden'],
+    default: 'shown',
+    title: 'Search: the row of toggles',
+    description: 'shown: the search pane draws a row of on/off toggles for what it searches (you, claude, tools, outputs, agents, ...); hidden: no row, and in:tools style words in the query still narrow it',
+  },
+  // What the search pane opens on (djdarcy, 2026-10-26: default "all"; "you+claude+tools+output
+  // ... covers most of what users see on the screen"; "a template for a more narrow view as
+  // "you+claude+sessions""). The values are core/search/results.ts SEARCH_VIEWS's names.
+  searchView: {
+    kind: 'enum',
+    values: ['all', 'you+claude+sessions+tools+outputs', 'you+claude+sessions', 'custom'],
+    default: 'all',
+    title: 'Search: what it opens on',
+    description: "all: every row; you+claude+sessions+tools+outputs: what the conversation shows on screen, other sessions' messages included; you+claude+sessions: the conversation and other sessions' messages; custom: the kinds you turn on in the rows below. The toggles change it while the pane is open",
+  },
+  // The custom set (djdarcy, 2026-10-26: "make it a list where users can pick the items they want
+  // to "build"". /config has no multi-select, so one on/off row per kind, shown only while the
+  // view is `custom`; the defaults are the second preset). Names: core/search/results.ts CUSTOM_FIELDS.
+  searchWithYou: customRow('you', true),
+  searchWithClaude: customRow('claude', true),
+  searchWithAgents: customRow('agents', false),
+  searchWithSessions: customRow('sessions', true),
+  searchWithTools: customRow('tools', true),
+  searchWithOutputs: customRow('outputs', true),
+  searchWithThinking: customRow('thinking', false),
+  searchWithNotices: customRow('notices', false),
+  searchWithOther: customRow('other', false),
+  // How a search result's kind is written (djdarcy, 2026-10-26: "a shorthand ... {"cl:", "th:",
+  // "to:", ...} this way it doesn't take up quite so much space in the search panel").
+  searchLabels: {
+    kind: 'enum',
+    values: ['words', 'short'],
+    default: 'words',
+    title: 'Search: how a result says what it is',
+    description: 'words: you, claude, thinking, Bash, output, notice; short: the first letters of each (yo, cl, th, ou, no at 2; a tool keeps its name, an agent its type), on the result rows; the toggles keep their words',
+  },
+  // How many letters a short kind keeps (djdarcy, 2026-10-26: "we still need to let users choose
+  // how many letters the shortname should be from the longname. As I suspect many users will
+  // want "3" letters. But 2 is my preference."). Shown only while the labels are short.
+  searchShortLength: {
+    kind: 'number',
+    min: 1,
+    max: 6,
+    default: 2,
+    title: 'Search: letters in a short kind',
+    description: 'How many letters a short kind keeps (1 to 6): 2 gives cl, ou, th; 3 gives cla, out, thi. Used while "how a result says what it is" is short',
+  },
+  // How a search result is laid out (djdarcy, 2026-10-26, on "mid-engineer · SubagentHandback:"
+  // taking half the row: the kind on its own line, the text "tabbed in slightly" below, the
+  // old layout kept as a choice).
+  searchLayout: {
+    kind: 'enum',
+    values: ['stacked', 'inline'],
+    default: 'stacked',
+    title: 'Search: how a result is laid out',
+    description: 'stacked: the number and kind on one line, the text on the lines below, indented; inline: the text beside the kind. With one line per row, always inline',
+  },
+  // A label that only repeats the one toggle on is left out (djdarcy, 2026-10-26: "When a person
+  // has only one tab selected ... we shouldn't need to show the implicit "you:" ... by having this
+  // as a config option where users can choose to always keep the identifiers visible versus
+  // hidden in implied-mode I think will conserve space").
+  searchImplied: {
+    kind: 'enum',
+    values: ['implied', 'always'],
+    default: 'implied',
+    title: 'Search: labels in a one-kind view',
+    description: 'implied: with one toggle on, a label that only repeats it is left out (claude alone: replies unlabelled, thinking still says so); always: every result keeps its label',
+  },
   // U70: how much of each row the prompts and jump lists show. The pane's width is known, so
   // lines are the one control that matters; the text is cut with an ellipsis at the end of
   // the last line.
@@ -200,6 +280,7 @@ export const FIELDS = {
   keyPrompts: keyRow('prompts', 'p'),
   keyRead: keyRow('reading position', 'Space r'),
   keyBookmarks: keyRow('bookmarks', 'b'),
+  keySearch: keyRow('search', '/'),
   keyPromote: keyRow('promote a mark', 'P'),
   keyDelete: keyRow('clear a mark', 'd'),
   keyForget: keyRow('forget a mark', 'D'),
@@ -256,6 +337,15 @@ export const FIELDS = {
 } as const satisfies Record<string, Field>
 
 // One keymap row: a text field whose empty value is the command's default keys.
+function customRow(kind: string, on: boolean) {
+  return {
+    kind: 'boolean',
+    default: on,
+    title: `Search: custom includes ${kind}`,
+    description: `true: a search with "what it opens on" set to custom starts with ${kind} on; false: off`,
+  } as const
+}
+
 function keyRow(what: string, defaults: string) {
   return {
     kind: 'text',

@@ -63,22 +63,35 @@ export function searchPlaces(rows: readonly IndexedPlace[], q: Query, readPiece:
     if (opts.deadline !== undefined && now() > opts.deadline) return { hits: hits.sort((a, b) => a - b), inScope: total, stopped: 'deadline' }
     const text = readPiece(n)
     if (text === undefined) continue
-    const keys = new Map(want.get(n)!.map(i => [placeKey(rows[i]!.at), i]))
-    for (const line of text.split('\n')) {
-      if (!line) continue
-      let entry: { k: string; t: string }
-      try {
-        entry = JSON.parse(line)
-      } catch {
-        continue
-      }
-      const i = keys.get(entry.k)
-      if (i === undefined) continue
-      if (matchesTerms(entry.t, q.terms, opts.phraseCase ?? true)) {
-        hits.push(i)
-        if (opts.limit && hits.length >= opts.limit) return { hits: hits.sort((a, b) => a - b), inScope: total, stopped: 'limit' }
-      }
-    }
+    const left = opts.limit ? opts.limit - hits.length : 0
+    hits.push(...matchPiece(rows, want.get(n)!, q, text, opts.phraseCase ?? true, left))
+    if (opts.limit && hits.length >= opts.limit) return { hits: hits.sort((a, b) => a - b), inScope: total, stopped: 'limit' }
   }
   return { hits: hits.sort((a, b) => a - b), inScope: total }
+}
+
+/**
+ * The rows among `inPiece` (positions in `rows`, all held by the piece `text`) whose text matches
+ * the query's terms, in the piece's order; at most `limit` of them (0: no limit). A caller that
+ * reads the pieces itself, one at a time (the search pane's handler), matches each with this.
+ */
+export function matchPiece(rows: readonly IndexedPlace[], inPiece: readonly number[], q: Pick<Query, 'terms'>, text: string, phraseCase = true, limit = 0): number[] {
+  const keys = new Map(inPiece.map(i => [placeKey(rows[i]!.at), i]))
+  const hits: number[] = []
+  for (const line of text.split('\n')) {
+    if (!line) continue
+    let entry: { k: string; t: string }
+    try {
+      entry = JSON.parse(line)
+    } catch {
+      continue
+    }
+    const i = keys.get(entry.k)
+    if (i === undefined) continue
+    if (matchesTerms(entry.t, q.terms, phraseCase)) {
+      hits.push(i)
+      if (limit && hits.length >= limit) break
+    }
+  }
+  return hits
 }

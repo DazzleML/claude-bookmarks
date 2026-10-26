@@ -4,7 +4,7 @@
 // /config row the menu leaves out, with the keys' own fold inside it.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { DEBUG_ROWS, DEBUG_SHOWN_FIELD, SETTINGS_SHOWN_FIELD, foldLabel, rowHidden } from '../../plugin/hooks/core/settings-fold.ts'
+import { CUSTOM_ROWS, DEBUG_ROWS, DEBUG_SHOWN_FIELD, SEARCH_ROWS, SEARCH_SHOWN_FIELD, SETTINGS_SHOWN_FIELD, foldLabel, rowHidden } from '../../plugin/hooks/core/settings-fold.ts'
 import { DEFAULTS, FIELDS, FOLD_CLOSED, FOLD_OPEN } from '../../plugin/hooks/core/settings.ts'
 
 const values = (over: Record<string, boolean> = {}) => ({ ...DEFAULTS, ...over }) as unknown as Record<string, unknown>
@@ -17,7 +17,7 @@ test('the Bookmarks fold is a setting, first in the list, folded by default', ()
 
 // /config flips a true/false row in place with Enter; a plugin's choice row opens a picker.
 test('every fold is a true/false row, so Enter flips it in place', () => {
-  for (const fold of [SETTINGS_SHOWN_FIELD, 'keysShown', DEBUG_SHOWN_FIELD]) assert.equal(FIELDS[fold as keyof typeof FIELDS].kind, 'boolean', fold)
+  for (const fold of [SETTINGS_SHOWN_FIELD, 'keysShown', DEBUG_SHOWN_FIELD, SEARCH_SHOWN_FIELD]) assert.equal(FIELDS[fold as keyof typeof FIELDS].kind, 'boolean', fold)
 })
 
 test('folded, every row but the Bookmarks fold is hidden, the keys fold among them', () => {
@@ -48,6 +48,33 @@ test('the debug rows sit together at the end behind their own fold, each titled 
   assert.equal(rowHidden(DEBUG_SHOWN_FIELD, open), false)
   for (const row of DEBUG_ROWS) assert.equal(rowHidden(row, open), true, row)
   for (const row of DEBUG_ROWS) assert.equal(rowHidden(row, values({ [SETTINGS_SHOWN_FIELD]: true, [DEBUG_SHOWN_FIELD]: true })), false, row)
+})
+
+// djdarcy, 2026-10-26, on four "Search: ..." rows listed loose: "Is there a reason we didn't set this up as a proper foldable?"
+test('the search rows sit together behind their own fold, the fold first, each titled "Search:"', () => {
+  const names = Object.keys(FIELDS)
+  const at = names.indexOf(SEARCH_SHOWN_FIELD)
+  assert.deepEqual(names.slice(at, at + 1 + SEARCH_ROWS.size), [SEARCH_SHOWN_FIELD, ...SEARCH_ROWS])
+  assert.equal(FIELDS[SEARCH_SHOWN_FIELD as keyof typeof FIELDS].kind, 'boolean')
+  for (const row of SEARCH_ROWS) assert.match(FIELDS[row as keyof typeof FIELDS].title, /^Search: /, row)
+  const open = values({ [SETTINGS_SHOWN_FIELD]: true })
+  assert.equal(rowHidden(SEARCH_SHOWN_FIELD, open), false)
+  for (const row of SEARCH_ROWS) assert.equal(rowHidden(row, open), true, row)
+  // Open, with the view custom and the labels short, every search row shows.
+  const all = { ...values({ [SETTINGS_SHOWN_FIELD]: true, [SEARCH_SHOWN_FIELD]: true }), searchView: 'custom', searchLabels: 'short' }
+  for (const row of SEARCH_ROWS) assert.equal(rowHidden(row, all), false, row)
+  assert.equal(rowHidden('searchView', values({ [SEARCH_SHOWN_FIELD]: true })), true, 'not while the Bookmarks fold is closed')
+})
+
+// djdarcy: "make it a list where users can pick the items they want to "build"": the custom rows
+// show only for the custom view, and the letters row only for short labels.
+test('the custom set shows only while the view is custom; the letters only while the labels are short', () => {
+  const open = values({ [SETTINGS_SHOWN_FIELD]: true, [SEARCH_SHOWN_FIELD]: true })
+  for (const row of CUSTOM_ROWS) assert.equal(rowHidden(row, open), true, `${row} with the view "all"`)
+  for (const row of CUSTOM_ROWS) assert.equal(rowHidden(row, { ...open, searchView: 'custom' }), false, row)
+  assert.equal(rowHidden('searchShortLength', open), true)
+  assert.equal(rowHidden('searchShortLength', { ...open, searchLabels: 'short' }), false)
+  assert.equal(rowHidden('searchView', open), false)
 })
 
 test('a fold row leads with ▸ while closed and ▾ while open; any other row keeps its label', () => {

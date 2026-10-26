@@ -153,6 +153,16 @@ export type ListPorts = {
   /** `d` after a number in the bookmarks list: that bookmark leaves the list (handlers/bookmarks.ts removeBookmark). */
   removeBookmarkNumber: (typed: string) => Promise<unknown>
   togglePin: (typed: string) => Promise<unknown>
+  /** The search pane's results, newest first, each with its row position (handlers/search.ts searchView). */
+  searchResults: () => readonly { i: number }[]
+  /** The search field's text changed: search for it (handlers/search.ts searchFor). */
+  searchFor: (query: string) => void
+  /** The search's query now, to search again when the pane opens. */
+  searchQuery: () => string
+  /** The pane opens: on the `searchView` setting's view, unless a toggle was pressed in this conversation (handlers/search.ts openOn). */
+  searchOpened: () => void
+  goToSearchResult: (typed: string, via: string) => Promise<unknown>
+  pinSearchResult: (typed: string) => Promise<unknown>
   groupStep: (dir: -1 | 1) => Promise<unknown>
   /** /bm-bookmarks': which bookmarks group the list shows (0, the first). */
   setBandGroup: (index: number) => Promise<unknown>
@@ -250,6 +260,21 @@ export type PlacesPorts = {
   fsWrite: (path: string, text: string) => Promise<unknown>
   after: (ms: number, fn: () => void) => { cancel: () => void }
   log: (line: string) => void
+}
+
+/** What the search pane's handler (handlers/search.ts) needs: the place reader's ports, a redraw of the pane, the landing, and the pins made in it. */
+export type SearchPorts = PlacesPorts & {
+  /** Redraw the pane: the results changed. */
+  redraw: () => Promise<unknown>
+  /** Land on a result: by the id it is drawn under when it has one, else its uuid with the words highlighted (handlers/bookmarks.ts arriveAtBookmark). */
+  arrive: (target: { uuid: string; drawn?: string; words?: string; label: string }, via: string) => Promise<string | undefined>
+  /** Turn the person's pin on a place in the search list on or off; the pins' place keys after it, or why it failed. */
+  setPin: (place: import('../core/bookmarks/pins.ts').PinPlace, on: boolean) => Promise<{ pinned: ReadonlySet<string> } | { error: string }>
+  /** The place keys (pins.ts pinPlaceKey) the person's pins mark in the search list, as the pinScope setting shows them. */
+  pinned: () => Promise<ReadonlySet<string>>
+  toast: (text: string, timeoutMs?: number) => void
+  /** Whether a quoted phrase's case counts (true until a setting says otherwise). */
+  phraseCase: () => boolean
 }
 
 /** Finding a message in the transcript by uuid or by a verbatim fragment (register.tsx's resolveTarget). */

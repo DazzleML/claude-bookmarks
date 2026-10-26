@@ -12,10 +12,10 @@
 // Pure: no engine imports. The adapter in register.tsx performs the operation.
 import { isMarkLetter } from '../marks/marks.ts'
 
-export type Pane = 'none' | 'list' | 'mark' | 'jump' | 'bookmarks'
+export type Pane = 'none' | 'list' | 'mark' | 'jump' | 'bookmarks' | 'search'
 
 export type Operation =
-  | { op: 'open'; pane: 'list' | 'mark' | 'jump' | 'bookmarks' }
+  | { op: 'open'; pane: 'list' | 'mark' | 'jump' | 'bookmarks' | 'search' }
   | { op: 'jump-mark'; letter: string }
   | { op: 'reading' }
   | { op: 'promote'; letter: string }
@@ -129,6 +129,19 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
           ? done({ op: 'jump-mark', letter: next })
           : done({ op: 'hint', reason: lineHint() }),
   },
+  // `read` sits with mark and jump, and the two panes, prompts and search, sit together
+  // (djdarcy, 2026-10-26: "prompts and search should be next to each other since they're
+  // thematically panels as compared to read which is more like a mark/jump").
+  {
+    id: 'read',
+    keys: [' ', 'r'],
+    label: 'reading',
+    button: 'read',
+    shown: true,
+    chord: 'read',
+    help: 'go to your reading position, or back to where you were',
+    route: () => done({ op: 'reading' }),
+  },
   {
     id: 'prompts',
     keys: ['p'],
@@ -141,16 +154,6 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
     route: () => waiting({ op: 'open', pane: 'list' }),
   },
   {
-    id: 'read',
-    keys: [' ', 'r'],
-    label: 'reading',
-    button: 'read',
-    shown: true,
-    chord: 'read',
-    help: 'go to your reading position, or back to where you were',
-    route: () => done({ op: 'reading' }),
-  },
-  {
     id: 'bookmarks',
     keys: ['b'],
     label: 'bookmarks',
@@ -158,6 +161,20 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
     shown: false,
     help: "the bookmarks list, yours and Claude's",
     route: () => waiting({ op: 'open', pane: 'bookmarks' }),
+  },
+  // Search (the search-pane-and-links design, 2026-10-26, gate G-2: djdarcy chose `/` over
+  // `s`). On the bar (djdarcy, after the first live look: "Add a 'search' button"), click-only:
+  // `/` cannot be a Button hotkey, so the key is typed in the band's field.
+  {
+    id: 'search',
+    keys: ['/'],
+    label: 'search',
+    // The key in the label: a Button with no hotkey shows none (djdarcy: "it doesn't have the
+    // "/" key next to it?").
+    button: '/search',
+    shown: true,
+    help: 'search the whole conversation: prompts, replies, tool calls, outputs, agents',
+    route: () => waiting({ op: 'open', pane: 'search' }),
   },
   {
     id: 'promote',
@@ -242,8 +259,10 @@ export function lineHint(tables: Tables = DEFAULT_TABLES): string {
 // keymap (#36) reaches it like any other key (the keys design, 2026-10-20, unit 1).
 export type ListKey = { key: string; label: string; button: string; panes: readonly Pane[]; field?: true; route: () => Routed }
 export const LIST_KEYS: readonly ListKey[] = [
-  { key: 'j', label: 'next', button: 'j↓', panes: ['list', 'bookmarks'], route: () => waiting({ op: 'step', dir: 1 }) },
-  { key: 'k', label: 'previous', button: 'k↑', panes: ['list', 'bookmarks'], route: () => waiting({ op: 'step', dir: -1 }) },
+  // In the search list the field's every letter is the query, so j and k are only its step
+  // buttons either side of the field (reached with Tab or the arrows), never typed keys.
+  { key: 'j', label: 'next', button: 'j↓', panes: ['list', 'bookmarks', 'search'], route: () => waiting({ op: 'step', dir: 1 }) },
+  { key: 'k', label: 'previous', button: 'k↑', panes: ['list', 'bookmarks', 'search'], route: () => waiting({ op: 'step', dir: -1 }) },
   { key: 's', label: 'pin', button: 's★ pin', panes: ['list'], route: () => waiting({ op: 'pin' }) },
   { key: 'h', label: 'previous group', button: 'h◂', panes: ['bookmarks'], route: () => waiting({ op: 'group', dir: -1 }) },
   { key: 'l', label: 'next group', button: '▸l', panes: ['bookmarks'], route: () => waiting({ op: 'group', dir: 1 }) },
@@ -376,7 +395,7 @@ export function bandFocusRoute(f: {
   const steps = f.stepKeys ?? { prev: 'band-num-k', next: 'band-num-j' }
   // The field is drawn as `band-num-field-<n>` (handlers/band.ts renewField); the hook draws
   // a fresh one after the step, so `element` here is where the ring was.
-  if (f.byPerson && f.ring?.startsWith('band-num-field') && (f.mode === 'list' || f.mode === 'bookmarks') && (f.element === steps.prev || f.element === steps.next)) {
+  if (f.byPerson && f.ring?.startsWith('band-num-field') && (f.mode === 'list' || f.mode === 'bookmarks' || f.mode === 'search') && (f.element === steps.prev || f.element === steps.next)) {
     return { element: f.ring, step: f.element === steps.prev ? -1 : 1, field: true }
   }
   if (f.byPerson && f.element?.startsWith('chord-') && f.mode === 'idle') {

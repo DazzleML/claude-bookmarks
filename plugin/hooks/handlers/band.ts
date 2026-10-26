@@ -10,18 +10,23 @@ import { ownerOf } from '../core/bookmarks/anchor.ts'
 import { centreDelays, promptNumberComplete, stepNumber } from '../core/band/band-entry.ts'
 import { parseListNumber, type Operation, type Pane } from '../core/band/keys.ts'
 import { fieldInput } from '../core/band/field-input.ts'
+import { searchField, stepResult } from '../core/search/results.ts'
 import { short } from '../core/kit/message-id.ts'
 import type { BandCorePorts, ListPorts, PanePorts } from '../engine/ports.ts'
 
 // How long the band waits for the next key before going back to its buttons.
 const BAND_MODE_MS = 15_000
 
-// The list the band's number entry works on: the prompts, or the bookmarks.
+// The list the band's number entry works on: the prompts, the bookmarks, or the search's results.
 async function listCount(ports: BandCorePorts & PanePorts & ListPorts): Promise<number> {
-  return (await ports.paneMode()) === 'bookmarks' ? (await ports.bookmarkList()).length : (await ports.prompts()).length
+  const mode = await ports.paneMode()
+  if (mode === 'search') return ports.searchResults().length
+  return mode === 'bookmarks' ? (await ports.bookmarkList()).length : (await ports.prompts()).length
 }
 async function jumpToListNumber(ports: BandCorePorts & PanePorts & ListPorts, typed: string, via: string) {
-  if ((await ports.paneMode()) === 'bookmarks') await ports.jumpToBookmarkNumber(typed, via)
+  const mode = await ports.paneMode()
+  if (mode === 'search') await ports.goToSearchResult(typed, via)
+  else if (mode === 'bookmarks') await ports.jumpToBookmarkNumber(typed, via)
   else await ports.jumpToPromptNumber(typed, via)
 }
 
@@ -51,12 +56,16 @@ export async function bandDigit(ports: BandCorePorts & PanePorts & ListPorts, di
 // Bring item #n into view in the pane's list, so it can be checked before Enter (its ▶
 // is drawn by the pane). Prompts are keyed `p-<uuid>`, bookmarks `b-<uuid>`.
 async function showInPane(ports: BandCorePorts & PanePorts & ListPorts, n: number) {
-  const bookmarks = (await ports.paneMode()) === 'bookmarks'
-  const target = bookmarks ? (await ports.bookmarkList())[n - 1] : (await ports.prompts())[n - 1]
+  const mode = await ports.paneMode()
+  const bookmarks = mode === 'bookmarks'
+  // A search result's Button is keyed by its row's position (views/search-pane.tsx).
+  const result = mode === 'search' ? ports.searchResults()[n - 1] : undefined
+  const target = mode === 'search' ? (result ? { uuid: '' } : undefined) : bookmarks ? (await ports.bookmarkList())[n - 1] : (await ports.prompts())[n - 1]
   if (!target) return
+  const key = result ? `s-${result.i}` : `${bookmarks ? 'b' : 'p'}-${target.uuid}`
   // A courtesy: the ▶ is drawn either way, so a refused or failed scroll never undoes the
   // key that asked for it (the parked Backspace patch found the throw aborting its hook).
-  const r = await ports.scrollPaneCentre(`${bookmarks ? 'b' : 'p'}-${target.uuid}`).catch((err: unknown) => ({ deny: String(err).slice(0, 120) }))
+  const r = await ports.scrollPaneCentre(key).catch((err: unknown) => ({ deny: String(err).slice(0, 120) }))
   if (r.deny) ports.log(`[bm] pane scroll to #${n} -> DENY: ${r.deny}`)
 }
 
@@ -85,7 +94,7 @@ export function centrePane(ports: BandCorePorts & PanePorts, target: string) {
 export async function bandStep(ports: BandCorePorts & PanePorts & ListPorts, dir: -1 | 1) {
   const count = await listCount(ports)
   if (count === 0) return
-  const n = stepNumber(await ports.bandNum(), count, dir)
+  const n = (await ports.paneMode()) === 'search' ? stepResult(await ports.bandNum(), count, dir) : stepNumber(await ports.bandNum(), count, dir)
   await ports.setBandNum(String(n))
   await showInPane(ports, n)
   keepBandWaiting(ports)
@@ -143,7 +152,20 @@ export async function bandNumberGo(ports: BandCorePorts & PanePorts & ListPorts)
 // arrives here like any other. Every path returns its promise, so a jump runs while the
 // field's handler is still running and counts as the person's.
 export async function bandFieldInput(ports: BandCorePorts & PanePorts & ListPorts, typed: string) {
-  const list = (await ports.bandMode()) === 'bookmarks' ? 'bookmarks' : 'list'
+  const mode = await ports.bandMode()
+  // The search list's field is the query (core/search/results.ts searchField): `#N` and `*N`
+  // wait for Enter, anything else searches as it is typed. No key in it is a list key.
+  if (mode === 'search') {
+    const step = searchField(typed)
+    if (step.op === 'query') ports.searchFor(step.text)
+    // `#19`: the ▶ moves to 19 before Enter, so the person sees which one Enter goes to.
+    else if (step.typed !== '') {
+      await ports.setBandNum(step.typed)
+      await showInPane(ports, Number(step.typed))
+    }
+    return keepBandWaiting(ports)
+  }
+  const list = mode === 'bookmarks' ? 'bookmarks' : 'list'
   const step = fieldInput(typed, list, await listCount(ports), ports.tables())
   if (step.op === 'close') return void (await closeAll(ports, 'band field'))
   if (step.op === 'remove') {
@@ -175,6 +197,18 @@ export async function bandFieldInput(ports: BandCorePorts & PanePorts & ListPort
 // filters), as `go` does for the digit buttons. With nothing typed it acts on the number the
 // band holds (a step's), and closes the list only when there is none.
 export async function bandFieldSubmit(ports: BandCorePorts & PanePorts & ListPorts, typed: string) {
+  if ((await ports.bandMode()) === 'search') {
+    // `*N` pins result N; `#N` lands on it; Enter on a query lands on the result under the ▶,
+    // or the newest. The band stays in search mode after a pin, to pin more.
+    const step = searchField(typed)
+    if (step.op === 'pin') {
+      await ports.pinSearchResult(step.typed)
+      return keepBandWaiting(ports)
+    }
+    const n = step.op === 'number' ? step.typed : await ports.bandNum()
+    await ports.setBandNum('')
+    return ports.goToSearchResult(n, 'band field')
+  }
   if (typed !== '') await ports.setBandNum(typed)
   return bandNumberGo(ports)
 }
@@ -201,8 +235,9 @@ export function renewFieldSoon(ports: BandCorePorts) {
 }
 
 // Where the band's ring goes for a list number: the field, or `go` among the digit buttons.
+// The search list always has its field: its query is text, which digit buttons cannot type.
 async function listFocusKey(ports: BandCorePorts): Promise<string> {
-  return ports.listInput() === 'band-field' ? ports.bandFieldKey() : 'band-num-go'
+  return ports.listInput() === 'band-field' || (await ports.bandMode()) === 'search' ? ports.bandFieldKey() : 'band-num-go'
 }
 /** The band's field, drawn under `band-num-field-<n>`; `n` grows each time the plugin renews it. */
 export const BAND_FIELD_PREFIX = 'band-num-field'
@@ -337,7 +372,13 @@ export async function openFor(ports: BandCorePorts & PanePorts & ListPorts, mode
   ports.log(`[bm] ${action.startsWith('command:') ? `leader ran ${action}` : `chord for ${action} pressed the band Button`}`)
   await ports.diagState(`${mode} (before open)`)
   await ports.setPaneMode(mode)
-  const title = mode === 'mark' ? 'mark: press a-z' : mode === 'jump' ? 'jump: press a-z' : mode === 'bookmarks' ? 'bookmarks: type #' : 'prompts: type #'
+  const title = mode === 'mark' ? 'mark: press a-z' : mode === 'jump' ? 'jump: press a-z' : mode === 'bookmarks' ? 'bookmarks: type #' : mode === 'search' ? 'search: type words' : 'prompts: type #'
+  // The search pane opens on its last query (empty: every place, newest first), which also
+  // starts the place reader the first time (G-1, on demand).
+  if (mode === 'search') {
+    ports.searchOpened()
+    ports.searchFor(ports.searchQuery())
+  }
   ports.note(`pane open (${mode}, focus)`)
   // Narrow on purpose (djdarcy, 2026-10-04: "collapse the panel so it has almost no
   // width"): it only has to take one letter. Both sizes are requests; a size the

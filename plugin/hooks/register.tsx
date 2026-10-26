@@ -23,7 +23,7 @@ import { excerpt, type Channel } from './core/log/debug'
 import { CHORD_ACTIONS, VERIFIED_CLIENTS, bandFocusRoute, barFor, helpFor, listHint, listKeysFor, route, type Operation, type Pane } from './core/band/keys'
 import type { Cause } from './core/band/after-action'
 import { LEADER_FIELD, isKeyRow, leaderChord, rowDenial, type Problem } from './core/band/keymap'
-import { FOLD_FIELDS, foldLabel, rowHidden } from './core/settings-fold'
+import { FOLD_FIELDS, SHOWS_ROWS, foldLabel, rowHidden } from './core/settings-fold'
 import { installedFromCache, type Settings } from './core/settings'
 import { SettingsState } from './core/settings-state'
 import type { Role, Style } from './core/palette'
@@ -44,8 +44,10 @@ import { bandView } from './views/band'
 import { bookmarksPaneView } from './views/bookmarks-pane'
 import { marksPaneView } from './views/marks-pane'
 import { promptsPaneView } from './views/prompts-pane'
+import { searchPaneView } from './views/search-pane'
+import * as search_ from './handlers/search'
 import { configCommand, envCommand, idsCommand, jumpCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
-import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PlacesPorts, PromptsPorts, ResolveOutcome, TranscriptPorts, ViewPorts } from './engine/ports'
+import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PlacesPorts, PromptsPorts, ResolveOutcome, SearchPorts, TranscriptPorts, ViewPorts } from './engine/ports'
 import { closeAll as bandCloseAll, endBandMode as bandEnd, settle as bandSettle, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
 import * as commandLine from './handlers/command-line'
@@ -114,6 +116,8 @@ const viewRev = atom({ plugin: 'bookmarks', key: 'viewRev' } as const, 0)
 // Bumped when one of the plugin's /config fields changes, so the panes and the band,
 // which read settings while drawing, draw again.
 const settingsRev = atom({ plugin: 'bookmarks', key: 'settingsRev' } as const, 0)
+// Bumped when the search pane's results change (handlers/search.ts redraw), so it redraws.
+const searchRev = atom({ plugin: 'bookmarks', key: 'searchRev' } as const, 0)
 
 
 // What is on screen, and when the plugin itself last caused a redraw: core/kit/screen-model.ts.
@@ -356,6 +360,7 @@ async function resetConversationMemory() {
   bookmarks_.newConversation()
   transcript_.newConversation()
   places_.newConversation()
+  search_.newConversation()
   screen.newConversation()
   sessionTitle = undefined
 }
@@ -603,6 +608,25 @@ function placesPorts($: EngineInterface): PlacesPorts {
     log: line => log($, line),
   }
 }
+// The search pane's handler (the search-pane-and-links design, unit U-S) over the place
+// reader's ports: a redraw of the pane, the landing (a bookmark's arrival, then the
+// after-action rule), and the pins made in the search list.
+function searchPorts($: EngineInterface): SearchPorts {
+  return {
+    ...placesPorts($),
+    redraw: () => update($, searchRev, n => n + 1),
+    arrive: async (target, via) => {
+      const deny = await arriveAtBookmark($, target, via)
+      await settle($, 'search', 'jump')
+      return deny
+    },
+    setPin: (place, on) => bookmarks_.togglePlacePin(bookmarksPorts($), place, on, currentSettings().pinScope),
+    pinned: () => bookmarks_.searchPins(bookmarksPorts($), currentSettings().pinScope),
+    toast: toastVia($),
+    phraseCase: () => true,
+  }
+}
+
 /** The places, brought up to date; returns at once, the pass running in the background. */
 function ensurePlaces($: EngineInterface) {
   void places_.ensurePlaces(placesPorts($)).catch(err => log($, `[bm] places: failed to start: ${String(err)}`))
@@ -1024,6 +1048,12 @@ function bandPorts($: EngineInterface): BandPorts {
     scrollPaneCentre: key => $.ui.scroll({ in: PANE, to: { key }, block: 'center' }),
     toast: toastVia($),
     togglePin: typed => togglePin($, typed),
+    searchResults: () => search_.searchView().results,
+    searchFor: query => search_.searchFor(searchPorts($), query),
+    searchQuery: () => search_.searchView().query,
+    searchOpened: () => search_.openOn(currentSettings().searchView, currentSettings() as unknown as Record<string, unknown>),
+    goToSearchResult: (typed, via) => search_.goToResult(searchPorts($), typed, via),
+    pinSearchResult: typed => search_.pinResult(searchPorts($), typed),
     groupStep: dir => bandGroupStep($, dir),
     claimBookmark: uuid => bookmarks_.claimBookmark(bookmarksPorts($), uuid),
     now: () => $.clock.now(),
@@ -1159,8 +1189,8 @@ export const register: Register = (on, options) => {
       // The fold: the key rows show or hide in the open menu. A change reloads the plugin on
       // 2.1.308, and the reload asks every row again (the fold look, 2026-10-24); the
       // invalidate keeps the fold working on a build that does not reload.
-      if (FOLD_FIELDS.has(field)) {
-        log($, `[bm] fold: ${field} set to ${JSON.stringify(result.value)}; asking /config to redraw its rows`)
+      if (FOLD_FIELDS.has(field) || SHOWS_ROWS.has(field)) {
+        log($, `[bm] ${FOLD_FIELDS.has(field) ? 'fold' : 'a row that shows others'}: ${field} set to ${JSON.stringify(result.value)}; asking /config to redraw its rows`)
         await $.ui.invalidate('config.describe')
       }
       if (isKeyRow(field)) {
@@ -1316,7 +1346,7 @@ export const register: Register = (on, options) => {
     const focusMode = await read($, bandMode)
     // The step buttons beside the band's field, by the keys the person's keymap gives them.
     const stepKey = (dir: -1 | 1) => {
-      const l = listKeysFor(focusMode === 'bookmarks' ? 'bookmarks' : 'list', currentTables()).find(k => { const op = k.route().operation; return op.op === 'step' && op.dir === dir })
+      const l = listKeysFor(focusMode === 'bookmarks' || focusMode === 'search' ? focusMode : 'list', currentTables()).find(k => { const op = k.route().operation; return op.op === 'step' && op.dir === dir })
       return `band-num-${l?.key ?? (dir === -1 ? 'k' : 'j')}`
     }
     const r = bandFocusRoute({ byPerson: e.origin.kind === 'person', ring: band.ring, mode: focusMode, element: e.element, cmdRev: await read($, cmdRev), stepKeys: { prev: stepKey(-1), next: stepKey(1) } })
@@ -1324,8 +1354,9 @@ export const register: Register = (on, options) => {
       log($, `[bm] band arrow -> ${r.step === -1 ? 'k (up)' : 'j (down)'}${r.field ? ' (from the band field)' : ''}`)
       await band_.bandStep(bandPorts($), r.step)
       // Off the band's field: the ring goes back to the field it was on (drawn), and a fresh
-      // empty field follows once drawn (handlers/band.ts renewFieldSoon).
-      if (r.field) band_.renewFieldSoon(bandPorts($))
+      // empty field follows once drawn (handlers/band.ts renewFieldSoon). Not in search: its
+      // field holds the query, which a fresh field would lose.
+      if (r.field && focusMode !== 'search') band_.renewFieldSoon(bandPorts($))
       return next({ ...e, element: r.element })
     }
     if (r.kept && r.element) {
@@ -1599,6 +1630,14 @@ export const register: Register = (on, options) => {
     await envCommand(diagnosticsPorts($))
     return {}
   })
+  // /bm-search (the search-pane-and-links design, unit U-S): the search pane, on the words
+  // given, else its last query.
+  on('command.run', { command: 'bm-search' }, async ($, e) => {
+    const words = e.args.trim()
+    if (words) search_.setQuery(words)
+    await band_.openFor(bandPorts($), 'search', 'command:bm-search')
+    return {}
+  })
   // /bm-check: a linter over the data root (handlers/bookmarks.ts checkCommand); reads only.
   on('command.run', { command: 'bm-check' }, async $ => {
     await bookmarks_.checkCommand(bookmarksPorts($))
@@ -1630,8 +1669,10 @@ export const register: Register = (on, options) => {
     const tables = currentTables()
     const help = helpFor(now, e.props.maxRows, tables)
     const bookmarks = mode === 'bookmarks'
-    const count = mode === 'list' || bookmarks ? (bookmarks ? (await bookmarkList($)).length : (await prompts($)).length) : 0
-    const listKeys = listKeysFor(bookmarks ? 'bookmarks' : 'list', tables).map(l => ({ key: l.key, button: l.button, operation: l.route().operation }))
+    const searching = mode === 'search'
+    const listed = mode === 'list' || bookmarks || searching
+    const count = searching ? search_.searchView().results.length : mode === 'list' || bookmarks ? (bookmarks ? (await bookmarkList($)).length : (await prompts($)).length) : 0
+    const listKeys = listKeysFor(bookmarks || searching ? mode : 'list', tables).map(l => ({ key: l.key, button: l.button, operation: l.route().operation }))
     const groupTitle = bookmarks ? (BOOKMARK_GROUPS[await read($, bandGroup)]?.title ?? '') : ''
     const bar = barFor(s, CHORD_ACTIONS, tables)
     return bandView(
@@ -1642,10 +1683,10 @@ export const register: Register = (on, options) => {
       // redraws through bandMode). Move audit F4.
       {
         mode, shown: last, help, marks, letters: MARK_LETTERS, readingLetter: READING_LETTER,
-        typed: mode === 'list' || bookmarks ? await read($, bandNum) : '',
+        typed: listed ? await read($, bandNum) : '',
         count, groupTitle, listKeys, bar,
         listInput: bandListInput(),
-        fieldKey: mode === 'list' || bookmarks ? band_.bandFieldKeyOf(await read($, bandFieldRev)) : '',
+        fieldKey: listed ? band_.bandFieldKeyOf(await read($, bandFieldRev)) : '',
         cmdRev: mode === 'idle' ? await read($, cmdRev) : 0,
       },
       {
@@ -1714,6 +1755,28 @@ export const register: Register = (on, options) => {
           go: typed => jumpToPromptNumber($, typed, 'prompts pane'),
           close: () => closeAll($, 'prompts pane'),
           setFilter: query => setPromptFilter($, query),
+        },
+        styles,
+      )
+    }
+
+    if (mode === 'search') {
+      await read($, searchRev) // read so new results redraw the pane
+      await read($, settingsRev)
+      const view = search_.searchView()
+      const fromBand = (await read($, bandMode)) === 'search' ? await read($, bandNum) : undefined
+      const ports = searchPorts($)
+      return searchPaneView(
+        elements,
+        { query: view.query, toggles: view.toggles, results: view.results, legend: view.legend, pinned: view.pinned, fromBand, pointing: view.pointing, current: view.current, togglesShown: currentSettings().searchToggles === 'shown', shortLetters: currentSettings().searchLabels === 'short' ? currentSettings().searchShortLength : 0, layout: currentSettings().searchLayout, implied: currentSettings().searchImplied, columns: e.props.bodyColumns, lines: currentSettings().rowLines },
+        {
+          search: query => search_.searchFor(ports, query),
+          point: typed => search_.pointAt(ports, typed),
+          toggle: preset => search_.pressToggle(ports, preset),
+          press: row => search_.landOn(ports, row, 'search pane'),
+          go: typed => search_.goToResult(ports, typed, 'search pane'),
+          pin: typed => search_.pinResult(ports, typed),
+          close: () => closeAll($, 'search pane'),
         },
         styles,
       )

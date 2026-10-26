@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-10-26
+
+### Added
+
+- **Search the whole conversation.** `Ctrl+] /` (the leader, then `/`), the bar's new `/search` button, or `/bm-search some words` opens the search pane. It searches every row the conversation has, not only your prompts: Claude's replies and thinking, every tool call and its output, agents' messages and messages from other sessions. The results narrow as you type and are numbered 1 the newest. Words match in any order and case; `"a phrase"` matches exactly; `m/pattern/i` is a regular expression; `in:tools`, `from:claude`, `tool:Bash` and `agent:oracle` narrow, and `-in:thinking` leaves rows out.
+- In search, `Tab` and `Shift+Tab` (or the `↑` `↓` buttons) move the `▶`; `Enter` goes to that result, `#12` then `Enter` to result 12, and `*12` then `Enter` pins or unpins it. A prompt or reply lands with its first line, or your search words, highlighted; a tool call or its output lands on the tool's row; an agent's message lands on the call that started the agent. The result you last went to stays yellow in the list.
+- A row of on/off toggles in the pane narrows by kind: you, claude, agents, sessions, tools, outputs, thinking, notices, other.
+- Settings in `/config`, behind their own fold ("▸ Search: show the search rows", inside ▸ Bookmarks, as the keys and the debug rows are):
+  - "Search: what it opens on": `all`, `you+claude+sessions+tools+outputs`, `you+claude+sessions`, or `custom`, which shows one on/off row per kind to build your own;
+  - "Search: the row of toggles": `shown` or `hidden`;
+  - "Search: how a result says what it is": `words`, or `short` (each kind word cut to its first letters on the result rows; the toggles keep their words), with "Search: letters in a short kind" (2 by default, 3 for `cla`, `out`);
+  - "Search: labels in a one-kind view": `implied` (the default) leaves out a label that only repeats the one toggle on (replies under `claude` alone, while thinking keeps its label); `always` keeps every label;
+  - "Search: how a result is laid out": `stacked` (the default) gives a long kind such as an agent's a line of its own with the text indented below, short kinds staying beside their text; `inline` puts every text beside its kind.
+
+  A key row for search joins the others under "Keys".
+
+### Changed
+
+- The band's bar reads `mark jump read prompts /search ?`: `read` sits with mark and jump, and the two panes sit together.
+- `docs/usage.md` says what a bookmark link can point at: any row the chat draws, a tool call or its output and an agent's message included.
+
+### Known gaps
+
+- A result from before the conversation's last compaction cannot be scrolled to, as with the prompts list; the toast copies its first line so `ctrl+o` can search for it.
+- A thinking result lands on its message with the thinking still folded; `ctrl+o` shows it.
+
 ## [0.7.3] - 2026-10-26
 
 ### Added
@@ -1359,7 +1385,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.3...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.4...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

@@ -265,6 +265,12 @@ async function pieceText(ports: PlacesPorts, p: PlacesPass, n: number): Promise<
   return p.base ? readIfExists(ports, `${p.base}/text.${n}.jsonl`) : undefined
 }
 
+/** Piece `n`'s text for this conversation's pass, or undefined when there is no pass or no such piece (the search pane reads one piece at a time). */
+export async function readPlacesPiece(ports: PlacesPorts, n: number): Promise<string | undefined> {
+  const p = placesPass
+  return p ? pieceText(ports, p, n) : undefined
+}
+
 export type PlacesResolution =
   | { kind: 'one'; place: FoundPlace }
   | { kind: 'many'; places: FoundPlace[]; earliest: FoundPlace }

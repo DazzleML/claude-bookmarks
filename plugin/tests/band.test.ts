@@ -34,7 +34,7 @@ test('? in a tall band: one line per command, and close returns to the bar', asy
   for (const line of ['jump to a mark', 'turn mark a-z into a bookmark', 'back to where the last jump left from', 'j next · k previous · s pin', 'Chords (mark, jump, prompts, read on their own keybindings): on'])
     expect(help.includes(line)).toBe(true)
   await band.press({ key: 'band-help-close' })
-  expect((await band.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['chord-mark', 'chord-jump', 'chord-prompts', 'chord-read', 'chord-help'])
+  expect((await band.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['chord-mark', 'chord-jump', 'chord-read', 'chord-prompts', 'chord-search', 'chord-help'])
 })
 
 // Taller than the band, the help scrolled, and the keyboard probe scrolled it back to the
@@ -57,7 +57,7 @@ test('q in a list closes the pane and brings the bar back (Q261012-09)', async (
   const closesBefore = w.calls.filter(c => c.event === 'ui.close').length
   await band.press({ key: 'band-num-q' })
   expect(w.calls.filter(c => c.event === 'ui.close').length).toBe(closesBefore + 1)
-  expect((await band.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['chord-mark', 'chord-jump', 'chord-prompts', 'chord-read', 'chord-help'])
+  expect((await band.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['chord-mark', 'chord-jump', 'chord-read', 'chord-prompts', 'chord-search', 'chord-help'])
 })
 
 test('a press on the bar does what its key does: prompts opens the list', async ($, on) => {
@@ -82,7 +82,7 @@ test('chords off: no button carries a borrowed action', { options: { chords: 'of
   world(on, { store: STORE, session: SID })
   const band = await mount($)
   const buttons = await band.findAll({ type: 'Button' })
-  expect(buttons.length).toBe(5)
+  expect(buttons.length).toBe(6)
   expect(buttons.filter(b => b.props.action !== undefined).length).toBe(0)
 })
 
