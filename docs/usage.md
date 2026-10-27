@@ -339,6 +339,8 @@ Claude has a `bookmark` tool. It gives a verbatim fragment of the message (or it
 
 A record has a tier. Claude's own references are `perma` by default: a stable link it cites in its reply, drawn without the `⚓` so its references don't look like bookmarks you made. `bookmark` is a named place you will want to find again; that is the default when Claude bookmarks something for you, and Claude can make any of its references one by passing `tier: "bookmark"`. A bookmark never drops back to perma. `claim` moves one of Claude's records onto your list, with the same message, id and link; ask Claude to claim it for you.
 
+The tool's own calls are folded away so a reply full of links stays readable. A reply's bookmark calls draw as one dim line where the first call was, `⚓ 5 bookmark calls ▸`. Press it to list one line per call (`⚓ bookmark #95: <label> ▸`), and press a call's line to see its row and its answer as Claude Code draws them. ctrl+o shows every call in full whatever is open. Calls made before the plugin last loaded (in a resumed conversation, say) each draw their own line, as they belong to no reply this load saw.
+
 ### Where bookmarks live
 
 Under your own folder, never under `~/.claude` (Claude Code cleans that):

@@ -37,6 +37,8 @@ declare module 'claude-code' {
       bandGroup: number
       // Bumped when the search pane's results change (handlers/search.ts), so it redraws.
       searchRev: number
+      // Bumped when the bookmark tool's fold changes (a call arrives, a line is pressed), so its rows redraw (0.7.5).
+      toolFoldRev: number
       // What the band shows after a mark or jump: the letter and the marked text.
       shown: { letter: string; text: string } | null
     }

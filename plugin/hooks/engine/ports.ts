@@ -406,6 +406,9 @@ export type CommandLinePorts = BandPorts & {
 //     footnotes, the centre at next draw      state.ts PromptsPaneState     unfolded, takeCentre); openFor
 //                                             (promptsPane, in register.tsx,  (centreOnNextDraw, via its port)
 //                                             0.4.102)
+//   the bookmark tool's fold: each call's   core/bookmarks/tool-fold.ts   the ToolUse/ToolResult render hooks
+//     turn, what is open (0.7.5)              ToolFold (toolFold, in        (read; presses toggle), tool.call
+//                                             register.tsx)                 (noteCall), turn.start (newTurn), reset
 //   conversationId (the conversation the    register.tsx sameConversation sameConversationSoon (read-only)
 //     plugin works for, Q261014-01)
 //   capabilitySignals (the build and the    register.tsx session.start    pathFor (navPorts), capabilityPaths

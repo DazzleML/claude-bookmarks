@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-10-26
+
+### Changed
+
+- **Claude's bookmark calls are folded away.** A reply's calls to the `bookmark` tool (the ones behind its links) draw as one dim line, `⚓ 5 bookmark calls ▸`, instead of a full row and a block of JSON each. Press the line to list one line per call (`⚓ bookmark #95: <label> ▸`); press a call's line to see its row and answer as before. ctrl+o shows every call in full. Nothing is removed; other tools' rows are unchanged.
+- Calls made before the plugin last loaded (a resumed conversation) each draw their own one-line summary, not grouped under a reply's line.
+
 ## [0.7.4] - 2026-10-26
 
 ### Added
@@ -1385,7 +1392,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.4...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.5...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

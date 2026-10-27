@@ -1,0 +1,8 @@
+{
+  "name": "bmtoolfoldpoc",
+  "displayName": "Tool-row fold POC",
+  "version": "0.0.1",
+  "description": "Proof-of-concept for claude-bookmarks 0.7.5: can a plugin draw its own tool's rows as nothing, or as one pressable line that opens them? Throwaway; see README.md beside this folder. It touches only its own `pocecho` tool's rows.",
+  "author": { "name": "DazzleML" },
+  "license": "GPL-3.0"
+}
