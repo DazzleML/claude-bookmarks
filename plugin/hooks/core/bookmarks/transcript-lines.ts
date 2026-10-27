@@ -11,6 +11,7 @@
 
 import { utf8ByteLength } from './anchor.ts'
 import { forwardSlashes } from '../kit/paths.ts'
+import { holdsPlain } from '../kit/fragment.ts'
 
 export type TranscriptRow = {
   /** 1-based line in the file, as `grep -n` counts. */
@@ -108,7 +109,9 @@ export type Resolution =
  * - by `uuid`: the row with that uuid (a prefix of 8+ characters is accepted);
  * - by `fragment`: rows whose text contains it, earliest first. One match is the answer;
  *   several are returned together with the earliest, so the caller can ask rather than
- *   guess (#19: never jump somewhere wrong).
+ *   guess (#19: never jump somewhere wrong). When no row holds it exactly, the rows that hold
+ *   it once Markdown's marks are dropped from both (core/kit/fragment.ts: a quote of
+ *   `**bold**` words leaves the stars out).
  */
 export function resolveRows(rows: TranscriptRow[], want: { uuid?: string; fragment?: string }): Resolution {
   let hits = rows
@@ -118,7 +121,8 @@ export function resolveRows(rows: TranscriptRow[], want: { uuid?: string; fragme
   }
   if (want.fragment) {
     const f = want.fragment
-    hits = hits.filter(r => r.text.includes(f))
+    const exact = hits.filter(r => r.text.includes(f))
+    hits = exact.length > 0 ? exact : hits.filter(r => holdsPlain(r.text, f))
   }
   if (hits.length === 0) return { kind: 'none' }
   if (hits.length === 1) return { kind: 'one', row: hits[0]! }

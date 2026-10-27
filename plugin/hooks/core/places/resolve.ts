@@ -85,6 +85,11 @@ export function fragmentQuery(fragment: string): Query {
   return { terms: [{ kind: 'phrase', text: fragment }], include: [], exclude: [], problems: [] }
 }
 
+/** The second pass for a fragment no row holds exactly: the same fragment with Markdown's marks dropped on both sides (core/kit/fragment.ts). */
+export function plainFragmentQuery(fragment: string): Query {
+  return { terms: [{ kind: 'plain', text: fragment }], include: [], exclude: [], problems: [] }
+}
+
 /** What a found place becomes for the tool: its address (none for a message), the id it is drawn under, its text and who wrote it. */
 export type FoundPlace = { uuid: string; file?: string; part?: number; drawn?: string; role: 'user' | 'assistant'; text: string; timestamp?: string; kind: IndexedPlace['kind'] }
 

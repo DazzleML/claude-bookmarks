@@ -22,6 +22,7 @@
 //
 // Pure: no engine, no state.
 import type { Author, PlaceKind, ToolCategory } from '../places/place.ts'
+import { holdsPlain } from '../kit/fragment.ts'
 
 /** The attributes of a place a scope reads (an IndexedPlace has all of them). */
 export type ScopedPlace = { kind: PlaceKind; author: Author; agent?: { id: string; type?: string }; tool?: string; category?: ToolCategory; failed?: boolean }
@@ -53,6 +54,8 @@ export type Term =
   | { kind: 'word'; text: string }
   | { kind: 'phrase'; text: string }
   | { kind: 'regex'; re: RegExp; source: string }
+  /** A quoted fragment matched with Markdown's marks dropped (core/kit/fragment.ts); made only by the resolver's second pass, never by a typed query. */
+  | { kind: 'plain'; text: string }
 
 export type Rule =
   | { on: 'in'; preset: Preset }
@@ -174,6 +177,8 @@ export function matchesTerms(text: string, terms: readonly Term[], phraseCase = 
       if (!lower.includes(t.text.toLowerCase())) return false
     } else if (t.kind === 'phrase') {
       if (phraseCase ? !text.includes(t.text) : !(lower ??= text.toLowerCase()).includes(t.text.toLowerCase())) return false
+    } else if (t.kind === 'plain') {
+      if (!holdsPlain(text, t.text)) return false
     } else if (!t.re.test(text)) return false
   }
   return true

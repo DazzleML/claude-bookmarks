@@ -14,6 +14,32 @@
 
 /** The bookmark tool's name as Claude Code draws its rows (the probe's `mcp__<plugin>__<tool>`). */
 export const BOOKMARK_TOOL_NAME = 'mcp__bookmarks__bookmark'
+/** The lists tool's (#45), the same way. */
+export const LISTS_TOOL_NAME = 'mcp__bookmarks__lists'
+
+/** A tool of the plugin's own whose calls fold: the word and glyph its lines use, and its call's line. */
+export type FoldedTool = {
+  word: string
+  glyph: string
+  line: (input: unknown, output: unknown, state?: { running?: boolean; errored?: boolean }) => string
+}
+
+/**
+ * Every tool of the plugin's own folds, as one class (djdarcy, 2026-10-27: "Anything we do for one
+ * should typically be done for all the others as a class"): the render hooks, the turn's count and
+ * the lines all read this table, so a new tool joins the fold by adding its row here.
+ */
+export const FOLDED_TOOLS: Readonly<Record<string, FoldedTool>> = {
+  [BOOKMARK_TOOL_NAME]: { word: 'bookmark', glyph: '⚓', line: compactLine },
+  [LISTS_TOOL_NAME]: { word: 'lists', glyph: '☰', line: listsLine },
+}
+
+/** Whether a row's tool is one of the plugin's own, which fold. */
+export const foldsTool = (tool: unknown): tool is string => typeof tool === 'string' && Object.hasOwn(FOLDED_TOOLS, tool)
+
+/** A call's line, by its tool's row in the table. */
+export const callLine = (tool: string, input: unknown, output: unknown, state: { running?: boolean; errored?: boolean } = {}): string =>
+  FOLDED_TOOLS[tool]?.line(input, output, state) ?? tool
 
 /** Where a call's row sits in the fold. */
 export type FoldPlace =
@@ -27,6 +53,7 @@ export class ToolFold {
   private readonly turnOf = new Map<string, number>()
   private readonly firstOf = new Map<number, string>()
   private readonly countOf = new Map<number, number>()
+  private readonly toolsOf = new Map<number, Record<string, number>>()
   private readonly openTurns = new Set<number>()
   private readonly openCalls = new Set<string>()
 
@@ -35,12 +62,20 @@ export class ToolFold {
     this.turn += 1
   }
 
-  /** A bookmark call arrived (the tool's hook): it joins the current turn. */
-  noteCall(id: string): void {
+  /** A call of one of the plugin's tools arrived (the tool's hook): it joins the current turn. */
+  noteCall(id: string, tool: string = BOOKMARK_TOOL_NAME): void {
     if (this.turnOf.has(id)) return
     this.turnOf.set(id, this.turn)
     if (!this.firstOf.has(this.turn)) this.firstOf.set(this.turn, id)
     this.countOf.set(this.turn, (this.countOf.get(this.turn) ?? 0) + 1)
+    const tools = this.toolsOf.get(this.turn) ?? {}
+    tools[tool] = (tools[tool] ?? 0) + 1
+    this.toolsOf.set(this.turn, tools)
+  }
+
+  /** How many calls of each tool a turn made, for the fold's line. */
+  toolsIn(turn: number): Readonly<Record<string, number>> {
+    return { ...(this.toolsOf.get(turn) ?? {}) }
   }
 
   placeOf(id: string): FoldPlace {
@@ -81,6 +116,7 @@ export class ToolFold {
     this.turnOf.clear()
     this.firstOf.clear()
     this.countOf.clear()
+    this.toolsOf.clear()
     this.openTurns.clear()
     this.openCalls.clear()
   }
@@ -137,5 +173,40 @@ export function compactLine(input: unknown, output: unknown, state: { running?: 
   return `⚓ bookmark${n}${label ? `: ${cut(label, 60)}` : ''}`
 }
 
-/** The fold's own line for a turn: how many calls, and whether it is open. */
-export const foldLine = (count: number, open: boolean): string => `⚓ ${count} bookmark ${count === 1 ? 'call' : 'calls'} ${open ? '▾' : '▸'}`
+/** One lists call's line (#45): the action and what it named; an error in place of it. */
+export function listsLine(input: unknown, output: unknown, state: { running?: boolean; errored?: boolean } = {}): string {
+  const i = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>
+  const s = (k: string): string | undefined => {
+    const v = i[k]
+    return typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' ? String(v) : undefined
+  }
+  const action = s('action') ?? 'lists'
+  const item = s('item')
+  const what =
+    action === 'add' || action === 'edit' ? s('label')
+    : action === 'create' ? s('name')
+    : action === 'rename' ? (s('name') ? `${s('list') ?? ''} -> ${s('name')}`.trim() : s('list'))
+    : action === 'move' ? (item ? `item ${item}${s('to') ? ` to ${s('to')}` : ''}` : undefined)
+    : action === 'remove' || action === 'done' ? (item ? `item ${item}` : undefined)
+    : s('list')
+  const head = `☰ lists${action === 'lists' ? '' : ` ${action}`}${what ? `: ${cut(what, 60)}` : ''}`
+  if (state.running) return `${head} …`
+  const r = resultObject(output)
+  if (r && typeof r.error === 'string') return `☰ lists: ${cut(r.error, 80)}`
+  if (!r && state.errored) return '☰ lists: failed'
+  return head
+}
+
+/**
+ * The fold's own line for a turn: how many calls, and whether it is open. One tool: its glyph and
+ * word (`⚓ 5 bookmark calls ▸`); several: the plugin's anchor and each tool's count
+ * (`⚓ 5 calls: 3 bookmark, 2 lists ▸`). Without `tools`, every call is a bookmark call.
+ */
+export const foldLine = (count: number, open: boolean, tools: Readonly<Record<string, number>> = { [BOOKMARK_TOOL_NAME]: count }): string => {
+  const arrow = open ? '▾' : '▸'
+  const calls = count === 1 ? 'call' : 'calls'
+  const names = Object.keys(tools).filter(k => (tools[k] ?? 0) > 0)
+  const only = names.length === 1 ? FOLDED_TOOLS[names[0]!] : undefined
+  if (only) return `${only.glyph} ${count} ${only.word} ${calls} ${arrow}`
+  return `⚓ ${count} ${calls}: ${names.map(k => `${tools[k]} ${FOLDED_TOOLS[k]?.word ?? k}`).join(', ')} ${arrow}`
+}

@@ -18,7 +18,7 @@ import {
   seal, serializePlaceIndex, takeSealed, type FileCursor, type PlaceIndex,
 } from '../core/places/reader.ts'
 import { agentFile } from '../core/places/place.ts'
-import { findPlaces, foundPlace, fragmentQuery, textOf, type FoundPlace } from '../core/places/resolve.ts'
+import { findPlaces, foundPlace, fragmentQuery, plainFragmentQuery, textOf, type FoundPlace } from '../core/places/resolve.ts'
 import { piecesToRead, searchPlaces } from '../core/search/search.ts'
 import { utf8Bytes } from '../core/prompts/text-store.ts'
 import type { PlacesPorts } from '../engine/ports.ts'
@@ -304,6 +304,8 @@ export async function resolveInPlaces(ports: PlacesPorts, want: { uuid?: string;
     const q = fragmentQuery(want.fragment)
     for (const n of piecesToRead(rows, q).keys()) await piece(n)
     hits = searchPlaces(rows, q, n => pieces.get(n)).hits
+    // No row holds it exactly: the rows that hold it once Markdown's marks are dropped (the pieces are already read).
+    if (hits.length === 0) hits = searchPlaces(rows, plainFragmentQuery(want.fragment), n => pieces.get(n)).hits
   } else return { kind: 'none', reason: 'nothing to look for' }
   const found: FoundPlace[] = []
   for (const i of hits) {

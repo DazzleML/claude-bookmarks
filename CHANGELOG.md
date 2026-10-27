@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.9] - 2026-10-27
+
+### Fixed
+
+- **Claude's `lists` calls now fold away like its `bookmark` calls.** A reply that keeps a list no longer fills the conversation with tool rows: its calls sit under one line (`☰ 2 lists calls ▸`), each opens to a one-line summary (`☰ lists add: Push dev`), and that opens to the call itself. A reply that uses both tools gets one fold for all of them (`⚓ 5 calls: 3 bookmark, 2 lists ▸`). `ctrl+o` still shows every row as Claude Code draws it.
+- **A link Claude makes to words that were bold or in code in the original now finds them.** Claude quotes a reply's words without their Markdown, so a fragment such as "<leader> l opens" did not match `**<leader> l** opens` and the link failed with "no message holds it". The exact text is still tried first; only when nothing holds it exactly are the stars, underscores, tildes and backticks left out of both, along with extra spaces and line breaks.
+
 ## [0.7.8] - 2026-10-27
 
 ### Added
@@ -1413,7 +1420,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.8...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.9...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

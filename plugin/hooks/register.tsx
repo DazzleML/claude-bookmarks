@@ -46,7 +46,7 @@ import { marksPaneView } from './views/marks-pane'
 import { promptsPaneView } from './views/prompts-pane'
 import { searchPaneView } from './views/search-pane'
 import { needsRow, toolFoldView } from './views/tool-fold'
-import { BOOKMARK_TOOL_NAME, ToolFold, compactLine } from './core/bookmarks/tool-fold'
+import { ToolFold, callLine, foldsTool } from './core/bookmarks/tool-fold'
 import * as search_ from './handlers/search'
 import { configCommand, envCommand, idsCommand, jumpCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
 import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, ListsPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PlacesPorts, PromptsPorts, ResolveOutcome, SearchPorts, TranscriptPorts, ViewPorts } from './engine/ports'
@@ -131,6 +131,13 @@ const searchRev = atom({ plugin: 'bookmarks', key: 'searchRev' } as const, 0)
 // was made in and what is open; the atom is bumped so the rows redraw.
 const toolFold = new ToolFold()
 const toolFoldRev = atom({ plugin: 'bookmarks', key: 'toolFoldRev' } as const, 0)
+/** A call of one of the plugin's tools joins its turn's fold, and the fold's rows redraw with the new count. */
+async function noteFoldedCall($: EngineInterface, e: unknown, tool: string): Promise<void> {
+  const id = (e as { tool_use_id?: unknown }).tool_use_id
+  if (typeof id !== 'string') return
+  toolFold.noteCall(id, tool)
+  await update($, toolFoldRev, n => n + 1)
+}
 // The project's lists and the list the pane shows (handlers/lists.ts, #45).
 const lists = new Lists()
 const listsRev = atom({ plugin: 'bookmarks', key: 'listsRev' } as const, 0)
@@ -1492,12 +1499,14 @@ export const register: Register = (on, options) => {
 
   // The other transcript rows that report onScreen (see otherOnScreen): observe only, so
   // a screen full of tool rows still tells the pane the view moved.
-  // The bookmark tool's own rows fold away (0.7.5; core/bookmarks/tool-fold.ts, views/tool-fold.tsx;
-  // the probe tests/one-offs/thinking/toolrow-fold). Every other row, and every row under ctrl+o
+  // The plugin's own tools' rows fold away, every tool of its own as one class (0.7.5, the lists
+  // tool joined in 0.7.9; core/bookmarks/tool-fold.ts FOLDED_TOOLS, views/tool-fold.tsx; the probe
+  // tests/one-offs/thinking/toolrow-fold). Every other row, and every row under ctrl+o
   // (`isExpanded`), is Claude Code's own drawing.
   on('ui.render', { component: 'ToolUse' }, async ($, e, next) => {
     noteOtherRow($, 'TU', e.requestId, e.props.onScreen)
-    if (e.props.tool !== BOOKMARK_TOOL_NAME || e.props.isExpanded) return next(e)
+    const tool = e.props.tool
+    if (!foldsTool(tool) || e.props.isExpanded) return next(e)
     await read($, toolFoldRev) // read so a press or a new call redraws the row
     const id = e.props.tool_use_id
     const place = toolFold.placeOf(id)
@@ -1505,7 +1514,8 @@ export const register: Register = (on, options) => {
       id, place,
       turnOpen: place.turn !== undefined && toolFold.turnOpen(place.turn),
       callOpen: toolFold.callOpen(id),
-      line: compactLine(e.props.input, e.props.output, { running: e.props.isRunning, errored: e.props.isErrored }),
+      line: callLine(tool, e.props.input, e.props.output, { running: e.props.isRunning, errored: e.props.isErrored }),
+      ...(place.turn !== undefined ? { tools: toolFold.toolsIn(place.turn) } : {}),
     }
     const row = needsRow(m) ? await next(e) : undefined
     return toolFoldView($.ui.resolve(e), m, {
@@ -1515,7 +1525,7 @@ export const register: Register = (on, options) => {
   })
   on('ui.render', { component: 'ToolResult' }, async ($, e, next) => {
     noteOtherRow($, 'TR', e.requestId, e.props.onScreen)
-    if (e.props.tool !== BOOKMARK_TOOL_NAME || e.props.isExpanded) return next(e)
+    if (!foldsTool(e.props.tool) || e.props.isExpanded) return next(e)
     await read($, toolFoldRev)
     if (toolFold.resultShown(e.props.tool_use_id)) return next(e)
     const { Box } = $.ui.resolve(e)
@@ -1687,16 +1697,14 @@ export const register: Register = (on, options) => {
   // from the manifest on a session start, so a rename leaves the literal red until then.
   // The model's tool call: handlers/bookmarks.ts.
   on('tool.call', { tool: /^mcp__bookmarks__bookmark$/ }, async ($, e) => {
-    // The call joins its turn's fold, and the fold's rows redraw with the new count (0.7.5).
-    const id = (e as unknown as { tool_use_id?: unknown }).tool_use_id
-    if (typeof id === 'string') {
-      toolFold.noteCall(id)
-      await update($, toolFoldRev, n => n + 1)
-    }
+    await noteFoldedCall($, e, 'mcp__bookmarks__bookmark')
     return bookmarks_.bookmarkTool(bookmarksPorts($), e)
   })
-  // The `lists` tool (#45): handlers/lists.ts listsToolCall.
-  on('tool.call', { tool: /^mcp__bookmarks__lists$/ }, async ($, e) => listsToolCall(listsPorts($), lists, e))
+  // The `lists` tool (#45): handlers/lists.ts listsToolCall. Its calls fold as the bookmark tool's do.
+  on('tool.call', { tool: /^mcp__bookmarks__lists$/ }, async ($, e) => {
+    await noteFoldedCall($, e, 'mcp__bookmarks__lists')
+    return listsToolCall(listsPorts($), lists, e)
+  })
 
   // /bm-debug lives in hooks/handlers/debug-command.ts; this is its ports (hooks/engine/ports.ts):
   // each engine call it needs, spelled here, where the validator follows `$`.

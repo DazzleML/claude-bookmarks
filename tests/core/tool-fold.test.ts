@@ -4,7 +4,7 @@
 // and its answer (core/bookmarks/tool-fold.ts).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { BOOKMARK_TOOL_NAME, ToolFold, compactLine, foldLine, resultObject } from '../../plugin/hooks/core/bookmarks/tool-fold.ts'
+import { BOOKMARK_TOOL_NAME, FOLDED_TOOLS, LISTS_TOOL_NAME, ToolFold, callLine, compactLine, foldLine, foldsTool, listsLine, resultObject } from '../../plugin/hooks/core/bookmarks/tool-fold.ts'
 
 test("the tool's rows are matched by the name the probe showed Claude Code draws them under", () => {
   assert.equal(BOOKMARK_TOOL_NAME, 'mcp__bookmarks__bookmark')
@@ -69,4 +69,47 @@ test("a call's line says what it did: the number and label, an ambiguity, an err
 test("the fold's line: how many calls, and whether it is open", () => {
   assert.equal(foldLine(5, false), '⚓ 5 bookmark calls ▸')
   assert.equal(foldLine(1, true), '⚓ 1 bookmark call ▾')
+})
+
+// The lists tool's calls fold as the bookmark tool's do (0.7.9): every tool of the plugin's own is
+// one class, read from FOLDED_TOOLS.
+test("every tool of the plugin's own folds, by the table; no other tool does", () => {
+  assert.equal(LISTS_TOOL_NAME, 'mcp__bookmarks__lists')
+  assert.deepEqual(Object.keys(FOLDED_TOOLS).sort(), [BOOKMARK_TOOL_NAME, LISTS_TOOL_NAME].sort())
+  assert.equal(foldsTool(BOOKMARK_TOOL_NAME), true)
+  assert.equal(foldsTool(LISTS_TOOL_NAME), true)
+  for (const other of ['Bash', 'mcp__bookmarks__other', 'toString', undefined, 3]) assert.equal(foldsTool(other), false, String(other))
+  assert.equal(callLine(BOOKMARK_TOOL_NAME, { label: 'x' }, JSON.stringify({ ok: true, n: 2 })), '⚓ bookmark #2: x')
+  assert.equal(callLine(LISTS_TOOL_NAME, { action: 'add', label: 'Push dev' }, JSON.stringify({ ok: true })), '☰ lists add: Push dev')
+})
+
+test("a turn counts its calls by tool, and the fold's line names them", () => {
+  const f = new ToolFold()
+  f.newTurn()
+  f.noteCall('a', BOOKMARK_TOOL_NAME)
+  f.noteCall('b', LISTS_TOOL_NAME)
+  f.noteCall('c', LISTS_TOOL_NAME)
+  f.noteCall('b', LISTS_TOOL_NAME)
+  assert.deepEqual(f.placeOf('b'), { turn: 1, first: false, count: 3 })
+  assert.deepEqual(f.toolsIn(1), { [BOOKMARK_TOOL_NAME]: 1, [LISTS_TOOL_NAME]: 2 })
+  assert.equal(foldLine(3, false, f.toolsIn(1)), '⚓ 3 calls: 1 bookmark, 2 lists ▸')
+  f.newTurn()
+  f.noteCall('d', LISTS_TOOL_NAME)
+  assert.equal(foldLine(1, true, f.toolsIn(2)), '☰ 1 lists call ▾')
+  f.newConversation()
+  assert.deepEqual(f.toolsIn(1), {})
+})
+
+test("a lists call's line says the action and what it named, or the error", () => {
+  const ok = JSON.stringify({ ok: true })
+  assert.equal(listsLine({}, JSON.stringify({ yours: [], claudes: [] })), '☰ lists')
+  assert.equal(listsLine({ action: 'show', list: "What's left" }, ok), "☰ lists show: What's left")
+  assert.equal(listsLine({ action: 'create', name: 'Tests to run' }, ok), '☰ lists create: Tests to run')
+  assert.equal(listsLine({ action: 'rename', list: '2', name: 'Later' }, ok), '☰ lists rename: 2 -> Later')
+  assert.equal(listsLine({ action: 'move', list: '1', item: 3, to: 1 }, ok), '☰ lists move: item 3 to 1')
+  assert.equal(listsLine({ action: 'done', item: '4' }, ok), '☰ lists done: item 4')
+  assert.equal(listsLine({ action: 'add', label: 'pending' }, undefined, { running: true }), '☰ lists add: pending …')
+  assert.equal(listsLine({ action: 'add' }, JSON.stringify({ error: 'add needs `label`' })), '☰ lists: add needs `label`')
+  assert.equal(listsLine({ action: 'add' }, 'refused', { errored: true }), '☰ lists: failed')
+  assert.equal(listsLine({ action: 'add', label: 'z'.repeat(100) }, ok).length, '☰ lists add: '.length + 60, 'a long label is cut')
 })

@@ -1,4 +1,4 @@
-// The bookmark tool's rows, folded (0.7.5): what a `ToolUse` row of the plugin's own tool draws
+// The plugin's tools' rows, folded (0.7.5; every tool of its own since 0.7.9): what a `ToolUse` row of the plugin's own tool draws
 // for its place in the fold (core/bookmarks/tool-fold.ts). register.tsx's render hook reads the
 // state, passes a row through under ctrl+o, and hands in Claude Code's own drawing of the row
 // (`row`) only when this needs it.
@@ -13,8 +13,10 @@ export type ToolFoldModel = {
   place: FoldPlace
   turnOpen: boolean
   callOpen: boolean
-  /** The call's compact line (core/bookmarks/tool-fold.ts compactLine). */
+  /** The call's compact line (core/bookmarks/tool-fold.ts callLine). */
   line: string
+  /** How many calls of each of the plugin's tools the call's turn made (ToolFold.toolsIn). */
+  tools?: Readonly<Record<string, number>>
 }
 
 export type ToolFoldActions = {
@@ -41,7 +43,7 @@ export function toolFoldView(elements: Elements, m: ToolFoldModel, a: ToolFoldAc
   if (m.place.turn === undefined) return callAndRow
   const turn = m.place.turn
   const turnLine = (
-    <Button key={`bmfold-turn-${turn}`} label={foldLine(m.place.count, m.turnOpen)} plain {...s.button('legend')} onPress={() => a.toggleTurn(turn)} />
+    <Button key={`bmfold-turn-${turn}`} label={foldLine(m.place.count, m.turnOpen, m.tools)} plain {...s.button('legend')} onPress={() => a.toggleTurn(turn)} />
   )
   if (!m.turnOpen) return m.place.first ? turnLine : <Box />
   return (

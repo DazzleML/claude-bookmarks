@@ -39,6 +39,15 @@ test('under ctrl+o (isExpanded) the row is Claude Code\'s own, with no fold line
   expect(await buttons(ui)).toEqual([])
 })
 
+test("a lists call's row folds as a bookmark call's does, and its result waits too (0.7.9)", async ($, on) => {
+  world(on, { session: SID })
+  const props = { tool: 'mcp__bookmarks__lists', input: { action: 'add', label: 'Push dev' }, output: JSON.stringify({ ok: true }) }
+  const ui = await mount($, { ...row({}, 'toolu_01List'), props: { ...row({}, 'toolu_01List').props, ...props } })
+  expect(await buttons(ui)).toEqual(['bmfold-call-toolu_01List:  ☰ lists add: Push dev ▸'])
+  const res = await mount($, { ...result({}, 'toolu_01List'), props: { ...result({}, 'toolu_01List').props, ...props } })
+  expect((await res.findAll({})).filter(e => e.type !== 'Box')).toEqual([])
+})
+
 test("another tool's row is untouched", async ($, on) => {
   world(on, { session: SID })
   const ui = await mount($, { ...row({}, 'toolu_01Bash'), props: { ...row({}, 'toolu_01Bash').props, tool: 'Bash' } })
