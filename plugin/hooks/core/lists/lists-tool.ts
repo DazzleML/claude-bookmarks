@@ -4,6 +4,7 @@
 // when needed), since it is used far less often than `bookmark` and every non-deferred tool's
 // schema is sent every turn. The handler is handlers/lists.ts listsTool.
 import { linkOf, type List, type ListItem } from './lists.ts'
+import { placeLinkOf } from './item-links.ts'
 import { short } from '../kit/message-id.ts'
 import type { AnchorOwner } from '../bookmarks/anchor.ts'
 
@@ -51,11 +52,12 @@ export const brief = (l: List) => ({ id: l.id, name: l.name, owner: l.owner, ite
 /** An item as the model sees it: its number, its place in short, and its link as markdown. */
 export function describeItem(i: ListItem, n: number, root: string | undefined) {
   const link = linkOf(i, root)
+  const p = placeLinkOf(i)
   return {
     n, id: i.id, label: i.label,
     ...(i.why ? { why: i.why } : {}),
     ...(i.done ? { done: true } : {}),
-    ...(i.place ? { place: `${short(i.place.session)}/${short(i.place.uuid)}${i.place.file ? ` in ${i.place.file}` : ''}` } : {}),
+    ...(p ? { place: `${short(p.session)}/${short(p.uuid)}${p.file ? ` in ${p.file}` : ''}` } : {}),
     ...(link ? { markdown: `[${i.label.replace(/[[\]]/g, ' ')}](${link})` } : {}),
   }
 }

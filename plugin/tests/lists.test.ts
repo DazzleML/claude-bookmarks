@@ -155,7 +155,8 @@ test("the tool adds a place of this conversation by a quote, and pressing the it
   const added = await call($, { action: 'add', list: 'Places', owner: 'user', label: 'where it was asked', query: 'keep a list of what is left' })
   expect((added.added as { place?: string }).place).toBe(`${SID.slice(0, 8)}/${U.slice(0, 8)}`)
   const f = JSON.parse(w.file(FILE)!) as ListsFile
-  expect(f.lists[0]!.items[0]!.place?.uuid).toBe(U)
+  // The file holds the item's typed links (lists v2, the links-in-files design, 2026-10-27).
+  expect(f.lists[0]!.items[0]!.links?.[0]).toEqual({ kind: 'place', session: SID, uuid: U, words: 'keep a list of what is left' })
   const ui = await mountPane($)
   const md = (await ui.findAll({ type: 'Markdown' })).find(m => m.key === 'lists-go-i1')
   const href = (md?.props.pressableLinks as string[] | undefined)?.[0]

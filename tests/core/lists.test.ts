@@ -104,6 +104,53 @@ test('the file reads back as written; a newer version is not read', () => {
   assert.equal(parseLists('{').kind, 'bad')
 })
 
+// Lists v2 (0.7.10; the links-in-files design, 2026-10-27, step B2): a v1 file is read through the
+// registered step into typed links, and every key this version does not know survives a rewrite.
+const SID = '8f0f9b27-33fc-4054-806a-22a6d569dfb5'
+const V1 = {
+  version: 1, writer: 'bookmarks 0.7.9', project: 'p', cwd: 'C:/p', updatedAt: 5, futureFileKey: 'kept',
+  lists: [{
+    id: 'what-s-left', name: "What's left", owner: 'user', createdAt: 1, updatedAt: 2, next: 4, futureListKey: [1, 2],
+    items: [
+      { id: 'i1', label: 'The release', place: { session: SID, uuid: 'f1c069db-67bc-42e3-b6d6-cf200b57d957', part: 0 }, words: 'release', by: 'claude', addedAt: 3, done: true },
+      { id: 'i2', label: 'The views', link: 'https://github.com/DazzleML/claude-bookmarks/issues/40', by: 'claude', addedAt: 3, futureItemKey: 'kept' },
+      { id: 'i3', label: 'A note', by: 'user', addedAt: 3 },
+    ],
+  }],
+  removed: [],
+}
+
+test('a version 1 file is read as version 2: place, words and link become typed links', () => {
+  const r = parseLists(JSON.stringify(V1))
+  assert.equal(r.kind, 'ok')
+  const f = (r as { file: ListsFile }).file
+  assert.equal(f.version, LISTS_VERSION)
+  const [a, b, c] = f.lists[0]!.items
+  assert.deepEqual(a, { id: 'i1', label: 'The release', by: 'claude', addedAt: 3, done: true, links: [{ kind: 'place', session: SID, uuid: 'f1c069db-67bc-42e3-b6d6-cf200b57d957', part: 0, words: 'release' }] })
+  assert.deepEqual(b!.links, [{ kind: 'issue', repo: 'DazzleML/claude-bookmarks', n: 40 }])
+  assert.deepEqual(c!.links, [])
+})
+
+test('keys this version does not know survive two rewrites, at the file, list and item levels (add-only)', () => {
+  let text = JSON.stringify(V1)
+  for (let n = 0; n < 2; n++) {
+    const r = parseLists(text)
+    assert.equal(r.kind, 'ok')
+    const f = (r as { file: ListsFile }).file
+    text = serializeLists(ok(applyListOp(f, { op: 'done', list: 'what-s-left', item: 'i3' }, T + n)))
+  }
+  const back = JSON.parse(text)
+  assert.equal(back.futureFileKey, 'kept')
+  assert.deepEqual(back.lists[0].futureListKey, [1, 2])
+  assert.equal(back.lists[0].items[1].futureItemKey, 'kept')
+  assert.equal(back.version, LISTS_VERSION)
+})
+
+test('a version that is not a number is refused; version 0 reads as 1', () => {
+  assert.equal(parseLists(JSON.stringify({ ...V1, version: 0 })).kind, 'ok', 'version 0 reads as 1 (the first version had no number below it)')
+  assert.equal(parseLists(JSON.stringify({ ...V1, version: 'two' })).kind, 'bad')
+})
+
 const TEMPLATE = readFileSync(new URL(`../../plugin/${LISTS_PAGE_TEMPLATE}`, import.meta.url), 'utf8')
 
 test('the page: yours, then Claude\'s, each item a link where it has one, done struck through', () => {

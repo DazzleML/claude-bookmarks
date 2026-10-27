@@ -5,9 +5,29 @@
 // (a file or a URL), or neither (a line of text).
 //
 // Pure: the file's text in, the file's text out; handlers/lists.ts reads and writes it.
-import { anchorHref, fileUrl, type AnchorOwner } from '../bookmarks/anchor.ts'
+import type { AnchorOwner } from '../bookmarks/anchor.ts'
+import { hrefOf, primaryLink, v1to2Item, type ItemLink } from './item-links.ts'
 
-export const LISTS_VERSION = 1
+/** 2 (0.7.10): an item's typed `links` replace its one `place`/`link`; the file keeps keys it does not know. */
+export const LISTS_VERSION = 2
+
+type RawFile = Record<string, unknown> & { version: number; lists?: unknown; removed?: unknown }
+
+const itemsTo2 = (l: unknown) => {
+  const x = l as { items?: unknown }
+  return Array.isArray(x?.items) ? { ...(l as object), items: x.items.map(i => (i && typeof i === 'object' ? v1to2Item(i as Record<string, unknown>) : i)) } : l
+}
+
+/**
+ * The steps from each version to the next: index 0 takes a version 1 file to version 2. A step is
+ * registered here a save before LISTS_VERSION moves (the house rule: plugin/ hot-reloads, and a
+ * reader at the new version with no step would refuse every file), and keeps every key it does not
+ * change (the add-only rule, the links-in-files design 2026-10-27).
+ */
+export const LISTS_MIGRATIONS: readonly ((f: RawFile) => RawFile)[] = [
+  // 1 -> 2: an item's `place`/`words`/`link` become its typed `links` (core/lists/item-links.ts).
+  f => ({ ...f, version: 2, lists: Array.isArray(f.lists) ? f.lists.map(itemsTo2) : f.lists, removed: Array.isArray(f.removed) ? f.removed.map(itemsTo2) : f.removed }),
+]
 
 /** A row of a conversation, as a record addresses it (core/places/place.ts PlaceAddress, with the id it is drawn under). */
 export type ListPlace = { session: string; uuid: string; file?: string; part?: number; drawn?: string }
@@ -17,10 +37,13 @@ export type ListItem = {
   id: string
   label: string
   why?: string
+  /** Version 2: the item's links, typed; the first is what a press opens (core/lists/item-links.ts). */
+  links?: ItemLink[]
+  /** Version 1: the item's one place (read through item-links.ts linksOf, never directly). */
   place?: ListPlace
-  /** A file path, a `file:` URL or an `https:` URL. */
+  /** Version 1: a file path, a `file:` URL or an `https:` URL. */
   link?: string
-  /** The words to highlight on arrival at a message. */
+  /** Version 1: the words to highlight on arrival at a message. */
   words?: string
   by: AnchorOwner
   addedAt: number
@@ -94,14 +117,23 @@ export function parseLists(text: string): ParsedLists {
     return { kind: 'bad', why: `not JSON: ${String(err)}` }
   }
   if (!o || typeof o !== 'object') return { kind: 'bad', why: 'not an object' }
-  const f = o as Partial<ListsFile>
-  if (typeof f.version !== 'number') return { kind: 'bad', why: 'no version' }
-  if (f.version > LISTS_VERSION) return { kind: 'newer', version: f.version }
+  let raw = o as RawFile
+  if (typeof raw.version !== 'number') return { kind: 'bad', why: 'no version' }
+  if (raw.version > LISTS_VERSION) return { kind: 'newer', version: raw.version }
+  // Older files are brought up to this version one step at a time.
+  for (let v = Math.max(1, Math.trunc(raw.version)); v < LISTS_VERSION; v++) {
+    const step = LISTS_MIGRATIONS[v - 1]
+    if (!step) return { kind: 'bad', why: `no step from version ${v} to ${v + 1}` }
+    raw = step(raw)
+  }
+  const f = raw as Partial<ListsFile> & Record<string, unknown>
   if (!Array.isArray(f.lists)) return { kind: 'bad', why: 'no lists' }
   const lists = f.lists.filter(isList)
   return {
     kind: 'ok',
     file: {
+      // Keys this version does not know are kept, so a newer writer's additions survive a rewrite (add-only).
+      ...f,
       version: LISTS_VERSION,
       writer: typeof f.writer === 'string' ? f.writer : '',
       project: typeof f.project === 'string' ? f.project : '',
@@ -240,11 +272,10 @@ export function applyListOp(f: ListsFile, op: Op, now: number): OpResult {
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n))
 
-/** An item's link in the page, in an answer and in the pane: its place's anchor URL, or its own link as a URL. */
+/** An item's link in the page, in an answer and in the pane: its first link as a URL (core/lists/item-links.ts). */
 export function linkOf(i: ListItem, root: string | undefined): string | undefined {
-  if (i.place && root) return anchorHref({ sessionId: i.place.session, uuid: i.place.uuid, ...(i.place.file !== undefined ? { file: i.place.file } : {}), ...(i.place.part !== undefined ? { part: i.place.part } : {}), ...(i.words ? { words: i.words } : {}) }, root)
-  if (i.link) return /^(https?|file):/i.test(i.link) ? i.link : fileUrl(i.link)
-  return undefined
+  const first = primaryLink(i)
+  return first ? hrefOf(first, root) : undefined
 }
 
 // --- The Markdown page (L-2) ------------------------------------------------------------

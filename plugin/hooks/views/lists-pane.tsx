@@ -5,6 +5,7 @@
 // and hands in the model and the actions.
 import type { EngineInterface } from 'claude-code'
 import type { List, ListItem, ListsFile } from '../core/lists/lists.ts'
+import { primaryLink, textOf } from '../core/lists/item-links.ts'
 import type { PaneStyles } from './prompts-pane.tsx'
 
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
@@ -83,6 +84,7 @@ export function listsPaneView(elements: Elements, m: ListsPaneModel, a: ListsPan
       {shown.items.map((item, i) => {
         const isOpen = m.expanded?.has(item.id) ?? false
         const href = m.hrefOf?.(item)
+        const first = primaryLink(item)
         return (
         <Box key={`lists-item-${shown.id}-${item.id}`} flexDirection="column">
           <Box flexDirection="row">
@@ -94,7 +96,7 @@ export function listsPaneView(elements: Elements, m: ListsPaneModel, a: ListsPan
                 {...(item.done ? s.button('unreached') : {})}
                 onPress={() => a.toggle(item)}
               />
-              {(item.place || item.link) && <Text {...style('pinned')}>{item.place ? '⚓ ' : '▤ '}</Text>}
+              {first && <Text {...style('pinned')}>{first.kind === 'place' ? '⚓ ' : '▤ '}</Text>}
             </Box>
             <Box flexGrow={1} flexShrink={1}>
               {(() => {
@@ -113,7 +115,7 @@ export function listsPaneView(elements: Elements, m: ListsPaneModel, a: ListsPan
                   )
                 }
                 // A note with no place or link opens in place instead of saying it has nowhere to go.
-                const onPress = item.place || item.link ? () => a.land(item) : () => a.toggle(item)
+                const onPress = first ? () => a.land(item) : () => a.toggle(item)
                 return <Button key={`lists-go-${item.id}`} label={item.label} plain {...(item.done ? s.button('unreached') : {})} onPress={onPress} />
               })()}
             </Box>
@@ -130,10 +132,10 @@ export function listsPaneView(elements: Elements, m: ListsPaneModel, a: ListsPan
             <Box key={`lists-open-${item.id}`} flexDirection="column" marginLeft={width + 2}>
               {item.why && <Text wrap="wrap">{item.why}</Text>}
               <Text {...style('legend')} wrap="wrap">
-                {item.place
-                  ? `⚓ a place in ${item.place.session.slice(0, 8)}${item.place.file ? ` (${item.place.file})` : ''}: press the label to go there${href ? ', ctrl-click to open its note' : ''}`
-                  : item.link
-                    ? `▤ ${item.link}: press the label to copy it, ctrl-click to open it`
+                {first?.kind === 'place'
+                  ? `⚓ a place in ${first.session.slice(0, 8)}${first.file ? ` (${first.file})` : ''}: press the label to go there${href ? ', ctrl-click to open its note' : ''}`
+                  : first
+                    ? `▤ ${textOf(first) ?? ''}: press the label to copy it, ctrl-click to open it`
                     : 'a note: no place or link'}
               </Text>
               <Text {...style('legend')}>{`added by ${item.by === 'claude' ? 'Claude' : 'you'}, ${when(item.addedAt)}${item.done ? '; done' : ''}`}</Text>

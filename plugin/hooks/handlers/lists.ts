@@ -12,6 +12,7 @@ import {
   type List, type ListItem, type ListPlace, type ListsFile, type Op,
 } from '../core/lists/lists.ts'
 import { brief, describeItem, parseListsInput, type ListsToolInput } from '../core/lists/lists-tool.ts'
+import { linkFromText, primaryLink, textOf, type ItemLink } from '../core/lists/item-links.ts'
 import { answer } from '../core/bookmarks/bookmark-tool.ts'
 import { short } from '../core/kit/message-id.ts'
 import type { ListsPorts } from '../engine/ports.ts'
@@ -201,12 +202,13 @@ export async function listsCommand(ports: ListsPorts, lists: Lists, args: string
  * copied. A note with no place or link opens in place instead (the pane does that).
  */
 export async function landItem(ports: ListsPorts, item: ListItem): Promise<void> {
-  const p = item.place
-  if (p) {
+  const first = primaryLink(item)
+  if (first?.kind === 'place') {
+    const p = first
     if (p.session === (await ports.sessionId())) {
       const target = {
         uuid: p.uuid, label: item.label,
-        ...(item.words ? { words: item.words } : {}),
+        ...(p.words ? { words: p.words } : {}),
         ...(p.drawn !== undefined ? { drawn: p.drawn } : {}),
         ...(p.file !== undefined ? { file: p.file } : {}),
         ...(p.part !== undefined ? { part: p.part } : {}),
@@ -220,9 +222,10 @@ export async function landItem(ports: ListsPorts, item: ListItem): Promise<void>
     ports.toast(`"${ports.cut(item.label, 40)}" is in another conversation (${short(p.session)}). ${copied ? 'Copied' : 'Run'}: ${cmd}`, 10000)
     return
   }
-  if (item.link) {
-    const copied = (await ports.copy(item.link)).isCopied
-    ports.toast(`${copied ? 'Copied' : 'The link'}: ${ports.cut(item.link, 80)}`, 8000)
+  const text = first ? textOf(first) : undefined
+  if (text) {
+    const copied = (await ports.copy(text)).isCopied
+    ports.toast(`${copied ? 'Copied' : 'The link'}: ${ports.cut(text, 80)}`, 8000)
     return
   }
   ports.toast(`"${ports.cut(item.label, 60)}" is a note: it has no place to go to.`)
@@ -301,9 +304,14 @@ export async function listsTool(ports: ListsPorts, lists: Lists, input: ListsToo
     }
     const label = input.label ?? (place && words ? words.slice(0, 60) : undefined)
     if (!label) return { error: 'add needs `label` (and `query`/`uuid` for a place in this conversation, or `link` for a file or URL)' }
+    // The item's links, typed (core/lists/item-links.ts): its place first, then its link.
+    const links: ItemLink[] = []
+    if (place) links.push({ kind: 'place', ...place, ...(words ? { words } : {}) })
+    const typed = input.link ? linkFromText(input.link) : undefined
+    if (typed) links.push(typed)
     const r = await lists.change(ports, {
       op: 'add', list: list.id,
-      item: { label, by: 'claude', ...(input.why ? { why: input.why } : {}), ...(place ? { place } : {}), ...(input.link ? { link: input.link } : {}), ...(words && place ? { words } : {}) },
+      item: { label, by: 'claude', ...(input.why ? { why: input.why } : {}), links },
       ...(input.at !== undefined ? { at: input.at } : {}),
     })
     if (!r.ok) return { error: r.error }

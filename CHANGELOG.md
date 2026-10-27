@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.10] - 2026-10-27
+
+### Changed
+
+- **The lists file is now format 2: each item holds a list of links.** An item can point at several things at once (a place in a conversation, a file, a web page, a GitHub issue), the first being what a press opens. Your lists are converted the next time they are saved, and the file from before is kept beside it as `.json.bak`. The pane, the page and Claude's `lists` tool show the same items as before; adding several links to one item comes next.
+- The lists file keeps any field it does not know, at every level, so a newer version of the plugin can add to it without an older one losing what it added.
+
 ## [0.7.9] - 2026-10-27
 
 ### Fixed
@@ -1420,7 +1427,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.9...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.10...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
