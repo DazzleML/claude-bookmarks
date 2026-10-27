@@ -9,10 +9,11 @@
 // principle; the ownership table in engine/ports.ts).
 import {
   applyListOp, emptyLists, findItem, findList, linkOf, listsBaseName, listsPage, LISTS_PAGE_TEMPLATE, parseLists, projectOf, serializeLists,
-  type List, type ListItem, type ListPlace, type ListsFile, type Op,
+  type List, type ListItem, type ListsFile, type Op,
 } from '../core/lists/lists.ts'
-import { brief, describeItem, parseListsInput, type ListsToolInput } from '../core/lists/lists-tool.ts'
-import { linkFromText, primaryLink, textOf, type ItemLink } from '../core/lists/item-links.ts'
+import { brief, describeItem, linkWants, parseListsInput, type LinkWant, type ListsToolInput } from '../core/lists/lists-tool.ts'
+import { linkFromText, linksOf, primaryLink, textOf, type ItemLink } from '../core/lists/item-links.ts'
+import { parseRef } from '../core/bookmarks/ref.ts'
 import { answer } from '../core/bookmarks/bookmark-tool.ts'
 import { short } from '../core/kit/message-id.ts'
 import type { ListsPorts } from '../engine/ports.ts'
@@ -244,14 +245,29 @@ export async function listsToolCall(ports: ListsPorts, lists: Lists, e: unknown)
   return answer(await listsTool(ports, lists, parseListsInput(input)))
 }
 
-/** A found row as a list item's place (refactor-advisor 2026-10-27, row 3: the port passes the outcome; the handler reads it). */
-const placeOfRow = (session: string, row: { uuid: string; file?: string; part?: number; drawn?: string }): ListPlace => ({
-  session,
-  uuid: row.uuid,
-  ...(row.file !== undefined ? { file: row.file } : {}),
-  ...(row.part !== undefined ? { part: row.part } : {}),
-  ...(row.drawn !== undefined ? { drawn: row.drawn } : {}),
-})
+/**
+ * The links a call asks for, typed (core/lists/item-links.ts), in order. A place of this
+ * conversation is minted as Claude's perma record through the bookmark tool (ports.mintPlace), so
+ * its note exists and the item's link opens it (the links-in-files design, B4: the census found
+ * list items handing out links to notes nobody wrote); the place is read back from the record's
+ * own link (core/bookmarks/ref.ts), so the item's link and the note agree by construction.
+ */
+async function linksFor(ports: ListsPorts, wants: readonly LinkWant[], label: string): Promise<{ links: ItemLink[] } | { error: string }> {
+  const links: ItemLink[] = []
+  for (const w of wants) {
+    if (w.query || w.uuid) {
+      const minted = await ports.mintPlace({ ...(w.query ? { query: w.query } : {}), ...(w.uuid ? { uuid: w.uuid } : {}), label, ...(w.words ?? w.query ? { words: (w.words ?? w.query)! } : {}) })
+      if ('error' in minted) return { error: minted.error }
+      const ref = parseRef(minted.anchor)
+      if (!ref?.session || !ref.uuid) return { error: `the place was bookmarked but its link could not be read: ${minted.anchor}` }
+      links.push({ kind: 'place', session: ref.session, uuid: ref.uuid, ...(ref.file !== undefined ? { file: ref.file } : {}), ...(ref.part !== undefined ? { part: ref.part } : {}), ...(ref.words ? { words: ref.words } : {}) })
+    } else if (w.link) {
+      const typed = linkFromText(w.link)
+      if (typed) links.push(typed)
+    }
+  }
+  return { links }
+}
 
 /** The `lists` tool's call: answers with a JSON-ready object. */
 export async function listsTool(ports: ListsPorts, lists: Lists, input: ListsToolInput): Promise<Record<string, unknown>> {
@@ -294,21 +310,13 @@ export async function listsTool(ports: ListsPorts, lists: Lists, input: ListsToo
     return r.ok ? { ok: true, shared: brief(r.list!), note: `a copy on ${r.list!.owner === 'user' ? "the person's" : 'your'} side; the original stays` } : { error: r.error }
   }
   if (input.action === 'add') {
-    let place: ListPlace | undefined
-    let words = input.words
-    if (input.query || input.uuid) {
-      const found = await ports.resolveTarget({ ...(input.query ? { fragment: input.query } : {}), ...(input.uuid ? { uuid: input.uuid } : {}) })
-      if (found.kind === 'none') return { error: found.reason }
-      place = placeOfRow(await ports.sessionId(), found.kind === 'one' ? found.row : found.earliest)
-      words ??= input.query
-    }
-    const label = input.label ?? (place && words ? words.slice(0, 60) : undefined)
+    const wants = linkWants(input)
+    const first = wants.find(w => w.query || w.uuid)
+    const label = input.label ?? (first ? (first.words ?? first.query)?.slice(0, 60) : undefined)
     if (!label) return { error: 'add needs `label` (and `query`/`uuid` for a place in this conversation, or `link` for a file or URL)' }
-    // The item's links, typed (core/lists/item-links.ts): its place first, then its link.
-    const links: ItemLink[] = []
-    if (place) links.push({ kind: 'place', ...place, ...(words ? { words } : {}) })
-    const typed = input.link ? linkFromText(input.link) : undefined
-    if (typed) links.push(typed)
+    const got = await linksFor(ports, wants, label)
+    if ('error' in got) return { error: got.error }
+    const links = got.links
     const r = await lists.change(ports, {
       op: 'add', list: list.id,
       item: { label, by: 'claude', ...(input.why ? { why: input.why } : {}), links },
@@ -321,6 +329,21 @@ export async function listsTool(ports: ListsPorts, lists: Lists, input: ListsToo
 
   const item = input.item ? findItem(list, input.item) : undefined
   if (!item) return { error: input.item ? `no item "${input.item}" in "${list.name}"` : 'give `item` (its number in the list, or its id)' }
+  const at = list.items.findIndex(i => i.id === item.id) + 1
+  if (input.action === 'link') {
+    const wants = linkWants(input)
+    if (!wants.length) return { error: 'link needs `query`/`uuid` (a place in this conversation), `link` (a file or URL), or `links`' }
+    const got = await linksFor(ports, wants, item.label)
+    if ('error' in got) return { error: got.error }
+    const r = await lists.change(ports, { op: 'edit', list: list.id, item: item.id, links: [...linksOf(item), ...got.links] })
+    return r.ok ? { ok: true, item: describeItem(r.item!, at, root) } : { error: r.error }
+  }
+  if (input.action === 'unlink') {
+    const have = linksOf(item)
+    if (input.at === undefined || input.at < 1 || input.at > have.length) return { error: `unlink needs \`at\`, the link's number (1 to ${have.length})` }
+    const r = await lists.change(ports, { op: 'edit', list: list.id, item: item.id, links: have.filter((_, k) => k !== input.at! - 1) })
+    return r.ok ? { ok: true, item: describeItem(r.item!, at, root) } : { error: r.error }
+  }
   if (input.action === 'move') {
     if (input.to === undefined) return { error: 'move needs `to` (the position, 1 the top)' }
     const r = await lists.change(ports, { op: 'move', list: list.id, item: item.id, to: input.to })

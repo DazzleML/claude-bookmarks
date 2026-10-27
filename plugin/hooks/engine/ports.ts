@@ -313,6 +313,12 @@ export type ListsPorts = {
   resolveTarget: (want: { fragment?: string; uuid?: string }) => Promise<ResolveOutcome>
   /** Go to a place of this conversation and highlight its words (handlers/bookmarks.ts arriveAtBookmark, with the landing fallback), as SearchPorts' arrive; the refusal, if any. */
   arrive: (target: { uuid: string; label: string; words?: string; drawn?: string; file?: string; part?: number }, via: string) => Promise<string | undefined>
+  /**
+   * A place of this conversation minted as Claude's perma record through the bookmark tool itself
+   * (handlers/bookmarks.ts bookmarkTool), so its note exists and a list item's link to it opens
+   * (the links-in-files design, B4); the record's anchor URL, or why not.
+   */
+  mintPlace: (want: { query?: string; uuid?: string; label: string; words?: string }) => Promise<{ anchor: string } | { error: string }>
 }
 
 /** What the bookmarks cluster (handlers/bookmarks.ts) needs: the register's files, who and where this session is, the transcript, the jump, the mark highlight, the clipboard and the person's feedback. */

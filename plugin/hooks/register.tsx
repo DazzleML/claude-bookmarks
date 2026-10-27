@@ -46,7 +46,7 @@ import { marksPaneView } from './views/marks-pane'
 import { promptsPaneView } from './views/prompts-pane'
 import { searchPaneView } from './views/search-pane'
 import { needsRow, toolFoldView } from './views/tool-fold'
-import { ToolFold, callLine, foldsTool } from './core/bookmarks/tool-fold'
+import { ToolFold, callLine, foldsTool, resultObject } from './core/bookmarks/tool-fold'
 import * as search_ from './handlers/search'
 import { configCommand, envCommand, idsCommand, jumpCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
 import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, ListsPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PlacesPorts, PromptsPorts, ResolveOutcome, SearchPorts, TranscriptPorts, ViewPorts } from './engine/ports'
@@ -804,6 +804,13 @@ function listsPorts($: EngineInterface): ListsPorts {
     },
     resolveTarget: want => resolveTarget($, want),
     arrive: (target, via) => bookmarks_.arriveAtBookmark(bookmarksPorts($), target, via),
+    mintPlace: async want => {
+      const out = await bookmarks_.bookmarkTool(bookmarksPorts($), { tool: 'mcp__bookmarks__bookmark', tool_use_id: 'lists-tool', ...want })
+      const r = resultObject(out)
+      if (r && typeof r.anchor === 'string') return { anchor: r.anchor }
+      if (r?.ambiguous === true) return { error: 'several places hold that fragment: give a longer one, or the uuid' }
+      return { error: typeof r?.error === 'string' ? r.error : 'the place could not be bookmarked' }
+    },
   }
 }
 

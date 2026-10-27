@@ -167,6 +167,37 @@ test("the tool adds a place of this conversation by a quote, and pressing the it
   expect(pressed).toContain('no implementation for ui.scroll')
 })
 
+// Several links per item (the links-in-files design, B4; djdarcy: "links from the real
+// conversation, links to files, and links to github issues all in one item").
+test('the tool adds an item with a place, a file and an issue; the place is minted, so its note exists', async ($, on) => {
+  const w = world(on, { session: SID, files: { [TRANSCRIPT]: '' }, process: () => ({ exitCode: 0, stdout: `1:0:${ROW}\n` }) })
+  await call($, { action: 'create', name: 'Places', owner: 'user' })
+  const added = await call($, {
+    action: 'add', list: 'Places', owner: 'user', label: 'the lists epic',
+    query: 'keep a list of what is left', links: [{ link: 'C:/code/notes/lists.md' }, { link: 'https://github.com/DazzleML/claude-bookmarks/issues/45' }],
+  })
+  const links = (added.added as { links: { kind: string; what: string }[] }).links
+  expect(links.map(l => l.kind)).toEqual(['place', 'file', 'issue'])
+  expect(links[2]!.what).toBe('DazzleML/claude-bookmarks#45')
+  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  expect(f.lists[0]!.items[0]!.links?.length).toBe(3)
+  // The place's note: written by the bookmark tool's mint, so the item's ctrl-click opens a file that exists.
+  expect(w.file(`${DATA_ROOT}/sessions/${SID}/${U.slice(0, 8)}.md`)).toBeDefined()
+})
+
+test('link adds a link to an item; unlink removes one by its number', async ($, on) => {
+  const w = world(on, { session: SID })
+  await call($, { action: 'create', name: 'Reading', owner: 'user' })
+  await call($, { action: 'add', list: 'Reading', owner: 'user', label: 'the design' })
+  const linked = await call($, { action: 'link', list: 'Reading', owner: 'user', item: '1', links: ['https://example.com/a', 'C:/code/b.md'] })
+  expect(((linked.item as { links: { kind: string }[] }).links).map(l => l.kind)).toEqual(['url', 'file'])
+  const unlinked = await call($, { action: 'unlink', list: 'Reading', owner: 'user', item: '1', at: 1 })
+  expect(((unlinked.item as { links: { kind: string; what: string }[] }).links).map(l => l.what)).toEqual(['C:/code/b.md'])
+  expect(String((await call($, { action: 'unlink', list: 'Reading', owner: 'user', item: '1', at: 5 })).error)).toContain('1 to 1')
+  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  expect(f.lists[0]!.items[0]!.links).toEqual([{ kind: 'file', path: 'C:/code/b.md' }])
+})
+
 test('the tool refuses an unknown list and an item with no label', async ($, on) => {
   world(on, { session: SID, files: seeded() })
   expect(String((await call($, { action: 'add', list: 'nope', label: 'x' })).error)).toContain('no list')

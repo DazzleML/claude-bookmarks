@@ -169,7 +169,7 @@ export type Op =
   | { op: 'move'; list: string; item: string; to: number }
   | { op: 'remove'; list: string; item: string }
   | { op: 'done'; list: string; item: string; done?: boolean }
-  | { op: 'edit'; list: string; item: string; label?: string; why?: string }
+  | { op: 'edit'; list: string; item: string; label?: string; why?: string; links?: ItemLink[] }
   | { op: 'share'; list: string }
 
 export type OpResult = { ok: true; file: ListsFile; list?: List; item?: ListItem } | { ok: false; error: string }
@@ -265,7 +265,7 @@ export function applyListOp(f: ListsFile, op: Op, now: number): OpResult {
     return { ok: true, file: withList(f, l, now), list: l, item: changed }
   }
   // edit
-  const changed: ListItem = { ...item, ...(op.label?.trim() ? { label: op.label.trim() } : {}), ...(op.why !== undefined ? { why: op.why } : {}) }
+  const changed: ListItem = { ...item, ...(op.label?.trim() ? { label: op.label.trim() } : {}), ...(op.why !== undefined ? { why: op.why } : {}), ...(op.links ? { links: op.links } : {}) }
   const l = { ...list, items: list.items.map(i => (i.id === item.id ? changed : i)), updatedAt: now }
   return { ok: true, file: withList(f, l, now), list: l, item: changed }
 }
