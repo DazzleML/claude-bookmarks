@@ -95,6 +95,13 @@ export async function perform(ports: CommandLinePorts, operation: Operation, via
       await ports.readingToggle()
       owedAfterAction(ports)
       return
+    case 'lists':
+      // The lists pane is its own pane (bm-lists), docked without the keyboard: the band
+      // steps back as after any one-key command (djdarcy, 2026-10-27: "<leader>l").
+      await ports.clearCommandLine()
+      await ports.toggleLists()
+      owedAfterAction(ports)
+      return
     case 'promote':
       await ports.clearCommandLine()
       await ports.promoteLetter(operation.letter)

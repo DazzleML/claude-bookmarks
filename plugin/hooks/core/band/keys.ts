@@ -32,6 +32,8 @@ export type Operation =
   | { op: 'remove' }
   | { op: 'group'; dir: -1 | 1 }
   | { op: 'close' }
+  // The lists pane, opened or closed (#45; djdarcy, 2026-10-27: "<leader>l").
+  | { op: 'lists' }
   | { op: 'help' }
   | { op: 'wait' }
   | { op: 'hint'; reason: string }
@@ -161,6 +163,19 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
     shown: false,
     help: "the bookmarks list, yours and Claude's",
     route: () => waiting({ op: 'open', pane: 'bookmarks' }),
+  },
+  // The lists pane (#45). A pane of its own (bm-lists), docked beside the others; the same
+  // key closes it. `l` is free on the command line; in the bookmarks list it is "next group".
+  // On the bar before search: djdarcy's order is m j r p l / ? (2026-10-27).
+  {
+    id: 'lists',
+    keys: ['l'],
+    label: 'lists',
+    button: 'lists',
+    // On the bar (djdarcy, 2026-10-27: "I'm not seeing the "l: list" option in the "band" yet?").
+    shown: true,
+    help: "the project's lists, beside the conversation; again to close",
+    route: () => done({ op: 'lists' }),
   },
   // Search (the search-pane-and-links design, 2026-10-26, gate G-2: djdarcy chose `/` over
   // `s`). On the bar (djdarcy, after the first live look: "Add a 'search' button"), click-only:

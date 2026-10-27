@@ -3,7 +3,7 @@
 // tool creates and fills them. Run: claude plugin test plugin
 import { expect, test } from 'claude-code/testing'
 import { applyListOp, emptyLists, serializeLists, type ListsFile } from '../hooks/core/lists/lists.ts'
-import { DATA_ROOT, world } from './harness.ts'
+import { BAND_PROPS, DATA_ROOT, world } from './harness.ts'
 
 const SID = '11111111-2222-4333-8444-999999999999'
 const FILE = `${DATA_ROOT}/lists/test-project.json`
@@ -106,6 +106,14 @@ test("Claude's tool creates a list on the person's side, adds to it, and moves a
   const f = JSON.parse(w.file(FILE)!) as ListsFile
   expect(f.lists[0]!.owner).toBe('user')
   expect((await call($, { action: 'lists' })).yours).toEqual([{ id: 'tests-to-run', name: 'Tests to run', owner: 'user', items: 2, done: 0 }])
+})
+
+// djdarcy, 2026-10-27: "Probably something like <leader>l would make sense".
+test('<leader> l: l on the band\'s command line opens the lists pane', async ($, on) => {
+  const w = world(on, { session: SID })
+  const band = (await ($ as unknown as Engine).ui.mount({ plugin: 'bookmarks', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS, requestId: 'band-1' } as never)) as { input: (t: object) => Promise<unknown> }
+  await band.input({ key: 'band-cmd-0', text: 'l' }).catch(() => undefined)
+  expect((w.opened() as { id?: string }[]).some(o => o.id === 'bm-lists')).toBe(true)
 })
 
 // The gaps the refactor-advisor named (2026-10-27), written before the moves so they prove them.

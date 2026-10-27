@@ -411,6 +411,8 @@ export type CommandLinePorts = BandPorts & {
   setBandGroup: (group: number) => Promise<unknown>
   jumpToMark: (letter: string) => Promise<unknown>
   readingToggle: () => Promise<unknown>
+  /** `<leader> l`: open the lists pane, or close it when open (handlers/lists.ts listsCommand). */
+  toggleLists: () => Promise<unknown>
   promoteLetter: (letter: string) => Promise<unknown>
   /** `d` + letter and `D` + letter (handlers/marks.ts clearLetter, forgetLetter). */
   clearLetter: (letter: string) => Promise<unknown>

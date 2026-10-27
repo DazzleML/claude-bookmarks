@@ -148,6 +148,7 @@ export const KEY_FIELDS: Readonly<Record<string, string>> = {
   read: 'keyRead',
   prompts: 'keyPrompts',
   bookmarks: 'keyBookmarks',
+  lists: 'keyLists',
   search: 'keySearch',
   promote: 'keyPromote',
   delete: 'keyDelete',

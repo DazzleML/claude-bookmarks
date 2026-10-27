@@ -280,6 +280,7 @@ export const FIELDS = {
   keyPrompts: keyRow('prompts', 'p'),
   keyRead: keyRow('reading position', 'Space r'),
   keyBookmarks: keyRow('bookmarks', 'b'),
+  keyLists: keyRow('lists', 'l'),
   keySearch: keyRow('search', '/'),
   keyPromote: keyRow('promote a mark', 'P'),
   keyDelete: keyRow('clear a mark', 'd'),

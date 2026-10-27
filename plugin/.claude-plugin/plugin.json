@@ -1,7 +1,7 @@
 {
   "name": "bookmarks",
   "displayName": "Bookmarks",
-  "version": "0.7.7",
+  "version": "0.7.8",
   "description": "Bookmarks and vim-style marks inside Claude Code conversations: mark a line, jump back, keep a reading position, browse your prompts, and let Claude cite earlier places as clickable links.",
   "author": {
     "name": "DazzleML",
@@ -285,6 +285,12 @@
       "type": "string",
       "title": "Keys: bookmarks",
       "description": "Keys for bookmarks, separated by spaces (default: b); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
+      "default": ""
+    },
+    "keyLists": {
+      "type": "string",
+      "title": "Keys: lists",
+      "description": "Keys for lists, separated by spaces (default: l); Space spells the space key; end with hidden to take its button off the bar; empty = the default",
       "default": ""
     },
     "keySearch": {

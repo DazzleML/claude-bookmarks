@@ -130,7 +130,7 @@ test('q alone closes the list and brings the bar back', async ($, on) => {
   world(on, { store: STORE, session: SID, panes: [{ id: 'bm-pane' }] })
   const band = await promptsBand($)
   await type(band, 'q')
-  expect((await band.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['chord-mark', 'chord-jump', 'chord-read', 'chord-prompts', 'chord-search', 'chord-help'])
+  expect((await band.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['chord-mark', 'chord-jump', 'chord-read', 'chord-prompts', 'chord-lists', 'chord-search', 'chord-help'])
 })
 
 test('Enter with nothing typed ends the list, as go does', async ($, on) => {

@@ -26,6 +26,7 @@ The band's field takes exactly one key (two for the ones that need a letter). An
 | `Space` or `r` | `Space` or `Enter` | Goes to the reading position, or back to where you were; with fresh selected text, sets it there |
 | `p` | see section 3 | Opens the prompts pane |
 | `b` | see section 3 | Opens the bookmarks pane |
+| `l` | -- | Opens the lists pane beside the conversation, or closes it ([Lists](usage.md#lists)); on the bar between `prompts` and `/search` |
 | `/` | see section 3 | Opens the search pane: the whole conversation, every kind of row ([Searching the conversation](usage.md#searching-the-conversation)) |
 | `P` | a letter `a`-`z`, or `` ` `` | Promotes that mark (or the reading position) into a bookmark on your list; the link goes to your clipboard |
 | `d` | a letter `a`-`z` | Clears that mark: the letter points at nothing, and its history is kept |

@@ -1142,6 +1142,7 @@ function commandLinePorts($: EngineInterface): CommandLinePorts {
     setBandGroup: group => update($, bandGroup, () => group),
     jumpToMark: letter => jumpToMark($, letter),
     readingToggle: () => readingToggle($),
+    toggleLists: () => listsCommand(listsPorts($), lists, ''),
     promoteLetter: letter => promoteLetter($, letter),
     clearLetter: letter => marks_.clearLetter(marksPorts($), letter),
     forgetLetter: letter => marks_.forgetLetter(marksPorts($), letter),
