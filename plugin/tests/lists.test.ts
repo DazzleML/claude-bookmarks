@@ -198,6 +198,17 @@ test('link adds a link to an item; unlink removes one by its number', async ($, 
   expect(f.lists[0]!.items[0]!.links).toEqual([{ kind: 'file', path: 'C:/code/b.md' }])
 })
 
+// Seen live (2026-10-27): Claude Code delivers the array parameter as a JSON string, and a
+// re-linked place was added twice.
+test('links given as a JSON string are read; a link the item already has is not added again', async ($, on) => {
+  const w = world(on, { session: SID })
+  await call($, { action: 'create', name: 'Reading', owner: 'user' })
+  await call($, { action: 'add', list: 'Reading', owner: 'user', label: 'the epic', links: JSON.stringify([{ link: 'https://github.com/DazzleML/claude-bookmarks/issues/45' }]) })
+  await call($, { action: 'link', list: 'Reading', owner: 'user', item: '1', links: '[{"link":"https://github.com/DazzleML/claude-bookmarks/issues/45"},{"link":"C:/code/b.md"}]' })
+  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  expect(f.lists[0]!.items[0]!.links).toEqual([{ kind: 'issue', repo: 'DazzleML/claude-bookmarks', n: 45 }, { kind: 'file', path: 'C:/code/b.md' }])
+})
+
 // Pressing a place in another conversation (the links-in-files design, B5): named and resumable
 // when its transcript is on this machine, said so when it is not -- never a blind copy.
 const OTHER = '22222222-3333-4444-8555-666666666666'

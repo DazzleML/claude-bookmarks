@@ -347,7 +347,11 @@ export async function listsTool(ports: ListsPorts, lists: Lists, input: ListsToo
     if (!wants.length) return { error: 'link needs `query`/`uuid` (a place in this conversation), `link` (a file or URL), or `links`' }
     const got = await linksFor(ports, wants, item.label)
     if ('error' in got) return { error: got.error }
-    const r = await lists.change(ports, { op: 'edit', list: list.id, item: item.id, links: [...linksOf(item), ...got.links] })
+    // A link the item already has is not added twice (seen live: re-linking a place doubled it).
+    const have = linksOf(item)
+    const same = (a: ItemLink, b: ItemLink) => a.kind === b.kind && JSON.stringify({ ...a, words: undefined }) === JSON.stringify({ ...b, words: undefined })
+    const fresh = got.links.filter(l => !have.some(h => same(h, l)))
+    const r = await lists.change(ports, { op: 'edit', list: list.id, item: item.id, links: [...have, ...fresh] })
     return r.ok ? { ok: true, item: describeItem(r.item!, at, root) } : { error: r.error }
   }
   if (input.action === 'unlink') {

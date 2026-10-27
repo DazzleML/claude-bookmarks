@@ -48,9 +48,18 @@ export function parseListsInput(input: Record<string, unknown>): ListsToolInput 
     if (v !== undefined) o[k] = v
   }
   if (typeof input.done === 'boolean') o.done = input.done
-  if (Array.isArray(input.links)) {
+  // Claude Code delivers an array parameter as a JSON string (seen live, 2026-10-27): read either.
+  let rawLinks: unknown = input.links
+  if (typeof rawLinks === 'string') {
+    try {
+      rawLinks = JSON.parse(rawLinks)
+    } catch {
+      rawLinks = undefined
+    }
+  }
+  if (Array.isArray(rawLinks)) {
     const wants: LinkWant[] = []
-    for (const w of input.links) {
+    for (const w of rawLinks) {
       const x = (typeof w === 'string' ? { link: w } : w) as Record<string, unknown>
       if (!x || typeof x !== 'object') continue
       const want: LinkWant = {}
