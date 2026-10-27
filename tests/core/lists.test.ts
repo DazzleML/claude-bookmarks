@@ -168,6 +168,15 @@ test('the page: yours, then Claude\'s, each item a link where it has one, done s
   assert.match(page, /### Mine\n\n\(empty\)/)
 })
 
+test("the page draws an item's other links after its label (lists v2, several links per item)", () => {
+  const f = withWhatsLeft()
+  const r = listsPage(f, 'x.json', i => (i.id === 'i1' ? 'file:///first' : undefined), TEMPLATE, i => (i.id === 'i1' ? [{ label: 'DazzleML/claude-bookmarks#45', href: 'https://github.com/DazzleML/claude-bookmarks/issues/45' }] : []))
+  assert.ok('text' in r)
+  const page = (r as { text: string }).text
+  assert.match(page, /1\. \[commit 0\.7\.5\]\(file:\/\/\/first\) · \[DazzleML\/claude-bookmarks#45\]\(https:\/\/github\.com\/DazzleML\/claude-bookmarks\/issues\/45\)/)
+  assert.doesNotMatch(page, /2\. [^\n]* · /, 'an item with no other links gets none')
+})
+
 test('the page says which template parts are missing and writes nothing from code in their place', () => {
   const r = listsPage(withWhatsLeft(), 'x.json', () => undefined, '<!-- part: page -->\n# {{project}}\n')
   assert.deepEqual(r, { missing: ['yours', 'claudes', 'empty-list', 'no-lists'] })

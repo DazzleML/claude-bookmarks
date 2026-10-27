@@ -11,8 +11,8 @@ import {
   applyListOp, emptyLists, findItem, findList, linkOf, listsBaseName, listsPage, LISTS_PAGE_TEMPLATE, parseLists, projectOf, serializeLists,
   type List, type ListItem, type ListsFile, type Op,
 } from '../core/lists/lists.ts'
-import { brief, describeItem, linkWants, parseListsInput, type LinkWant, type ListsToolInput } from '../core/lists/lists-tool.ts'
-import { linkFromText, linksOf, primaryLink, textOf, type ItemLink } from '../core/lists/item-links.ts'
+import { brief, describeItem, describeLink, linkWants, parseListsInput, type LinkWant, type ListsToolInput } from '../core/lists/lists-tool.ts'
+import { hrefOf, linkFromText, linksOf, primaryLink, textOf, type ItemLink } from '../core/lists/item-links.ts'
 import { parseRef } from '../core/bookmarks/ref.ts'
 import { answer } from '../core/bookmarks/bookmark-tool.ts'
 import { short } from '../core/kit/message-id.ts'
@@ -96,7 +96,11 @@ export class Lists {
     const template = await ports.pluginFile(LISTS_PAGE_TEMPLATE)
     if (template === undefined) return ports.log(`[bm] lists: the page's template (${LISTS_PAGE_TEMPLATE}) is missing; the page is not written`)
     const root = await ports.dataRoot()
-    const page = listsPage(file, path.slice(path.lastIndexOf('/') + 1), i => linkOf(i, root), template)
+    const page = listsPage(file, path.slice(path.lastIndexOf('/') + 1), i => linkOf(i, root), template, i =>
+      linksOf(i).slice(1).flatMap(l => {
+        const href = hrefOf(l, root)
+        return href ? [{ label: describeLink(l, 0, root).what, href }] : []
+      }))
     if ('missing' in page) return ports.log(`[bm] lists: the page's template lacks ${page.missing.join(', ')}; the page is not written`)
     await ports.fsWrite(path.replace(/\.json$/, '.md'), page.text)
   }

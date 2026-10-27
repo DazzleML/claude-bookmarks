@@ -310,7 +310,7 @@ export type LinkOf = (item: ListItem) => string | undefined
  * item a link where it has one. `missing` names the parts the template lacks (a packaging bug the
  * caller reports; no wording is filled from code).
  */
-export function listsPage(f: ListsFile, jsonName: string, linkOf: LinkOf, template: string): { text: string } | { missing: string[] } {
+export function listsPage(f: ListsFile, jsonName: string, linkOf: LinkOf, template: string, more?: (item: ListItem) => { label: string; href: string }[]): { text: string } | { missing: string[] } {
   const parts = templateParts(template)
   const missing = PAGE_PARTS.filter(p => parts[p] === undefined)
   if (missing.length) return { missing }
@@ -326,7 +326,9 @@ export function listsPage(f: ListsFile, jsonName: string, linkOf: LinkOf, templa
       l.items.forEach((i, n) => {
         const href = linkOf(i)
         const text = href ? `[${i.label.replace(/[[\]]/g, ' ')}](${href})` : md(i.label)
-        body.push(`${n + 1}. ${i.done ? '~~' : ''}${text}${i.done ? '~~' : ''}${i.why ? ` -- ${md(i.why)}` : ''}`)
+        // The item's other links after its label, each a link of its own (lists v2: several per item).
+        const rest = (more?.(i) ?? []).map(m => ` · [${m.label.replace(/[[\]]/g, ' ')}](${m.href})`).join('')
+        body.push(`${n + 1}. ${i.done ? '~~' : ''}${text}${i.done ? '~~' : ''}${rest}${i.why ? ` -- ${md(i.why)}` : ''}`)
       })
       body.push('')
     }

@@ -376,20 +376,33 @@ Every record is addressed in two ways. The full address is the link above, which
 
 ## Lists
 
-A list is a named, ordered list of things you are keeping track of: what is left to do, tests still to run, ideas for later. Each item is a place in a conversation (a prompt, a reply, a tool call, its output), a link to a file or a web page, or a plain line of text. Lists belong to the project (the folder Claude Code runs in), not to one conversation, so a list made today is there in tomorrow's conversation too.
+A list is a named, ordered list of things you are keeping track of: what is left to do, tests still to run, ideas for later. An item can point at several things at once: a place in a conversation (a prompt, a reply, a tool call, its output), a file, a web page, a GitHub issue. The first is what a press opens. An item with nothing to point at is a plain line of text. Lists belong to the project (the folder Claude Code runs in), not to one conversation, so a list made today is there in tomorrow's conversation too.
 
 `/bm-lists` opens the lists pane. In fullscreen, at 110 columns or wider, it docks beside the conversation on the right as its own tab, so it can stay open next to the prompts or search pane. It opens without taking the keyboard, so you can keep typing while it is up, and every action in it is a press:
 
 - the row at the top names each list with how many items are still open; press one to show it (`◆` marks Claude's own lists);
-- press an item to go to it. A place in this conversation lands as a bookmark link does; a place in another conversation copies the `claude --resume` command for it; a link is copied. An item with a place or a link is drawn as a link, so a ctrl-click opens it instead (the place's note, the file, the web page), as links in Claude's replies do;
+- press an item to go to its first link. A place in this conversation lands as a bookmark link does; a place in another conversation names that conversation and copies the `claude --resume` command for it, or says the conversation is not on this machine; a file, page or issue link is copied. An item with a place or a link is drawn as a link, so a ctrl-click opens it instead (the place's note, the file, the web page), as links in Claude's replies do;
 - press an item's number to open it in place: its whole note, wrapped, where it points, and who added it and when. Press the number again to close it. A plain note, with no place or link, opens on a press of its label too;
 - `▲` and `▼` move an item; `·` ticks it done (`✓`), and a done item stays in the list, dimmed.
 
 `/bm-lists <name>` opens on that list (a part of its name is enough), `/bm-lists 2` on the second tab; `/bm-lists` again closes the pane.
 
-Claude keeps lists through its `lists` tool: it can create a list, add items (by a fragment of the place, as its bookmark links do, or by a link, or as plain text), move, tick and remove them, and share a list onto the other side. Ask it to "keep a list of what's left" and it makes one on your side; it also keeps lists of its own. The tool is found when needed rather than sent with every message, so it costs nothing while unused.
+Claude keeps lists through its `lists` tool: it can create a list, add items (by a fragment of the place, as its bookmark links do, or by a link, or as plain text, and with several links at once), add links to an item later or remove one, move, tick and remove items, and share a list onto the other side. A place Claude adds to a list is kept as one of its own references, so the item's note exists and a ctrl-click opens it. Ask it to "keep a list of what's left" and it makes one on your side; it also keeps lists of its own. The tool is found when needed rather than sent with every message, so it costs nothing while unused.
 
 The lists are kept in `~/claude/bookmarks/lists/<project>.json`, with the last version beside it as `.bak`, and as a page, `<project>.md`, with every item a link, for reading the lists outside Claude Code (in Obsidian, say). The page is rewritten on every change.
+
+### Links in files
+
+A bookmark link is an ordinary Markdown link to a file under `~/claude/bookmarks/`, so it can be pasted into any Markdown file of your own: a design note, a to-do file, a project log. A ctrl-click on it opens the bookmark's note, which says where the place is and quotes it. Ask Claude to put the link to a place into a file and it writes it with its edit tool; the plugin never edits your files itself.
+
+Keep each link on one line. A link whose address is wrapped across two lines is broken by tools that join wrapped lines (they put a space inside the address).
+
+A line in a Markdown file can also mark itself as an entry of a list, so the line can be found again after it is moved or its heading renamed:
+
+- a bookmark link carrying `list=<list>&id=<entry>` in its address, which also points at the conversation the entry came from;
+- or an invisible comment, `<!-- bm list=<list> id=<entry> -->`, when the line only belongs to the list.
+
+The plugin can read these markers (since 0.7.11); lists that pick up their entries from files this way come in a later version.
 
 ## Optional fast keys
 
