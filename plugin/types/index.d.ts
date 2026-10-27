@@ -39,6 +39,8 @@ declare module 'claude-code' {
       searchRev: number
       // Bumped when the bookmark tool's fold changes (a call arrives, a line is pressed), so its rows redraw (0.7.5).
       toolFoldRev: number
+      // Bumped when the project's lists change or the lists pane switches list, so it redraws (#45).
+      listsRev: number
       // What the band shows after a mark or jump: the letter and the marked text.
       shown: { letter: string; text: string } | null
     }

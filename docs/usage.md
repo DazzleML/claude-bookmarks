@@ -374,6 +374,23 @@ The file carries a `version` (how many format migrations it has been through) an
 
 Every record is addressed in two ways. The full address is the link above, which names the message's uuid and never changes. The short reference, for citations once records carry a number `n` (coming in 0.5.x), is **`bm:<sid8>.<n>`**: the first eight characters of the conversation's session id, a dot, the record's number in that conversation. Inside its own conversation `bm:<n>` is enough. A short reference is resolved by the register file whose name starts with `<sid8>`; if no file by that name exists (the file was moved or renamed), by reading every register's header for a matching `sessionId`; and if that finds two, the reference is ambiguous and the full uuid decides. Numbers are never reused within a conversation, so `bm:13` means the same record for the life of the file. Until the number lands, the plugin writes only the full link.
 
+## Lists
+
+A list is a named, ordered list of things you are keeping track of: what is left to do, tests still to run, ideas for later. Each item is a place in a conversation (a prompt, a reply, a tool call, its output), a link to a file or a web page, or a plain line of text. Lists belong to the project (the folder Claude Code runs in), not to one conversation, so a list made today is there in tomorrow's conversation too.
+
+`/bm-lists` opens the lists pane. In fullscreen, at 110 columns or wider, it docks beside the conversation on the right as its own tab, so it can stay open next to the prompts or search pane. It opens without taking the keyboard, so you can keep typing while it is up, and every action in it is a press:
+
+- the row at the top names each list with how many items are still open; press one to show it (`◆` marks Claude's own lists);
+- press an item to go to it. A place in this conversation lands as a bookmark link does; a place in another conversation copies the `claude --resume` command for it; a link is copied. An item with a place or a link is drawn as a link, so a ctrl-click opens it instead (the place's note, the file, the web page), as links in Claude's replies do;
+- press an item's number to open it in place: its whole note, wrapped, where it points, and who added it and when. Press the number again to close it. A plain note, with no place or link, opens on a press of its label too;
+- `▲` and `▼` move an item; `·` ticks it done (`✓`), and a done item stays in the list, dimmed.
+
+`/bm-lists <name>` opens on that list (a part of its name is enough), `/bm-lists 2` on the second tab; `/bm-lists` again closes the pane.
+
+Claude keeps lists through its `lists` tool: it can create a list, add items (by a fragment of the place, as its bookmark links do, or by a link, or as plain text), move, tick and remove them, and share a list onto the other side. Ask it to "keep a list of what's left" and it makes one on your side; it also keeps lists of its own. The tool is found when needed rather than sent with every message, so it costs nothing while unused.
+
+The lists are kept in `~/claude/bookmarks/lists/<project>.json`, with the last version beside it as `.bak`, and as a page, `<project>.md`, with every item a link, for reading the lists outside Claude Code (in Obsidian, say). The page is rewritten on every change.
+
 ## Optional fast keys
 
 For one-step actions, a key can press a band button directly. It goes through one of the few actions of Claude Code's diff panel that do nothing in a conversation:
@@ -401,6 +418,7 @@ These are for power users, and not part of the recommended setup:
 | `/bm-prompts` | Opens the prompts pane |
 | `/bm-read` | Goes to the reading position, or back |
 | `/bm-bookmarks` | Opens the bookmarks pane |
+| `/bm-lists [name]` | Opens the lists pane (on that list), or closes it |
 | `/bm-promote a` | Promotes mark `a` into a bookmark on your list |
 | `/bm-delmarks a b`, `/bm-delmarks all` | Deletes marks |
 | `/bm-pin [N]` | Pins or unpins prompt #N (the newest without a number) |
@@ -436,12 +454,12 @@ Everything under `~/claude/bookmarks/` falls into four kinds, and the folder car
 
 | Kind | Where | What it means |
 |------|-------|---------------|
-| **Authored** | `sessions/<session id>.json`, `sessions/<session id>/<uuid8>.md`, `sessions/<session id>.state.json` | What you and Claude made: bookmarks, marks, pins, notes. Nothing rebuilds them. Back these up |
-| **Backup** | `sessions/<session id>.json.bak`, `backups/` | Copies the plugin took: the file before its last change, the originals of each format migration with a manifest, and the one snapshot taken before the first migration on a machine. Keep them as long as you might want to go back |
+| **Authored** | `sessions/<session id>.json`, `sessions/<session id>/<uuid8>.md`, `sessions/<session id>.state.json`, `lists/<project>.json` | What you and Claude made: bookmarks, marks, pins, notes, lists. Nothing rebuilds them. Back these up |
+| **Backup** | `sessions/<session id>.json.bak`, `lists/<project>.json.bak`, `backups/` | Copies the plugin took: the file before its last change, the originals of each format migration with a manifest, and the one snapshot taken before the first migration on a machine. Keep them as long as you might want to go back |
 | **Cache** | `prompttext/`, `debug/` | Rebuilt or regrown when missing: the prompt text the filter searches, the log |
-| **Generated** | `sessions/index.json`, `sessions/INDEX.md`, `README.md` | Rewritten by the plugin from the authored files; edits to them are overwritten |
+| **Generated** | `sessions/index.json`, `sessions/INDEX.md`, `lists/<project>.md`, `README.md` | Rewritten by the plugin from the authored files; edits to them are overwritten |
 
-A backup tool that versions your home folder should take `~/claude/bookmarks/sessions/` and `backups/` and may skip the caches. ([claude-session-backup](https://github.com/DazzleML/Claude-Session-Backup) is adding `~/claude` to what it versions; this table is the classification it uses.)
+A backup tool that versions your home folder should take `~/claude/bookmarks/sessions/`, `lists/` and `backups/` and may skip the caches. ([claude-session-backup](https://github.com/DazzleML/Claude-Session-Backup) is adding `~/claude` to what it versions; this table is the classification it uses.)
 
 **Reinstalling the plugin.** The bookmark folder is yours and a reinstall never touches it. Claude Code's own plugin store is another matter: it is named after the plugin's install identity, so a reinstall under another marketplace name starts an empty store -- the prompt list is read again from the transcript, the jumplist starts empty -- and your `/config` choices for the plugin reset to their defaults. Marks, pins and bookmarks are unaffected, because since 0.5.5 none of them lives in the store. If you are on a version before 0.5.5, upgrade first and open each conversation whose marks you want once, so they migrate into the bookmark file, before you reinstall.
 

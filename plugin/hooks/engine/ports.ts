@@ -283,6 +283,38 @@ export type ResolveOutcome =
   | { kind: 'many'; rows: import('../core/bookmarks/transcript-lines.ts').TranscriptRow[]; earliest: import('../core/bookmarks/transcript-lines.ts').TranscriptRow; via: string; ms: number }
   | { kind: 'none'; via?: string; ms?: number; reason: string }
 
+/** What the lists (handlers/lists.ts, #45) need: the project's file under the data root, a place found and landed on, the pane, the clipboard and the person's feedback. */
+export type ListsPorts = {
+  log: (line: string) => void
+  toast: (text: string, timeoutMs?: number) => void
+  cut: (text: string, n: number) => string
+  dataRoot: () => Promise<string | undefined>
+  cwd: () => Promise<string>
+  sessionId: () => Promise<string>
+  now: () => Promise<number>
+  pluginName: string
+  pluginVersion: () => Promise<string>
+  /** A stable hash of a string, hex (core/bookmarks/migrations.ts fnv1a64): names a second project of the same folder name. */
+  hash: (text: string) => string
+  fsExists: (path: string) => Promise<boolean>
+  fsRead: (path: string) => Promise<string>
+  fsWrite: (path: string, text: string) => Promise<unknown>
+  copy: (text: string) => Promise<{ isCopied: boolean }>
+  /** Redraw the lists pane (bumps its rev). */
+  redraw: () => Promise<void>
+  /** Open the lists pane, without the keyboard; what the engine answered. */
+  openPane: () => Promise<unknown>
+  /** Whether the lists pane is open now; close it (`/bm-lists` toggles). */
+  paneOpen: () => Promise<boolean>
+  closePane: () => Promise<unknown>
+  /** One of the plugin's own files by its path relative to the plugin folder (the page's template), or undefined when missing. */
+  pluginFile: (relative: string) => Promise<string | undefined>
+  /** A place of this conversation by a verbatim fragment or a uuid, as the bookmark tool finds one; the outcome as found (handlers/lists.ts reads it). */
+  resolveTarget: (want: { fragment?: string; uuid?: string }) => Promise<ResolveOutcome>
+  /** Go to a place of this conversation and highlight its words (handlers/bookmarks.ts arriveAtBookmark, with the landing fallback), as SearchPorts' arrive; the refusal, if any. */
+  arrive: (target: { uuid: string; label: string; words?: string; drawn?: string; file?: string; part?: number }, via: string) => Promise<string | undefined>
+}
+
 /** What the bookmarks cluster (handlers/bookmarks.ts) needs: the register's files, who and where this session is, the transcript, the jump, the mark highlight, the clipboard and the person's feedback. */
 export type BookmarksPorts = {
   /** `text`: the line quotes the conversation (kept per the debugText setting). */
@@ -430,6 +462,10 @@ export type CommandLinePorts = BandPorts & {
 //   placesPass (the place reader's state    handlers/places.ts            startPlacesPass, newConversation;
 //     for this conversation: its index,       (the one writer)              read by placesStatus, placesIndex
 //     the file cursors; 0.7 unit 3)
+//   lists (handlers/lists.ts Lists: the     handlers/lists.ts (the one     the lists pane's render hook through
+//     project's lists file cached, the      writer: load, change, pick,   paneModel; the lists tool and
+//     list the pane shows, the items        show, toggleShown)            /bm-lists through the same class
+//     opened in place; #45)
 //   promptTextCache, promptTextSave,        handlers/prompts.ts (the      --
 //     storedPromptTextDropped                 back-fill fills it there too,
 //                                             since 0.4.101)

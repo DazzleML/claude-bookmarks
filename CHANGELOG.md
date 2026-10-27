@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.7] - 2026-10-26
+
+### Added
+
+- **Lists.** Named, ordered lists of what you are keeping track of, kept per project so they span conversations. `/bm-lists` opens them in a pane docked beside the conversation (in fullscreen, 110 columns or wider), without taking the keyboard. Press an item to go to it, `▲` `▼` to reorder, `·` to tick it done; the top row switches between lists. An item is a place in a conversation, a link to a file or page, or a line of text.
+- An item with a place or a link is drawn as a link, as in Claude's replies: a click goes to it, a ctrl-click opens it (the note, the file or the web page). Press an item's number to open it in place: its whole note, where it points, who added it and when. A note with nowhere to go opens on a press of its label.
+- Claude keeps lists through a new `lists` tool (create, add, move, done, remove, share), on your side when you ask and on its own. The tool is loaded only when needed.
+- The lists live in `~/claude/bookmarks/lists/<project>.json`, with a Markdown page of the same lists beside it, each item a link. The page's wording is the plugin's own file, `templates/lists-page.md`.
+
 ## [0.7.6] - 2026-10-26
 
 ### Fixed
@@ -1398,7 +1407,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.6...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.7...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

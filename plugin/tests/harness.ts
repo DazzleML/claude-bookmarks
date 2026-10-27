@@ -39,6 +39,9 @@ export type WorldOptions = {
 /** What the harness answers for plugin/templates/data-readme.md: the placeholders the real template uses, in a short page. */
 export const README_TEMPLATE_STANDIN = '{{mark}}\n<!-- writer: {{writer}} -->\n\n# Your bookmarks (kit stand-in)\n\n| Path | What | Kind |\n|---|---|---|\n{{layout_table}}\n\n## What to back up\n\nWritten by {{writer}}.\n'
 
+/** What the harness answers for plugin/templates/lists-page.md: every part the real one has, in short. The real template's text is the core suite's (tests/core/lists.test.ts). */
+export const LISTS_PAGE_STANDIN = '<!-- part: page -->\n# Lists: {{project}} (kit stand-in)\n\n{{mark}} {{json}} -->\n\n{{lists}}\n<!-- part: yours -->\n## Yours\n<!-- part: claudes -->\n## Claude\'s\n<!-- part: empty-list -->\n(empty)\n<!-- part: no-lists -->\n(no lists yet)\n'
+
 export type World = {
   calls: Call[]
   files: Record<string, string>
@@ -137,13 +140,14 @@ export function world(on: unknown, options: WorldOptions = {}): World {
   // The plugin's own template files (under $.plugin.root, a path this harness never sees) are
   // answered with a stand-in, so a start can write the README; `templates: false` makes them
   // missing. The real template's text is the core suite's to check (tests/core/data-readme.test.ts).
-  const isTemplate = (p: unknown) => /\\templates\\data-readme\.md$/.test(norm(p))
+  const isListsTemplate = (p: unknown) => /\\templates\\lists-page\.md$/.test(norm(p))
+  const isTemplate = (p: unknown) => /\\templates\\data-readme\.md$/.test(norm(p)) || isListsTemplate(p)
   answer('fs.exists', e => {
     const p = norm(e.path).replace(/\\+$/, '')
     if (isTemplate(p)) return options.templates !== false
     return p in files || Object.keys(files).some(k => k.startsWith(p + '\\'))
   })
-  answer('fs.read', e => files[norm(e.path)] ?? (isTemplate(e.path) && options.templates !== false ? README_TEMPLATE_STANDIN : ''))
+  answer('fs.read', e => files[norm(e.path)] ?? (isTemplate(e.path) && options.templates !== false ? (isListsTemplate(e.path) ? LISTS_PAGE_STANDIN : README_TEMPLATE_STANDIN) : ''))
   answer('fs.write', e => {
     if (options.failWrite?.(norm(e.path))) throw new Error(`write refused (test): ${norm(e.path)}`)
     files[norm(e.path)] = String(e.text ?? '')

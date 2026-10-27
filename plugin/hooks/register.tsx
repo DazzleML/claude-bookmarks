@@ -49,7 +49,7 @@ import { needsRow, toolFoldView } from './views/tool-fold'
 import { BOOKMARK_TOOL_NAME, ToolFold, compactLine } from './core/bookmarks/tool-fold'
 import * as search_ from './handlers/search'
 import { configCommand, envCommand, idsCommand, jumpCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
-import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PlacesPorts, PromptsPorts, ResolveOutcome, SearchPorts, TranscriptPorts, ViewPorts } from './engine/ports'
+import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, ListsPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PlacesPorts, PromptsPorts, ResolveOutcome, SearchPorts, TranscriptPorts, ViewPorts } from './engine/ports'
 import { closeAll as bandCloseAll, endBandMode as bandEnd, settle as bandSettle, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
 import * as commandLine from './handlers/command-line'
@@ -67,6 +67,11 @@ import { BandState } from './core/band/band-state'
 import { PromptsPaneState } from './core/prompts/prompts-pane-state'
 import { DrawnMessages } from './core/kit/drawn-messages'
 import { BOOKMARK_TOOL } from './core/bookmarks/bookmark-tool'
+import { LISTS_TOOL } from './core/lists/lists-tool'
+import { fnv1a64 } from './core/bookmarks/migrations'
+import { Lists, landItem, listsCommand, listsToolCall } from './handlers/lists'
+import { linkOf } from './core/lists/lists'
+import { listsPaneView } from './views/lists-pane'
 import { COMMANDS } from './core/band/commands'
 import { promptList, transcriptGuess, type PromptRef } from './core/prompts/prompt-store'
 
@@ -89,6 +94,8 @@ const keymapProblemsLine = (problems: readonly Problem[]) =>
 
 // The plugin's one pane id (prompts, bookmarks, mark and jump panes all open under it).
 const PANE = 'bm-pane'
+// The lists pane (#45): its own id, so it stays docked as its own tab beside the other pane.
+const LISTS_PANE = 'bm-lists'
 
 // The borrowed chord actions and the Claude Code builds they were verified on are
 // core/band/keys.ts CHORD_ACTIONS and VERIFIED_CLIENTS (the one list the start-up
@@ -124,6 +131,9 @@ const searchRev = atom({ plugin: 'bookmarks', key: 'searchRev' } as const, 0)
 // was made in and what is open; the atom is bumped so the rows redraw.
 const toolFold = new ToolFold()
 const toolFoldRev = atom({ plugin: 'bookmarks', key: 'toolFoldRev' } as const, 0)
+// The project's lists and the list the pane shows (handlers/lists.ts, #45).
+const lists = new Lists()
+const listsRev = atom({ plugin: 'bookmarks', key: 'listsRev' } as const, 0)
 
 
 // What is on screen, and when the plugin itself last caused a redraw: core/kit/screen-model.ts.
@@ -368,6 +378,7 @@ async function resetConversationMemory() {
   places_.newConversation()
   search_.newConversation()
   toolFold.newConversation()
+  lists.newConversation()
   screen.newConversation()
   sessionTitle = undefined
 }
@@ -756,6 +767,36 @@ function bookmarksPorts($: EngineInterface): BookmarksPorts {
     loadMarks: () => loadMarks($),
     copy: copyVia($),
     highlightWords: (letter, uuid, words) => marks_.showWords(marksPorts($), letter, uuid, words),
+  }
+}
+
+// The project's lists (handlers/lists.ts, #45), over listsPorts($).
+function listsPorts($: EngineInterface): ListsPorts {
+  return {
+    log: line => log($, line),
+    toast: toastVia($),
+    cut,
+    dataRoot: () => dataRoot($),
+    cwd: () => $.session.cwd(),
+    sessionId: () => $.session.id(),
+    now: () => $.clock.now(),
+    pluginName: $.plugin.name,
+    pluginVersion: () => pluginVersion($),
+    hash: fnv1a64,
+    fsExists: path => $.fs.exists(path),
+    fsRead: path => $.fs.read(path),
+    fsWrite: (path, text) => $.fs.write(path, text),
+    copy: copyVia($),
+    redraw: async () => { await update($, listsRev, n => n + 1) },
+    openPane: () => $.ui.open({ id: LISTS_PANE, title: 'Lists', columns: 44 }),
+    paneOpen: async () => (await $.ui.panes()).some(p => p.id === LISTS_PANE),
+    closePane: () => $.ui.close({ id: LISTS_PANE }),
+    pluginFile: async relative => {
+      const path = `${$.plugin.root}/${relative}`
+      return (await $.fs.exists(path)) ? await $.fs.read(path) : undefined
+    },
+    resolveTarget: want => resolveTarget($, want),
+    arrive: (target, via) => bookmarks_.arriveAtBookmark(bookmarksPorts($), target, via),
   }
 }
 
@@ -1267,12 +1308,15 @@ export const register: Register = (on, options) => {
       await $.command.register({ name, description, immediate: true })
     }
 
-    // The model's tool: what it takes and how it answers is core/bookmarks/bookmark-tool.ts.
-    try {
-      const t = await $.tool.register(BOOKMARK_TOOL)
-      log($, `[bm] tool registered: ${t.tool}`)
-    } catch (err) {
-      log($, `[bm] tool.register failed: ${String(err)}`, { always: true })
+    // The model's tools: the bookmark tool (core/bookmarks/bookmark-tool.ts) and the lists tool
+    // (#45, core/lists/lists-tool.ts, deferred so it costs nothing per turn).
+    for (const def of [BOOKMARK_TOOL, LISTS_TOOL]) {
+      try {
+        const t = await $.tool.register(def)
+        log($, `[bm] tool registered: ${t.tool}`)
+      } catch (err) {
+        log($, `[bm] tool.register failed for ${def.name}: ${String(err)}`, { always: true })
+      }
     }
     // Each cluster's own part of a conversation's start: handlers/bookmarks.ts (the
     // register), handlers/marks.ts (the marks and the selection poll).
@@ -1650,6 +1694,8 @@ export const register: Register = (on, options) => {
     }
     return bookmarks_.bookmarkTool(bookmarksPorts($), e)
   })
+  // The `lists` tool (#45): handlers/lists.ts listsToolCall.
+  on('tool.call', { tool: /^mcp__bookmarks__lists$/ }, async ($, e) => listsToolCall(listsPorts($), lists, e))
 
   // /bm-debug lives in hooks/handlers/debug-command.ts; this is its ports (hooks/engine/ports.ts):
   // each engine call it needs, spelled here, where the validator follows `$`.
@@ -1684,6 +1730,12 @@ export const register: Register = (on, options) => {
     const words = e.args.trim()
     if (words) search_.setQuery(words)
     await band_.openFor(bandPorts($), 'search', 'command:bm-search')
+    return {}
+  })
+  // /bm-lists (#45): the lists pane, docked beside the conversation without the keyboard;
+  // `/bm-lists <name>` opens on that list; with no name, a second /bm-lists closes it.
+  on('command.run', { command: 'bm-lists' }, async ($, e) => {
+    await listsCommand(listsPorts($), lists, e.args)
     return {}
   })
   // /bm-check: a linter over the data root (handlers/bookmarks.ts checkCommand); reads only.
@@ -1751,6 +1803,25 @@ export const register: Register = (on, options) => {
         fieldSubmit: typed => band_.bandFieldSubmit(bandPorts($), typed),
         runCommandLine: (typed, kind) => runCommandLine($, typed, kind),
         perform: (key, id, action) => perform($, route(key, { pane: 'none' }, tables).operation, action ?? `button:${id}`),
+      },
+      { text: style, button: buttonStyle },
+    )
+  })
+
+  // The lists pane (#45): views/lists-pane.tsx, the file through handlers/lists.ts.
+  on('ui.render', { component: 'Pane', requestId: LISTS_PANE }, async ($, e) => {
+    await read($, listsRev) // read so a change or a switch of list redraws the pane
+    const ports = listsPorts($)
+    const root = await dataRoot($)
+    return listsPaneView(
+      $.ui.resolve(e),
+      { ...(await lists.paneModel(ports)), columns: e.props.bodyColumns, hrefOf: item => linkOf(item, root) },
+      {
+        pick: l => lists.pick(ports, l.id),
+        land: item => landItem(ports, item),
+        move: (item, to) => lists.moveShown(ports, item.id, to),
+        done: item => lists.doneShown(ports, item.id),
+        toggle: item => lists.toggleShown(ports, item.id),
       },
       { text: style, button: buttonStyle },
     )
