@@ -76,7 +76,9 @@ export class Navigation {
   // Every jump goes through here: scroll, then report exactly what the engine answered. Returns the
   // refusal, if any. `probe`: a try whose "not person-initiated" refusal the caller
   // handles (the band command line's one-time check), so no toast for that one.
-  async jumpTo(ports: NavigationPorts, uuid: string, via: string, label: string, words?: string, probe = false, block: 'start' | 'end' = 'start'): Promise<string | undefined> {
+  // `quiet`: a first try whose "nothing drawn" refusal the caller handles by trying another id
+  // (a record's drawn id, then its own uuid: 0.7.6), so no toast and no copied phrase for it.
+  async jumpTo(ports: NavigationPorts, uuid: string, via: string, label: string, words?: string, probe = false, block: 'start' | 'end' = 'start', quiet = false): Promise<string | undefined> {
     // Where the person is leaving from, for the jumplist: the view before the pane opened
     // when a pane is up (the pane shifts the view), else the view now.
     const from = await ports.leavingFrom()
@@ -87,6 +89,10 @@ export class Navigation {
       await this.recordJump(ports, from, { uuid, block })
     }
     const verdict = result.deny ? `DENY: ${result.deny}` : 'ok'
+    if (quiet && result.deny && /nothing drawn/i.test(result.deny)) {
+      ports.log(`[bm] ${via} scroll -> ${verdict} | target ${label} ${short(uuid)} (a first try; another id follows)`)
+      return result.deny
+    }
     if (probe && result.deny && /person-initiated/i.test(result.deny)) {
       ports.log(`[bm] ${via} scroll -> ${verdict} | target ${label} ${short(uuid)} (probe)`)
       return result.deny

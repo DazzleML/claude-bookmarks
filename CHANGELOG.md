@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.6] - 2026-10-26
+
+### Fixed
+
+- **A link to a tool call that Claude Code draws no row for still lands.** Claude Code draws a shell command under its own id, but not every tool: a link to an `AskUserQuestion` call was refused ("nothing drawn under that requestId"). The jump now tries the call's own row, then the message that holds it, then (once the conversation has been read for search) the reply it was made in, and says where it landed. One press shows one message, not one per try.
+
 ## [0.7.5] - 2026-10-26
 
 ### Changed
@@ -1392,7 +1398,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.5...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.6...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

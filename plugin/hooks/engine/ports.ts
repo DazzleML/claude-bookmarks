@@ -319,7 +319,10 @@ export type BookmarksPorts = {
   resolveTarget: (want: { uuid?: string; fragment?: string; file?: string; part?: number }) => Promise<ResolveOutcome>
   transcriptPath: () => Promise<string | undefined>
   allRows: () => Promise<readonly { uuid: string }[]>
-  jumpTo: (uuid: string, via: string, label: string, words?: string) => Promise<string | undefined>
+  /** `quiet`: a first try; a "nothing drawn" refusal returns with no toast, for the caller to try another id (handlers/bookmarks.ts jumpToRecord). */
+  jumpTo: (uuid: string, via: string, label: string, words?: string, quiet?: boolean) => Promise<string | undefined>
+  /** The message a row belongs to, from the place reader's index as far as it has read (core/places/resolve.ts messageOf); undefined when no pass has run. Never starts one. */
+  messageOf: (want: { uuid: string; file?: string; part?: number }) => { uuid: string; why?: string } | undefined
   loadMarks: () => Promise<import('../core/marks/marks.ts').Marks>
   copy: (text: string) => Promise<{ isCopied: boolean }>
   /** The marks cluster's: highlight `words` on a message under `letter` (handlers/marks.ts showWords). */

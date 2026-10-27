@@ -18,7 +18,7 @@ import {
   type MarkerStyle,
 } from './core/bookmarks/anchor'
 import { headOf, resolveRows, rowsFromGrep, targetPattern, type Resolution, type TranscriptRow } from './core/bookmarks/transcript-lines'
-import type { FoundPlace } from './core/places/resolve'
+import { messageOf, type FoundPlace } from './core/places/resolve'
 import { excerpt, type Channel } from './core/log/debug'
 import { CHORD_ACTIONS, VERIFIED_CLIENTS, bandFocusRoute, barFor, helpFor, listHint, listKeysFor, route, type Operation, type Pane } from './core/band/keys'
 import type { Cause } from './core/band/after-action'
@@ -748,7 +748,11 @@ function bookmarksPorts($: EngineInterface): BookmarksPorts {
     resolveTarget: want => resolveTarget($, want),
     transcriptPath: () => transcriptPath($),
     allRows: () => allRows($),
-    jumpTo: (uuid, via, label, words) => jumpTo($, uuid, via, label, words),
+    jumpTo: (uuid, via, label, words, quiet) => jumpTo($, uuid, via, label, words, false, 'start', quiet ?? false),
+    messageOf: want => {
+      const idx = places_.placesIndex()
+      return idx ? messageOf(idx.rows, want) : undefined
+    },
     loadMarks: () => loadMarks($),
     copy: copyVia($),
     highlightWords: (letter, uuid, words) => marks_.showWords(marksPorts($), letter, uuid, words),
@@ -785,8 +789,8 @@ function navPorts($: EngineInterface): NavigationPorts {
 async function jumplistMove($: EngineInterface, step: -1 | 1) {
   await navigation.jumplistMove(navPorts($), step)
 }
-async function jumpTo($: EngineInterface, uuid: string, via: string, label: string, words?: string, probe = false, block: 'start' | 'end' = 'start'): Promise<string | undefined> {
-  return navigation.jumpTo(navPorts($), uuid, via, label, words, probe, block)
+async function jumpTo($: EngineInterface, uuid: string, via: string, label: string, words?: string, probe = false, block: 'start' | 'end' = 'start', quiet = false): Promise<string | undefined> {
+  return navigation.jumpTo(navPorts($), uuid, via, label, words, probe, block, quiet)
 }
 
 // Where the view was before a pane opened, and where it goes back to: core/kit/pane-position.ts

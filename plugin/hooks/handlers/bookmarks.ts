@@ -814,9 +814,9 @@ export async function onAnchorPress(ports: BookmarksPorts, href: string) {
   // tool row's `tool_use` id, an agent's Agent call: measured 2026-10-26), and is not
   // highlighted, since only prompts and replies are drawn by this plugin.
   const drawn = record?.drawn
-  const target = drawn ?? uuid
-  const deny = await ports.jumpTo(target, 'anchor press', `anchor ${short(uuid)}${a.part !== undefined ? ` part ${a.part}` : ''}${a.file ? ` in ${a.file}` : ''}${a.line ? ` (line ${a.line})` : ''}`, words)
-  if (deny || !words || drawn) return
+  const label = `anchor ${short(uuid)}${a.part !== undefined ? ` part ${a.part}` : ''}${a.file ? ` in ${a.file}` : ''}${a.line ? ` (line ${a.line})` : ''}`
+  const r = await jumpToRecord(ports, { uuid, ...(drawn !== undefined ? { drawn } : {}), ...place }, 'anchor press', label, words)
+  if (r.deny || !words || drawn) return
   await highlightWords(ports, uuid, words)
   ports.log(`[bm] anchor words highlighted on ${short(uuid)}: "${ports.cut(words, 60)}"`, true)
 }
@@ -838,11 +838,53 @@ async function highlightWords(ports: BookmarksPorts, uuid: string, words: string
 }
 
 // Jump to a bookmark and highlight its words. Returns the scroll's refusal, if any.
-export async function arriveAtBookmark(ports: BookmarksPorts, record: { uuid: string; words?: string; label: string; drawn?: string }, via: string): Promise<string | undefined> {
+export async function arriveAtBookmark(ports: BookmarksPorts, record: { uuid: string; words?: string; label: string; drawn?: string; file?: string; part?: number }, via: string): Promise<string | undefined> {
   // A tool row's or an agent's record jumps to the id its row is drawn under, unhighlighted (as the anchor press).
-  const deny = await ports.jumpTo(record.drawn ?? record.uuid, via, `bookmark ${short(record.uuid)}`, record.words)
-  if (!deny && record.words && !record.drawn) await highlightWords(ports, record.uuid, record.words)
-  return deny
+  const r = await jumpToRecord(ports, record, via, `bookmark ${short(record.uuid)}`, record.words)
+  if (!r.deny && record.words && !record.drawn) await highlightWords(ports, record.uuid, record.words)
+  return r.deny
+}
+
+/**
+ * Jump to a record: by the id its row is drawn under when it has one, and if Claude Code has
+ * nothing drawn under that id, by the record's own uuid (0.7.6). Claude Code draws a Bash call
+ * under its `tool_use` id (measured 0.7.3) but not every tool: a link to an AskUserQuestion
+ * row was refused, "nothing drawn under that requestId" (djdarcy, 2026-10-26). The first try
+ * is quiet, so one press shows at most one toast; the last try reports as any jump does.
+ */
+export async function jumpToRecord(ports: BookmarksPorts, record: { uuid: string; drawn?: string; file?: string; part?: number }, via: string, label: string, words?: string): Promise<{ deny?: string; landedOn?: string }> {
+  // Only a row with its own drawn id falls back; a prompt or a reply jumps as it always has.
+  if (record.drawn === undefined || record.drawn === record.uuid) {
+    const deny = await ports.jumpTo(record.uuid, via, label, words)
+    return deny ? { deny } : { landedOn: record.uuid }
+  }
+  const nothingDrawn = (deny: string | undefined) => deny !== undefined && /nothing drawn/i.test(deny)
+  const first = await ports.jumpTo(record.drawn, via, label, words, true)
+  if (!first) return { landedOn: record.drawn }
+  if (!nothingDrawn(first)) return { deny: first }
+  // The message before, from the place reader's index when it is loaded (never started here: its
+  // first read of a long conversation takes minutes). A row in an agent's file has no row of its
+  // own in the main transcript, so it skips straight to that.
+  const msg = ports.messageOf({ uuid: record.uuid, ...(record.file !== undefined ? { file: record.file } : {}), ...(record.part !== undefined ? { part: record.part } : {}) })
+  const before = msg && msg.uuid !== record.uuid ? msg : undefined
+  if (record.file === undefined) {
+    ports.log(`[bm] ${via}: nothing drawn under ${short(record.drawn)}; trying the record's own id ${short(record.uuid)}`)
+    const second = await ports.jumpTo(record.uuid, via, label, words, before !== undefined)
+    if (!second) {
+      ports.toast('Claude Code draws no row of its own for that call: this is the reply it was made in.')
+      return { landedOn: record.uuid }
+    }
+    if (!nothingDrawn(second) || !before) return { deny: second }
+  } else if (!before) {
+    // An agent's row has no row of its own in the main transcript: with no index to place it, the refusal as any jump reports it.
+    const again = await ports.jumpTo(record.drawn, via, label, words)
+    return again ? { deny: again } : { landedOn: record.drawn }
+  }
+  ports.log(`[bm] ${via}: nothing drawn for ${short(record.uuid)}; landing on the message it belongs to, ${short(before.uuid)}`)
+  const third = await ports.jumpTo(before.uuid, via, label, words)
+  if (third) return { deny: third }
+  ports.toast(`Claude Code draws no row for that place${before.why ? ` (${before.why})` : ''}: this is the message it belongs to.`)
+  return { landedOn: before.uuid }
 }
 
 // /bm-promote <letter> (moved from register.tsx's registration, 0.4.94).

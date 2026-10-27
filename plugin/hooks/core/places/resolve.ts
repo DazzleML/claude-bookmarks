@@ -5,6 +5,7 @@
 //
 // Pure: the handler reads the pieces (handlers/places.ts resolveInPlaces).
 import { placeKey, type IndexedPlace } from './reader.ts'
+import { landingFor } from './landing.ts'
 import type { Query } from '../search/query.ts'
 
 /** A prompt or a reply in the main transcript: a message, addressed by its uuid alone, as every record before 0.7.3. */
@@ -51,6 +52,17 @@ export function drawnOf(rows: readonly IndexedPlace[], i: number, seen = new Set
   }
   if (r.kind === 'tool-call' || r.kind === 'tool-result') return r.toolUseId
   return undefined
+}
+
+/**
+ * The message a row belongs to, by the record's address: core/places/landing.ts's stock landing
+ * (the last prompt or reply before it; for an agent's row, before the Agent call that started
+ * it). Where a jump goes when Claude Code draws nothing under the row's own ids (the landing
+ * fallback, 0.7.6). `why` says what the row was, for the toast.
+ */
+export function messageOf(rows: readonly IndexedPlace[], want: PlaceWant): { uuid: string; why?: string } | undefined {
+  const l = landingFor(rows, findPlaces(rows, want)[0] ?? -1)
+  return l.on === 'outside' ? undefined : l.on === 'message' ? { uuid: l.uuid, why: l.why } : { uuid: l.uuid }
 }
 
 /** A row's text, from the piece that holds it (its `{"k", "t"}` line), or undefined when the piece does not have it. */

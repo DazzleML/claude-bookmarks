@@ -9,6 +9,9 @@ import { landingFor, STOCK_ROUTES } from '../../plugin/hooks/core/places/landing
 import { addPlace, newPlaceIndex } from '../../plugin/hooks/core/places/reader.ts'
 import type { Place } from '../../plugin/hooks/core/places/place.ts'
 import { capabilityOf, choose } from '../../plugin/hooks/engine/select.ts'
+import { messageOf } from '../../plugin/hooks/core/places/resolve.ts'
+import { jumpToRecord } from '../../plugin/hooks/handlers/bookmarks.ts'
+import type { BookmarksPorts } from '../../plugin/hooks/engine/ports.ts'
 
 const oracle = { id: 'a1', type: 'oracle', call: 'toolu_agent' }
 function rows() {
@@ -89,6 +92,78 @@ test('a row before any message, or no row at all, lands outside', () => {
   addPlace(idx, { at: { session: 's', uuid: 'n1' }, kind: 'event', author: 'engine', text: 'an event first' })
   assert.deepEqual(landingFor(idx.rows, 0), { on: 'outside', why: 'an event before the first message' })
   assert.equal(landingFor(idx.rows, 5).on, 'outside')
+})
+
+// --- The landing fallback (0.7.6): a record's drawn id refused, then its uuid, then its message ---
+// Claude Code draws a Bash call under its tool_use id but had nothing drawn under an
+// AskUserQuestion call's ("nothing drawn under that requestId", 2026-10-26).
+
+test('messageOf: a record found by uuid, by tool_use id, or by an agent address lands on its message', () => {
+  const r = rows()
+  assert.deepEqual(messageOf(r, { uuid: 'c1' }), { uuid: 'r1', why: 'the Agent call, in this turn' })
+  assert.equal(messageOf(r, { uuid: 'toolu_agent' })?.uuid, 'r1')
+  assert.equal(messageOf(r, { uuid: 'e1', file: 'agent:a1', part: 0 })?.uuid, 'r1')
+  assert.deepEqual(messageOf(r, { uuid: 'p1' }), { uuid: 'p1' })
+  assert.equal(messageOf(r, { uuid: 'nowhere' }), undefined)
+})
+
+type Call = { uuid: string; quiet: boolean }
+function fakePorts(drawnUnder: string[], msg?: { uuid: string; why?: string }) {
+  const calls: Call[] = []
+  const toasts: string[] = []
+  const ports = {
+    log: () => {},
+    toast: (t: string) => void toasts.push(t),
+    messageOf: () => msg,
+    jumpTo: async (uuid: string, _via: string, _label: string, _words?: string, quiet?: boolean) => {
+      calls.push({ uuid, quiet: !!quiet })
+      if (drawnUnder.includes(uuid)) return undefined
+      if (!quiet) toasts.push(`refused ${uuid}`)
+      return 'nothing drawn under that requestId'
+    },
+  } as unknown as BookmarksPorts
+  return { ports, calls, toasts }
+}
+
+test('jumpToRecord: the drawn id first, quietly, and no toast when it lands', async () => {
+  const f = fakePorts(['toolu_bash'])
+  assert.deepEqual(await jumpToRecord(f.ports, { uuid: 'u', drawn: 'toolu_bash' }, 'test', 'l'), { landedOn: 'toolu_bash' })
+  assert.deepEqual(f.calls, [{ uuid: 'toolu_bash', quiet: true }])
+  assert.deepEqual(f.toasts, [])
+})
+
+test('jumpToRecord: nothing drawn under the drawn id -> the record uuid, with one toast', async () => {
+  const f = fakePorts(['u'])
+  assert.deepEqual(await jumpToRecord(f.ports, { uuid: 'u', drawn: 'toolu_ask' }, 'test', 'l'), { landedOn: 'u' })
+  assert.deepEqual(f.calls.map(c => c.uuid), ['toolu_ask', 'u'])
+  assert.equal(f.toasts.length, 1)
+  assert.match(f.toasts[0]!, /no row of its own/)
+})
+
+test('jumpToRecord: neither id drawn -> the message it belongs to, with one toast that says what it was', async () => {
+  const f = fakePorts(['r1'], { uuid: 'r1', why: 'the AskUserQuestion call, in this turn' })
+  assert.deepEqual(await jumpToRecord(f.ports, { uuid: 'u', drawn: 'toolu_ask' }, 'test', 'l'), { landedOn: 'r1' })
+  assert.deepEqual(f.calls, [{ uuid: 'toolu_ask', quiet: true }, { uuid: 'u', quiet: true }, { uuid: 'r1', quiet: false }])
+  assert.equal(f.toasts.length, 1)
+  assert.match(f.toasts[0]!, /AskUserQuestion call.*message it belongs to/)
+})
+
+test('jumpToRecord: nothing drawn anywhere and no index -> the refusal, reported once', async () => {
+  const f = fakePorts([])
+  assert.match((await jumpToRecord(f.ports, { uuid: 'u', drawn: 'toolu_ask' }, 'test', 'l')).deny ?? '', /nothing drawn/)
+  assert.deepEqual(f.toasts, ['refused u'])
+})
+
+test("jumpToRecord: an agent's row skips its own uuid (not in the main transcript) for its message", async () => {
+  const f = fakePorts(['r1'], { uuid: 'r1' })
+  assert.deepEqual(await jumpToRecord(f.ports, { uuid: 'e1', drawn: 'toolu_agent', file: 'agent:a1', part: 0 }, 'test', 'l'), { landedOn: 'r1' })
+  assert.deepEqual(f.calls.map(c => c.uuid), ['toolu_agent', 'r1'])
+})
+
+test('jumpToRecord: a prompt or a reply jumps by its uuid alone, as before', async () => {
+  const f = fakePorts(['p1'])
+  assert.deepEqual(await jumpToRecord(f.ports, { uuid: 'p1' }, 'test', 'l'), { landedOn: 'p1' })
+  assert.deepEqual(f.calls, [{ uuid: 'p1', quiet: false }])
 })
 
 test('the capability rows exist, stock takes their workaround, and the stock routes match it', () => {
