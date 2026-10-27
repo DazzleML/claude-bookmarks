@@ -198,6 +198,37 @@ test('link adds a link to an item; unlink removes one by its number', async ($, 
   expect(f.lists[0]!.items[0]!.links).toEqual([{ kind: 'file', path: 'C:/code/b.md' }])
 })
 
+// Pressing a place in another conversation (the links-in-files design, B5): named and resumable
+// when its transcript is on this machine, said so when it is not -- never a blind copy.
+const OTHER = '22222222-3333-4444-8555-666666666666'
+const elsewhere = () => ({
+  [FILE]: JSON.stringify({
+    version: 2, writer: 'test', project: 'test-project', cwd: 'C:/test-project', updatedAt: 1, removed: [],
+    lists: [{ id: 'elsewhere', name: 'Elsewhere', owner: 'user', createdAt: 1, updatedAt: 1, next: 2,
+      items: [{ id: 'i1', label: 'decided over there', by: 'claude', addedAt: 1, links: [{ kind: 'place', session: OTHER, uuid: 'ffffffff-0000-4000-8000-000000000001' }] }] }],
+  }),
+})
+async function pressFirst($: unknown) {
+  const ui = await mountPane($)
+  const md = (await ui.findAll({ type: 'Markdown' })).find(m => m.key === 'lists-go-i1')
+  const href = (md?.props.pressableLinks as string[] | undefined)?.[0]
+  await ui.press({ key: 'lists-go-i1', link: { href: href! } } as never)
+}
+
+test('a place in another conversation on this machine: the press names it and copies its resume command', async ($, on) => {
+  const w = world(on, { session: SID, files: { ...elsewhere(), [`C:/test-home/.claude/projects/C--other/${OTHER}.jsonl`]: '{}\n', [`${DATA_ROOT}/sessions/${OTHER}.json`]: JSON.stringify({ title: 'the ck3 worker' }) } })
+  await pressFirst($)
+  expect(w.copied()).toEqual([`claude --resume ${OTHER}`])
+  expect(w.toasts().some(t => t.includes('"the ck3 worker"') && t.includes('Copied'))).toBe(true)
+})
+
+test('a place in a conversation not on this machine: the press says so and copies nothing', async ($, on) => {
+  const w = world(on, { session: SID, files: elsewhere() })
+  await pressFirst($)
+  expect(w.copied()).toEqual([])
+  expect(w.toasts().some(t => t.includes('not on this machine'))).toBe(true)
+})
+
 test('the tool refuses an unknown list and an item with no label', async ($, on) => {
   world(on, { session: SID, files: seeded() })
   expect(String((await call($, { action: 'add', list: 'nope', label: 'x' })).error)).toContain('no list')

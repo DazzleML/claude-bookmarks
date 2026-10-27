@@ -319,6 +319,12 @@ export type ListsPorts = {
    * (the links-in-files design, B4); the record's anchor URL, or why not.
    */
   mintPlace: (want: { query?: string; uuid?: string; label: string; words?: string }) => Promise<{ anchor: string } | { error: string }>
+  /**
+   * Another conversation of this machine, by its session id: whether its transcript is here, and
+   * its title from this plugin's own register (register.tsx conversationOf). Lists folders and
+   * checks a path exists; reads no transcript (the links-in-files design, B5).
+   */
+  findConversation: (sessionId: string) => Promise<{ found: boolean; title?: string }>
 }
 
 /** What the bookmarks cluster (handlers/bookmarks.ts) needs: the register's files, who and where this session is, the transcript, the jump, the mark highlight, the clipboard and the person's feedback. */

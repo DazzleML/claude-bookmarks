@@ -218,9 +218,17 @@ export async function landItem(ports: ListsPorts, item: ListItem): Promise<void>
       if (deny) ports.log(`[bm] lists: item ${item.id} did not land: ${deny}`)
       return
     }
+    // Another conversation: named when its transcript is on this machine, its resume command
+    // copied; otherwise said so, and nothing copied (the links-in-files design, B5).
+    const where = await ports.findConversation(p.session)
+    if (!where.found) {
+      ports.toast(`"${ports.cut(item.label, 40)}" is in a conversation that is not on this machine (${short(p.session)}).`, 10000)
+      return
+    }
+    const name = where.title ? `"${ports.cut(where.title, 40)}" (${short(p.session)})` : short(p.session)
     const cmd = `claude --resume ${p.session}`
     const copied = (await ports.copy(cmd)).isCopied
-    ports.toast(`"${ports.cut(item.label, 40)}" is in another conversation (${short(p.session)}). ${copied ? 'Copied' : 'Run'}: ${cmd}`, 10000)
+    ports.toast(`"${ports.cut(item.label, 40)}" is in another conversation, ${name}. ${copied ? 'Copied' : 'Run'}: ${cmd}`, 10000)
     return
   }
   const text = first ? textOf(first) : undefined

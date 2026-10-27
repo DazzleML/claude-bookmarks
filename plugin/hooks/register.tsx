@@ -456,6 +456,36 @@ async function keptFootnotes($: EngineInterface): Promise<FootnoteRef[]> {
 // The session's transcript: <config dir>/projects/<project>/<session id>.jsonl. The
 // project folder is the cwd with every non-alphanumeric character turned into `-`;
 // if that guess misses, every project folder is looked in.
+/**
+ * Another conversation of this machine, by its session id (a list item's place, the
+ * links-in-files design B5): whether its transcript is in any project folder, and its title from
+ * this plugin's own register file. Lists folders and checks existence, as transcriptPath does;
+ * reads no other conversation's transcript.
+ */
+async function conversationOf($: EngineInterface, sid: string): Promise<{ found: boolean; title?: string }> {
+  const config = await configDir($)
+  if (!config) return { found: false }
+  let found = false
+  for (const entry of await $.fs.list(`${config}/projects`).catch(() => [])) {
+    if (entry.kind === 'dir' && (await $.fs.exists(`${config}/projects/${entry.name}/${sid}.jsonl`))) {
+      found = true
+      break
+    }
+  }
+  if (!found) return { found }
+  const root = await dataRoot($)
+  const reg = root ? `${root.replace(/\\/g, '/').replace(/\/+$/, '')}/bookmarks/sessions/${sid}.json` : undefined
+  try {
+    if (reg && (await $.fs.exists(reg))) {
+      const title = (JSON.parse(await $.fs.read(reg)) as { title?: unknown }).title
+      if (typeof title === 'string' && title.trim()) return { found, title: title.trim() }
+    }
+  } catch {
+    /* a register that cannot be read leaves the title out */
+  }
+  return { found }
+}
+
 async function transcriptPath($: EngineInterface): Promise<string | undefined> {
   const config = await configDir($)
   if (!config) return undefined
@@ -811,6 +841,7 @@ function listsPorts($: EngineInterface): ListsPorts {
       if (r?.ambiguous === true) return { error: 'several places hold that fragment: give a longer one, or the uuid' }
       return { error: typeof r?.error === 'string' ? r.error : 'the place could not be bookmarked' }
     },
+    findConversation: sid => conversationOf($, sid),
   }
 }
 
