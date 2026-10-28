@@ -15,7 +15,7 @@
 // is a hint (a uuid survives forks, the stable-links design T8); the row's uuid is the identity.
 //
 // Pure.
-import { anchorHref, parseAnchor, uuid8 } from './anchor.ts'
+import { anchorHref, encodePart, parseAnchor, uuid8 } from './anchor.ts'
 
 export type Ref = {
   spelling: 'file' | 'bm'
@@ -140,8 +140,8 @@ export function formatBm(ref: Ref, opts: { fullRow?: boolean } = {}): string | u
   if (!ref.uuid) return `bm:${sid8}.${ref.record}`
   const row = opts.fullRow ? ref.uuid.toLowerCase() : uuid8(ref.uuid)
   const part = ref.part !== undefined ? `.p${ref.part}` : ''
-  const file = ref.file !== undefined ? `@${encodeURIComponent(ref.file)}` : ''
-  const words = ref.words ? `~w:${encodeURIComponent(ref.words)}` : ''
+  const file = ref.file !== undefined ? `@${encodePart(ref.file)}` : ''
+  const words = ref.words ? `~w:${encodePart(ref.words)}` : ''
   return `bm:${sid8}/${row}${part}${file}${words}${marker}`
 }
 

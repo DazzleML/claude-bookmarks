@@ -6,6 +6,7 @@ import {
   anchorLinks,
   anchorMarkdown,
   anchorPath,
+  encodePart,
   fileUrl,
   markLinks,
   markdownLinks,
@@ -161,4 +162,31 @@ test('utf8ByteLength agrees with the JSON line that was measured by wc -c', () =
   assert.equal(utf8ByteLength('⚓'), 3)
   assert.equal(utf8ByteLength('😀'), 4)
   assert.equal(utf8ByteLength('a⚓😀'), 8)
+})
+
+// The bm: design's unit 1a (2026-10-27__14-00-02, consultation F1/F2): `encodeURIComponent` leaves
+// `~ ( ) ! * '` raw, so a `)` in the words ended a reply's markdown link early.
+const HARD = ['a)b', 'foo (bar', 'x ~ y', "it's", 'a*b!', 'über Straße', '100% & #3 ? yes', ' spaced ', '(both)']
+
+test('encodePart percent-encodes ~ ( ) ! * and the quote, and decodes back to the same text', () => {
+  for (const s of HARD) {
+    const e = encodePart(s)
+    assert.doesNotMatch(e, /[~()!*'\s]/, s)
+    assert.equal(decodeURIComponent(e), s)
+  }
+})
+
+test('a ) in the highlighted words no longer ends the markdown link, and the words come back whole', () => {
+  for (const words of HARD) {
+    const md = anchorMarkdown({ ...record, words }, ROOT)
+    const found = markdownLinks(md)
+    assert.equal(found.length, 1, words)
+    assert.equal(found[0]!.end, md.length, `the whole link is one link: ${words}`)
+    assert.equal(parseAnchor(found[0]!.href)?.words, words.trim() || undefined, words)
+  }
+  const file = 'agent:a(1)~x'
+  const md = anchorMarkdown({ ...record, file, words: 'w' }, ROOT)
+  const [link] = markdownLinks(md)
+  assert.equal(link!.end, md.length, 'a file name with ( ) ~ keeps the link whole')
+  assert.equal(parseAnchor(link!.href)?.file, file)
 })

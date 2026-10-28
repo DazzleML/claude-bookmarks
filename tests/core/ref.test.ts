@@ -68,3 +68,17 @@ test('formatFile writes the pressable spelling, a marker as v=2; it reads back t
   assert.equal(formatFile({ ...ref, list: undefined, entry: undefined }, ROOT), `${BASE}/e92204f6.md?u=${UUID}&q=the%20words&v=1`, 'no marker: today\'s v1 link')
   assert.equal(formatFile({ ...ref, session: '8f0f9b27' }, ROOT), undefined, 'a session prefix cannot make a path')
 })
+
+// The bm: design's unit 1a (consultation F1): a `~` in the words was left raw, so the parser's
+// tilde split cut them short and a tie-break on words would have used the wrong words.
+test('words and a file name with ~ ( ) ! * and quotes survive the bm: spelling whole', () => {
+  for (const words of ['a~b', 'a)b (c)', "it's ~ *really*!", 'über Straße', '100% & #3 ? yes']) {
+    const bm = formatBm({ spelling: 'bm', session: SID, uuid: UUID, words })!
+    assert.doesNotMatch(bm.slice(3), /[~][^w]|[()!*'\s]/, bm)
+    assert.equal(parseRef(bm)?.words, words, bm)
+  }
+  const file = 'agent:a(1)~x'
+  const bm = formatBm({ spelling: 'bm', session: SID, uuid: UUID, file, words: 'w' })!
+  assert.equal(parseRef(bm)?.file, file, bm)
+  assert.equal(parseRef(bm)?.words, 'w', bm)
+})

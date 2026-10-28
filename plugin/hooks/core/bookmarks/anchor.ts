@@ -147,14 +147,24 @@ export function fileUrl(path: string): string {
   return `file://${encodeURI(abs).replace(/[()?#]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)}`
 }
 
+/**
+ * One value inside a link (words, a file name): `encodeURIComponent`, plus `~ ( ) ! * '`, which
+ * it leaves raw. A `)` ended a reply's markdown link early, and a `~` split a `bm:` reference's
+ * words at the grammar's own separator (the bm: short-reference design, unit 1a). Read back with
+ * `decodeURIComponent`, which reads old links that left them raw just the same.
+ */
+export function encodePart(s: string): string {
+  return encodeURIComponent(s).replace(/[~()!*']/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+}
+
 /** The anchor URL of a record. */
 export function anchorHref(record: Pick<AnchorRecord, 'sessionId' | 'uuid' | 'line' | 'bytes' | 'words' | 'file' | 'part'>, dataRoot: string): string {
   const params = [`u=${record.uuid}`]
-  if (record.file !== undefined) params.push(`f=${encodeURIComponent(record.file)}`)
+  if (record.file !== undefined) params.push(`f=${encodePart(record.file)}`)
   if (record.part !== undefined) params.push(`p=${record.part}`)
   if (record.line !== undefined) params.push(`l=${record.line}`)
   if (record.bytes) params.push(`b=${record.bytes[0]}-${record.bytes[1]}`)
-  if (record.words) params.push(`q=${encodeURIComponent(record.words)}`)
+  if (record.words) params.push(`q=${encodePart(record.words)}`)
   params.push(`v=${ANCHOR_VERSION}`)
   return `${fileUrl(anchorPath(dataRoot, record.sessionId, record.uuid, record))}?${params.join('&')}`
 }
