@@ -120,3 +120,27 @@ test('a new conversation reads its own register, not the one before it', async (
   const out = await call($ as never, { action: 'list' })
   expect((out.claudes as unknown[]).length).toBe(0)
 })
+
+// The bm: short-reference design, unit 3a: the tool takes a reference in place of query/uuid.
+test('a lookup reference to a bookmarked place is answered with its record, and nothing is minted', async ($, on) => {
+  const w = world(on, { session: SID, files: seeded() })
+  const before = w.file(PATH)
+  const out = await call($ as never, { ref: `bm:${SID.slice(0, 8)}.1~${UUID.slice(0, 8)}` })
+  expect(out.ok).toBe(true)
+  expect(out.added).toBe(false)
+  expect(out.n).toBe(1)
+  expect(w.file(PATH)).toBe(before)
+})
+
+test('a lookup whose check names another record says so instead of answering with the wrong one', async ($, on) => {
+  world(on, { session: SID, files: seeded() })
+  const out = await call($ as never, { ref: `bm:${SID.slice(0, 8)}.1~dddddddd` })
+  expect(String(out.error)).toContain('not the one the check names')
+  expect((out.resolution as { kind: string }).kind).toBe('mismatch')
+})
+
+test('a reference to a conversation not on this machine, or text that is no reference, is refused with the reason', async ($, on) => {
+  world(on, { session: SID, files: seeded() })
+  expect(String((await call($ as never, { ref: 'bm:99999999/cccccccc', label: 'x' })).error)).toContain('not on this machine')
+  expect(String((await call($ as never, { ref: 'not a reference', label: 'x' })).error)).toContain('not a bm: reference')
+})

@@ -44,6 +44,12 @@ test('ambiguous row: two rows share the prefix; the words decide, else both are 
   assert.deepEqual(await resolveRef(ref('bm:aaaaaaaa/68b352d2~w:landing%20fix'), p), { kind: 'found', session: CUR, uuid: U1, words: 'landing fix' })
 })
 
+test('unverified: a reference into a conversation whose rows cannot be read here is kept as written', async () => {
+  const base = ports({ sessions: { [CUR]: { rows: [] }, [OTHER]: { rows: [] } } })
+  const p = { ...base, rowsByPrefix: async (sid: string, pre: string) => (sid === OTHER ? undefined : base.rowsByPrefix(sid, pre)) }
+  assert.deepEqual(await resolveRef(ref('bm:bbbbbbbb/77777777.p1'), p), { kind: 'found', session: OTHER, uuid: '77777777', part: 1, unverified: true })
+})
+
 test('ambiguous session: two conversations share the prefix and neither is the current one', async () => {
   const p = ports({ sessions: { [CUR]: { rows: [] }, [OTHER]: { title: 'one', rows: [] }, [TWIN]: { title: 'two', rows: [] } } })
   assert.deepEqual(await resolveRef(ref('bm:bbbbbbbb/77777777'), p), { kind: 'ambiguous-session', candidates: [{ id: OTHER, title: 'one' }, { id: TWIN, title: 'two' }] })

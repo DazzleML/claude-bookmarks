@@ -29,6 +29,8 @@ import { forwardSlashes } from '../core/kit/paths.ts'
 import { short } from '../core/kit/message-id.ts'
 import { answer as toolAnswer, brief as briefRow, describe as describeRecord, listActedOn, listName, parseToolInput, tierFor } from '../core/bookmarks/bookmark-tool.ts'
 import type { BookmarksPorts } from '../engine/ports.ts'
+import { parseRef } from '../core/bookmarks/ref.ts'
+import { cachedRegisters, resolveRef, type RefPorts, type RegisterView, type Resolution } from '../core/bookmarks/ref-resolve.ts'
 
 // --- Bookmark anchors (anchors DWP 2026-10-09) -----------------------------------------
 // The URL format, its parser and the link finder live in hooks/core/bookmarks/anchor.ts (pure, with
@@ -933,14 +935,114 @@ export async function promoteLetter(ports: BookmarksPorts, letter: string) {
 
 // The model's tool call (`mcp__bookmarks__bookmark`): what it takes and how it answers is
 // core/bookmarks/bookmark-tool.ts; register.tsx's tool.call hook hands the event here.
+// --- References (the bm: short-reference design, units 2 and 3a) -------------------------
+// What a `bm:` reference or a bookmark link names, through core/bookmarks/ref-resolve.ts. This
+// conversation is read through the loader (resolveTarget); another conversation only through
+// what this plugin keeps of it, its register, never its transcript, so a reference to a row
+// there that no record names is found but unverified.
+
+const registerView = (reg: BookmarkRegister): RegisterView => ({
+  records: reg.perma.map(r => ({ ...(r.n !== undefined ? { n: r.n } : {}), uuid: r.uuid, ...(r.part !== undefined ? { part: r.part } : {}), ...(r.file !== undefined ? { file: r.file } : {}), label: r.label })),
+  tombstones: reg.tombstones.map(t => ({ ...(t.n !== undefined ? { n: t.n } : {}), uuid: t.uuid })),
+})
+
+/** The resolver's ports over BookmarksPorts, for one use (a call, a draw): conversations listed and registers read once. */
+export async function refPortsOf(ports: BookmarksPorts): Promise<RefPorts> {
+  const current = (await ports.sessionId()).toLowerCase()
+  const root = await ports.dataRoot()
+  const config = await ports.configDir()
+  let ids: string[] | undefined
+  const allIds = async (): Promise<string[]> => {
+    if (ids) return ids
+    const found: string[] = []
+    if (config) {
+      for (const d of await ports.fsList(`${config}/projects`).catch(() => [])) {
+        if (d.kind !== 'dir') continue
+        for (const f of await ports.fsList(`${config}/projects/${d.name}`).catch(() => [])) if (f.name.endsWith('.jsonl')) found.push(f.name.slice(0, -6).toLowerCase())
+      }
+    }
+    return (ids = [...new Set(found)])
+  }
+  const otherRegister = async (sid: string): Promise<BookmarkRegister | undefined> => {
+    const path = root ? `${root}/bookmarks/sessions/${sid}.json` : undefined
+    try {
+      return path && (await ports.fsExists(path)) ? parseRegister(await ports.fsRead(path)) : undefined
+    } catch {
+      return undefined
+    }
+  }
+  const register = cachedRegisters(async sid => {
+    const reg = sid === current ? await loadRegister(ports) : await otherRegister(sid)
+    return reg ? registerView(reg) : undefined
+  })
+  const bare = (s: string) => s.replace(/-/g, '').toLowerCase()
+  return {
+    currentSession: () => current,
+    sessionsByPrefix: async p => {
+      const out: { id: string; title?: string }[] = []
+      for (const id of (await allIds()).filter(i => i.startsWith(p))) {
+        const title = (await otherRegister(id) as { title?: unknown } | undefined)?.title
+        out.push({ id, ...(typeof title === 'string' && title.trim() ? { title: title.trim() } : {}) })
+      }
+      return out
+    },
+    rowsByPrefix: async (sid, p) => {
+      if (sid === current) {
+        if (bare(p).length < 8) return []
+        const found = await ports.resolveTarget({ uuid: p })
+        return found.kind === 'one' ? [{ uuid: found.row.uuid, text: found.row.text }] : found.kind === 'many' ? found.rows.map(r => ({ uuid: r.uuid, text: r.text })) : []
+      }
+      const known = ((await register(sid))?.records ?? []).filter(r => bare(r.uuid).startsWith(bare(p)))
+      return known.length ? known.map(r => ({ uuid: r.uuid, ...(r.label ? { text: r.label } : {}) })) : undefined
+    },
+    register,
+  }
+}
+
+/** What a reference's text names, or undefined when the text is not a reference. */
+export async function resolveRefText(ports: BookmarksPorts, text: string): Promise<Resolution | undefined> {
+  const ref = parseRef(text)
+  return ref ? resolveRef(ref, await refPortsOf(ports)) : undefined
+}
+
+/** One sentence for an outcome that is not a single place here. */
+function refProblem(r: Resolution): string {
+  switch (r.kind) {
+    case 'ambiguous-row': return `that prefix names ${r.candidates.length} messages; give more of the uuid, or words with ~w:`
+    case 'ambiguous-session': return `that prefix names ${r.candidates.length} conversations; give more of the session id`
+    case 'mismatch': return `record #${r.record} in that conversation is not the one the check names${r.fallback ? '; the message the check names is in the answer' : ''}`
+    case 'removed': return `record #${r.record} was removed (a tombstone)`
+    case 'not-found': return 'no such place in that conversation'
+    case 'not-on-this-machine': return 'that conversation is not on this machine'
+    default: return 'that place is in another conversation; a bookmark is made in the conversation it belongs to'
+  }
+}
+
 export async function bookmarkTool(ports: BookmarksPorts, e: unknown) {
   const { tool, tool_use_id, agentId, requestMeta, ...input } = e as unknown as Record<string, unknown>
   void agentId
   void requestMeta
   ports.log(`[bm] ${String(tool)} called (${String(tool_use_id).slice(0, 12)}) with ${ports.cut(JSON.stringify(input), 160)}`, true)
   const answer = toolAnswer
-  const { query, uuid, label, action, tierAsked, owner, why, words: wordsAsked, temporary, tags, x } = parseToolInput(input)
-  if (action !== 'list' && !query && !uuid) return answer({ error: 'give `query` (a short verbatim fragment of the message) or `uuid`' })
+  const { query, uuid: uuidGiven, ref, label, action, tierAsked, owner, why, words: wordsGiven, temporary, tags, x } = parseToolInput(input)
+  let uuid = uuidGiven
+  let wordsAsked = wordsGiven
+  if (ref && action !== 'list') {
+    // A reference names a place; one in this conversation goes on as its uuid, so a place
+    // already bookmarked is answered with its record and nothing new is minted.
+    const r = await resolveRefText(ports, ref)
+    if (!r) return answer({ error: '`ref` is not a bm: reference or a bookmark link' })
+    if (r.kind !== 'found' || r.unverified || r.session !== (await ports.sessionId()).toLowerCase()) {
+      return answer({ error: refProblem(r), resolution: r })
+    }
+    uuid = r.uuid
+    wordsAsked = wordsAsked ?? r.words
+    if (!label && action === 'add') {
+      const existing = findRecord(await loadRegister(ports), uuid, owner)
+      if (existing) return answer({ ok: true, added: false, ...describeRecord(existing, await ports.dataRoot()) })
+    }
+  }
+  if (action !== 'list' && !query && !uuid) return answer({ error: 'give `query` (a short verbatim fragment of the message), `uuid` or `ref`' })
   const root = await ports.dataRoot()
   const describe = (r: AnchorRecord) => describeRecord(r, root)
   const brief = briefRow

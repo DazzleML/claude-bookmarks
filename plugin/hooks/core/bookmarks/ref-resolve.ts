@@ -25,13 +25,18 @@ export type RefPorts = {
   currentSession(): string
   /** The conversations on this machine whose id starts with the prefix, with their titles when known. */
   sessionsByPrefix(prefix: string): Promise<{ id: string; title?: string }[]>
-  /** A conversation's rows whose uuid starts with the prefix (compared without dashes), any length. */
-  rowsByPrefix(sessionId: string, prefix: string): Promise<{ uuid: string; text?: string }[]>
+  /**
+   * A conversation's rows whose uuid starts with the prefix (compared without dashes), any length;
+   * undefined when that conversation's rows cannot be read here (the plugin reads no other
+   * conversation's transcript), so a reference into it is found but unverified.
+   */
+  rowsByPrefix(sessionId: string, prefix: string): Promise<{ uuid: string; text?: string }[] | undefined>
   /** A conversation's register, or undefined when it has none. */
   register(sessionId: string): Promise<RegisterView | undefined>
 }
 
-type Place = { session: string; uuid: string; part?: number; file?: string; words?: string; record?: number }
+/** `unverified`: a reference into a conversation whose rows cannot be read here; `uuid` is then the reference's prefix. */
+type Place = { session: string; uuid: string; part?: number; file?: string; words?: string; record?: number; unverified?: true }
 
 export type Resolution =
   | ({ kind: 'found' } & Place)
@@ -85,11 +90,12 @@ function pick(session: string, rows: { uuid: string; text?: string }[], ref: Ref
 async function resolveRow(ref: Ref, ports: RefPorts): Promise<Resolution> {
   const row = ref.uuid!
   const cur = ports.currentSession()
-  const local = await ports.rowsByPrefix(cur, row)
+  const local = (await ports.rowsByPrefix(cur, row)) ?? []
   if (local.length) return pick(cur, local, ref)
   const s = await sessionOf(ref.session!, ports)
   if (!('id' in s)) return s
   const rows = s.id === cur.toLowerCase() ? [] : await ports.rowsByPrefix(s.id, row)
+  if (rows === undefined) return { kind: 'found', session: s.id, uuid: row.toLowerCase(), ...extras(ref), unverified: true }
   return rows.length ? pick(s.id, rows, ref) : { kind: 'not-found', session: s.id }
 }
 
@@ -104,7 +110,7 @@ async function resolveLookup(ref: Ref, ports: RefPorts): Promise<Resolution> {
   if (ref.check && !(named && checkMatches(ref.check, named))) {
     // The number names another record now (a register re-created, or two copies unioned), or no
     // record at all: report both halves, and search the conversation for the check's prefix.
-    const byCheck = [...new Set((await ports.rowsByPrefix(s.id, ref.check)).map(r => r.uuid))]
+    const byCheck = [...new Set(((await ports.rowsByPrefix(s.id, ref.check)) ?? []).map(r => r.uuid))]
     return {
       kind: 'mismatch', session: s.id, record: n, check: ref.check,
       ...(named ? { registerNames: named } : {}),
@@ -114,7 +120,7 @@ async function resolveLookup(ref: Ref, ports: RefPorts): Promise<Resolution> {
   if (tomb) return { kind: 'removed', session: s.id, record: n, uuid: tomb.uuid }
   if (!rec) return { kind: 'not-found', session: s.id, record: n }
   const cur = ports.currentSession()
-  const here = (await ports.rowsByPrefix(cur, rec.uuid)).length > 0
+  const here = ((await ports.rowsByPrefix(cur, rec.uuid)) ?? []).length > 0
   return {
     kind: 'found', session: here ? cur : s.id, uuid: rec.uuid, record: n,
     ...(rec.part !== undefined ? { part: rec.part } : {}),

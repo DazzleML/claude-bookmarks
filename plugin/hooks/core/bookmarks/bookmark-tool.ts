@@ -22,6 +22,7 @@ export const BOOKMARK_TOOL = {
     properties: {
       query: { type: 'string', description: 'A short verbatim fragment of the message to bookmark (the earliest message containing it)' },
       uuid: { type: 'string', description: 'The message uuid instead of a fragment (full, or its first 8+ characters)' },
+      ref: { type: 'string', description: 'A short reference (bm:<session>/<message> or bm:<session>.<n>~<check>) or a bookmark link, instead of query or uuid; a place already bookmarked is answered with its record' },
       label: { type: 'string', description: 'What the place says: the link text, a few words' },
       why: { type: 'string', description: 'What the place decides, or why it matters: one or two sentences' },
       words: { type: 'string', description: 'The exact words to highlight on arrival; defaults to query' },
@@ -48,6 +49,8 @@ export type ToolAction = 'add' | 'relabel' | 'remove' | 'share' | 'claim' | 'lis
 export type ToolInput = {
   query: string
   uuid: string
+  /** A reference (`bm:` or a bookmark link), resolved by the handler to the uuid it names. */
+  ref: string
   label: string | undefined
   action: ToolAction
   tierAsked: AnchorTier | undefined
@@ -85,7 +88,8 @@ export function parseToolInput(input: Record<string, unknown>): ToolInput {
   const why = typeof input.why === 'string' ? input.why.trim() : undefined
   const words = typeof input.words === 'string' && input.words.trim() ? input.words.trim() : undefined
   const meta = parseMeta(input.meta)
-  return { query, uuid, label, action, tierAsked, owner, why, words, temporary: input.temporary === true, tags: meta.tags, x: meta.x }
+  const ref = typeof input.ref === 'string' ? input.ref.trim() : ''
+  return { query, uuid, ref, label, action, tierAsked, owner, why, words, temporary: input.temporary === true, tags: meta.tags, x: meta.x }
 }
 
 /** The tier a new record gets: what was asked, else perma on Claude's list and bookmark on the person's. */

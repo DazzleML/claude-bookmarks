@@ -11,7 +11,7 @@ test('the tool stays in front with every action and both lists in its schema', (
 })
 
 test('a bare call reads as an add on Claude\'s list with nothing asked', () => {
-  assert.deepEqual(parseToolInput({}), { query: '', uuid: '', label: undefined, action: 'add', tierAsked: undefined, owner: 'claude', why: undefined, words: undefined, temporary: false, tags: undefined, x: undefined })
+  assert.deepEqual(parseToolInput({}), { query: '', uuid: '', ref: '', label: undefined, action: 'add', tierAsked: undefined, owner: 'claude', why: undefined, words: undefined, temporary: false, tags: undefined, x: undefined })
 })
 
 test('the one meta parameter: tags trimmed and kept as strings, x as an object of namespaces, anything else ignored', () => {
@@ -31,8 +31,8 @@ test('the one meta parameter: tags trimmed and kept as strings, x as an object o
 })
 
 test('fields are trimmed and typed; unknown actions, tiers and owners fall to the defaults', () => {
-  const p = parseToolInput({ query: '  the words ', uuid: ' abcd1234 ', label: '  a label ', why: ' because ', words: '  ', temporary: 'yes', tier: 'gold', owner: 'robot', action: 'explode' })
-  assert.deepEqual(p, { query: 'the words', uuid: 'abcd1234', label: 'a label', action: 'add', tierAsked: undefined, owner: 'claude', why: 'because', words: undefined, temporary: false, tags: undefined, x: undefined })
+  const p = parseToolInput({ query: '  the words ', uuid: ' abcd1234 ', ref: '  bm:8f0f9b27.1  ', label: '  a label ', why: ' because ', words: '  ', temporary: 'yes', tier: 'gold', owner: 'robot', action: 'explode' })
+  assert.deepEqual(p, { query: 'the words', uuid: 'abcd1234', ref: 'bm:8f0f9b27.1', label: 'a label', action: 'add', tierAsked: undefined, owner: 'claude', why: 'because', words: undefined, temporary: false, tags: undefined, x: undefined })
   const q = parseToolInput({ label: '   ', action: 'claim', tier: 'bookmark', owner: 'user', temporary: true, words: ' hi ' })
   assert.equal(q.label, undefined)
   assert.equal(q.action, 'claim')
