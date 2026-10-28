@@ -1,0 +1,5 @@
+{
+  "name": "bmprobe",
+  "version": "0.0.1",
+  "description": "Throwaway probe (claude-bookmarks unit 0): does a prompt.submit context reach the transcript, and which session.append doors do prompts take? Never installed; loaded only with --plugin-dir."
+}

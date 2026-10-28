@@ -1,0 +1,10 @@
+transcripts: 406; distinct session ids: 406; sid8 prefixes shared: 0
+lines: 1109072 = rows with a uuid + 385531 without + 1 unparsed
+distinct uuids summed per transcript: 720452; distinct across all: 625613; uuids in 2+ transcripts (forks/copies): 79371
+largest transcript by distinct uuids: 8f0f9b27 with 83887
+prefix  6 hex chars: prefixes shared within a transcript, summed: 572
+prefix  7 hex chars: prefixes shared within a transcript, summed: 25
+prefix  8 hex chars: prefixes shared within a transcript, summed: 1
+prefix 10 hex chars: prefixes shared within a transcript, summed: 0
+prefix 12 hex chars: prefixes shared within a transcript, summed: 0
+transcripts with any 8-char collision: 1; worst: fe8a1041 with 1 (of 26127 uuids)

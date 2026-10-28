@@ -307,6 +307,10 @@ A band `Input` holding the ring takes printable keys and Backspace, and drops th
 
 `$.ui.focus` from the plugin moves the ring, but the plugin's own `ui.focus` hook never sees that move; it sees the person's. So a plugin that tracks where its ring is records its own successful moves itself (`handlers/band.ts` `focusBand`). Before it did, the band thought its ring was still where the person last put it, and the first Up off the band's field moved the ring instead of stepping (2026-10-25, 2.1.310).
 
+### What a prompt hook can change, and where its context is kept — Rule
+
+A `prompt.submit` hook may rewrite the prompt's `text`: the row the transcript keeps holds the rewritten text, appended through `session.append`'s door `prompt` with its own uuid. A `context` entry the hook attaches is not part of that row: it is written to the transcript as a separate row (type `attachment`, `hook_additional_context`, door `hook-context`) with its own uuid, after the prompt's other attachment rows. Its `parentUuid` is the row just before it, not the prompt, so the prompt a context row belongs to is found by walking its parents back to the nearest typed user row. A local slash command (one that runs without the model, like `/bm-env`) raises no `prompt.submit` at all; its rows come through door `command`. Measured 2026-10-27 on 2.1.312 with a probe plugin under `claude -p` (`tests/one-offs/thinking/probe-submit-context/`).
+
 ### Testing the plugin with Claude Code's own test kit — Workaround
 
 `claude plugin test plugin` runs every `*.test.ts` under the plugin folder with `claude-code/testing`: the plugin is loaded by the engine's own host, a test mounts a component (`$.ui.mount` with `AbovePrompt`, `Pane`, ...), reads what it drew, types into an `Input`, presses a `Button`, runs a command (`$.command.run`), and passes `userConfig` values (`test(name, { options }, body)`). The plugin's kit tests live in `plugin/tests/`; the pure core's `node:test` suites live in `tests/core/`, because the kit refuses any import but the plugin's own files and `claude-code` (measured 2026-10-12, Claude Code 2.1.296: every `node:test` file failed to load).
