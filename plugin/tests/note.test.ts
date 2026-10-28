@@ -51,6 +51,61 @@ test('a note edited in Obsidian is read back before the rewrite: the label and t
   expect((out.relabelled as { tags: string[] }).tags).toEqual(['design/records'])
 })
 
+// The bm: short-reference design, unit 7: a note quotes a message with each reference it holds
+// expanded into its long link (the text as typed kept as the label), and says so in its front matter.
+const REC = 'cccccccc-0000-4000-8000-000000000001'
+function registerWithOne(): string {
+  return serializeRegister(addOrRelabel(emptyRegister(SID, 'bookmarks test', 1), { uuid: REC, owner: 'claude', label: 'the place', head: 'h', by: 'claude', source: 'tool' }, 2).register)
+}
+const rowSaying = (content: string) => JSON.stringify({ type: 'user', uuid: U, message: { role: 'user', content }, timestamp: '2026-10-17T00:00:00.000Z' })
+const LOOKUP = `bm:${SID.slice(0, 8)}.1~${REC.slice(0, 8)}`
+// The grep finds each message the transcript holds: the one bookmarked and the record's own. A
+// grep that misses falls back to the place reader, which waits for its pass by clock ticks the kit
+// never fires (handlers/places.ts settled), so a test whose transcript lacks a row hangs.
+const RECROW = JSON.stringify({ type: 'assistant', uuid: REC, message: { role: 'assistant', content: 'the place' }, timestamp: '2026-10-16T00:00:00.000Z' })
+const only = (row: string) => (argv: readonly string[]) =>
+  argv.some(a => a.includes(U)) ? { exitCode: 0, stdout: `1:0:${row}\n` }
+  : argv.some(a => a.includes(REC)) ? { exitCode: 0, stdout: `2:0:${RECROW}\n` }
+  : { exitCode: 1, stdout: '' }
+const ANCHOR = `/sessions/${SID}/cccccccc.md?u=${REC}`
+
+test('a note expands the references in the message it quotes, and says so in its front matter', async ($, on) => {
+  const row = rowSaying(`See [that place](${LOOKUP}) and ${LOOKUP} again.`)
+  const w = world(on, { session: SID, files: { [REGISTER]: registerWithOne(), [TRANSCRIPT]: '' }, process: only(row) })
+  const out = await call($ as never, { uuid: U, label: 'refs', owner: 'user' })
+  expect(typeof out.anchor).toBe('string')
+  const md = w.file(NOTE) ?? ''
+  expect(md).toContain('\nreferences: expanded\n')
+  expect(md).toContain(`[that place](file:///`)
+  expect(md).toContain(`[${LOOKUP}](file:///`)
+  expect(md.split(ANCHOR).length - 1).toBe(2)
+  // Every bm: left in the note is a link's label, never a bare reference.
+  expect(md.replace(/\[[^\]]*\]\([^)]*\)/g, '')).not.toContain('bm:')
+})
+
+test("a note says how many of its quote's references it could expand, and leaves the rest as written", async ($, on) => {
+  // A lookup into a conversation that is not here (an exact reference is first looked for in this
+  // transcript, since a uuid survives a fork, and its miss would reach the place reader's wait).
+  const row = rowSaying(`One ${LOOKUP}, one bm:99999999.4~abcdef12.`)
+  const w = world(on, { session: SID, files: { [REGISTER]: registerWithOne(), [TRANSCRIPT]: '' }, process: only(row) })
+  await call($ as never, { uuid: U, label: 'refs', owner: 'user' })
+  const md = w.file(NOTE) ?? ''
+  expect(md).toContain('\nreferences: expanded 1 of 2\n')
+  expect(md).toContain('one bm:99999999.4~abcdef12.')
+})
+
+test('a reference the transcript does not hold is left as written without waiting on the place reader', async ($, on) => {
+  // An exact reference is first looked for in this transcript; its miss must not reach the place
+  // reader, whose wait is the tool call's own time (here the kit's clock never fires it: a hang).
+  const row = rowSaying('Elsewhere: bm:99999999/12345678 is not here.')
+  const w = world(on, { session: SID, files: { [REGISTER]: registerWithOne(), [TRANSCRIPT]: '' }, process: only(row) })
+  const out = await call($ as never, { uuid: U, label: 'refs', owner: 'user' })
+  expect(typeof out.anchor).toBe('string')
+  const md = w.file(NOTE) ?? ''
+  expect(md).toContain('\nreferences: expanded 0 of 1\n')
+  expect(md).toContain('bm:99999999/12345678 is not here.')
+})
+
 test('a note from a build below the floor is regenerated, its edit not adopted', async ($, on) => {
   const w = world(on, { session: SID, files: { [REGISTER]: seeded(), [NOTE]: note('claude-bookmarks 0.5.8'), [TRANSCRIPT]: '' }, process: () => ({ exitCode: 0, stdout: `1:0:${ROW}\n` }) })
   await call($ as never, { action: 'relabel', uuid: U.slice(0, 8), owner: 'user', meta: { x: { claude: { seen: true } } } })

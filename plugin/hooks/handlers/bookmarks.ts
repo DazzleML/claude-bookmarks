@@ -725,7 +725,8 @@ async function writeExport(ports: BookmarksPorts, register: BookmarkRegister, re
   const minted = `${new Date(now).toISOString()} by ${main.by} (${main.source})`
   const header = await headerFields(ports)
   const writer = `${ports.pluginName} ${await ports.pluginVersion()}`
-  await ports.fsWrite(exportPath, exportMarkdown(main, messageText, { minted, records, notes: exportNotesOf(existing), writer, ...header }))
+  const quote = await expandNoteRefs(ports, root, messageText)
+  await ports.fsWrite(exportPath, exportMarkdown(main, quote.text, { minted, records, notes: exportNotesOf(existing), writer, ...header, ...(quote.references ? { references: quote.references } : {}) }))
   await settleBase()
   return exportPath
 }
@@ -950,7 +951,7 @@ const registerView = (reg: BookmarkRegister): RegisterView => ({
 })
 
 /** The resolver's ports over BookmarksPorts, for one use (a call, a draw): conversations listed and registers read once. */
-export async function refPortsOf(ports: BookmarksPorts): Promise<RefPorts> {
+export async function refPortsOf(ports: BookmarksPorts, opts: { quick?: boolean } = {}): Promise<RefPorts> {
   const current = (await ports.sessionId()).toLowerCase()
   const root = await ports.dataRoot()
   const config = await ports.configDir()
@@ -992,7 +993,7 @@ export async function refPortsOf(ports: BookmarksPorts): Promise<RefPorts> {
     rowsByPrefix: async (sid, p) => {
       if (sid === current) {
         if (bare(p).length < 8) return []
-        const found = await ports.resolveTarget({ uuid: p })
+        const found = await ports.resolveTarget({ uuid: p, ...(opts.quick ? { quick: true } : {}) })
         return found.kind === 'one' ? [{ uuid: found.row.uuid, text: found.row.text }] : found.kind === 'many' ? found.rows.map(r => ({ uuid: r.uuid, text: r.text })) : []
       }
       const known = ((await register(sid))?.records ?? []).filter(r => bare(r.uuid).startsWith(bare(p)))
@@ -1017,11 +1018,16 @@ export async function expandReplyRefs(ports: BookmarksPorts, text: string): Prom
   if (!/bm:[0-9a-f]/i.test(text)) return text
   const root = await ports.dataRoot()
   if (!root) return text
+  return expandRefs(text, refAnchorOf(ports, root))
+}
+
+/** A reference's `file:` anchor when it resolves to a place, else undefined; the resolver's ports read once per use. */
+function refAnchorOf(ports: BookmarksPorts, root: string, opts: { quick?: boolean } = {}): (raw: string) => Promise<string | undefined> {
   let refPorts: RefPorts | undefined
-  return expandRefs(text, async raw => {
+  return async raw => {
     const ref = parseRef(raw)
     if (!ref) return undefined
-    refPorts ??= await refPortsOf(ports)
+    refPorts ??= await refPortsOf(ports, opts)
     const r = await resolveRef(ref, refPorts)
     if (r.kind !== 'found') return undefined
     return anchorHref({
@@ -1031,7 +1037,28 @@ export async function expandReplyRefs(ports: BookmarksPorts, text: string): Prom
       ...(r.file !== undefined ? { file: r.file } : {}),
       ...(r.words ? { words: r.words } : {}),
     }, root)
+  }
+}
+
+/**
+ * A note's quote with each reference expanded into its long link, so the note reads without the
+ * plugin (the bm: design, unit 7), and the front-matter value that says so: `expanded`, or
+ * `expanded <k> of <n>` when some did not resolve (those stay as written). No value when the
+ * text holds no reference. Quick: a note is written inside the bookmark tool's call, so a
+ * reference is looked for among prompts and replies only, never through the place reader, whose
+ * wait (up to 6 s each) would spend the hook's 10 s.
+ */
+async function expandNoteRefs(ports: BookmarksPorts, root: string, text: string): Promise<{ text: string; references?: string }> {
+  const of = refTokens(text).length
+  if (of === 0) return { text }
+  const anchor = refAnchorOf(ports, root, { quick: true })
+  let found = 0
+  const expanded = await expandRefs(text, async raw => {
+    const href = await anchor(raw)
+    if (href) found++
+    return href
   })
+  return { text: expanded, references: found === of ? 'expanded' : `expanded ${found} of ${of}` }
 }
 
 /**

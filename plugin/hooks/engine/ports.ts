@@ -365,8 +365,11 @@ export type BookmarksPorts = {
   storeSet: (key: string, value: unknown) => Promise<unknown>
   storeDelete: (key: string) => Promise<unknown>
   storeKeys: () => Promise<readonly string[]>
-  /** `file` and `part`: a row that is not a prompt or a reply, found among the places (the search-pane-and-links design, 2026-10-26). */
-  resolveTarget: (want: { uuid?: string; fragment?: string; file?: string; part?: number }) => Promise<ResolveOutcome>
+  /**
+   * `file` and `part`: a row that is not a prompt or a reply, found among the places (the search-pane-and-links design, 2026-10-26).
+   * `quick`: prompts and replies only, never the place reader, whose wait for its pass is the calling hook's own time (a note's references, the bm: design, unit 7).
+   */
+  resolveTarget: (want: { uuid?: string; fragment?: string; file?: string; part?: number; quick?: boolean }) => Promise<ResolveOutcome>
   transcriptPath: () => Promise<string | undefined>
   allRows: () => Promise<readonly { uuid: string }[]>
   /** `quiet`: a first try; a "nothing drawn" refusal returns with no toast, for the caller to try another id (handlers/bookmarks.ts jumpToRecord). */

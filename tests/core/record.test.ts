@@ -120,3 +120,11 @@ test('the export writes only names from FRONT_MATTER_PROPERTIES, and now n, tier
   const bare = exportMarkdown({ ...addOrRelabel(emptyRegister(SESSION, 'w', T0), mint, T0).record, why: '' }, 'text', { title: '' })
   assert.ok(!bare.includes('\ntitle:') && !bare.includes('\naliases:') && !bare.includes('\nbm-writer:') && !bare.includes('\nwhy:'), bare)
 })
+
+test('a note whose quote had its bm: references expanded says so in its front matter (the bm: design, unit 7)', () => {
+  const rec = addOrRelabel(emptyRegister(SESSION, 'w', T0), mint, T0).record
+  const fm = parseFrontMatter(exportMarkdown(rec, 'see [that](file:///x.md?u=1)', { references: 'expanded' }))
+  assert.equal(fm.references, 'expanded')
+  assert.ok((FRONT_MATTER_PROPERTIES as readonly string[]).includes('references'))
+  assert.ok(!exportMarkdown(rec, 'no reference here').includes('\nreferences:'), 'no property when nothing was expanded')
+})

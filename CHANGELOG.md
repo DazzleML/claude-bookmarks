@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.26] - 2026-10-28
+
+### Added
+
+- **A bookmark's note spells out the short references in the message it quotes.** Each `bm:...` reference becomes a link to the full address of the place it names, keeping the text as it was written, so the note reads and clicks without the plugin. The note's front matter says so (`references: expanded`), or how many could be expanded (`expanded 1 of 2`) when some could not be found here; those stay as written. Finding them never holds up the bookmark being made.
+
 ## [0.7.25] - 2026-10-28
 
 ### Added
@@ -1523,7 +1529,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.25...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.26...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

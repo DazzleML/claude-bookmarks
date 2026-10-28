@@ -380,6 +380,8 @@ export const RESERVED = { register: REGISTER_KEYS, record: RECORD_KEYS } as cons
 export const FRONT_MATTER_PROPERTIES = [
   'kind', 'version', 'bm-writer', 'session', 'uuid', 'n', 'owners', 'tier', 'tags', 'aliases', 'title', 'project',
   'role', 'timestamp', 'transcript', 'line', 'bytes', 'words', 'label', 'why', 'by', 'source', 'shared-from', 'temporary', 'created',
+  // The bm: short-reference design, unit 7: `expanded`, or `expanded <k> of <n>`, when the quote held references.
+  'references',
 ] as const
 
 export function serializeRegister(reg: Register): string {
@@ -532,7 +534,7 @@ export function exportNotesOf(existing: string | undefined): string {
 export function exportMarkdown(
   record: AnchorRecord,
   messageText: string,
-  opts?: { minted?: string; owners?: AnchorOwner[]; records?: readonly AnchorRecord[]; notes?: string; writer?: string; title?: string; project?: string },
+  opts?: { minted?: string; owners?: AnchorOwner[]; records?: readonly AnchorRecord[]; notes?: string; writer?: string; title?: string; project?: string; references?: string },
 ): string {
   const records = opts?.records && opts.records.length > 0 ? opts.records : [record]
   const owners = opts?.records ? noteOwners(record, records) : opts?.owners && opts.owners.length > 0 ? opts.owners : [ownerOf(record)]
@@ -564,6 +566,7 @@ export function exportMarkdown(
     ['shared-from', record.sharedFrom],
     ['temporary', record.temporary ? true : undefined],
     ['created', new Date(record.createdAt).toISOString()],
+    ['references', opts?.references],
   ]
   const lines = ['---']
   for (const [k, v] of fm) {

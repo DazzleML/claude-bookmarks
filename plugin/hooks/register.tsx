@@ -708,7 +708,7 @@ async function resolvePlaced($: EngineInterface, want: { uuid?: string; fragment
   return { kind: 'none', via: 'places', ms, reason: r.reason === 'no row of the conversation holds it' ? otherwise : r.reason }
 }
 
-async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment?: string; file?: string; part?: number }): Promise<ResolveOutcome> {
+async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment?: string; file?: string; part?: number; quick?: boolean }): Promise<ResolveOutcome> {
   // A link that names a row's file or block is a row the loader does not hold: the places.
   if (want.file !== undefined || want.part !== undefined) return resolvePlaced($, want, 'the row is not in this conversation')
   // The loader's rows first (in memory, every message the pass has read); the grep below
@@ -718,7 +718,7 @@ async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment
   if (loaded?.kind === 'many') return { kind: 'many', rows: loaded.rows, earliest: loaded.earliest, via: 'loader', ms: 0 }
   // No prompt or reply holds it: any other row of the conversation may (a tool call, its
   // output, an agent's message), found by the place reader (the search-pane-and-links design, 2026-10-26).
-  if (loaded?.kind === 'none') return resolvePlaced($, want, 'no message holds it')
+  if (loaded?.kind === 'none') return want.quick ? { kind: 'none', reason: 'no message holds it' } : resolvePlaced($, want, 'no message holds it')
   const path = await transcriptPath($)
   if (!path) return { kind: 'none', reason: 'transcript not found' }
   const pattern = targetPattern(want)
@@ -728,6 +728,7 @@ async function resolveTarget($: EngineInterface, want: { uuid?: string; fragment
   const rows = rowsFromGrep(g.stdout)
   const r: Resolution = resolveRows(rows, want)
   if (r.kind === 'none') {
+    if (want.quick) return { kind: 'none', via: g.via, ms: g.ms, reason: 'no match' }
     const placed = await resolvePlaced($, want, g.isStdoutTruncated ? 'no match (output was cut at 4 MiB)' : 'no match')
     return placed.kind === 'none' ? { ...placed, via: g.via, ms: g.ms } : placed
   }
