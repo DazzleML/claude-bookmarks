@@ -29,6 +29,28 @@ export function bindingContext(bindings: Binding[]): string | undefined {
   ].join('\n')
 }
 
+/** A transcript row as the binding reader needs it. */
+export type BindingRow = { uuid: string; parentUuid?: string | null; type: string; isMeta?: boolean; attachment?: string; text: string }
+
+/**
+ * The bindings stored for a prompt (unit 5b): every hook-context row (`hook_additional_context`)
+ * whose parents lead back to this prompt as the nearest typed user row -- its parentUuid is the row
+ * before it, not the prompt (unit 0's probe) -- read with parseBindings. No plugin store: the
+ * engine's own row is the binding.
+ */
+export function bindingsForPrompt(rows: BindingRow[], promptUuid: string): Binding[] {
+  const byId = new Map(rows.map(r => [r.uuid, r]))
+  const promptOf = (r: BindingRow): string | undefined => {
+    const seen = new Set<string>()
+    for (let p = r.parentUuid ? byId.get(r.parentUuid) : undefined; p && !seen.has(p.uuid); p = p.parentUuid ? byId.get(p.parentUuid) : undefined) {
+      seen.add(p.uuid)
+      if (p.type === 'user' && !p.isMeta) return p.uuid
+    }
+    return undefined
+  }
+  return rows.filter(r => r.attachment === 'hook_additional_context' && promptOf(r) === promptUuid).flatMap(r => parseBindings(r.text))
+}
+
 /** The bindings a text holds (a context row's text), in order; lines of any other shape are skipped. */
 export function parseBindings(text: string): Binding[] {
   const out: Binding[] = []

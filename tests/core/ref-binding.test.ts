@@ -2,7 +2,24 @@
 // The binding lines a prompt's references get (core/bookmarks/ref-binding.ts; the bm: design, 5a/5b).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bindingContext, bindingLine, parseBindings } from '../../plugin/hooks/core/bookmarks/ref-binding.ts'
+import { bindingContext, bindingLine, bindingsForPrompt, parseBindings } from '../../plugin/hooks/core/bookmarks/ref-binding.ts'
+
+// Unit 5b: the shape unit 0 measured -- the prompt, its attachment rows, then the context row whose
+// parent is the last attachment, not the prompt.
+test('a prompt\'s bindings are read back from its context row, found by walking parents to the nearest typed prompt', () => {
+  const ctx = bindingContext([{ asTyped: 'bm:8f0f9b27.1~68b352d2', exact: 'bm:8f0f9b27/68b352d2', record: 1 }])!
+  const rows = [
+    { uuid: 'p1', parentUuid: null, type: 'user', text: 'first prompt' },
+    { uuid: 'a1', parentUuid: 'p1', type: 'attachment', attachment: 'environment', text: 'env' },
+    { uuid: 'c1', parentUuid: 'a1', type: 'attachment', attachment: 'hook_additional_context', text: ctx },
+    { uuid: 'r1', parentUuid: 'c1', type: 'assistant', text: 'reply' },
+    { uuid: 'p2', parentUuid: 'r1', type: 'user', text: 'second prompt, no references' },
+    { uuid: 'm2', parentUuid: 'p2', type: 'user', isMeta: true, text: 'a reminder' },
+    { uuid: 'c2', parentUuid: 'm2', type: 'attachment', attachment: 'hook_additional_context', text: 'unrelated context' },
+  ]
+  assert.deepEqual(bindingsForPrompt(rows, 'p1'), [{ asTyped: 'bm:8f0f9b27.1~68b352d2', exact: 'bm:8f0f9b27/68b352d2', record: 1 }])
+  assert.deepEqual(bindingsForPrompt(rows, 'p2'), [], 'a meta row is skipped on the walk; a context row without binding lines gives none')
+})
 
 test('a binding line names the exact place, with the record for a lookup, or says why it is unresolved', () => {
   assert.equal(bindingLine({ asTyped: 'bm:8f0f9b27.122~68b352d2', exact: 'bm:8f0f9b27/68b352d2', record: 122 }), 'bm-binding v1: bm:8f0f9b27.122~68b352d2 = bm:8f0f9b27/68b352d2 (#122)')
