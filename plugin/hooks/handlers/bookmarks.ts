@@ -31,7 +31,9 @@ import { answer as toolAnswer, brief as briefRow, describe as describeRecord, li
 import type { BookmarksPorts } from '../engine/ports.ts'
 import { parseRef } from '../core/bookmarks/ref.ts'
 import { cachedRegisters, resolveRef, type RefPorts, type RegisterView, type Resolution } from '../core/bookmarks/ref-resolve.ts'
-import { expandRefs } from '../core/bookmarks/ref-expand.ts'
+import { expandRefs, refTokens } from '../core/bookmarks/ref-expand.ts'
+import { bindingContext, type Binding } from '../core/bookmarks/ref-binding.ts'
+import { exactRef } from '../core/bookmarks/ref.ts'
 
 // --- Bookmark anchors (anchors DWP 2026-10-09) -----------------------------------------
 // The URL format, its parser and the link finder live in hooks/core/bookmarks/anchor.ts (pure, with
@@ -1030,6 +1032,28 @@ export async function expandReplyRefs(ports: BookmarksPorts, text: string): Prom
       ...(r.words ? { words: r.words } : {}),
     }, root)
   })
+}
+
+/**
+ * The context entry a prompt's references get (the bm: design, unit 5a): one `bm-binding v1:` line
+ * per `bm:` reference or pasted bookmark link outside code, naming the exact place it resolved to,
+ * or why it did not. The prompt's text is never changed; undefined when the text holds no reference.
+ */
+export async function promptBindings(ports: BookmarksPorts, text: string): Promise<string | undefined> {
+  const raws = [...refTokens(text).map(t => t.raw), ...markdownLinks(text).filter(l => l.kind === 'anchor').map(l => l.href)]
+  if (raws.length === 0) return undefined
+  const refPorts = await refPortsOf(ports)
+  const bindings: Binding[] = []
+  for (const raw of [...new Set(raws)]) {
+    const ref = parseRef(raw)
+    if (!ref) continue
+    const r = await resolveRef(ref, refPorts)
+    const asTyped = raw.startsWith('bm:') ? raw : `<${raw.split('?')[0]!.split('/').pop()}>`
+    bindings.push(r.kind === 'found'
+      ? { asTyped, exact: exactRef({ sessionId: r.session, uuid: r.uuid, ...(r.part !== undefined ? { part: r.part } : {}), ...(r.file !== undefined ? { file: r.file } : {}) }), ...(r.record !== undefined ? { record: r.record } : {}) }
+      : { asTyped, unresolved: r.kind })
+  }
+  return bindingContext(bindings)
 }
 
 /** One sentence for an outcome that is not a single place here. */

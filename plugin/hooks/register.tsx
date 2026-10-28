@@ -1406,12 +1406,15 @@ export const register: Register = (on, options) => {
     return ended
   })
 
-  // The next prompt ends the temporary highlight.
+  // The next prompt ends the temporary highlight. A short reference typed in it is bound for
+  // Claude as context, the text left as typed (the bm: short-reference design, unit 5a); the
+  // context row is kept in the transcript, so the binding is durable.
   on('prompt.submit', async ($, e, next) => {
     await sameConversation($)
     await marks_.clearShown(marksPorts($))
     await endBandMode($)
-    return next(e)
+    const bound = await bookmarks_.promptBindings(bookmarksPorts($), e.text ?? '').catch(() => undefined)
+    return next(bound ? { ...e, context: [...(e.context ?? []), bound] } : e)
   })
 
   // Leaving the band's key mode without picking anything (djdarcy, 2026-10-05: "it
