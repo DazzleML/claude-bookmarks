@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.27] - 2026-10-28
+
+### Added
+
+- **Short references are documented.** `docs/usage.md` has a "Short references" section: the two forms (`bm:<session>.<n>~<check>`, a bookmark by its number; `bm:<session>/<message>`, any message), where each works (replies, prompts, the bookmark tool, lists, notes, markers in your files), how one is found, and why one may be marked unverified. The README says what a reference reads in other conversations: their bookmark files, never their transcripts. A hand-run checklist covers the whole arc (`tests/checklists/v0.7.27__Feature__short-references-bm.md`).
+
 ## [0.7.26] - 2026-10-28
 
 ### Added
@@ -1529,7 +1535,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.26...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.27...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

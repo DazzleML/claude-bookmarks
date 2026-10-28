@@ -372,7 +372,31 @@ The register belongs to one conversation, and its name is that conversation's se
 
 The file carries a `version` (how many format migrations it has been through) and a `format` (the oldest plugin that can still handle its data). A plugin that finds a file whose `format` is newer than what it knows reads it in full and refuses to write it (a toast says so once when the conversation loads, and any bookmark action that would save answers "not saved"); update the plugin to write it again. A plugin that finds an older `version` brings the file up to date when the conversation starts, keeping a copy of the original under `backups/` first. The two numbers are explained under [What to back up, and what a reinstall does](#what-to-back-up-and-what-a-reinstall-does).
 
-Every record is addressed in two ways. The full address is the link above, which names the message's uuid and never changes. The short reference, for citations once records carry a number `n` (coming in 0.5.x), is **`bm:<sid8>.<n>`**: the first eight characters of the conversation's session id, a dot, the record's number in that conversation. Inside its own conversation `bm:<n>` is enough. A short reference is resolved by the register file whose name starts with `<sid8>`; if no file by that name exists (the file was moved or renamed), by reading every register's header for a matching `sessionId`; and if that finds two, the reference is ambiguous and the full uuid decides. Numbers are never reused within a conversation, so `bm:13` means the same record for the life of the file. Until the number lands, the plugin writes only the full link.
+Every record is addressed in two ways: the full address (the link above, which names the message's uuid and never changes), and a short reference, below.
+
+### Short references
+
+A short reference names a place in a few characters, for writing where a full link is too long: a prompt, a commit message, a note of your own, a list. It comes in two forms:
+
+| Form | Looks like | Names |
+|------|------------|-------|
+| Lookup | `bm:8f0f9b27.12~e92204f6` | Record number 12 of the conversation whose session id starts `8f0f9b27`. The part after `~` is a check: the first 8 characters of that record's message id. |
+| Exact | `bm:8f0f9b27/e92204f6` | The message whose id starts `e92204f6`, in that conversation. It needs no bookmark: any message can be named this way. |
+
+Either can carry the words to highlight, `~w:the%20words`, and the exact form can name one block of a message, `.p2`, or a row that is not a prompt or a reply, `@tool-result:...`. The plugin writes 8 characters of each id; when 8 would name two conversations or two messages, the reference says so and more characters settle it. A number is never reused within a conversation, so a lookup keeps meaning the same record; the check makes sure of it. If the conversation's bookmark file was lost and started again from number 1, the check no longer matches, and the reference says so instead of pointing at a different record.
+
+**Where they work:**
+
+- **In Claude's replies.** A `[label](bm:...)` link, or a bare `bm:...` outside code, is drawn as a clickable link to the place. One that does not resolve stays as text. The transcript keeps the short text.
+- **In your prompts.** Your prompt is sent exactly as you typed it. Claude also receives a short note naming the exact place each `bm:...` (or pasted bookmark link) points to, or saying it could not be found, so a reference is never guessed. The note is kept in the conversation with the prompt.
+- **In Claude's `bookmark` tool.** Every answer carries the record's `lookup`, its `exact` form and a `cite` ready to write. The tool also accepts a `ref` in place of a fragment; a place already bookmarked is answered with its record.
+- **In lists.** A `bm:...` given to the `lists` tool as a link is stored as the place it names. One that cannot be found here is kept as typed: pressing the item tries it again, goes there if it resolves now, and copies it otherwise. A short reference is never stored as a file path.
+- **In notes.** A bookmark's note quotes its message with each short reference turned into its full link, and says so in its front matter: `references: expanded`, or `expanded 1 of 2` when some could not be found.
+- **In your files.** A `[*](bm:...?list=<list>&id=<entry>)` marker works in either form (see [Links in files](#links-in-files)).
+
+**How one is found:** first in this conversation, since a message keeps its id when a conversation is forked; then in the conversation the reference names, through that conversation's bookmark file only. The plugin never reads another conversation's transcript. So a reference into another conversation that only its transcript could confirm is resolved but marked *unverified*. A reference to a record that was removed says so. A reference to a conversation that is not on this machine says that.
+
+**In commit messages and notes of your own,** write the bare form: `bm:8f0f9b27.12~e92204f6` is readable text without the plugin, and pasting it back into Claude Code resolves it. Claude still writes the full link in its replies for now; short citations in replies are being tried in practice first.
 
 ## Lists
 

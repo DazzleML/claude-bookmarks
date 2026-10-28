@@ -273,6 +273,8 @@ claude-bookmarks/
 
 5. **The prompt list is back-filled once.** The first time the plugin sees a conversation, it reads the user prompts out of the session's transcript file with one shell command (`Select-String` on Windows, `grep` elsewhere), then keeps the list current as you type. Where `sh` is available it also reads the whole conversation once, in the background and in pieces (`tail | head`), keeps an index of where each message sits so later loads resume instead of re-reading, and from then on answers "which message is this?" from memory; `/bm-env` shows how far that read has got.
 
+6. **A short reference reads only bookmark files from other conversations.** A `bm:` reference to another conversation is resolved through that conversation's bookmark file under `~/claude/bookmarks/`, never through its transcript; when only the transcript could confirm the message, the reference is resolved but marked unverified. When you type a reference in a prompt, your text is sent as you typed it, and Claude also receives a short note naming the exact place each reference points to.
+
 ## Contributing
 
 Contributions welcome! Please open an issue or submit a pull request.
