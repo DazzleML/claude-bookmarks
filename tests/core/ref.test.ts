@@ -4,7 +4,7 @@
 // parameters are read and written, and the `bm:` grammar parses and formats both ways.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { formatBm, formatFile, parseRef } from '../../plugin/hooks/core/bookmarks/ref.ts'
+import { checkMatches, exactRef, formatBm, formatFile, lookupRef, parseRef, shortestUniquePrefix } from '../../plugin/hooks/core/bookmarks/ref.ts'
 
 const SID = '8f0f9b27-33fc-4054-806a-22a6d569dfb5'
 const UUID = 'e92204f6-1a2b-4c3d-8e9f-0123456789ab'
@@ -37,7 +37,46 @@ test('the bm: grammar: a row, a block, a file, words, a marker; a record; a bare
   assert.deepEqual(parseRef('bm:8f0f9b27.113'), { spelling: 'bm', session: '8f0f9b27', record: 113 })
   assert.deepEqual(parseRef('bm:list/whats-left#wl-landing'), { spelling: 'bm', list: 'whats-left', entry: 'wl-landing' })
   assert.deepEqual(parseRef('<bm:8f0f9b27/e92204f6>'), { spelling: 'bm', session: '8f0f9b27', uuid: 'e92204f6' }, 'an autolink')
-  assert.equal(parseRef('bm:8f0f9b27/e92204f6~c10-20')?.words, undefined, 'a range segment is ignored until it is built')
+  assert.deepEqual(parseRef('bm:8f0f9b27/e92204f6~c:10-20'), { spelling: 'bm', session: '8f0f9b27', uuid: 'e92204f6' }, 'a range segment (~c:) is reserved and ignored until it is built')
+})
+
+// The bm: design's unit 1b (2026-10-27__14-00-02, the consultation's F3/F4/F7 and the gate's 8-hex check).
+const R1 = '68b352d2-c1aa-4bbb-8ccc-000000000001'
+const R2 = '68b352d2-c9ff-4ddd-8eee-000000000002'
+
+test('the lookup carries an 8-hex check of its record, and reads with or without one', () => {
+  assert.equal(lookupRef({ sessionId: SID, n: 122, uuid: R1 }), 'bm:8f0f9b27.122~68b352d2')
+  assert.deepEqual(parseRef('bm:8f0f9b27.122~68b352d2'), { spelling: 'bm', session: '8f0f9b27', record: 122, check: '68b352d2' })
+  assert.deepEqual(parseRef('bm:8f0f9b27.122~68B3'), { spelling: 'bm', session: '8f0f9b27', record: 122, check: '68b3' }, 'a typed check of any length, lower-cased')
+  assert.deepEqual(parseRef('bm:8f0f9b27.122~w:the%20words~68b352d2'), { spelling: 'bm', session: '8f0f9b27', record: 122, check: '68b352d2', words: 'the words' })
+  assert.equal(formatBm(parseRef('bm:8f0f9b27.122~68b352d2')!), 'bm:8f0f9b27.122~68b352d2', 'round trip')
+})
+
+test('the tilde rule: tagged segments, at most one bare hex check, and only on a lookup', () => {
+  assert.equal(parseRef('bm:8f0f9b27.122~68b352d2~1234'), undefined, 'two bare segments')
+  assert.equal(parseRef('bm:8f0f9b27.122~zz'), undefined, 'a bare segment that is not hex')
+  assert.equal(parseRef('bm:8f0f9b27/e92204f6~68b352d2'), undefined, 'a check on the exact form, which names its row already')
+  assert.equal(parseRef('bm:8f0f9b27/e92204f6~c10-20'), undefined, 'an untagged range')
+  assert.deepEqual(parseRef('bm:8f0f9b27.122~x:later~68b352d2'), { spelling: 'bm', session: '8f0f9b27', record: 122, check: '68b352d2' }, 'an unknown tag is ignored, kept for later builds')
+})
+
+test('the check compares as a prefix of the record\'s uuid, and survives a drawn id swapped for the real one', () => {
+  assert.equal(checkMatches('68b352d2', R1), true)
+  assert.equal(checkMatches('68b3', R1), true)
+  assert.equal(checkMatches('68b352d2c1', R1), true, 'a check past the dash compares without dashes')
+  assert.equal(checkMatches('68b352d3', R1), false)
+  assert.equal(checkMatches('68b352d2', '68b352d2-c1aa-4bbb-8ccc-000000000000'), true, 'a drawn id (fifth group zeros) shares the check')
+})
+
+test('prefixes lengthen only when another id shares them, as prefixes of the dashed id, never ending on a dash', () => {
+  assert.equal(shortestUniquePrefix(R1, [R1, '12345678-0000-4000-8000-000000000000']), '68b352d2', 'unique at 8')
+  assert.equal(shortestUniquePrefix(R1, [R1, R2]), '68b352d2-c1', 'shares 8 and 10 characters: the first unique prefix past the dash')
+  assert.equal(shortestUniquePrefix('68b352d2-a000-4000-8000-000000000000', [R1]), '68b352d2-a', 'one more than the dash')
+  assert.equal(shortestUniquePrefix(R1, ['68b352d2']), '68b352d2-c', 'an 8-character id among the others: never stop on the dash')
+  const exact = exactRef({ sessionId: SID, uuid: R1, part: 0 }, { rowChars: shortestUniquePrefix(R1, [R1, R2]).length })
+  assert.equal(exact, 'bm:8f0f9b27/68b352d2-c1.p0')
+  assert.deepEqual(parseRef(exact), { spelling: 'bm', session: '8f0f9b27', uuid: '68b352d2-c1', part: 0 })
+  assert.equal(lookupRef({ sessionId: SID, n: 3, uuid: R1 }, { sessionChars: 10 }), 'bm:8f0f9b27-3.3~68b352d2', 'a lengthened session prefix')
 })
 
 test('anything else is undefined, never a throw', () => {

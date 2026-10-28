@@ -25,6 +25,12 @@ export type Ref = {
   uuid?: string
   /** A record of the session, by its number (`bm:<sid8>.<n>`). */
   record?: number
+  /**
+   * A lookup's check: the first hex characters of the record's uuid (`bm:<sid8>.<n>~<check>`), so a
+   * register re-created after a loss, which numbers from 1 again, reports a mismatch instead of
+   * resolving to another record. Written as 8; read at any length as a prefix (`checkMatches`).
+   */
+  check?: string
   /** The row's file and block, for a row that is not a prompt or a reply. */
   file?: string
   part?: number
@@ -88,8 +94,30 @@ function parseFile(href: string): Ref | undefined {
 }
 
 const BM_LIST = /^bm:list\/([^#\s]+)#(\S+)$/i
-const BM_RECORD = /^bm:([0-9a-f][0-9a-f-]{7,35})\.(\d+)$/i
+const BM_RECORD = /^bm:([0-9a-f][0-9a-f-]{7,35})\.(\d+)((?:~[^~?\s]+)*)(?:\?(\S*))?$/i
 const BM_ROW = /^bm:([0-9a-f][0-9a-f-]{7,35})\/([0-9a-f][0-9a-f-]{7,35})(?:\.p(\d+))?(?:@([^~?\s]+))?((?:~[^~?\s]+)*)(?:\?(\S*))?$/i
+
+/**
+ * The tilde rule (the bm: short-reference design, unit 1b): every `~` segment is `<tag>:<value>`
+ * -- `w:` the words, `c:` a character range (reserved, ignored until built), any other tag ignored
+ * so a later build can add one -- except at most one bare hex segment, a lookup's check. Undefined
+ * when there are two bare segments or a bare one that is not hex.
+ */
+function tildeSegments(tildes: string): { words?: string; check?: string } | undefined {
+  let words: string | undefined
+  let check: string | undefined
+  for (const seg of tildes.split('~')) {
+    if (!seg) continue
+    const tagged = /^([a-z][a-z0-9]*):(.*)$/i.exec(seg)
+    if (tagged) {
+      if (tagged[1]!.toLowerCase() === 'w') words = decode(tagged[2]!).trim() || undefined
+      continue
+    }
+    if (check !== undefined || !/^[0-9a-f]{1,32}$/i.test(seg)) return undefined
+    check = seg.toLowerCase()
+  }
+  return { ...(words ? { words } : {}), ...(check ? { check } : {}) }
+}
 
 function parseBm(text: string): Ref | undefined {
   const l = BM_LIST.exec(text)
@@ -99,14 +127,18 @@ function parseBm(text: string): Ref | undefined {
     return ID.test(list) && ID.test(entry) ? { spelling: 'bm', list, entry } : undefined
   }
   const r = BM_RECORD.exec(text)
-  if (r) return HEX_PREFIX.test(r[1]!) ? { spelling: 'bm', session: r[1]!.toLowerCase(), record: Number(r[2]) } : undefined
+  if (r) {
+    const segs = tildeSegments(r[3] ?? '')
+    if (!segs || !HEX_PREFIX.test(r[1]!)) return undefined
+    return { spelling: 'bm', session: r[1]!.toLowerCase(), record: Number(r[2]), ...segs, ...markerParams(r[4] ?? '') }
+  }
   const m = BM_ROW.exec(text)
   if (!m) return undefined
   const [, session, row, part, file, tildes, query] = m
   if (!HEX_PREFIX.test(session!) || !HEX_PREFIX.test(row!)) return undefined
-  let words: string | undefined
-  // `~w:<words>`; other `~` segments (a character range, `~c<start>-<end>`, later) are ignored.
-  for (const seg of (tildes ?? '').split('~')) if (seg.startsWith('w:')) words = decode(seg.slice(2)).trim() || undefined
+  // The exact form names its row; a check belongs only to a lookup.
+  const segs = tildeSegments(tildes ?? '')
+  if (!segs || segs.check !== undefined) return undefined
   const f = file !== undefined ? decode(file) : undefined
   return {
     spelling: 'bm',
@@ -114,7 +146,7 @@ function parseBm(text: string): Ref | undefined {
     uuid: row!.toLowerCase(),
     ...(f !== undefined && /^(agent|tool-result|continued):/.test(f) ? { file: f } : {}),
     ...(part !== undefined ? { part: Number(part) } : {}),
-    ...(words ? { words } : {}),
+    ...(segs.words ? { words: segs.words } : {}),
     ...markerParams(query ?? ''),
   }
 }
@@ -131,18 +163,62 @@ export function parseRef(text: string): Ref | undefined {
   return undefined
 }
 
-/** The `bm:` spelling: the session's 8-character prefix, the row (its uuid8, or the full uuid when asked). */
-export function formatBm(ref: Ref, opts: { fullRow?: boolean } = {}): string | undefined {
+/**
+ * The `bm:` spelling. The session and the row are prefixes of their dashed ids: 8 characters
+ * unless `sessionChars` / `rowChars` say more (`shortestUniquePrefix`), or the full row when asked.
+ * A lookup (`record`) carries its words, then its check: `bm:<sid>.<n>[~w:<words>][~<check>]`.
+ */
+export function formatBm(ref: Ref, opts: { fullRow?: boolean; sessionChars?: number; rowChars?: number } = {}): string | undefined {
   const marker = ref.list && ref.entry ? `?list=${encodeURIComponent(ref.list)}&id=${encodeURIComponent(ref.entry)}` : ''
   if (!ref.uuid && ref.record === undefined) return ref.list && ref.entry ? `bm:list/${encodeURIComponent(ref.list)}#${encodeURIComponent(ref.entry)}` : undefined
   if (!ref.session) return undefined
-  const sid8 = ref.session.slice(0, 8).toLowerCase()
-  if (!ref.uuid) return `bm:${sid8}.${ref.record}`
-  const row = opts.fullRow ? ref.uuid.toLowerCase() : uuid8(ref.uuid)
+  const sid = ref.session.toLowerCase().slice(0, Math.max(8, opts.sessionChars ?? 8))
+  const words = ref.words ? `~w:${encodePart(ref.words)}` : ''
+  if (!ref.uuid) return `bm:${sid}.${ref.record}${words}${ref.check ? `~${ref.check.toLowerCase()}` : ''}${marker}`
+  const row = opts.fullRow ? ref.uuid.toLowerCase() : opts.rowChars !== undefined ? ref.uuid.toLowerCase().slice(0, Math.max(8, opts.rowChars)) : uuid8(ref.uuid)
   const part = ref.part !== undefined ? `.p${ref.part}` : ''
   const file = ref.file !== undefined ? `@${encodePart(ref.file)}` : ''
-  const words = ref.words ? `~w:${encodePart(ref.words)}` : ''
-  return `bm:${sid8}/${row}${part}${file}${words}${marker}`
+  return `bm:${sid}/${row}${part}${file}${words}${marker}`
+}
+
+/** True when a lookup's check names this uuid: a prefix of it, compared without dashes. */
+export function checkMatches(check: string, uuid: string): boolean {
+  const c = check.replace(/-/g, '').toLowerCase()
+  return c.length > 0 && uuid.replace(/-/g, '').toLowerCase().startsWith(c)
+}
+
+/**
+ * The shortest prefix of `id` (lower-case, dashes kept) of at least `min` characters that no other
+ * id among `others` shares, never ending on a dash; the whole id when none is shorter. The rule a
+ * reference's session and row prefixes are lengthened by at mint (the bm: design's D2, unit 1b).
+ */
+export function shortestUniquePrefix(id: string, others: Iterable<string>, min = 8): string {
+  const me = id.toLowerCase()
+  const rest = [...others].map(o => o.toLowerCase()).filter(o => o !== me)
+  for (let n = min; n < me.length; n++) {
+    if (me[n - 1] === '-') continue
+    const p = me.slice(0, n)
+    if (!rest.some(o => o.startsWith(p))) return p
+  }
+  return me
+}
+
+/** The lookup of a record: `bm:<sid>.<n>~<8 hex of its uuid>`, with its words when given. */
+export function lookupRef(r: { sessionId: string; n: number; uuid: string; words?: string }, opts: { sessionChars?: number } = {}): string {
+  const check = r.uuid.replace(/-/g, '').toLowerCase().slice(0, 8)
+  return formatBm({ spelling: 'bm', session: r.sessionId, record: r.n, check, ...(r.words ? { words: r.words } : {}) }, opts)!
+}
+
+/** The exact piece: `bm:<sid>/<row>[.p<part>][@<file>][~w:<words>]`, the row at `rowChars` when lengthened. */
+export function exactRef(r: { sessionId: string; uuid: string; part?: number; file?: string; words?: string }, opts: { sessionChars?: number; rowChars?: number } = {}): string {
+  return formatBm({
+    spelling: 'bm',
+    session: r.sessionId,
+    uuid: r.uuid,
+    ...(r.part !== undefined ? { part: r.part } : {}),
+    ...(r.file !== undefined ? { file: r.file } : {}),
+    ...(r.words ? { words: r.words } : {}),
+  }, opts)!
 }
 
 /**

@@ -78,7 +78,11 @@ export type AnchorRecord = {
   tags?: string[]
   /** Named axes with a named position each (`{ attention: 'read' }`); the read-state layer's shape (unit 8), never a rank. */
   axes?: Record<string, string>
-  /** Relations to other records: `{ kind, to }`, `to` a canonical reference (`bm:<sid8>.<n>`) across conversations. */
+  /**
+   * Relations to other records: `{ kind, to }`, `to` a reference across conversations -- a lookup
+   * with its check (`bm:<sid8>.<n>~<check>`) or an exact form (`bm:<sid8>/<uuid8>...`), never a
+   * bare `bm:<sid8>.<n>`, which a re-created register could resolve to another record (ref.ts).
+   */
   rel?: { kind: string; to: string }[]
   /** Open namespaces for what an owner wants to keep on a record: `x.claude`, `x.user`, `x['agent:<name>']`, `x['plugin:<name>']`. */
   x?: Record<string, Record<string, unknown>>
