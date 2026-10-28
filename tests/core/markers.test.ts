@@ -40,6 +40,20 @@ test('A1: every form on a heading and on a bullet is found, with its form and li
   assert.equal(byId.get('a1-f2-b')!.ref?.uuid, UUID, 'a file: marker also names its place')
 })
 
+test('a bm: marker in either form, the lookup with its check, names its place (the bm: design, unit 6)', () => {
+  const text = [
+    '- by number [*](bm:8f0f9b27.12~e92204f6?list=whats-left&id=look)',
+    '- exact, with words [*](bm:8f0f9b27/e92204f6~w:the%20release?list=whats-left&id=exact)',
+  ].join('\n')
+  const byId = new Map(scanMarkers(text).map(m => [m.id, m]))
+  const look = byId.get('look')!
+  assert.equal(look.form, 'bm')
+  assert.equal(look.broken, undefined)
+  assert.deepEqual([look.ref?.session, look.ref?.record, look.ref?.check], ['8f0f9b27', 12, 'e92204f6'])
+  const exact = byId.get('exact')!
+  assert.deepEqual([exact.ref?.uuid, exact.ref?.words, exact.list], ['e92204f6', 'the release', 'whats-left'])
+})
+
 test('A2: reordered and renamed, every entry is still found by its id', () => {
   const text = `# What's left (renamed)\n\n${entries('a2', 'Renamed heading for').reverse().join('\n')}`
   const found = ids(text)

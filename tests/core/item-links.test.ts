@@ -19,6 +19,20 @@ test('a typed-in link is classified: a GitHub issue or pull request, a web page,
   assert.equal(linkFromText('   '), undefined)
 })
 
+test('a bm: reference, either form, is a ref link and never a file path; a pasted bookmark link is its place', () => {
+  // The bm: short-reference design, unit 6: resolved at add by the handler; kept as typed when it does not resolve.
+  for (const text of ['bm:8f0f9b27.12~f1c069db', `bm:8f0f9b27/f1c069db~w:the%20release`, 'bm:list/todo#i3', 'BM:8f0f9b27.3']) {
+    assert.deepEqual(linkFromText(text), { kind: 'ref', text }, text)
+  }
+  assert.deepEqual(linkFromText(' bm:8f0f9b27.12 '), { kind: 'ref', text: 'bm:8f0f9b27.12' }, 'trimmed')
+  const anchor = `file:///C:/Users/x/claude/bookmarks/sessions/${SID}/f1c069db.p2.md?u=${UUID}&p=2&q=the%20release&v=1`
+  assert.deepEqual(linkFromText(anchor), { kind: 'place', session: SID, uuid: UUID, part: 2, words: 'the release' })
+  assert.deepEqual(linkFromText(`<${anchor}>`), { kind: 'place', session: SID, uuid: UUID, part: 2, words: 'the release' }, 'an autolink too')
+  const ref: ItemLink = { kind: 'ref', text: 'bm:8f0f9b27.12~f1c069db' }
+  assert.equal(textOf(ref), 'bm:8f0f9b27.12~f1c069db', 'a press copies it as typed')
+  assert.equal(hrefOf(ref, ROOT), undefined, 'no URL until it resolves')
+})
+
 test('a v1 item\'s links: its place with its words, or its link; a v2 item\'s own list', () => {
   const place = { session: SID, uuid: UUID, part: 0 }
   assert.deepEqual(linksOf({ place, words: 'the release' }), [{ kind: 'place', session: SID, uuid: UUID, part: 0, words: 'the release' }])

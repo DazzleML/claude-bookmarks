@@ -325,6 +325,12 @@ export type ListsPorts = {
    * checks a path exists; reads no transcript (the links-in-files design, B5).
    */
   findConversation: (sessionId: string) => Promise<{ found: boolean; title?: string }>
+  /**
+   * A `bm:` reference (either form) as the exact place it names, through the bookmarks resolver
+   * (handlers/bookmarks.ts resolveRefText); undefined when it does not name one place whose rows
+   * are readable here (the bm: short-reference design, unit 6: the item then keeps it as typed).
+   */
+  resolveRef: (text: string) => Promise<import('../core/lists/item-links.ts').PlaceLink | undefined>
 }
 
 /** What the bookmarks cluster (handlers/bookmarks.ts) needs: the register's files, who and where this session is, the transcript, the jump, the mark highlight, the clipboard and the person's feedback. */

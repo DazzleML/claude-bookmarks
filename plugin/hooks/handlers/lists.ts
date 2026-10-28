@@ -207,7 +207,10 @@ export async function listsCommand(ports: ListsPorts, lists: Lists, args: string
  * copied. A note with no place or link opens in place instead (the pane does that).
  */
 export async function landItem(ports: ListsPorts, item: ListItem): Promise<void> {
-  const first = primaryLink(item)
+  let first = primaryLink(item)
+  // A reference kept as typed is read again: it may resolve now (its register came back, or its
+  // conversation is on this machine now); if not, it is copied as typed.
+  if (first?.kind === 'ref') first = (await ports.resolveRef(first.text)) ?? first
   if (first?.kind === 'place') {
     const p = first
     if (p.session === (await ports.sessionId())) {
@@ -275,7 +278,10 @@ async function linksFor(ports: ListsPorts, wants: readonly LinkWant[], label: st
       links.push({ kind: 'place', session: ref.session, uuid: ref.uuid, ...(ref.file !== undefined ? { file: ref.file } : {}), ...(ref.part !== undefined ? { part: ref.part } : {}), ...(ref.words ? { words: ref.words } : {}) })
     } else if (w.link) {
       const typed = linkFromText(w.link)
-      if (typed) links.push(typed)
+      // A `bm:` reference is stored as the exact place it names, or kept as typed when it names
+      // none here (the bm: short-reference design, unit 6); never as a file path.
+      if (typed?.kind === 'ref') links.push((await ports.resolveRef(typed.text)) ?? typed)
+      else if (typed) links.push(typed)
     }
   }
   return { links }

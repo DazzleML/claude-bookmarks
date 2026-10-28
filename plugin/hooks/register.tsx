@@ -842,6 +842,11 @@ function listsPorts($: EngineInterface): ListsPorts {
       return { error: typeof r?.error === 'string' ? r.error : 'the place could not be bookmarked' }
     },
     findConversation: sid => conversationOf($, sid),
+    resolveRef: async text => {
+      const r = await bookmarks_.resolveRefText(bookmarksPorts($), text)
+      if (r?.kind !== 'found' || r.unverified) return undefined
+      return { kind: 'place', session: r.session, uuid: r.uuid, ...(r.file !== undefined ? { file: r.file } : {}), ...(r.part !== undefined ? { part: r.part } : {}), ...(r.words ? { words: r.words } : {}) }
+    },
   }
 }
 

@@ -90,6 +90,7 @@ export function describeLink(l: ItemLink, n: number, root: string | undefined) {
     : l.kind === 'url' ? l.href
     : l.kind === 'issue' ? `${l.repo}#${l.n}`
     : l.kind === 'line' ? `${l.path} (line ${l.id})`
+    : l.kind === 'ref' ? `${l.text} (not resolved here)`
     : 'a link this version cannot read'
   const href = hrefOf(l, root)
   return { n, kind: l.kind, what, ...(href ? { href } : {}) }
@@ -135,7 +136,7 @@ export const LISTS_TOOL = {
       why: { type: 'string', description: 'add, edit: a line under it: why it matters, or its state' },
       query: { type: 'string', description: 'add: a short verbatim fragment of the place in this conversation (any row: a prompt, a reply, a tool call, an output)' },
       uuid: { type: 'string', description: 'add: the place\'s uuid (or a tool_use id) instead of a fragment' },
-      link: { type: 'string', description: 'add: a file path or URL instead of a place' },
+      link: { type: 'string', description: 'add: a file path, a URL, or a bm: reference (either form; stored as the place it names) instead of a place' },
       words: { type: 'string', description: 'add: the words to highlight on arrival; defaults to query' },
       links: {
         type: 'array',

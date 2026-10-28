@@ -3,6 +3,7 @@
 // tool creates and fills them. Run: claude plugin test plugin
 import { expect, test } from 'claude-code/testing'
 import { applyListOp, emptyLists, serializeLists, type ListsFile } from '../hooks/core/lists/lists.ts'
+import { addOrRelabel, emptyRegister, serializeRegister } from '../hooks/core/bookmarks/register-file.ts'
 import { BAND_PROPS, DATA_ROOT, world } from './harness.ts'
 
 const SID = '11111111-2222-4333-8444-999999999999'
@@ -238,6 +239,51 @@ test('a place in a conversation not on this machine: the press says so and copie
   await pressFirst($)
   expect(w.copied()).toEqual([])
   expect(w.toasts().some(t => t.includes('not on this machine'))).toBe(true)
+})
+
+// A bm: reference given as a link (the bm: short-reference design, unit 6): stored as the exact
+// place it names when it resolves; kept as typed when it does not; never as a file path.
+const REC = 'cccccccc-0000-4000-8000-000000000001'
+const registerWithOne = () => {
+  const r = addOrRelabel(emptyRegister(SID, 'test', 1), { uuid: REC, owner: 'claude', label: 'the place', head: 'the message', by: 'claude', source: 'tool' }, 2)
+  return { [`${DATA_ROOT}/sessions/${SID}.json`]: serializeRegister(r.register) }
+}
+
+test('a bm: lookup given as a link is stored as the place it names, its check matched', async ($, on) => {
+  const w = world(on, { session: SID, files: registerWithOne() })
+  await call($, { action: 'create', name: 'Refs', owner: 'user' })
+  const added = await call($, { action: 'add', list: 'Refs', owner: 'user', label: 'that place', link: `bm:${SID.slice(0, 8)}.1~${REC.slice(0, 8)}` })
+  expect((added.added as { links: { kind: string }[] }).links.map(l => l.kind)).toEqual(['place'])
+  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  expect(f.lists[0]!.items[0]!.links).toEqual([{ kind: 'place', session: SID, uuid: REC }])
+})
+
+test('a bm: reference that names no place here is kept as typed, and a press copies it', async ($, on) => {
+  const w = world(on, { session: SID, files: registerWithOne() })
+  await call($, { action: 'create', name: 'Refs', owner: 'user' })
+  const wrongCheck = `bm:${SID.slice(0, 8)}.1~dddddddd`
+  await call($, { action: 'add', list: 'Refs', owner: 'user', label: 'a lost place', link: wrongCheck, links: [{ link: 'bm:99999999/12345678' }] })
+  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  expect(f.lists[0]!.items[0]!.links).toEqual([{ kind: 'ref', text: wrongCheck }, { kind: 'ref', text: 'bm:99999999/12345678' }])
+  const ui = await mountPane($)
+  await ui.press({ key: 'lists-go-i1' } as never)
+  expect(w.copied()).toEqual([wrongCheck])
+})
+
+test('a reference kept as typed is read again on a press: once it resolves, the press goes there', async ($, on) => {
+  // Kept as typed at add (its register was missing then); the register is here now.
+  const lookup = `bm:${SID.slice(0, 8)}.1~${REC.slice(0, 8)}`
+  const file = JSON.stringify({
+    version: 2, writer: 'test', project: 'test-project', cwd: 'C:/test-project', updatedAt: 1, removed: [],
+    lists: [{ id: 'refs', name: 'Refs', owner: 'user', createdAt: 1, updatedAt: 1, next: 2,
+      items: [{ id: 'i1', label: 'that place', by: 'claude', addedAt: 1, links: [{ kind: 'ref', text: lookup }] }] }],
+  })
+  const w = world(on, { session: SID, files: { ...registerWithOne(), [FILE]: file } })
+  const ui = await mountPane($)
+  // The jump is the plugin's own $.ui.scroll, which the kit never routes (as the quote test above).
+  const pressed = await ui.press({ key: 'lists-go-i1' } as never).then(() => 'no scroll', err => String(err))
+  expect(w.copied()).toEqual([])
+  expect(pressed).toContain('no implementation for ui.scroll')
 })
 
 test('the tool refuses an unknown list and an item with no label', async ($, on) => {

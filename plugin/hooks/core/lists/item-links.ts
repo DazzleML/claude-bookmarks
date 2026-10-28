@@ -7,6 +7,8 @@
 //   url     a web page
 //   issue   a GitHub issue (or pull request), drawn `#45`
 //   line    a callback line: the line in a Markdown file whose marker carries `id`
+//   ref     a `bm:` reference kept as typed, because it did not resolve when it was added (the bm:
+//           short-reference design, unit 6); read again on a press. Never stored as a file path.
 //
 // Version 1 items held one target, `place` (with `words`) or `link`; linksOf reads both shapes, so
 // every reader works the same before and after the file is migrated (v1to2Item). An unknown kind
@@ -14,13 +16,15 @@
 //
 // Pure.
 import { anchorHref, fileUrl } from '../bookmarks/anchor.ts'
+import { parseRef } from '../bookmarks/ref.ts'
 
 export type PlaceLink = { kind: 'place'; session: string; uuid: string; file?: string; part?: number; drawn?: string; words?: string }
 export type FileLink = { kind: 'file'; path: string }
 export type UrlLink = { kind: 'url'; href: string }
 export type IssueLink = { kind: 'issue'; repo: string; n: number }
 export type LineLink = { kind: 'line'; path: string; id: string }
-export type ItemLink = PlaceLink | FileLink | UrlLink | IssueLink | LineLink
+export type RefLink = { kind: 'ref'; text: string }
+export type ItemLink = PlaceLink | FileLink | UrlLink | IssueLink | LineLink | RefLink
 
 /** The fields an item's links come from: v2's `links`, or v1's single `place`/`link`/`words`. */
 export type Linked = {
@@ -44,10 +48,21 @@ function decodePath(fileHref: string): string {
   return /^[A-Za-z]:/.test(d) ? d : `/${d.replace(/^\/+/, '')}`
 }
 
-/** A link typed in by a person or Claude, as the kind it is: a GitHub issue, a web page, or a file. */
+const FULL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * A link typed in by a person or Claude, as the kind it is: a `bm:` reference (kept as typed; the
+ * lists handler resolves it at add), a pasted bookmark link (its place), a GitHub issue, a web
+ * page, or a file.
+ */
 export function linkFromText(text: string): ItemLink | undefined {
   const t = text.trim()
   if (!t) return undefined
+  if (/^bm:/i.test(t)) return { kind: 'ref', text: t }
+  const ref = /^<?file:/i.test(t) ? parseRef(t) : undefined
+  if (ref?.session && ref.uuid && FULL_ID.test(ref.session) && FULL_ID.test(ref.uuid)) {
+    return { kind: 'place', session: ref.session, uuid: ref.uuid, ...(ref.file !== undefined ? { file: ref.file } : {}), ...(ref.part !== undefined ? { part: ref.part } : {}), ...(ref.words ? { words: ref.words } : {}) }
+  }
   const issue = ISSUE.exec(t)
   if (issue) return { kind: 'issue', repo: issue[1]!, n: Number(issue[2]) }
   if (/^https?:/i.test(t)) return { kind: 'url', href: t }
@@ -94,12 +109,14 @@ export function hrefOf(l: ItemLink, root: string | undefined): string | undefine
   }
 }
 
-/** A link as text a person can paste: a file's path, a page's or an issue's URL; a place has none. */
+/** A link as text a person can paste: a file's path, a page's or an issue's URL, a reference as typed; a place has none. */
 export function textOf(l: ItemLink): string | undefined {
   switch (l.kind) {
     case 'file':
     case 'line':
       return l.path
+    case 'ref':
+      return l.text
     case 'url':
       return l.href
     case 'issue':
