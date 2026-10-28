@@ -5,6 +5,7 @@
 // read, the mint) stays there with its engine calls.
 import { anchorHref, anchorMarkdown, ownerOf, tierOf, type AnchorOwner, type AnchorRecord, type AnchorTier } from './anchor.ts'
 import { headOf, type TranscriptRow } from './transcript-lines.ts'
+import { exactRef, lookupRef } from './ref.ts'
 
 // The model's tool (anchors DWP, 2026-10-09): mint a durable bookmark for a place in
 // this conversation and get back the markdown link to cite it with. Kept in front
@@ -114,7 +115,20 @@ export const describe = (r: AnchorRecord, root: string | undefined, linked = tru
   n: r.n, uuid: r.uuid, owner: ownerOf(r), tier: tierOf(r), label: r.label, why: r.why, words: r.words, line: r.line, sharedFrom: r.sharedFrom,
   ...(r.tags && r.tags.length > 0 ? { tags: r.tags } : {}),
   ...(root && linked ? { anchor: anchorHref(r, root), markdown: anchorMarkdown(r, root) } : {}),
+  ...references(r),
 })
+
+/**
+ * The record's short references (the bm: short-reference design, unit 3b): `lookup` names the
+ * bookmark (`bm:<sid8>.<n>~<check>`, when it has a number), `exact` the message (`bm:<sid8>/<uuid8>`,
+ * with its block or agent file), and `cite` the citation to write in a reply, `[label](<lookup>)`.
+ * Prefixes are 8 characters; a later collision is reported by the resolver, never guessed.
+ */
+function references(r: AnchorRecord): { lookup?: string; exact: string; cite: string } {
+  const exact = exactRef({ sessionId: r.sessionId, uuid: r.uuid, ...(r.part !== undefined ? { part: r.part } : {}), ...(r.file !== undefined ? { file: r.file } : {}) })
+  const lookup = r.n !== undefined ? lookupRef({ sessionId: r.sessionId, n: r.n, uuid: r.uuid }) : undefined
+  return { ...(lookup ? { lookup } : {}), exact, cite: `[${r.label.replace(/[[\]]/g, ' ')}](${lookup ?? exact})` }
+}
 
 /** A transcript row as the model sees it. */
 export const brief = (r: TranscriptRow) => ({

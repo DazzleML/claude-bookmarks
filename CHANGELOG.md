@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.22] - 2026-10-27
+
+### Added
+
+- **Every bookmark Claude's tool returns carries its short references:** `lookup` (`bm:<session>.<n>~<check>`, the bookmark), `exact` (`bm:<session>/<message>`, the message itself) and `cite` (a citation ready to write, `[label](bm:...)`), beside the full link. Claude still writes the full link in its replies until short citations have been tried in practice.
+
 ## [0.7.21] - 2026-10-27
 
 ### Added
@@ -1499,7 +1505,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.21...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.22...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

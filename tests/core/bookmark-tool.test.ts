@@ -76,3 +76,18 @@ test('answers are strings; a record and a row are described with their link and 
   const b = brief({ uuid: 'u', role: 'user', line: 7, byteStart: 1, byteEnd: 9, text: 'first line\nsecond', timestamp: 't' } as never)
   assert.deepEqual(b, { uuid: 'u', role: 'user', line: 7, bytes: [1, 9], head: 'first line second', timestamp: 't' })
 })
+
+// The bm: short-reference design, unit 3b: every described record carries its short references.
+test('a described record carries its lookup, its exact piece and the citation to write', () => {
+  const SID = '8f0f9b27-33fc-4054-806a-22a6d569dfb5'
+  const base = { uuid: '68b352d2-c1aa-4bbb-8ccc-000000000001', sessionId: SID, by: 'claude' }
+  const numbered = describe({ ...base, n: 122, label: 'the [landing] fix' } as never, undefined)
+  assert.equal(numbered.lookup, 'bm:8f0f9b27.122~68b352d2')
+  assert.equal(numbered.exact, 'bm:8f0f9b27/68b352d2')
+  assert.equal(numbered.cite, '[the  landing  fix](bm:8f0f9b27.122~68b352d2)', 'the label\'s brackets cannot end the citation')
+  const unnumbered = describe({ ...base, label: 'L', part: 1 } as never, undefined)
+  assert.equal(unnumbered.lookup, undefined)
+  assert.equal(unnumbered.exact, 'bm:8f0f9b27/68b352d2.p1')
+  assert.equal(unnumbered.cite, '[L](bm:8f0f9b27/68b352d2.p1)', 'no number: the exact piece is cited')
+  assert.equal(describe({ ...base, n: 1, label: 'L', file: 'agent:a1b2' } as never, undefined).exact, 'bm:8f0f9b27/68b352d2@agent%3Aa1b2')
+})
