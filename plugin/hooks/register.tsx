@@ -1609,6 +1609,12 @@ export const register: Register = (on, options) => {
     noteOnScreen(e.requestId, e.props.onScreen)
     noteViewMoved($)
 
+    // A `bm:` reference is drawn as the anchor it names (the bm: short-reference design, unit 4):
+    // Claude Code draws only https/http/file links, so the text is expanded here and the anchored
+    // path below draws and presses it; the transcript keeps the short text.
+    const withRefs = await bookmarks_.expandReplyRefs(bookmarksPorts($), e.props.text ?? '')
+    if (withRefs !== (e.props.text ?? '')) e = { ...e, props: { ...e.props, text: withRefs } }
+
     // Bookmark links (anchors DWP, 2026-10-09): a reply carrying bookmark-anchor links is
     // drawn as the mod's own Markdown, so a plain click on such a link reaches the mod
     // (onLinkPress) and tries the jump; the log says what the engine answered. A ctrl-click

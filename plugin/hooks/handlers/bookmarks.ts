@@ -31,6 +31,7 @@ import { answer as toolAnswer, brief as briefRow, describe as describeRecord, li
 import type { BookmarksPorts } from '../engine/ports.ts'
 import { parseRef } from '../core/bookmarks/ref.ts'
 import { cachedRegisters, resolveRef, type RefPorts, type RegisterView, type Resolution } from '../core/bookmarks/ref-resolve.ts'
+import { expandRefs } from '../core/bookmarks/ref-expand.ts'
 
 // --- Bookmark anchors (anchors DWP 2026-10-09) -----------------------------------------
 // The URL format, its parser and the link finder live in hooks/core/bookmarks/anchor.ts (pure, with
@@ -1003,6 +1004,32 @@ export async function refPortsOf(ports: BookmarksPorts): Promise<RefPorts> {
 export async function resolveRefText(ports: BookmarksPorts, text: string): Promise<Resolution | undefined> {
   const ref = parseRef(text)
   return ref ? resolveRef(ref, await refPortsOf(ports)) : undefined
+}
+
+/**
+ * A reply's text with each `bm:` reference it names turned into its `file:` anchor, so the reply
+ * hook draws it as a pressable link (the bm: design, unit 4); one that does not resolve to a place
+ * stays as written. Text with no reference, or no data root, comes back unchanged.
+ */
+export async function expandReplyRefs(ports: BookmarksPorts, text: string): Promise<string> {
+  if (!/bm:[0-9a-f]/i.test(text)) return text
+  const root = await ports.dataRoot()
+  if (!root) return text
+  let refPorts: RefPorts | undefined
+  return expandRefs(text, async raw => {
+    const ref = parseRef(raw)
+    if (!ref) return undefined
+    refPorts ??= await refPortsOf(ports)
+    const r = await resolveRef(ref, refPorts)
+    if (r.kind !== 'found') return undefined
+    return anchorHref({
+      sessionId: r.session,
+      uuid: r.uuid,
+      ...(r.part !== undefined ? { part: r.part } : {}),
+      ...(r.file !== undefined ? { file: r.file } : {}),
+      ...(r.words ? { words: r.words } : {}),
+    }, root)
+  })
 }
 
 /** One sentence for an outcome that is not a single place here. */

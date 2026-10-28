@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.21] - 2026-10-27
+
+### Added
+
+- **A short reference in Claude's reply is a link.** `[label](bm:...)` and a bare `bm:...` are drawn as links to the place they name, pressed like any bookmark link; the conversation keeps the short text. One inside code, one that names nothing, or one whose check names another bookmark stays as plain text.
+
 ## [0.7.20] - 2026-10-27
 
 ### Added
@@ -1493,7 +1499,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.20...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.21...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
