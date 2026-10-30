@@ -1,0 +1,8 @@
+{
+  "self": "cccccccc-3333-4333-8333-333333333333",
+  "ancestors": [
+    { "sessionId": "eeeeeeee-5555-4555-8555-555555555555", "via": ["copied"] },
+    { "sessionId": "dddddddd-4444-4444-8444-444444444444", "via": ["forked"], "forkPoint": "03030303-0000-4000-8000-000000000002" }
+  ],
+  "continuedIn": []
+}

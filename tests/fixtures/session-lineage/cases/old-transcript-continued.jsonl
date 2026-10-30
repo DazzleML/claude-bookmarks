@@ -1,0 +1,5 @@
+{"type":"user","uuid":"05050505-0000-4000-8000-000000000001","parentUuid":null,"sessionId":"aaaaaaaa-1111-4111-8111-111111111111","session_id":"aaaaaaaa-1111-4111-8111-111111111111"}
+{"type":"assistant","uuid":"05050505-0000-4000-8000-000000000002","parentUuid":"05050505-0000-4000-8000-000000000001","sessionId":"aaaaaaaa-1111-4111-8111-111111111111","session_id":"aaaaaaaa-1111-4111-8111-111111111111"}
+{"type":"continued-in","sessionId":"aaaaaaaa-1111-4111-8111-111111111111","continuedInSessionId":"bbbbbbbb-2222-4222-8222-222222222222","timestamp":"2026-10-28T11:47:59.243Z"}
+{"type":"user","uuid":"05050505-0000-4000-8000-000000000003","parentUuid":"05050505-0000-4000-8000-000000000002","sessionId":"aaaaaaaa-1111-4111-8111-111111111111","session_id":"aaaaaaaa-1111-4111-8111-111111111111"}
+{"type":"continued-in","sessionId":"aaaaaaaa-1111-4111-8111-111111111111","continuedInSessionId":"bbbbbbbb-2222-4222-8222-222222222222","timestamp":"2026-10-28T12:02:11.004Z"}

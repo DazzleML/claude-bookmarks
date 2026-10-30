@@ -1,0 +1,9 @@
+this line is not JSON
+[1, 2, 3]
+{"type":"user","uuid":"07070707-0000-4000-8000-000000000001","session_id":12345}
+{"type":"user","uuid":"07070707-0000-4000-8000-000000000002","session_id":""}
+{"type":"system","uuid":"07070707-0000-4000-8000-000000000003","forkedFrom":{"sessionId":"cccccccc-3333-4333-8333-333333333333","messageUuid":"07070707-0000-4000-8000-000000000000"}}
+{"type":"system","uuid":"07070707-0000-4000-8000-000000000004","forkedFrom":"dddddddd-4444-4444-8444-444444444444"}
+{"type":"continued-in","sessionId":"cccccccc-3333-4333-8333-333333333333","continuedInSessionId":7}
+{"type":"user","uuid":"07070707-0000-4000-8000-000000000005","session_id":"aaaaaaaa-1111-4111-8111-111111111111"}
+{"type":"user","uuid":"07070707-0000-4000-8000-000000000006","session_id":"aaaaaaaa-1111-4111-8111-111111111111"}
