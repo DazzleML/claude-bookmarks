@@ -159,6 +159,9 @@ docs/images/bak/
 # Anthropic's directory reviews, so they stay out of it. The root .vscode/ rules
 # above still let shared debug settings be committed.
 plugin/.vscode/
+# A probe's dump of real bookmark links (home path, session ids, message words);
+# the probe and its reader are tracked, the dump never is.
+tests/one-offs/thinking/measure-link-durability/links.txt
 
 # RepoKit Private Content Protection (DO NOT REMOVE)
 CLAUDE.md

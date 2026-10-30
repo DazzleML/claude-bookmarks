@@ -1,0 +1,107 @@
+--- baseline/hooks/core/bookmarks/tool-fold.ts	2026-10-27 05:06:46.639177800 -0400
++++ candidate/hooks/core/bookmarks/tool-fold.ts	2026-10-27 05:14:37.385870600 -0400
+@@ -12,10 +12,11 @@
+ // were made in, as the tool's hook sees them arrive; a call from before this plugin loaded (a
+ // resumed conversation) belongs to no known turn and draws its compact line alone.
+ 
+-/** The bookmark tool's name as Claude Code draws its rows (the probe's `mcp__<plugin>__<tool>`). */
+-export const BOOKMARK_TOOL_NAME = 'mcp__bookmarks__bookmark'
+-/** The lists tool's (#45), the same way. */
+-export const LISTS_TOOL_NAME = 'mcp__bookmarks__lists'
++import { BOOKMARK_TOOL } from './bookmark-tool.ts'
++import { LISTS_TOOL } from '../lists/lists-tool.ts'
++
++/** A tool's name as Claude Code draws its rows and calls it (the probe's `mcp__<plugin>__<tool>`). */
++export const toolName = (name: string): string => `mcp__bookmarks__${name}`
+ 
+ /** A tool of the plugin's own whose calls fold: the word and glyph its lines use, and its call's line. */
+ export type FoldedTool = {
+@@ -24,15 +25,19 @@
+   line: (input: unknown, output: unknown, state?: { running?: boolean; errored?: boolean }) => string
+ }
+ 
+-/**
+- * Every tool of the plugin's own folds, as one class (djdarcy, 2026-10-27: "Anything we do for one
+- * should typically be done for all the others as a class"): the render hooks, the turn's count and
+- * the lines all read this table, so a new tool joins the fold by adding its row here.
+- */
+-export const FOLDED_TOOLS: Readonly<Record<string, FoldedTool>> = {
+-  [BOOKMARK_TOOL_NAME]: { word: 'bookmark', glyph: '⚓', line: compactLine },
+-  [LISTS_TOOL_NAME]: { word: 'lists', glyph: '☰', line: listsLine },
+-}
++/** POC: every tool of the plugin's own, one row each: its definition, and how its calls fold. */
++export const PLUGIN_TOOLS = [
++  { def: BOOKMARK_TOOL, word: 'bookmark', glyph: '⚓', line: compactLine },
++  { def: LISTS_TOOL, word: 'lists', glyph: '☰', line: listsLine },
++] as const
++
++export const BOOKMARK_TOOL_NAME = toolName(BOOKMARK_TOOL.name)
++export const LISTS_TOOL_NAME = toolName(LISTS_TOOL.name)
++
++/** The fold's table, built from PLUGIN_TOOLS by each tool's drawn name. */
++export const FOLDED_TOOLS: Readonly<Record<string, FoldedTool>> = Object.fromEntries(
++  PLUGIN_TOOLS.map(t => [toolName(t.def.name), { word: t.word, glyph: t.glyph, line: t.line }]),
++)
+ 
+ /** Whether a row's tool is one of the plugin's own, which fold. */
+ export const foldsTool = (tool: unknown): tool is string => typeof tool === 'string' && Object.hasOwn(FOLDED_TOOLS, tool)
+--- baseline/hooks/register.tsx	2026-10-27 05:06:46.675512100 -0400
++++ candidate/hooks/register.tsx	2026-10-27 05:15:49.067319100 -0400
+@@ -66,8 +66,7 @@
+ import { BandState } from './core/band/band-state'
+ import { PromptsPaneState } from './core/prompts/prompts-pane-state'
+ import { DrawnMessages } from './core/kit/drawn-messages'
+-import { BOOKMARK_TOOL } from './core/bookmarks/bookmark-tool'
+-import { LISTS_TOOL } from './core/lists/lists-tool'
++import { PLUGIN_TOOLS } from './core/bookmarks/tool-fold'
+ import { fnv1a64 } from './core/bookmarks/migrations'
+ import { Lists, landItem, listsCommand, listsToolCall } from './handlers/lists'
+ import { linkOf } from './core/lists/lists'
+@@ -131,6 +130,16 @@
+ // was made in and what is open; the atom is bumped so the rows redraw.
+ const toolFold = new ToolFold()
+ const toolFoldRev = atom({ plugin: 'bookmarks', key: 'toolFoldRev' } as const, 0)
++/** POC: each tool's handler, by its definition's name (core/bookmarks/tool-fold.ts PLUGIN_TOOLS); here, since a handler needs `$`. */
++// The validator lets `$` reach only functions declared here, so the table's handlers take ports, built here.
++function toolPorts($: EngineInterface) {
++  return { bookmarks: bookmarksPorts($), lists: listsPorts($) }
++}
++type ToolAnswer = Awaited<ReturnType<typeof bookmarks_.bookmarkTool>> | Awaited<ReturnType<typeof listsToolCall>>
++const TOOL_HANDLERS: Readonly<Record<string, (p: ReturnType<typeof toolPorts>, e: unknown) => Promise<ToolAnswer>>> = {
++  bookmark: (p, e) => bookmarks_.bookmarkTool(p.bookmarks, e),
++  lists: (p, e) => listsToolCall(p.lists, lists, e),
++}
+ /** A call of one of the plugin's tools joins its turn's fold, and the fold's rows redraw with the new count. */
+ async function noteFoldedCall($: EngineInterface, e: unknown, tool: string): Promise<void> {
+   const id = (e as { tool_use_id?: unknown }).tool_use_id
+@@ -1318,7 +1327,7 @@
+ 
+     // The model's tools: the bookmark tool (core/bookmarks/bookmark-tool.ts) and the lists tool
+     // (#45, core/lists/lists-tool.ts, deferred so it costs nothing per turn).
+-    for (const def of [BOOKMARK_TOOL, LISTS_TOOL]) {
++    for (const { def } of PLUGIN_TOOLS) {
+       try {
+         const t = await $.tool.register(def)
+         log($, `[bm] tool registered: ${t.tool}`)
+@@ -1696,14 +1705,13 @@
+   // Matched by pattern, not by the literal name: the engine generates the tool-name type
+   // from the manifest on a session start, so a rename leaves the literal red until then.
+   // The model's tool call: handlers/bookmarks.ts.
+-  on('tool.call', { tool: /^mcp__bookmarks__bookmark$/ }, async ($, e) => {
+-    await noteFoldedCall($, e, 'mcp__bookmarks__bookmark')
+-    return bookmarks_.bookmarkTool(bookmarksPorts($), e)
+-  })
+-  // The `lists` tool (#45): handlers/lists.ts listsToolCall. Its calls fold as the bookmark tool's do.
+-  on('tool.call', { tool: /^mcp__bookmarks__lists$/ }, async ($, e) => {
+-    await noteFoldedCall($, e, 'mcp__bookmarks__lists')
+-    return listsToolCall(listsPorts($), lists, e)
++  // POC: one hook for every tool of the plugin's own; the fold notes the call, then the tool's handler answers.
++  on('tool.call', { tool: /^mcp__bookmarks__/ }, async ($, e, next) => {
++    const tool = String((e as { tool?: unknown }).tool)
++    const handler = TOOL_HANDLERS[tool.replace(/^mcp__bookmarks__/, '')]
++    if (!handler) return next(e)
++    await noteFoldedCall($, e, tool)
++    return handler(toolPorts($), e)
+   })
+ 
+   // /bm-debug lives in hooks/handlers/debug-command.ts; this is its ports (hooks/engine/ports.ts):

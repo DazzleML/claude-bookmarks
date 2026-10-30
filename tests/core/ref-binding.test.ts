@@ -18,7 +18,21 @@ test('a prompt\'s bindings are read back from its context row, found by walking 
     { uuid: 'c2', parentUuid: 'm2', type: 'attachment', attachment: 'hook_additional_context', text: 'unrelated context' },
   ]
   assert.deepEqual(bindingsForPrompt(rows, 'p1'), [{ asTyped: 'bm:8f0f9b27.1~68b352d2', exact: 'bm:8f0f9b27/68b352d2', record: 1 }])
-  assert.deepEqual(bindingsForPrompt(rows, 'p2'), [], 'a meta row is skipped on the walk; a context row without binding lines gives none')
+  assert.deepEqual(bindingsForPrompt(rows, 'p2'), [], 'a context row without binding lines gives none')
+})
+
+// The red-green audit (dispatched after the fact, 2026-10-30) found the meta skip unpinned: the
+// case above holds no binding under the meta row, so counting the meta row as the prompt changed
+// nothing. Here the binding sits under a meta row and belongs to the typed prompt above it.
+test('a meta user row between a context row and its prompt is skipped: the binding belongs to the typed prompt', () => {
+  const ctx = bindingContext([{ asTyped: 'bm:8f0f9b27.2~aaaaaaaa', exact: 'bm:8f0f9b27/aaaaaaaa', record: 2 }])!
+  const rows = [
+    { uuid: 'p1', parentUuid: null, type: 'user', text: 'a prompt' },
+    { uuid: 'm1', parentUuid: 'p1', type: 'user', isMeta: true, text: 'a reminder' },
+    { uuid: 'c1', parentUuid: 'm1', type: 'attachment', attachment: 'hook_additional_context', text: ctx },
+  ]
+  assert.deepEqual(bindingsForPrompt(rows, 'p1'), [{ asTyped: 'bm:8f0f9b27.2~aaaaaaaa', exact: 'bm:8f0f9b27/aaaaaaaa', record: 2 }])
+  assert.deepEqual(bindingsForPrompt(rows, 'm1'), [], 'a meta row is never a prompt')
 })
 
 test('a binding line names the exact place, with the record for a lookup, or says why it is unresolved', () => {
