@@ -213,7 +213,12 @@ export async function landItem(ports: ListsPorts, item: ListItem): Promise<void>
   if (first?.kind === 'ref') first = (await ports.resolveRef(first.text)) ?? first
   if (first?.kind === 'place') {
     const p = first
-    if (p.session === (await ports.sessionId())) {
+    // A conversation continued under a new session id keeps its messages' ids (the CK3 report,
+    // 2026-10-28: fe8a1041 -> 432b5fd1), so a place naming another id is looked for in this
+    // transcript first: prompts and replies only (quick), never the place reader's wait in a press.
+    const here = p.session === (await ports.sessionId())
+      || (p.file === undefined && (await ports.resolveTarget({ uuid: p.uuid, quick: true })).kind === 'one')
+    if (here) {
       const target = {
         uuid: p.uuid, label: item.label,
         ...(p.words ? { words: p.words } : {}),

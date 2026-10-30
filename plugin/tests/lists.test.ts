@@ -234,6 +234,23 @@ test('a place in another conversation on this machine: the press names it and co
   expect(w.toasts().some(t => t.includes('"the ck3 worker"') && t.includes('Copied'))).toBe(true)
 })
 
+// A conversation that continued under a new session id keeps its messages' ids (seen in the CK3
+// worker's report, 2026-10-28: fe8a1041 -> 432b5fd1, the bookmarked uuids in both transcripts), so
+// a place naming the old id is looked for in this transcript first and, when found, landed on here.
+test('a place naming an earlier session id whose message is in this conversation lands here', async ($, on) => {
+  const FU = 'ffffffff-0000-4000-8000-000000000001'
+  const row = JSON.stringify({ type: 'user', uuid: FU, message: { role: 'user', content: 'decided over there' }, timestamp: '2026-10-27T00:00:00.000Z' })
+  const w = world(on, {
+    session: SID,
+    files: { ...elsewhere(), [TRANSCRIPT]: '', [`C:/test-home/.claude/projects/C--other/${OTHER}.jsonl`]: '{}\n' },
+    process: argv => (argv.some(a => a.includes(FU)) ? { exitCode: 0, stdout: `1:0:${row}\n` } : { exitCode: 1, stdout: '' }),
+  })
+  // The jump is the plugin's own $.ui.scroll, which the kit never routes: reaching it is the evidence.
+  const pressed = await pressFirst($).then(() => 'no scroll', err => String(err))
+  expect(pressed).toContain('no implementation for ui.scroll')
+  expect(w.copied()).toEqual([])
+})
+
 test('a place in a conversation not on this machine: the press says so and copies nothing', async ($, on) => {
   const w = world(on, { session: SID, files: elsewhere() })
   await pressFirst($)

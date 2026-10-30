@@ -309,8 +309,8 @@ export type ListsPorts = {
   closePane: () => Promise<unknown>
   /** One of the plugin's own files by its path relative to the plugin folder (the page's template), or undefined when missing. */
   pluginFile: (relative: string) => Promise<string | undefined>
-  /** A place of this conversation by a verbatim fragment or a uuid, as the bookmark tool finds one; the outcome as found (handlers/lists.ts reads it). */
-  resolveTarget: (want: { fragment?: string; uuid?: string }) => Promise<ResolveOutcome>
+  /** A place of this conversation by a verbatim fragment or a uuid, as the bookmark tool finds one; the outcome as found (handlers/lists.ts reads it). `quick`: prompts and replies only, never the place reader's wait. */
+  resolveTarget: (want: { fragment?: string; uuid?: string; quick?: boolean }) => Promise<ResolveOutcome>
   /** Go to a place of this conversation and highlight its words (handlers/bookmarks.ts arriveAtBookmark, with the landing fallback), as SearchPorts' arrive; the refusal, if any. */
   arrive: (target: { uuid: string; label: string; words?: string; drawn?: string; file?: string; part?: number }, via: string) => Promise<string | undefined>
   /**
