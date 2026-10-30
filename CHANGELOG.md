@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.31] - 2026-10-30
+
+### Added
+
+- **The plugin learns which earlier sessions a conversation continues.** When a conversation starts, or Claude Code moves it to a new session id, the plugin reads its transcript once in the background (a single `grep`, a second or two even on a very large transcript; skipped where there is no `sh`) and keeps the answer, so it never reads it again. Nothing uses the answer yet; the next versions use it to keep links, bookmarks, marks and pins working under the new id.
+
 ## [0.7.30] - 2026-10-30
 
 ### Added
@@ -1553,7 +1559,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.30...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.31...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

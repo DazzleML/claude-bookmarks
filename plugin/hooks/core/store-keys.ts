@@ -11,6 +11,8 @@
 //                        the prompt store and its back-fill flag
 //                        (core/prompts/prompt-store.ts; rebuilt from the transcript, so
 //                        pruned when a conversation goes unopened: core/store-prune.ts)
+//   lineage:<sid>        the earlier sessions this one continues (handlers/lineage.ts, U83):
+//                        a few hundred bytes, read once from the transcript and never changing
 //   seen                 when each conversation was last opened (core/store-prune.ts)
 //   debug:echo           the machine-wide debug echo policy (handlers/log.ts)
 //
@@ -23,5 +25,6 @@ export const marksKey = perConversation('marks')
 export const pinsKey = perConversation('pins')
 export const jumplistKey = perConversation('jumplist')
 export const readingStateKey = perConversation('readingState')
+export const lineageKey = perConversation('lineage')
 export const SEEN_KEY = 'seen'
 export const ECHO_POLICY_KEY = 'debug:echo'

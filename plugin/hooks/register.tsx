@@ -49,7 +49,7 @@ import { needsRow, toolFoldView } from './views/tool-fold'
 import { ToolFold, callLine, foldsTool, resultObject } from './core/bookmarks/tool-fold'
 import * as search_ from './handlers/search'
 import { configCommand, envCommand, idsCommand, jumpCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
-import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, ListsPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PlacesPorts, PromptsPorts, ResolveOutcome, SearchPorts, TranscriptPorts, ViewPorts } from './engine/ports'
+import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LineagePorts, ListsPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PlacesPorts, PromptsPorts, ResolveOutcome, SearchPorts, TranscriptPorts, ViewPorts } from './engine/ports'
 import { closeAll as bandCloseAll, endBandMode as bandEnd, settle as bandSettle, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
 import * as commandLine from './handlers/command-line'
@@ -59,6 +59,8 @@ import * as prompts_ from './handlers/prompts'
 import * as transcript_ from './handlers/transcript'
 import * as places_ from './handlers/places'
 import * as log_ from './handlers/log'
+import * as lineage_ from './handlers/lineage'
+import { LINEAGE_SCAN_PATTERN } from './core/lineage/lineage'
 import { MarkState } from './core/marks/mark-state'
 import { Navigation } from './handlers/navigation'
 import { ViewTracker } from './handlers/view-tracker'
@@ -347,6 +349,7 @@ async function sameConversation($: EngineInterface): Promise<void> {
   pruneThenBackfill($)
   startLoader($)
   resumePlaces($)
+  startLineage($)
   log($, `[bm] a new conversation: ${short(before)} -> ${short(id)}; what the one before left in memory is reset`)
 }
 // The store's prune, then this conversation's back-fill (done once per conversation, by its
@@ -500,9 +503,10 @@ async function transcriptPath($: EngineInterface): Promise<string | undefined> {
   return undefined
 }
 
-// --- For reviewers: the three places this plugin runs a program --------------------
-// userRows() and grepTranscript() below, and readChunk in transcriptPorts() after them,
-// are the plugin's only $.process.run calls. Each reads the conversation's transcript and
+// --- For reviewers: the four places this plugin runs a program ---------------------
+// userRows() and grepTranscript() below, readChunk in transcriptPorts() after them, and
+// scanLineage() (sh only: `grep -o -E "$1" "$2" | uniq`, the tests/fixtures/session-lineage pattern;
+// with no sh it is skipped), are the plugin's only $.process.run calls. Each reads the conversation's transcript and
 // nothing else. Why a program at all: the transcript is often larger than the 4 MiB that
 // $.fs.read accepts (it rejects above that), so the file is searched, or read in 4 MB
 // pieces by byte offset, by a tool already on the machine. What runs: `sh -c 'grep ...'`
@@ -577,6 +581,39 @@ async function grepTranscript($: EngineInterface, path: string, pattern: string)
     // PowerShell is not there either.
   }
   return undefined
+}
+
+// The earlier sessions a transcript names (tests/fixtures/session-lineage, U83): one pass of grep for the
+// three lineage fields, consecutive repeats dropped. sh only; with none, undefined (no lineage).
+async function scanLineage($: EngineInterface, path: string): Promise<{ text: string; truncated: boolean; ms: number } | undefined> {
+  try {
+    const started = Date.now()
+    const r = await $.process.run(
+      ['sh', '-c', 'grep -o -E -- "$1" "$2" | uniq', 'sh', LINEAGE_SCAN_PATTERN, path],
+      { timeoutMs: 60_000 },
+    )
+    if (r.exitCode === 0 || r.exitCode === 1 || r.stdout) return { text: r.stdout, truncated: r.isStdoutTruncated, ms: Date.now() - started }
+  } catch {
+    // sh is not there.
+  }
+  return undefined
+}
+
+function lineagePorts($: EngineInterface): LineagePorts {
+  return {
+    log: line => log($, line),
+    logAlways: line => log($, line, { always: true }),
+    sessionId: () => $.session.id(),
+    storeGet: key => $.store.get(key),
+    storeSet: (key, value) => $.store.set(key, value),
+    transcriptPath: () => transcriptPath($),
+    scanLineage: path => scanLineage($, path),
+  }
+}
+
+// In the background: never awaited by a hook (the scan takes seconds on a large transcript).
+function startLineage($: EngineInterface) {
+  void lineage_.ensureLineage(lineagePorts($)).catch(err => log($, `[bm] lineage failed: ${String(err)}`))
 }
 
 // The message a request names, with its line and byte range: by uuid (full or 8+
@@ -1378,6 +1415,7 @@ export const register: Register = (on, options) => {
     pruneThenBackfill($)
     startLoader($)
     resumePlaces($)
+    startLineage($)
 
     // The tracking mechanism for the borrowed actions: say so whenever the build is
     // not one the chords were verified on.

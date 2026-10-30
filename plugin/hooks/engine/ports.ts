@@ -283,6 +283,22 @@ export type ResolveOutcome =
   | { kind: 'many'; rows: import('../core/bookmarks/transcript-lines.ts').TranscriptRow[]; earliest: import('../core/bookmarks/transcript-lines.ts').TranscriptRow; via: string; ms: number }
   | { kind: 'none'; via?: string; ms?: number; reason: string }
 
+/**
+ * What the lineage (handlers/lineage.ts, U83) needs: this conversation's id and transcript, the
+ * store it keeps the answer in, and the one scan of the transcript (tests/fixtures/session-lineage: `grep -o -E
+ * <LINEAGE_SCAN_PATTERN> | uniq`); undefined when no program could run it.
+ */
+export type LineagePorts = {
+  log: (line: string) => void
+  /** Logged whatever the debug setting: the lineage found, once per session id ever. */
+  logAlways: (line: string) => void
+  sessionId: () => Promise<string>
+  storeGet: (key: string) => Promise<unknown>
+  storeSet: (key: string, value: unknown) => Promise<unknown>
+  transcriptPath: () => Promise<string | undefined>
+  scanLineage: (path: string) => Promise<{ text: string; truncated: boolean; ms: number } | undefined>
+}
+
 /** What the lists (handlers/lists.ts, #45) need: the project's file under the data root, a place found and landed on, the pane, the clipboard and the person's feedback. */
 export type ListsPorts = {
   log: (line: string) => void
@@ -485,6 +501,9 @@ export type CommandLinePorts = BandPorts & {
 //   placesPass (the place reader's state    handlers/places.ts            startPlacesPass, newConversation;
 //     for this conversation: its index,       (the one writer)              read by placesStatus, placesIndex
 //     the file cursors; 0.7 unit 3)
+//   current, pending (the lineage of this   handlers/lineage.ts           lineageNow (read-only); ensureLineage
+//     conversation, and a scan running for    (the one writer:              from startLineage in register.tsx
+//     it; U83)                                ensureLineage)
 //   lists (handlers/lists.ts Lists: the     handlers/lists.ts (the one     the lists pane's render hook through
 //     project's lists file cached, the      writer: load, change, pick,   paneModel; the lists tool and
 //     list the pane shows, the items        show, toggleShown)            /bm-lists through the same class
