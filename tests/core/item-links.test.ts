@@ -3,7 +3,7 @@
 // typed links read from either shape, a typed-in link classified, the v1 -> v2 item step.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { hrefOf, linkFromText, linksOf, placeLinkOf, primaryLink, textOf, v1to2Item, type ItemLink } from '../../plugin/hooks/core/lists/item-links.ts'
+import { hrefOf, linkFromText, linkKey, linksOf, placeLinkOf, primaryLink, sameLink, textOf, v1to2Item, type ItemLink } from '../../plugin/hooks/core/lists/item-links.ts'
 
 const SID = '8f0f9b27-33fc-4054-806a-22a6d569dfb5'
 const UUID = 'f1c069db-67bc-42e3-b6d6-cf200b57d957'
@@ -63,4 +63,28 @@ test('the v1 -> v2 item step moves place, words and link into links and keeps ev
   assert.deepEqual(v1to2Item({ id: 'i5', label: 'a note' }), { id: 'i5', label: 'a note', links: [] })
   const v2 = { id: 'i6', label: 'y', links: [{ kind: 'url' as const, href: 'https://b' }] }
   assert.equal(v1to2Item(v2), v2, 'a v2 item is returned as it is')
+})
+
+// A link's identity (the bundles design, unit 1; U74): what it points at, never how it was stored.
+test('a place is one link however it was stored: with or without drawn and words, its fields in any order, any case', () => {
+  const a: ItemLink = { kind: 'place', session: SID, uuid: UUID }
+  const b: ItemLink = { kind: 'place', uuid: UUID.toUpperCase(), session: SID, drawn: 'f1c069db-67bc-42e3-b6d6-000000000000', words: 'some words' }
+  assert.ok(sameLink(a, b))
+  assert.equal(linkKey(a), linkKey(b))
+  assert.ok(!sameLink(a, { kind: 'place', session: SID, uuid: UUID, part: 1 }), 'another block of the message is another place')
+  assert.ok(!sameLink(a, { kind: 'place', session: SID, uuid: UUID, file: 'agent-x.jsonl' }), "a sub-agent's row is another place")
+  assert.ok(!sameLink(a, { kind: 'place', session: SID, uuid: '00000000-67bc-42e3-b6d6-cf200b57d957' }))
+})
+
+test('files, pages, issues, lines and references: one link by what they name', () => {
+  assert.ok(sameLink({ kind: 'file', path: 'C:\\code\\x\\a.md' }, { kind: 'file', path: 'c:/code/x/a.md' }), 'a Windows path, either slash, any case')
+  assert.ok(!sameLink({ kind: 'file', path: 'C:/code/x/a.md' }, { kind: 'file', path: 'C:/code/x/b.md' }))
+  assert.ok(sameLink({ kind: 'issue', repo: 'DazzleML/claude-bookmarks', n: 45 }, { kind: 'issue', repo: 'dazzleml/claude-bookmarks', n: 45 }))
+  assert.ok(!sameLink({ kind: 'issue', repo: 'DazzleML/claude-bookmarks', n: 45 }, { kind: 'issue', repo: 'DazzleML/claude-bookmarks', n: 46 }))
+  assert.ok(sameLink({ kind: 'url', href: 'https://example.com/a' }, { kind: 'url', href: 'https://example.com/a' }))
+  assert.ok(!sameLink({ kind: 'url', href: 'https://example.com/a' }, { kind: 'url', href: 'https://example.com/A' }), 'a page path is case-sensitive')
+  assert.ok(sameLink({ kind: 'line', path: 'C:/v/n.md', id: 'e1' }, { kind: 'line', path: 'c:\\v\\n.md', id: 'e1' }))
+  assert.ok(!sameLink({ kind: 'line', path: 'C:/v/n.md', id: 'e1' }, { kind: 'line', path: 'C:/v/n.md', id: 'e2' }))
+  assert.ok(sameLink({ kind: 'ref', text: 'bm:8f0f9b27.12' }, { kind: 'ref', text: ' bm:8f0f9b27.12 ' }))
+  assert.ok(!sameLink({ kind: 'file', path: 'C:/a' }, { kind: 'url', href: 'C:/a' }), 'different kinds are different links')
 })

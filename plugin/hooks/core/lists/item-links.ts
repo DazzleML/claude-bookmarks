@@ -92,6 +92,36 @@ export const placeLinkOf = (i: Linked): PlaceLink | undefined => linksOf(i).find
 
 export const issueUrl = (l: IssueLink): string => `https://github.com/${l.repo}/issues/${l.n}`
 
+// A link's identity (the bundles design, 2026-10-30__23-47-01, unit 1; closes U74): what it points
+// at, never how it was stored. A place by its session, message, block and agent file (not the
+// drawn id or the words, which are how it is shown); a file or line by its path, slashes and case
+// folded (Windows paths); an issue by its repository (any case) and number; a page by its URL; a
+// reference by its text.
+const pathKey = (p: string) => p.trim().replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+
+/** The identity of a link as one string: equal for two links that point at the same thing. */
+export function linkKey(l: ItemLink): string {
+  switch (l.kind) {
+    case 'place':
+      return `place|${l.session.toLowerCase()}|${l.uuid.toLowerCase()}|${l.file ?? ''}|${l.part ?? ''}`
+    case 'file':
+      return `file|${pathKey(l.path)}`
+    case 'line':
+      return `line|${pathKey(l.path)}|${l.id}`
+    case 'url':
+      return `url|${l.href.trim()}`
+    case 'issue':
+      return `issue|${l.repo.toLowerCase()}|${l.n}`
+    case 'ref':
+      return `ref|${l.text.trim()}`
+    default:
+      return `${(l as { kind: string }).kind}|${JSON.stringify(l)}`
+  }
+}
+
+/** Whether two links point at the same thing. */
+export const sameLink = (a: ItemLink, b: ItemLink): boolean => linkKey(a) === linkKey(b)
+
 /** A link as a pressable URL: a place's anchor (needs the data root), a file's `file:` URL, the page, the issue. */
 export function hrefOf(l: ItemLink, root: string | undefined): string | undefined {
   switch (l.kind) {

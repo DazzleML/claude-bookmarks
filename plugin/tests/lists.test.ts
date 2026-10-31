@@ -210,6 +210,16 @@ test('links given as a JSON string are read; a link the item already has is not 
   expect(f.lists[0]!.items[0]!.links).toEqual([{ kind: 'issue', repo: 'DazzleML/claude-bookmarks', n: 45 }, { kind: 'file', path: 'C:/code/b.md' }])
 })
 
+// A link's identity (the bundles design, unit 1; U74): the same file written another way is the same link.
+test('a link the item has, written with other slashes or case, is not added again', async ($, on) => {
+  const w = world(on, { session: SID })
+  await call($, { action: 'create', name: 'Reading', owner: 'user' })
+  await call($, { action: 'add', list: 'Reading', owner: 'user', label: 'notes', link: 'C:/code/b.md' })
+  await call($, { action: 'link', list: 'Reading', owner: 'user', item: '1', link: 'c:\\code\\b.md' })
+  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  expect(f.lists[0]!.items[0]!.links).toEqual([{ kind: 'file', path: 'C:/code/b.md' }])
+})
+
 // Pressing a place in another conversation (the links-in-files design, B5): named and resumable
 // when its transcript is on this machine, said so when it is not -- never a blind copy.
 const OTHER = '22222222-3333-4444-8555-666666666666'

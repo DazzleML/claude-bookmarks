@@ -12,7 +12,7 @@ import {
   type List, type ListItem, type ListsFile, type Op,
 } from '../core/lists/lists.ts'
 import { brief, describeItem, describeLink, linkWants, parseListsInput, type LinkWant, type ListsToolInput } from '../core/lists/lists-tool.ts'
-import { hrefOf, linkFromText, linksOf, primaryLink, textOf, type ItemLink } from '../core/lists/item-links.ts'
+import { hrefOf, linkFromText, linksOf, primaryLink, sameLink, textOf, type ItemLink } from '../core/lists/item-links.ts'
 import { parseRef } from '../core/bookmarks/ref.ts'
 import { answer } from '../core/bookmarks/bookmark-tool.ts'
 import { short } from '../core/kit/message-id.ts'
@@ -360,8 +360,8 @@ export async function listsTool(ports: ListsPorts, lists: Lists, input: ListsToo
     if ('error' in got) return { error: got.error }
     // A link the item already has is not added twice (seen live: re-linking a place doubled it).
     const have = linksOf(item)
-    const same = (a: ItemLink, b: ItemLink) => a.kind === b.kind && JSON.stringify({ ...a, words: undefined }) === JSON.stringify({ ...b, words: undefined })
-    const fresh = got.links.filter(l => !have.some(h => same(h, l)))
+    // By identity (the bundles design, unit 1): what a link points at, not how it was stored.
+    const fresh = got.links.filter((l, k) => !have.some(h => sameLink(h, l)) && got.links.findIndex(x => sameLink(x, l)) === k)
     const r = await lists.change(ports, { op: 'edit', list: list.id, item: item.id, links: [...have, ...fresh] })
     return r.ok ? { ok: true, item: describeItem(r.item!, at, root) } : { error: r.error }
   }
