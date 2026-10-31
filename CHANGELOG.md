@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.39] - 2026-10-31
+
+### Added
+
+- **A setting for what a click on a list's link does: "A click on a link in a list".** `copy` (the default, as before) copies a file, page or issue; `nothing` leaves the clipboard alone, and each link in an opened item gets a `⧉` button that copies it. Ctrl-click opens a link either way, and a place in this conversation is jumped to either way. (Claude Code tells a plugin no held keys with a click, so alt+click cannot copy instead.)
+
+### Changed
+
+- **The link a bundle leads with in a list is marked `●`**, and `○` beside another makes it lead; `★` means pinned in the prompts and search panes, so it no longer doubles as this.
+
 ## [0.7.38] - 2026-10-31
 
 ### Added
@@ -1611,7 +1621,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.38...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.39...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

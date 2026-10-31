@@ -1,7 +1,7 @@
 {
   "name": "bookmarks",
   "displayName": "Bookmarks",
-  "version": "0.7.38",
+  "version": "0.7.39",
   "description": "Bookmarks and vim-style marks inside Claude Code conversations: mark a line, jump back, keep a reading position, browse your prompts, and let Claude cite earlier places as clickable links.",
   "author": {
     "name": "DazzleML",
@@ -173,6 +173,16 @@
       "title": "Bring bookmarks into a continued conversation",
       "description": "true: when Claude Code carries a conversation on under a new session id (a branch, a resume, a background hand-off), its earlier bookmarks, marks and pins are copied in once; false: the new id starts with none (the earlier ones stay where they are)",
       "default": true
+    },
+    "listLinkClick": {
+      "type": "string",
+      "title": "A click on a link in a list",
+      "description": "copy: a file, page or issue is copied (ctrl-click opens it); nothing: the clipboard is left alone and each link in an opened item gets a copy button. A place in this conversation is jumped to either way",
+      "default": "copy",
+      "options": [
+        "copy",
+        "nothing"
+      ]
     },
     "searchShown": {
       "type": "boolean",

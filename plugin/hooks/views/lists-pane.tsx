@@ -27,6 +27,8 @@ export type ListsPaneModel = {
   hrefOf?: (item: ListItem) => string | undefined
   /** One link's target, for its row in an opened item: drawn as a Markdown link, so a ctrl-click opens it too. */
   hrefOfLink?: (link: ItemLink) => string | undefined
+  /** A copy button on each link row (the listLinkClick setting is `nothing`, so a click does not copy). */
+  copyButtons?: boolean
   /**
    * The items opened in place, by id: drawn with their whole note wrapped, where they point, and
    * who added them when (djdarcy, 2026-10-27: "how am I supposed to read the entire note?").
@@ -45,6 +47,8 @@ export type ListsPaneActions = {
   landLink?: (item: ListItem, link: ItemLink) => Promise<unknown>
   /** A bundled item's face set to one of its links. */
   face?: (item: ListItem, link: ItemLink) => Promise<unknown>
+  /** One of an opened item's links copied (the ⧉ beside it). */
+  copyLink?: (item: ListItem, link: ItemLink) => Promise<unknown>
 }
 
 // A link's mark in the opened view, by kind.
@@ -151,7 +155,9 @@ export function listsPaneView(elements: Elements, m: ListsPaneModel, a: ListsPan
                   <Box key={`lists-linkrow-${item.id}-${k}`} flexDirection="row">
                     {(() => {
                       const glyph = GLYPH[l.kind] ?? '·'
-                      const mark = k === 0 && item.bundle ? '★ ' : ''
+                      // The face is marked ●, never ★, which means pinned in the other panes (djdarcy,
+                      // 2026-10-31: "Is the star an indicator that the link is already bookmarked?").
+                      const mark = k === 0 && item.bundle ? '● ' : ''
                       // A place says what it is about: the words it was made from (djdarcy, 2026-10-31:
                       // "some description as to what they were about so it wasn't just a bare anchor").
                       const words = l.kind === 'place' && l.words ? (l.words.length > 70 ? `${l.words.slice(0, 69)}…` : l.words) : ''
@@ -167,15 +173,18 @@ export function listsPaneView(elements: Elements, m: ListsPaneModel, a: ListsPan
                         const target = lh.replace(/[()]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
                         const esc = (t: string) => t.replace(/([\\`*_[\]<>#|])/g, '\\$1')
                         // The link's one sentence of what it is, when it has one (the bundles design,
-                      // addendum 2026-10-31), else a place's words.
-                      const tail = l.about ? ` — ${esc(l.about)}` : words ? ` "${esc(words)}"` : ''
+                        // addendum 2026-10-31), else a place's words.
+                        const tail = l.about ? ` — ${esc(l.about)}` : words ? ` "${esc(words)}"` : ''
                         const text = `${mark}${glyph === '#' ? '\\#' : glyph} [${what.replace(/[[\]]/g, ' ')}](${target})${tail}`
                         return <Markdown key={`lists-link-${item.id}-${k}`} text={text} pressableLinks={[target]} onLinkPress={onPress} />
                       }
                       return <Button key={`lists-link-${item.id}-${k}`} label={`${mark}${glyph} ${what}${l.about ? ` — ${l.about}` : words ? ` "${words}"` : ''}`} plain onPress={onPress} />
                     })()}
                     {item.bundle && k > 0 && a.face && (
-                      <Button key={`lists-face-${item.id}-${k}`} label=" ☆" plain {...s.button('unreached')} onPress={() => a.face!(item, l)} />
+                      <Button key={`lists-face-${item.id}-${k}`} label=" ○" plain {...s.button('unreached')} onPress={() => a.face!(item, l)} />
+                    )}
+                    {m.copyButtons && a.copyLink && (
+                      <Button key={`lists-copy-${item.id}-${k}`} label=" ⧉" plain {...s.button('unreached')} onPress={() => a.copyLink!(item, l)} />
                     )}
                   </Box>
                 ))}

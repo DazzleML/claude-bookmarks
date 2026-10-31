@@ -152,7 +152,7 @@ export class Lists {
     if (list) await this.changeOrToast(ports, { op: 'done', list, item: itemId })
   }
 
-  /** A bundled item's face in the shown list (the bundles design, unit 6): the ★ on a link row. */
+  /** A bundled item's face in the shown list (the bundles design, unit 6): the ○ on a link row. */
   async faceShown(ports: ListsPorts, itemId: string, face: string): Promise<void> {
     const list = this.shownId()
     if (list) await this.changeOrToast(ports, { op: 'face', list, item: itemId, face })
@@ -212,6 +212,17 @@ export async function listsCommand(ports: ListsPorts, lists: Lists, args: string
  * place in another conversation names it and copies the command that resumes it; a link is
  * copied. A note with no place or link opens in place instead (the pane does that).
  */
+/**
+ * The ⧉ on a link row (the listLinkClick setting's `nothing`): the link copied -- a file's path, a
+ * page's or an issue's URL, a reference as typed, a place's bookmark link.
+ */
+export async function copyLink(ports: ListsPorts, link: ItemLink): Promise<void> {
+  const text = textOf(link) ?? hrefOf(link, await ports.dataRoot())
+  if (!text) return
+  const copied = (await ports.copy(text)).isCopied
+  ports.toast(`${copied ? 'Copied' : 'The link'}: ${ports.cut(text, 80)}`, 8000)
+}
+
 export async function landItem(ports: ListsPorts, item: ListItem, link?: ItemLink): Promise<void> {
   // `link`: one of the item's links pressed in its opened view (the bundles design, unit 6); else its first.
   let first = link ?? primaryLink(item)
@@ -246,12 +257,16 @@ export async function landItem(ports: ListsPorts, item: ListItem, link?: ItemLin
     }
     const name = where.title ? `"${ports.cut(where.title, 40)}" (${short(p.session)})` : short(p.session)
     const cmd = `claude --resume ${p.session}`
-    const copied = (await ports.copy(cmd)).isCopied
+    // The listLinkClick setting: with `nothing` a click leaves the clipboard alone (djdarcy, 2026-10-31).
+    const copies = ports.clickCopies?.() ?? true
+    const copied = copies && (await ports.copy(cmd)).isCopied
     ports.toast(`"${ports.cut(item.label, 40)}" is in another conversation, ${name}. ${copied ? 'Copied' : 'Run'}: ${cmd}`, 10000)
     return
   }
   const text = first ? textOf(first) : undefined
   if (text) {
+    // With `nothing`, a click on a file, page or issue does nothing; ctrl-click opens it, the row's ⧉ copies it.
+    if (!(ports.clickCopies?.() ?? true)) return
     const copied = (await ports.copy(text)).isCopied
     ports.toast(`${copied ? 'Copied' : 'The link'}: ${ports.cut(text, 80)}`, 8000)
     return

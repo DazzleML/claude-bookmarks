@@ -322,6 +322,8 @@ export type ListsPorts = {
   fsRead: (path: string) => Promise<string>
   fsWrite: (path: string, text: string) => Promise<unknown>
   copy: (text: string) => Promise<{ isCopied: boolean }>
+  /** Whether a click on a list's link writes the clipboard (the listLinkClick setting; absent: it does). */
+  clickCopies?: () => boolean
   /** Redraw the lists pane (bumps its rev). */
   redraw: () => Promise<void>
   /** Open the lists pane, without the keyboard; what the engine answered. */

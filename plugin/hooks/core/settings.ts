@@ -182,6 +182,17 @@ export const FIELDS = {
     description:
       'true: when Claude Code carries a conversation on under a new session id (a branch, a resume, a background hand-off), its earlier bookmarks, marks and pins are copied in once; false: the new id starts with none (the earlier ones stay where they are)',
   },
+  // What a plain click on a list's link does with the clipboard (djdarcy, 2026-10-31: "an option
+  // that let's people enable/disable whether or not clicking a link in the list automatically copies
+  // the URI/URL"). Claude Code reports no held keys with a press, so alt+click cannot copy instead;
+  // `nothing` gives each link row a copy button. A place in this conversation is jumped to either way.
+  listLinkClick: {
+    kind: 'enum',
+    values: ['copy', 'nothing'],
+    default: 'copy',
+    title: 'A click on a link in a list',
+    description: "copy: a file, page or issue is copied (ctrl-click opens it); nothing: the clipboard is left alone and each link in an opened item gets a copy button. A place in this conversation is jumped to either way",
+  },
   // The search pane's rows behind their own fold, as the keys and the debug rows are (djdarcy,
   // 2026-10-26: "Is there a reason we didn't set this up as a proper foldable?").
   searchShown: {

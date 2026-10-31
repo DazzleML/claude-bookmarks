@@ -200,6 +200,7 @@ Open `/config` and find the plugin's one row, **▸ Bookmarks**, reading `false`
 | Lists in a pane | `on`, `off` | Whether the prompts and bookmarks lists open in a pane, or `p`/`b` take a number in the band with no pane |
 | Typing a list number | `auto`, `field`, `buttons` | How the band takes a prompt or bookmark number: in a text field of its own, where Backspace, `/words` and `*N` work (`auto`, the default, and `field`), or one button per digit as before 0.6.27 |
 | Pins shown in a list | `here`, `everywhere` | Whether a list shows only the pins made in it (`here`, the default) or every pin on its rows, wherever it was made |
+| A click on a link in a list | `copy`, `nothing` | Whether a click on a file, page or issue in the lists pane copies it (`copy`, the default; ctrl-click opens it either way); with `nothing` each link gets a ⧉ button that copies it |
 | Bring bookmarks into a continued conversation | `true`, `false` | When Claude Code carries a conversation on under a new session id (a branch, a resume, a background hand-off), copy its earlier bookmarks, marks and pins in once (`true`, the default) |
 | Keyboard after an action | `input`, `band` | Where the keyboard should go after an action (`input` waits on Claude Code allowing it) |
 | ▸ Debug: show the debug rows | `false`, `true` | The fold over the three debug rows below |

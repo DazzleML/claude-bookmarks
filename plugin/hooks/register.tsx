@@ -71,7 +71,7 @@ import { DrawnMessages } from './core/kit/drawn-messages'
 import { BOOKMARK_TOOL } from './core/bookmarks/bookmark-tool'
 import { LISTS_TOOL } from './core/lists/lists-tool'
 import { fnv1a64 } from './core/bookmarks/migrations'
-import { Lists, landItem, listsCommand, listsToolCall } from './handlers/lists'
+import { Lists, copyLink, landItem, listsCommand, listsToolCall } from './handlers/lists'
 import { linkOf } from './core/lists/lists'
 import { hrefOf as linkHref, linkKey } from './core/lists/item-links'
 import { listsPaneView } from './views/lists-pane'
@@ -866,6 +866,7 @@ function listsPorts($: EngineInterface): ListsPorts {
     fsRead: path => $.fs.read(path),
     fsWrite: (path, text) => $.fs.write(path, text),
     copy: copyVia($),
+    clickCopies: () => currentSettings().listLinkClick !== 'nothing',
     redraw: async () => { await update($, listsRev, n => n + 1) },
     openPane: () => $.ui.open({ id: LISTS_PANE, title: 'Lists', columns: 44 }),
     paneOpen: async () => (await $.ui.panes()).some(p => p.id === LISTS_PANE),
@@ -1919,7 +1920,7 @@ export const register: Register = (on, options) => {
     const root = await dataRoot($)
     return listsPaneView(
       $.ui.resolve(e),
-      { ...(await lists.paneModel(ports)), columns: e.props.bodyColumns, hrefOf: item => linkOf(item, root), hrefOfLink: l => linkHref(l, root) },
+      { ...(await lists.paneModel(ports)), columns: e.props.bodyColumns, hrefOf: item => linkOf(item, root), hrefOfLink: l => linkHref(l, root), copyButtons: currentSettings().listLinkClick === 'nothing' },
       {
         pick: l => lists.pick(ports, l.id),
         land: item => landItem(ports, item),
@@ -1928,6 +1929,7 @@ export const register: Register = (on, options) => {
         toggle: item => lists.toggleShown(ports, item.id),
         landLink: (item, link) => landItem(ports, item, link),
         face: (item, link) => lists.faceShown(ports, item.id, linkKey(link)),
+        copyLink: (_item, link) => copyLink(ports, link),
       },
       { text: style, button: buttonStyle },
     )

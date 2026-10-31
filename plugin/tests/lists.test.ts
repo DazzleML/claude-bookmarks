@@ -352,7 +352,8 @@ test('an item with several links shows +N on its row; opened, it lists every lin
   expect(rows[1]).toContain('DazzleML/claude-bookmarks#45')
   // One line per row: the mark and the icon inside the row's own Markdown, never a line of their own
   // (djdarcy, 2026-10-31: "Notice how the icons are on a line by themselves?").
-  expect(rows[0]).toMatch(/^★ ▤ \[C:\/code\/x\/dwp\.md\]\(/)
+  // The face is marked ●, never ★, which means pinned elsewhere (djdarcy, 2026-10-31: "Is the star an indicator that the link is already bookmarked?").
+  expect(rows[0]).toMatch(/^● ▤ \[C:\/code\/x\/dwp\.md\]\(/)
   expect(rows[1]).toMatch(/^\\# \[DazzleML\/claude-bookmarks#45\]\(/)
 })
 
@@ -386,7 +387,7 @@ test('a place row says what it is about: the words it was made from', async ($, 
   await ui.press({ key: 'lists-num-i1' })
   const row = (await ui.findAll({})).find(e => e.key === 'lists-link-i1-0')
   // The words follow the link, outside it (djdarcy: "it would be nice if the text next to the shortlinks wasn't hyperlinked").
-  expect(String(row?.props.text ?? row?.text)).toMatch(/^★ ⚓ \[11111111\/aaaaaaaa\]\([^)]*\) "We will need to handle migrations"$/)
+  expect(String(row?.props.text ?? row?.text)).toMatch(/^● ⚓ \[11111111\/aaaaaaaa\]\([^)]*\) "We will need to handle migrations"$/)
 })
 
 test('pressing a link row opens that link, not the face', async ($, on) => {
@@ -395,9 +396,23 @@ test('pressing a link row opens that link, not the face', async ($, on) => {
   await ui.press({ key: 'lists-num-i1' })
   await ui.press({ key: 'lists-link-i1-1', link: { href: 'https://github.com/DazzleML/claude-bookmarks/issues/45' } } as never)
   expect(w.copied()).toEqual(['https://github.com/DazzleML/claude-bookmarks/issues/45'])
+  expect((await ui.findAll({ type: 'Button' })).some(b => (b.key ?? '').startsWith('lists-copy-')), 'no copy button while a click copies').toBe(false)
 })
 
-test("a link row's ★ button makes it this list's face, and the row leads with it", async ($, on) => {
+// djdarcy, 2026-10-31: "an option that let's people enable/disable whether or not clicking a link in
+// the list automatically copies the URI/URL to the clipboard" -- with a copy button when it does not.
+test('with "A click on a link in a list" set to nothing: a click copies nothing, the ⧉ button copies', { options: { listLinkClick: 'nothing' } }, async ($, on) => {
+  const w = world(on, { session: SID, files: bundled() })
+  const ui = await mountPane($)
+  await ui.press({ key: 'lists-go-i2', link: { href: 'file:///C:/code/x/one.md' } } as never)
+  await ui.press({ key: 'lists-num-i1' })
+  await ui.press({ key: 'lists-link-i1-1', link: { href: 'https://github.com/DazzleML/claude-bookmarks/issues/45' } } as never)
+  expect(w.copied()).toEqual([])
+  await ui.press({ key: 'lists-copy-i1-0' })
+  expect(w.copied()).toEqual(['C:/code/x/dwp.md'])
+})
+
+test("a link row's ○ button makes it this list's face, and the row leads with it", async ($, on) => {
   const w = world(on, { session: SID, files: bundled() })
   const ui = await mountPane($)
   await ui.press({ key: 'lists-num-i1' })
