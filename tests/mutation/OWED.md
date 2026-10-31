@@ -34,6 +34,7 @@ When a sweep is run, add its report beside the others (`vX.Y.Z__sweep__<slug>.md
 | [ ] | 0.7.31 | d38f99f | the background lineage scan |
 | [ ] | 0.7.33 | d553f2c | copying the earlier sessions' bookmarks |
 | [ ] | 0.7.34 | 78ab0ae | on by default; the jumplist |
-| [ ] | 0.7.35 | (this commit) | a link's identity: the lists `link` duplicate check |
+| [ ] | 0.7.35 | b82e6f5 | a link's identity: the lists `link` duplicate check |
+| [ ] | 0.7.36 | (this commit) | bundles in the lists file: settle, the face-first copy, auto-bundle |
 
 Not listed: 0.7.29 (59eb80d) and 0.7.32 (bf66372) add tests only; docs and build commits.

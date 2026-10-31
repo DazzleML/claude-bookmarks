@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.36] - 2026-10-31
+
+### Added
+
+- **Bundles, the first part: a set of links kept once that any list can show.** A project's lists file can now hold bundles: a set of links (conversation places, files, issues, pages) kept once, which an item in any of its lists can show, each item choosing which link leads its row. An item that adding or linking leaves with two or more links becomes a bundle on its own; its links are copied with the leading one first, so every press, the lists page and an older build read it exactly as before. An item with one link or none stays as it is. Making, sharing and re-leading bundles from the lists tool, and the pane's view of every link, come next.
+
 ## [0.7.35] - 2026-10-31
 
 ### Fixed
@@ -1588,7 +1594,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.35...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.36...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

@@ -7,6 +7,7 @@
 // Pure: the file's text in, the file's text out; handlers/lists.ts reads and writes it.
 import type { AnchorOwner } from '../bookmarks/anchor.ts'
 import { hrefOf, primaryLink, v1to2Item, type ItemLink } from './item-links.ts'
+import { applyBundleOp, BUNDLE_OPS, editBundled, settle, type Bundle, type BundleOp } from './bundles.ts'
 
 /** 2 (0.7.10): an item's typed `links` replace its one `place`/`link`; the file keeps keys it does not know. */
 export const LISTS_VERSION = 2
@@ -48,6 +49,10 @@ export type ListItem = {
   by: AnchorOwner
   addedAt: number
   done?: boolean
+  /** The bundle this item shows (core/lists/bundles.ts); its `links` are then the bundle's, face first. */
+  bundle?: string
+  /** The link this item leads with: a link's identity (item-links.ts linkKey). */
+  face?: string
 }
 
 /** Reserved (L-9): a list whose items are read from a file. Never written by version 1. */
@@ -78,6 +83,8 @@ export type ListsFile = {
   lists: List[]
   /** Lists deleted, kept as they were (as the register's tombstones), newest last. */
   removed: (List & { removedAt: number })[]
+  /** Sets of links shown by items in any list (core/lists/bundles.ts); absent until the first one. */
+  bundles?: Bundle[]
 }
 
 export const emptyLists = (project: string, cwd: string, writer: string, now: number): ListsFile =>
@@ -171,8 +178,9 @@ export type Op =
   | { op: 'done'; list: string; item: string; done?: boolean }
   | { op: 'edit'; list: string; item: string; label?: string; why?: string; links?: ItemLink[] }
   | { op: 'share'; list: string }
+  | BundleOp
 
-export type OpResult = { ok: true; file: ListsFile; list?: List; item?: ListItem } | { ok: false; error: string }
+export type OpResult = { ok: true; file: ListsFile; list?: List; item?: ListItem; bundle?: Bundle } | { ok: false; error: string }
 
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'list'
 
@@ -210,7 +218,34 @@ function freshId(f: ListsFile, name: string): string {
 
 const withList = (f: ListsFile, l: List, now: number): ListsFile => ({ ...f, updatedAt: now, lists: f.lists.map(x => (x.id === l.id ? l : x)) })
 
+/**
+ * One operation on the file. The bundle ops go to core/lists/bundles.ts; after any operation, the
+ * bundles are settled: the item it touched becomes a bundle at two or more links, and every
+ * bundled item's copy of its links is refreshed. An `edit` of a bundled item's links changes its bundle.
+ */
 export function applyListOp(f: ListsFile, op: Op, now: number): OpResult {
+  const again = (file: ListsFile, list?: List, item?: ListItem) => {
+    const l = list ? file.lists.find(x => x.id === list.id) : undefined
+    const i = l && item ? l.items.find(x => x.id === item.id) : undefined
+    return { ...(l ? { list: l } : {}), ...(i ? { item: i } : {}) }
+  }
+  if (BUNDLE_OPS.has(op.op)) {
+    const r = applyBundleOp(f, op as BundleOp, now, findItem)
+    if (!r.ok) return r
+    const file = settle(r.file, now)
+    const list = r.list ?? ('list' in op ? file.lists.find(l => l.id === op.list) : undefined)
+    return { ok: true, file, ...again(file, list, r.item), ...(r.bundle ? { bundle: r.bundle } : {}) }
+  }
+  const r = applyPlainOp(f, op as Exclude<Op, BundleOp>, now)
+  if (!r.ok) return r
+  let file = r.file
+  if (op.op === 'edit' && op.links && r.item?.bundle) file = editBundled(file, r.item, op.links, now)
+  const touched = (op.op === 'add' || op.op === 'edit') && r.list && r.item ? { list: r.list.id, item: r.item.id } : undefined
+  file = settle(file, now, touched)
+  return { ok: true, file, ...again(file, r.list, r.item) }
+}
+
+function applyPlainOp(f: ListsFile, op: Exclude<Op, BundleOp>, now: number): OpResult {
   if (op.op === 'create') {
     const name = op.name.trim()
     if (!name) return { ok: false, error: 'a list needs a name' }
