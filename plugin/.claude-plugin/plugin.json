@@ -1,7 +1,7 @@
 {
   "name": "bookmarks",
   "displayName": "Bookmarks",
-  "version": "0.7.39",
+  "version": "0.7.40",
   "description": "Bookmarks and vim-style marks inside Claude Code conversations: mark a line, jump back, keep a reading position, browse your prompts, and let Claude cite earlier places as clickable links.",
   "author": {
     "name": "DazzleML",
@@ -31,6 +31,12 @@
       "type": "boolean",
       "title": "▸ Bookmarks",
       "description": "true: the plugin's settings appear below (the prompts list, the band, the lists' rows, debugging, colours, and the keys behind their own row); false: folded away, and everything you set still applies",
+      "default": false
+    },
+    "promptsShown": {
+      "type": "boolean",
+      "title": "▸ Prompts: show the prompts list's rows",
+      "description": "true: the rows below set where the prompts list opens, whether it follows the view, its footnotes and kept text, and what the prompts and bookmarks lists do after a pick and while you type; false: folded away (what you set stays)",
       "default": false
     },
     "listOpensAt": {
@@ -82,22 +88,6 @@
         "stay"
       ]
     },
-    "afterActionFocus": {
-      "type": "string",
-      "title": "Keyboard after an action",
-      "description": "input: back to the input box once Claude Code allows a plugin to do it; band: stay in the band",
-      "default": "input",
-      "options": [
-        "input",
-        "band"
-      ]
-    },
-    "palette": {
-      "type": "string",
-      "title": "Colour overrides",
-      "description": "JSON, e.g. {\"here\": {\"color\": \"cyan\"}, \"markBand\": {\"backgroundColor\": \"#203040\"}}. Roles: here, pinned, footnote, legend, heading, mark, markBand, used, unused, unreached, emphasis, search. A colour is a theme key (warning, subtle, ...), a terminal colour name or #rrggbb; anything else is ignored",
-      "default": ""
-    },
     "footnotes": {
       "type": "string",
       "title": "Footnotes in the prompts list",
@@ -116,6 +106,22 @@
       "default": 2000000,
       "min": 0,
       "max": 1000000000
+    },
+    "afterActionFocus": {
+      "type": "string",
+      "title": "Keyboard after an action",
+      "description": "input: back to the input box once Claude Code allows a plugin to do it; band: stay in the band",
+      "default": "input",
+      "options": [
+        "input",
+        "band"
+      ]
+    },
+    "palette": {
+      "type": "string",
+      "title": "Colour overrides",
+      "description": "JSON, e.g. {\"here\": {\"color\": \"cyan\"}, \"markBand\": {\"backgroundColor\": \"#203040\"}}. Roles: here, pinned, footnote, legend, heading, mark, markBand, used, unused, unreached, emphasis, search. A colour is a theme key (warning, subtle, ...), a terminal colour name or #rrggbb; anything else is ignored",
+      "default": ""
     },
     "band": {
       "type": "string",

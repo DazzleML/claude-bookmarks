@@ -182,19 +182,20 @@ The known limits, briefly; **[docs/troubleshooting.md](docs/troubleshooting.md)*
 
 ## Configuration
 
-Open `/config` and find the plugin's one row, **▸ Bookmarks**, reading `false`: every setting is folded away behind it, since the defaults are meant to need no changing. Press `Enter` on it and it turns `true` in place: the rows below appear, the key rows and the debug rows behind folds of their own inside it. Press `Enter` again to fold them away; everything you set still applies. A change takes effect at once; `/bm-config` prints every setting, its value and where the value came from.
+Open `/config` and find the plugin's one row, **▸ Bookmarks**, reading `false`: every setting is folded away behind it, since the defaults are meant to need no changing. Press `Enter` on it and it turns `true` in place: the rows below appear, the prompts list's rows, the key rows and the debug rows behind folds of their own inside it. Press `Enter` again to fold them away; everything you set still applies. A change takes effect at once; `/bm-config` prints every setting, its value and where the value came from.
 
 | Setting | Values (default first) | What it does |
 |---|---|---|
 | ▸ Bookmarks | `false`, `true` | The fold over every row below: folded by default; your settings apply either way |
+| ▸ Prompts: show the prompts list's rows | `false`, `true` | The fold over the seven rows below, through "A list while you type" |
 | Prompts list opens at | `nearest`, `newest` | Where the prompts list opens: centred on the prompt nearest your view, or at the newest |
 | Prompts list follows the view | `when-idle`, `always`, `never` | Whether the list scrolls to keep the yellow row showing as you scroll the conversation (`when-idle`: not while you type a number) |
 | Closeness for the earlier prompt | `0.6` (0 to 1) | How much of the screen an earlier exchange must hold to count as nearest |
 | Footnotes in the prompts list | `folded`, `shown`, `hidden` | Your slash commands, `!` shell commands and interruptions, listed as `N.k` under the prompt they followed: folded behind `… N footnotes`, always listed, or never |
 | Prompt text kept for the filter (bytes) | `2000000` (0 = unlimited) | How much of your prompts the `/words` filter searches, newest first; past the budget the oldest prompts are matched only on the short excerpt the list shows |
-| Lines per row in the lists | `2` (1 to 5) | How many lines each prompt in the prompts list, and each mark in the jump list, may take; the text is cut with an ellipsis at the end of the last line, and a second line sits under the text, not under the number |
 | Prompts or bookmarks list after you pick a row | `close`, `stay` | Whether the list closes after you click a row (or type its number and `Enter`), or stays open for the next pick |
 | A list while you type | `stay`, `close` | Whether an open list stays while you type in the input box |
+| Lines per row in the lists | `2` (1 to 5) | How many lines each prompt in the prompts list, and each mark in the jump list, may take; the text is cut with an ellipsis at the end of the last line, and a second line sits under the text, not under the number |
 | The band | `full`, `field` | The command field with the labelled commands and `?`, or the field alone |
 | Chords on their own keybindings | `on`, `off` | Whether mark, jump, prompts and read also answer the optional chords bound to their borrowed actions |
 | Lists in a pane | `on`, `off` | Whether the prompts and bookmarks lists open in a pane, or `p`/`b` take a number in the band with no pane |

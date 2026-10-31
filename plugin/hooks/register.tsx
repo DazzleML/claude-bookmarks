@@ -1168,6 +1168,8 @@ function bandPorts($: EngineInterface): BandPorts {
     bandMode: () => read($, bandMode),
     setBandMode: v => update($, bandMode, () => v),
     paneId: PANE,
+    listsPaneId: LISTS_PANE,
+    closeListsPane: () => $.ui.close({ id: LISTS_PANE }),
     panes: () => $.ui.panes(),
     closePaneUi: () => $.ui.close({ id: PANE }),
     expectRedraw,

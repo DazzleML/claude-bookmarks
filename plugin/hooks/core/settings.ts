@@ -50,6 +50,14 @@ export const FIELDS = {
     description:
       "true: the plugin's settings appear below (the prompts list, the band, the lists' rows, debugging, colours, and the keys behind their own row); false: folded away, and everything you set still applies",
   },
+  // The prompts list's rows behind their own fold (djdarcy, 2026-10-31: "a lot of items that are
+  // exclusive to how we do the "prompts" feature that should be grouped"); core/settings-fold.ts.
+  promptsShown: {
+    kind: 'boolean',
+    default: false,
+    title: `${FOLD_CLOSED} Prompts: show the prompts list's rows`,
+    description: 'true: the rows below set where the prompts list opens, whether it follows the view, its footnotes and kept text, and what the prompts and bookmarks lists do after a pick and while you type; false: folded away (what you set stays)',
+  },
   listOpensAt: {
     kind: 'enum',
     values: ['nearest', 'newest'],
@@ -88,20 +96,6 @@ export const FIELDS = {
     title: 'A list while you type',
     description: 'stay: typing in the input box leaves an open list where it is; close: typing closes it',
   },
-  afterActionFocus: {
-    kind: 'enum',
-    values: ['input', 'band'],
-    default: 'input',
-    title: 'Keyboard after an action',
-    description: 'input: back to the input box once Claude Code allows a plugin to do it; band: stay in the band',
-  },
-  // #27: a role's colour, background, dim or bold, as JSON; core/palette.ts validates it.
-  palette: {
-    kind: 'text',
-    default: '',
-    title: 'Colour overrides',
-    description: 'JSON, e.g. {"here": {"color": "cyan"}, "markBand": {"backgroundColor": "#203040"}}. Roles: here, pinned, footnote, legend, heading, mark, markBand, used, unused, unreached, emphasis, search. A colour is a theme key (warning, subtle, ...), a terminal colour name or #rrggbb; anything else is ignored',
-  },
   // #33: the person's slash commands, `!` shell commands and interruptions, as N.k rows
   // under their prompt in the prompts list. The fold is the first ladder on the
   // continuum (core/kit/continuum.ts): hidden (-1) < folded (0) < shown (+1).
@@ -122,6 +116,21 @@ export const FIELDS = {
     default: 2_000_000,
     title: 'Prompt text kept for the filter (bytes)',
     description: 'How much of your prompts the filter searches, across the conversation; 0 = unlimited (for machines with room to spare). The default keeps whole prompts in most conversations',
+  },
+  // After the prompts fold's rows (2026-10-31): these two apply everywhere, so they stay outside it.
+  afterActionFocus: {
+    kind: 'enum',
+    values: ['input', 'band'],
+    default: 'input',
+    title: 'Keyboard after an action',
+    description: 'input: back to the input box once Claude Code allows a plugin to do it; band: stay in the band',
+  },
+  // #27: a role's colour, background, dim or bold, as JSON; core/palette.ts validates it.
+  palette: {
+    kind: 'text',
+    default: '',
+    title: 'Colour overrides',
+    description: 'JSON, e.g. {"here": {"color": "cyan"}, "markBand": {"backgroundColor": "#203040"}}. Roles: here, pinned, footnote, legend, heading, mark, markBand, used, unused, unreached, emphasis, search. A colour is a theme key (warning, subtle, ...), a terminal colour name or #rrggbb; anything else is ignored',
   },
   // The input layers (#29) as switches. `band`: full shows the field, the labelled
   // commands and `?`; field shows the field alone. A band with nothing in it cannot take

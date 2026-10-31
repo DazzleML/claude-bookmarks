@@ -119,6 +119,9 @@ export type BandCorePorts = {
 /** Opening and closing the pane, and the view around it (openFor, bandOnly, handOff, settle, closePane): the pane surface, PanePosition's anchor and view, and where the view is. */
 export type PanePorts = {
   paneId: string
+  /** The lists pane's own id (bm-lists), and its close: `q` closes it too (djdarcy, 2026-10-31). */
+  listsPaneId?: string
+  closeListsPane?: () => Promise<unknown>
   panes: () => Promise<readonly { id: string; isFocused?: boolean }[]>
   closePaneUi: () => Promise<unknown>
   expectRedraw: (why: string) => void

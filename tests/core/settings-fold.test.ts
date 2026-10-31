@@ -4,7 +4,7 @@
 // /config row the menu leaves out, with the keys' own fold inside it.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { CUSTOM_ROWS, DEBUG_ROWS, DEBUG_SHOWN_FIELD, SEARCH_ROWS, SEARCH_SHOWN_FIELD, SETTINGS_SHOWN_FIELD, foldLabel, rowHidden } from '../../plugin/hooks/core/settings-fold.ts'
+import { CUSTOM_ROWS, DEBUG_ROWS, DEBUG_SHOWN_FIELD, PROMPTS_ROWS, PROMPTS_SHOWN_FIELD, SEARCH_ROWS, SEARCH_SHOWN_FIELD, SETTINGS_SHOWN_FIELD, foldLabel, rowHidden } from '../../plugin/hooks/core/settings-fold.ts'
 import { DEFAULTS, FIELDS, FOLD_CLOSED, FOLD_OPEN } from '../../plugin/hooks/core/settings.ts'
 
 const values = (over: Record<string, boolean> = {}) => ({ ...DEFAULTS, ...over }) as unknown as Record<string, unknown>
@@ -34,6 +34,24 @@ test('unfolded, every setting shows and the key rows stay behind their own fold'
   const both = values({ [SETTINGS_SHOWN_FIELD]: true, keysShown: true })
   assert.equal(rowHidden('keyMark', both), false)
   assert.equal(rowHidden('keyLeader', both), false)
+})
+
+// djdarcy, 2026-10-31: "we have a lot of items that are exclusive to how we do the "prompts" feature
+// that should be grouped" -- the prompts list's rows and the two rows on the lists' behaviour.
+test('the prompts rows sit behind their own fold, inside the Bookmarks fold; the rows for everywhere stay out', () => {
+  const rows = ['listOpensAt', 'followHere', 'closeShare', 'footnotes', 'promptTextBudget', 'paneAfterJump', 'paneWhileTyping']
+  assert.deepEqual([...PROMPTS_ROWS].sort(), [...rows].sort())
+  const bookmarks = values({ [SETTINGS_SHOWN_FIELD]: true })
+  for (const r of rows) assert.equal(rowHidden(r, bookmarks), true, `${r} folded away`)
+  assert.equal(rowHidden(PROMPTS_SHOWN_FIELD, bookmarks), false, 'the fold row shows')
+  assert.equal(rowHidden('afterActionFocus', bookmarks), false, 'Keyboard after an action stays out')
+  assert.equal(rowHidden('palette', bookmarks), false, 'Colour overrides stay out')
+  const both = values({ [SETTINGS_SHOWN_FIELD]: true, [PROMPTS_SHOWN_FIELD]: true })
+  for (const r of rows) assert.equal(rowHidden(r, both), false, `${r} shown`)
+  assert.equal(rowHidden('listOpensAt', values({ [PROMPTS_SHOWN_FIELD]: true })), true, 'not while the Bookmarks fold is closed')
+  const keys = Object.keys(FIELDS)
+  assert.equal(keys.indexOf(PROMPTS_SHOWN_FIELD), keys.indexOf('listOpensAt') - 1, 'the fold row heads its rows')
+  assert.equal((DEFAULTS as Record<string, unknown>)[PROMPTS_SHOWN_FIELD], false)
 })
 
 test('the keys fold alone does not show the key rows while the Bookmarks fold is closed', () => {

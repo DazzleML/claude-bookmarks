@@ -539,6 +539,10 @@ async function closePane(ports: BandCorePorts & PanePorts) {
 // rest, the band's list row, or a pane's own field.
 export async function closeAll(ports: BandCorePorts & PanePorts, via: string) {
   ports.log(`[bm] close (${via}): the pane and the band's mode`)
-  if ((await ports.panes()).some(p => p.id === ports.paneId)) await closePane(ports)
+  const open = await ports.panes()
+  if (open.some(p => p.id === ports.paneId)) await closePane(ports)
+  // The lists pane has its own id, so it is closed by name (djdarcy, 2026-10-31: "if I open the
+  // "lists" pane and if I hit <leader>q it does not close").
+  if (ports.listsPaneId && ports.closeListsPane && open.some(p => p.id === ports.listsPaneId)) await ports.closeListsPane()
   await endBandMode(ports)
 }

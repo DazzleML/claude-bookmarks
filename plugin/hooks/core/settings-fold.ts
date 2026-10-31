@@ -31,9 +31,13 @@ export const SEARCH_ROWS: ReadonlySet<string> = new Set(['searchToggles', 'searc
  * never appeared after "short" was chosen).
  */
 export const SHOWS_ROWS: ReadonlySet<string> = new Set(['searchView', 'searchLabels'])
+/** The fold over the prompts list's rows (djdarcy, 2026-10-31: "a lot of items that are exclusive to how we do the "prompts" feature that should be grouped"). */
+export const PROMPTS_SHOWN_FIELD = 'promptsShown'
+/** The rows behind the prompts fold: the prompts list's, and how the prompts and bookmarks lists behave after a pick and while you type. */
+export const PROMPTS_ROWS: ReadonlySet<string> = new Set(['listOpensAt', 'followHere', 'closeShare', 'footnotes', 'promptTextBudget', 'paneAfterJump', 'paneWhileTyping'])
 
 /** The fold rows, each a true/false setting: /config flips those in place with Enter. */
-export const FOLD_FIELDS: ReadonlySet<string> = new Set([SETTINGS_SHOWN_FIELD, KEYS_SHOWN_FIELD, DEBUG_SHOWN_FIELD, SEARCH_SHOWN_FIELD])
+export const FOLD_FIELDS: ReadonlySet<string> = new Set([SETTINGS_SHOWN_FIELD, PROMPTS_SHOWN_FIELD, KEYS_SHOWN_FIELD, DEBUG_SHOWN_FIELD, SEARCH_SHOWN_FIELD])
 
 const open = (values: Readonly<Record<string, unknown>>, fold: string) => values[fold] === true
 
@@ -43,6 +47,7 @@ export function rowHidden(field: string, values: Readonly<Record<string, unknown
   if (!open(values, SETTINGS_SHOWN_FIELD)) return true
   if (isKeyRow(field)) return !open(values, KEYS_SHOWN_FIELD)
   if (DEBUG_ROWS.has(field)) return !open(values, DEBUG_SHOWN_FIELD)
+  if (PROMPTS_ROWS.has(field)) return !open(values, PROMPTS_SHOWN_FIELD)
   if (CUSTOM_ROWS.has(field)) return !open(values, SEARCH_SHOWN_FIELD) || values.searchView !== CUSTOM_VIEW
   if (field === 'searchShortLength') return !open(values, SEARCH_SHOWN_FIELD) || values.searchLabels !== 'short'
   if (SEARCH_ROWS.has(field)) return !open(values, SEARCH_SHOWN_FIELD)

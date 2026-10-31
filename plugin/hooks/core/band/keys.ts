@@ -144,23 +144,16 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
     help: 'go to your reading position, or back to where you were',
     route: () => done({ op: 'reading' }),
   },
-  {
-    id: 'prompts',
-    keys: ['p'],
-    then: 'number',
-    label: 'prompt',
-    button: 'prompts',
-    shown: true,
-    chord: 'prompts',
-    help: 'your prompts, numbered; a number jumps to one',
-    route: () => waiting({ op: 'open', pane: 'list' }),
-  },
+  // The bar's order is djdarcy's (2026-10-31): "bm:  m: mark j: jump r: read b: bookmarks l:
+  // lists p: prompts /: search ?" -- moving around first (marks, jumps, the reading position),
+  // then the lasting links (bookmarks, then lists of them), then the panes that find things
+  // (prompts, then search), then help.
   {
     id: 'bookmarks',
     keys: ['b'],
     label: 'bookmarks',
     button: 'bookmarks',
-    shown: false,
+    shown: true,
     help: "the bookmarks list, yours and Claude's",
     route: () => waiting({ op: 'open', pane: 'bookmarks' }),
   },
@@ -176,6 +169,17 @@ export const LINE_COMMANDS: readonly LineCommand[] = [
     shown: true,
     help: "the project's lists, beside the conversation; again to close",
     route: () => done({ op: 'lists' }),
+  },
+  {
+    id: 'prompts',
+    keys: ['p'],
+    then: 'number',
+    label: 'prompt',
+    button: 'prompts',
+    shown: true,
+    chord: 'prompts',
+    help: 'your prompts, numbered; a number jumps to one',
+    route: () => waiting({ op: 'open', pane: 'list' }),
   },
   // Search (the search-pane-and-links design, 2026-10-26, gate G-2: djdarcy chose `/` over
   // `s`). On the bar (djdarcy, after the first live look: "Add a 'search' button"), click-only:
