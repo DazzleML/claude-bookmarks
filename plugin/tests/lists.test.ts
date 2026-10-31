@@ -426,10 +426,47 @@ test('the tool: bundle an item, attach the bundle to another list, choose its fa
   expect(String((await call($, { action: 'attach', list: 'Board', owner: 'user', bundle: 'b9' })).error)).toContain('no bundle')
 })
 
-test('an item with one link opens as before: no link rows, no +N', async ($, on) => {
+// A link's `about` (the bundles design, addendum 2026-10-31 01:49; djdarcy: "a 1 sentence explanation of each file / URL").
+test('an about given with a link is kept on it and shown after it on its row', async ($, on) => {
+  const w = world(on, { session: SID })
+  await call($, { action: 'create', name: 'Work', owner: 'user' })
+  await call($, { action: 'add', list: 'Work', owner: 'user', label: 'continuations', links: [
+    { link: 'C:/code/x/dwp.md', about: 'the design and its addenda' },
+    { link: 'https://github.com/DazzleML/claude-bookmarks/issues/39', about: 'A branched conversation keeps its data' },
+  ] })
+  const item = (JSON.parse(w.file(FILE)!) as ListsFile).lists[0]!.items[0]!
+  expect(item.links!.map(l => (l as { about?: string }).about)).toEqual(['the design and its addenda', 'A branched conversation keeps its data'])
+  const ui = await mountPane($)
+  await ui.press({ key: 'lists-num-i1' })
+  const row = (await ui.findAll({ type: 'Markdown' })).find(m => m.key === 'lists-link-i1-1')
+  expect(String(row?.props.text)).toMatch(/\]\([^)]*\) — A branched conversation keeps its data$/)
+})
+
+test('about on an existing link reaches every list that shows its bundle; a link given again gains an about, never doubles', async ($, on) => {
+  const w = world(on, { session: SID })
+  await call($, { action: 'create', name: 'Work', owner: 'user' })
+  await call($, { action: 'create', name: 'Board', owner: 'user' })
+  await call($, { action: 'add', list: 'Work', owner: 'user', label: 'notes', links: [{ link: 'C:/code/x/a.md' }, { link: 'C:/code/x/b.md' }] })
+  await call($, { action: 'attach', list: 'Board', owner: 'user', bundle: 'b1' })
+  await call($, { action: 'about', list: 'Work', owner: 'user', item: '1', at: 2, about: 'the second note' })
+  await call($, { action: 'link', list: 'Board', owner: 'user', item: '1', links: [{ link: 'c:\\code\\x\\a.md', about: 'the first note' }] })
+  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  for (const name of ['Work', 'Board']) {
+    const links = f.lists.find(l => l.name === name)!.items[0]!.links as { path: string; about?: string }[]
+    expect(links.map(l => [l.path, l.about])).toEqual([['C:/code/x/a.md', 'the first note'], ['C:/code/x/b.md', 'the second note']])
+  }
+})
+
+// djdarcy, 2026-10-31: "I'm not sure we need the info text in the middle of the foldout pane
+// explaining how to use the links" -- each link's row says where it goes, the footer how to use it.
+test('an item with one link opens to its one link row, no +N, and no how-to line', async ($, on) => {
   world(on, { session: SID, files: bundled() })
   const ui = await mountPane($)
+  expect(await texts(ui)).not.toContain('+0')
   await ui.press({ key: 'lists-num-i2' })
-  expect((await ui.findAll({ type: 'Button' })).some(b => (b.key ?? '').startsWith('lists-link-i2-'))).toBe(false)
-  expect(await texts(ui)).toContain('C:/code/x/one.md: press the label to copy it')
+  const rows = (await ui.findAll({})).filter(e => (e.key ?? '').startsWith('lists-link-i2-'))
+  expect(rows.length).toBe(1)
+  expect(String(rows[0]!.props.text)).toContain('C:/code/x/one.md')
+  expect(await texts(ui)).not.toContain('press the label')
+  expect(await texts(ui)).toContain('ctrl-click a link to open it')
 })

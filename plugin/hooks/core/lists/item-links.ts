@@ -18,12 +18,15 @@
 import { anchorHref, fileUrl } from '../bookmarks/anchor.ts'
 import { parseRef } from '../bookmarks/ref.ts'
 
-export type PlaceLink = { kind: 'place'; session: string; uuid: string; file?: string; part?: number; drawn?: string; words?: string }
-export type FileLink = { kind: 'file'; path: string }
-export type UrlLink = { kind: 'url'; href: string }
-export type IssueLink = { kind: 'issue'; repo: string; n: number }
-export type LineLink = { kind: 'line'; path: string; id: string }
-export type RefLink = { kind: 'ref'; text: string }
+// Every kind may carry `about`: one sentence of what the link is (the bundles design, addendum
+// 2026-10-31; djdarcy: "a 1 sentence explanation of each file / URL could be handy"). It is how a
+// link is shown, never what it points at, so a link's identity (linkKey) ignores it.
+export type PlaceLink = { kind: 'place'; session: string; uuid: string; file?: string; part?: number; drawn?: string; words?: string; about?: string }
+export type FileLink = { kind: 'file'; path: string; about?: string }
+export type UrlLink = { kind: 'url'; href: string; about?: string }
+export type IssueLink = { kind: 'issue'; repo: string; n: number; about?: string }
+export type LineLink = { kind: 'line'; path: string; id: string; about?: string }
+export type RefLink = { kind: 'ref'; text: string; about?: string }
 export type ItemLink = PlaceLink | FileLink | UrlLink | IssueLink | LineLink | RefLink
 
 /** The fields an item's links come from: v2's `links`, or v1's single `place`/`link`/`words`. */

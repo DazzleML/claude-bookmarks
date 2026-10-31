@@ -5,7 +5,7 @@
 // and hands in the model and the actions.
 import type { EngineInterface } from 'claude-code'
 import type { List, ListItem, ListsFile } from '../core/lists/lists.ts'
-import { linksOf, primaryLink, textOf, type ItemLink } from '../core/lists/item-links.ts'
+import { linksOf, primaryLink, type ItemLink } from '../core/lists/item-links.ts'
 import { describeLink } from '../core/lists/lists-tool.ts'
 import type { PaneStyles } from './prompts-pane.tsx'
 
@@ -143,14 +143,10 @@ export function listsPaneView(elements: Elements, m: ListsPaneModel, a: ListsPan
           {isOpen && (
             <Box key={`lists-open-${item.id}`} flexDirection="column" marginLeft={width + 2}>
               {item.why && <Text wrap="wrap">{item.why}</Text>}
-              <Text {...style('legend')} wrap="wrap">
-                {first?.kind === 'place'
-                  ? `⚓ a place in ${first.session.slice(0, 8)}${first.file ? ` (${first.file})` : ''}: press the label to go there${href ? ', ctrl-click to open its note' : ''}`
-                  : first
-                    ? `▤ ${textOf(first) ?? ''}: press the label to copy it, ctrl-click to open it`
-                    : 'a note: no place or link'}
-              </Text>
-              {links.length > 1 &&
+              {/* Each link's row says where it goes; the footer says how to use them (djdarcy, 2026-10-31:
+                  "I'm not sure we need the info text in the middle of the foldout pane"). A note says it is one. */}
+              {!first && <Text {...style('legend')}>a note: no place or link</Text>}
+              {links.length > 0 &&
                 links.map((l, k) => (
                   <Box key={`lists-linkrow-${item.id}-${k}`} flexDirection="row">
                     {(() => {
@@ -170,10 +166,13 @@ export function listsPaneView(elements: Elements, m: ListsPaneModel, a: ListsPan
                       if (lh && /^(https?|file):/i.test(lh)) {
                         const target = lh.replace(/[()]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
                         const esc = (t: string) => t.replace(/([\\`*_[\]<>#|])/g, '\\$1')
-                        const text = `${mark}${glyph === '#' ? '\\#' : glyph} [${what.replace(/[[\]]/g, ' ')}](${target})${words ? ` "${esc(words)}"` : ''}`
+                        // The link's one sentence of what it is, when it has one (the bundles design,
+                      // addendum 2026-10-31), else a place's words.
+                      const tail = l.about ? ` — ${esc(l.about)}` : words ? ` "${esc(words)}"` : ''
+                        const text = `${mark}${glyph === '#' ? '\\#' : glyph} [${what.replace(/[[\]]/g, ' ')}](${target})${tail}`
                         return <Markdown key={`lists-link-${item.id}-${k}`} text={text} pressableLinks={[target]} onLinkPress={onPress} />
                       }
-                      return <Button key={`lists-link-${item.id}-${k}`} label={`${mark}${glyph} ${what}${words ? ` "${words}"` : ''}`} plain onPress={onPress} />
+                      return <Button key={`lists-link-${item.id}-${k}`} label={`${mark}${glyph} ${what}${l.about ? ` — ${l.about}` : words ? ` "${words}"` : ''}`} plain onPress={onPress} />
                     })()}
                     {item.bundle && k > 0 && a.face && (
                       <Button key={`lists-face-${item.id}-${k}`} label=" ☆" plain {...s.button('unreached')} onPress={() => a.face!(item, l)} />
@@ -186,7 +185,7 @@ export function listsPaneView(elements: Elements, m: ListsPaneModel, a: ListsPan
         </Box>
         )
       })}
-      <Text {...style('legend')}>Press an item to go to it, its number to read it all; ▲ ▼ move it; · ticks it done. ◆ marks Claude's lists.</Text>
+      <Text {...style('legend')}>Press an item to go to it, its number to read it all and see its links (ctrl-click a link to open it); ▲ ▼ move it; · ticks it done. ◆ marks Claude's lists.</Text>
     </Box>
   )
 }

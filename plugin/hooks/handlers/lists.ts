@@ -282,18 +282,20 @@ export async function listsToolCall(ports: ListsPorts, lists: Lists, e: unknown)
 async function linksFor(ports: ListsPorts, wants: readonly LinkWant[], label: string): Promise<{ links: ItemLink[] } | { error: string }> {
   const links: ItemLink[] = []
   for (const w of wants) {
+    // A link's one sentence of what it is (the bundles design, addendum 2026-10-31).
+    const about = w.about ? { about: w.about } : {}
     if (w.query || w.uuid) {
       const minted = await ports.mintPlace({ ...(w.query ? { query: w.query } : {}), ...(w.uuid ? { uuid: w.uuid } : {}), label, ...(w.words ?? w.query ? { words: (w.words ?? w.query)! } : {}) })
       if ('error' in minted) return { error: minted.error }
       const ref = parseRef(minted.anchor)
       if (!ref?.session || !ref.uuid) return { error: `the place was bookmarked but its link could not be read: ${minted.anchor}` }
-      links.push({ kind: 'place', session: ref.session, uuid: ref.uuid, ...(ref.file !== undefined ? { file: ref.file } : {}), ...(ref.part !== undefined ? { part: ref.part } : {}), ...(ref.words ? { words: ref.words } : {}) })
+      links.push({ kind: 'place', session: ref.session, uuid: ref.uuid, ...(ref.file !== undefined ? { file: ref.file } : {}), ...(ref.part !== undefined ? { part: ref.part } : {}), ...(ref.words ? { words: ref.words } : {}), ...about })
     } else if (w.link) {
       const typed = linkFromText(w.link)
       // A `bm:` reference is stored as the exact place it names, or kept as typed when it names
       // none here (the bm: short-reference design, unit 6); never as a file path.
-      if (typed?.kind === 'ref') links.push((await ports.resolveRef(typed.text)) ?? typed)
-      else if (typed) links.push(typed)
+      if (typed?.kind === 'ref') links.push({ ...((await ports.resolveRef(typed.text)) ?? typed), ...about })
+      else if (typed) links.push({ ...typed, ...about })
     }
   }
   return { links }
@@ -378,13 +380,25 @@ export async function listsTool(ports: ListsPorts, lists: Lists, input: ListsToo
     const r = await lists.change(ports, { op: 'face', list: list.id, item: item.id, face: linkKey(have[input.at - 1]!) })
     return r.ok ? { ok: true, item: describeItem(r.item!, at, root) } : { error: r.error }
   }
+  if (input.action === 'about') {
+    const have = linksOf(item)
+    if (input.at === undefined || input.at < 1 || input.at > have.length) return { error: `about needs \`at\`, the number of the link (1 to ${have.length}), and \`about\`` }
+    if (!input.about) return { error: 'about needs `about`: one sentence of what the link is' }
+    const links = have.map((l, k) => (k === input.at! - 1 ? { ...l, about: input.about! } : l))
+    const r = await lists.change(ports, { op: 'edit', list: list.id, item: item.id, links })
+    return r.ok ? { ok: true, item: describeItem(r.item!, at, root) } : { error: r.error }
+  }
   if (input.action === 'link') {
     const wants = linkWants(input)
     if (!wants.length) return { error: 'link needs `query`/`uuid` (a place in this conversation), `link` (a file or URL), or `links`' }
     const got = await linksFor(ports, wants, item.label)
     if ('error' in got) return { error: got.error }
     // A link the item already has is not added twice (seen live: re-linking a place doubled it).
-    const have = linksOf(item)
+    // A link given again with an `about` gains it (the bundles design, addendum 2026-10-31).
+    const have = linksOf(item).map(h => {
+      const again = got.links.find(l => sameLink(h, l) && l.about)
+      return again ? { ...h, about: again.about } : h
+    })
     // By identity (the bundles design, unit 1): what a link points at, not how it was stored.
     const fresh = got.links.filter((l, k) => !have.some(h => sameLink(h, l)) && got.links.findIndex(x => sameLink(x, l)) === k)
     const r = await lists.change(ports, { op: 'edit', list: list.id, item: item.id, links: [...have, ...fresh] })

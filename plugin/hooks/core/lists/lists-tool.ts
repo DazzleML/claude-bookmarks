@@ -9,7 +9,7 @@ import { short } from '../kit/message-id.ts'
 import type { AnchorOwner } from '../bookmarks/anchor.ts'
 
 /** One link the tool is asked to add: a place of this conversation (`query`/`uuid`), or a file path or URL (`link`). */
-export type LinkWant = { query?: string; uuid?: string; link?: string; words?: string }
+export type LinkWant = { query?: string; uuid?: string; link?: string; words?: string; about?: string }
 
 export type ListsToolInput = {
   /** add, link: more links for the item, after the one given by the top-level fields. */
@@ -30,6 +30,8 @@ export type ListsToolInput = {
   done?: boolean
   /** attach: the bundle's id (`b1`), as an item's answer names it. */
   bundle?: string
+  /** add, link: one sentence of what the top-level link is; about: the text set on link `at`. */
+  about?: string
 }
 
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
@@ -39,7 +41,7 @@ const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.
 export function parseListsInput(input: Record<string, unknown>): ListsToolInput {
   const owner: AnchorOwner = input.owner === 'user' ? 'user' : 'claude'
   const o: ListsToolInput = { action: str(input.action) ?? 'lists', owner }
-  for (const k of ['list', 'name', 'label', 'why', 'query', 'uuid', 'link', 'words', 'bundle'] as const) {
+  for (const k of ['list', 'name', 'label', 'why', 'query', 'uuid', 'link', 'words', 'bundle', 'about'] as const) {
     const v = str(input[k])
     if (v !== undefined) o[k] = v
   }
@@ -65,7 +67,7 @@ export function parseListsInput(input: Record<string, unknown>): ListsToolInput 
       const x = (typeof w === 'string' ? { link: w } : w) as Record<string, unknown>
       if (!x || typeof x !== 'object') continue
       const want: LinkWant = {}
-      for (const k of ['query', 'uuid', 'link', 'words'] as const) {
+      for (const k of ['query', 'uuid', 'link', 'words', 'about'] as const) {
         const v = str(x[k])
         if (v !== undefined) want[k] = v
       }
@@ -79,8 +81,10 @@ export function parseListsInput(input: Record<string, unknown>): ListsToolInput 
 /** The links a call asks for, in order: the top-level `query`/`uuid`/`link` first, then `links`. */
 export function linkWants(input: ListsToolInput): LinkWant[] {
   const out: LinkWant[] = []
-  if (input.query || input.uuid) out.push({ ...(input.query ? { query: input.query } : {}), ...(input.uuid ? { uuid: input.uuid } : {}), ...(input.words ? { words: input.words } : {}) })
-  if (input.link) out.push({ link: input.link })
+  // `about` belongs to the top-level link when there is one (the `about` action uses it alone).
+  const about = input.about ? { about: input.about } : {}
+  if (input.query || input.uuid) out.push({ ...(input.query ? { query: input.query } : {}), ...(input.uuid ? { uuid: input.uuid } : {}), ...(input.words ? { words: input.words } : {}), ...about })
+  if (input.link) out.push({ link: input.link, ...(input.query || input.uuid ? {} : about) })
   return [...out, ...(input.links ?? [])]
 }
 
@@ -95,7 +99,7 @@ export function describeLink(l: ItemLink, n: number, root: string | undefined) {
     : l.kind === 'ref' ? `${l.text} (not resolved here)`
     : 'a link this version cannot read'
   const href = hrefOf(l, root)
-  return { n, kind: l.kind, what, ...(href ? { href } : {}) }
+  return { n, kind: l.kind, what, ...(l.about ? { about: l.about } : {}), ...(href ? { href } : {}) }
 }
 
 /** A list as the model sees it. */
@@ -130,8 +134,8 @@ export const LISTS_TOOL = {
     properties: {
       action: {
         type: 'string',
-        enum: ['lists', 'show', 'create', 'rename', 'delete', 'add', 'link', 'unlink', 'move', 'remove', 'done', 'edit', 'share', 'bundle', 'attach', 'face'],
-        description: 'lists (default): every list; show: one list\'s items, and opens the pane on it; create: a new list (`name`); add: an item (`label`, and `query`/`uuid` or `link`, and more in `links`); link: add links to an `item` (`query`/`uuid`/`link`/`links`); unlink: remove an `item`\'s link number `at` (1 the first); move: an item to position `to`; done: tick or untick an item; share: copy the list to the other side; bundle: make an `item` a bundle (one with two or more links already is); attach: show `bundle` (its id, as an item\'s answer gives it) in `list` as a new item, at position `at`; face: lead an `item` with its link number `at`',
+        enum: ['lists', 'show', 'create', 'rename', 'delete', 'add', 'link', 'unlink', 'move', 'remove', 'done', 'edit', 'share', 'bundle', 'attach', 'face', 'about'],
+        description: 'lists (default): every list; show: one list\'s items, and opens the pane on it; create: a new list (`name`); add: an item (`label`, and `query`/`uuid` or `link`, and more in `links`); link: add links to an `item` (`query`/`uuid`/`link`/`links`); unlink: remove an `item`\'s link number `at` (1 the first); move: an item to position `to`; done: tick or untick an item; share: copy the list to the other side; bundle: make an `item` a bundle (one with two or more links already is); attach: show `bundle` (its id, as an item\'s answer gives it) in `list` as a new item, at position `at`; face: lead an `item` with its link number `at`; about: set the one-sentence `about` of an `item`\'s link number `at`',
       },
       list: { type: 'string', description: 'The list: its id, its name, or its number among `owner`\'s lists (1 the first)' },
       name: { type: 'string', description: 'create, rename: the list\'s name' },
@@ -145,13 +149,14 @@ export const LISTS_TOOL = {
       words: { type: 'string', description: 'add: the words to highlight on arrival; defaults to query' },
       links: {
         type: 'array',
-        description: 'add, link: more links for the item, after `query`/`uuid`/`link`: each a place of this conversation (`query` or `uuid`, with `words`) or a `link` (a file path, a URL, a GitHub issue URL)',
-        items: { type: 'object', properties: { query: { type: 'string' }, uuid: { type: 'string' }, link: { type: 'string' }, words: { type: 'string' } } },
+        description: 'add, link: more links for the item, after `query`/`uuid`/`link`: each a place of this conversation (`query` or `uuid`, with `words`) or a `link` (a file path, a URL, a GitHub issue URL), each with an optional `about`: one sentence of what it is (a file\'s purpose, an issue\'s title)',
+        items: { type: 'object', properties: { query: { type: 'string' }, uuid: { type: 'string' }, link: { type: 'string' }, words: { type: 'string' }, about: { type: 'string' } } },
       },
       to: { type: 'number', description: 'move: the new position, 1 the top' },
       at: { type: 'number', description: 'add: the position to insert at, 1 the top; the end by default. unlink: the number of the link to remove, 1 the first' },
       done: { type: 'boolean', description: 'done: true to tick, false to untick; toggles when left out' },
       bundle: { type: 'string', description: 'attach: the bundle to show, by its id (`b1`)' },
+      about: { type: 'string', description: 'add, link: one sentence of what the `query`/`uuid`/`link` link is (shown after it in the pane); about: the text for link `at`' },
     },
   },
   isDeferred: true,

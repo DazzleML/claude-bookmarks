@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.38] - 2026-10-31
+
+### Added
+
+- **A link can say what it is.** Each of a list item's links can carry one sentence of description -- a file's purpose, an issue's title, what a place in a conversation is about -- given with the link through the lists tool (`about` beside it) or set later (the `about` action). The lists pane shows it after the link in an opened item; on a bundle, every list that shows the link shows it.
+
+### Changed
+
+- **An opened item lists its links without a how-to line.** Every opened item with a link, even one, shows each link as its own row; the line that explained pressing and ctrl-clicking is gone, and the pane's footer says it once ("ctrl-click a link to open it"). A note with no link still says it is a note.
+
 ## [0.7.37] - 2026-10-31
 
 ### Added
@@ -1601,7 +1611,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.37...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.38...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

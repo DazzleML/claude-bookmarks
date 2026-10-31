@@ -54,10 +54,14 @@ export function faceFirst(links: readonly ItemLink[], face: string | undefined):
   return at <= 0 ? [...links] : [links[at]!, ...links.slice(0, at), ...links.slice(at + 1)]
 }
 
-/** Links added once each, by identity, after those already there. */
+/** Links added once each, by identity, after those already there; a link given again with an `about` gains it. */
 const union = (have: readonly ItemLink[], more: readonly ItemLink[]): ItemLink[] => {
   const out = [...have]
-  for (const l of more) if (!out.some(h => sameLink(h, l))) out.push(l)
+  for (const l of more) {
+    const at = out.findIndex(h => sameLink(h, l))
+    if (at < 0) out.push(l)
+    else if (l.about && l.about !== out[at]!.about) out[at] = { ...out[at]!, about: l.about }
+  }
   return out
 }
 
@@ -119,6 +123,7 @@ export function applyBundleOp(f: ListsFile, op: BundleOp, now: number, findItem:
 export function editBundled(f: ListsFile, item: ListItem, links: readonly ItemLink[], now: number): ListsFile {
   const b = item.bundle ? findBundle(f, item.bundle) : undefined
   if (!b) return f
+  // union carries a changed `about` onto the kept link.
   const kept = b.links.filter(l => links.some(x => sameLink(x, l)))
   return withBundle(f, { ...b, links: union(kept, links), updatedAt: now })
 }

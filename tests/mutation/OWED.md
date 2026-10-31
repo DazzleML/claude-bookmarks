@@ -36,6 +36,7 @@ When a sweep is run, add its report beside the others (`vX.Y.Z__sweep__<slug>.md
 | [ ] | 0.7.34 | 78ab0ae | on by default; the jumplist |
 | [ ] | 0.7.35 | b82e6f5 | a link's identity: the lists `link` duplicate check |
 | [ ] | 0.7.36 | 9092ab3 | bundles in the lists file: settle, the face-first copy, auto-bundle |
-| [ ] | 0.7.37 | (this commit) | the pane's opened view of every link; the tool's bundle, attach, face |
+| [ ] | 0.7.37 | f6c1b4e | the pane's opened view of every link; the tool's bundle, attach, face |
+| [ ] | 0.7.38 | (this commit) | a link's `about`: stored, merged by identity, shown on its row |
 
 Not listed: 0.7.29 (59eb80d) and 0.7.32 (bf66372) add tests only; docs and build commits.
