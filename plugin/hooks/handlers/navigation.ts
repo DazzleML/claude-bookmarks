@@ -42,6 +42,23 @@ export class Navigation {
     await ports.storeSet(key, jl)
   }
 
+  /**
+   * A conversation carried on under a new session id (U83 unit 5): the newest earlier session's
+   * jumplist becomes this one's when this conversation has none of its own. Its entries name
+   * messages that came along with their ids. Through the cache, so a later save keeps it.
+   * Returns the session it came from.
+   */
+  async adoptJumplist(ports: NavigationPorts, earlier: readonly string[]): Promise<string | undefined> {
+    if ((await this.loadJumplist(ports)).entries.length) return undefined
+    for (const sid of [...earlier].reverse()) {
+      const jl = (await ports.storeGet(jumplistKey(sid))) as Jumplist | undefined
+      if (!jl?.entries?.length) continue
+      await this.saveJumplist(ports, jl)
+      return sid
+    }
+    return undefined
+  }
+
   async recordJump(ports: NavigationPorts, from: JumpEntry | undefined, to: JumpEntry) {
     if (this.jumplistMoving) return // a back or forward move is a walk, not a new jump
     const jl = await this.loadJumplist(ports)

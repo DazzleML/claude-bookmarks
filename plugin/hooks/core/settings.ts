@@ -172,6 +172,16 @@ export const FIELDS = {
     title: 'Pins shown in a list',
     description: 'here: a list shows the pins made in it; everywhere: a list shows a pin on any of its rows, wherever it was made',
   },
+  // A conversation Claude Code carries on under a new session id (U83 unit 4; on by default
+  // since unit 6's dry run on copies of real data; djdarcy, 2026-10-30: "having a way to
+  // disable it if a person wants to disable it is fine").
+  adoptEarlier: {
+    kind: 'boolean',
+    default: true,
+    title: 'Bring bookmarks into a continued conversation',
+    description:
+      'true: when Claude Code carries a conversation on under a new session id (a branch, a resume, a background hand-off), its earlier bookmarks, marks and pins are copied in once; false: the new id starts with none (the earlier ones stay where they are)',
+  },
   // The search pane's rows behind their own fold, as the keys and the debug rows are (djdarcy,
   // 2026-10-26: "Is there a reason we didn't set this up as a proper foldable?").
   searchShown: {

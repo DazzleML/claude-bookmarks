@@ -608,8 +608,9 @@ function lineagePorts($: EngineInterface): LineagePorts {
     storeSet: (key, value) => $.store.set(key, value),
     transcriptPath: () => transcriptPath($),
     scanLineage: path => scanLineage($, path),
-    adoptOn: async () => (await $.env.get('CONVO_BOOKMARKS_ADOPT')) === '1',
+    adoptOn: async () => currentSettings().adoptEarlier,
     adoptEarlier: ancestors => bookmarks_.adoptEarlier(bookmarksPorts($), ancestors),
+    adoptJumplist: ancestors => navigation.adoptJumplist(navPorts($), ancestors),
   }
 }
 

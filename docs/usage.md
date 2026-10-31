@@ -368,7 +368,17 @@ The file's **Notes** section is yours: anything below its marker line survives w
 
 ### One file per conversation: forks, resumes and references
 
-The register belongs to one conversation, and its name is that conversation's session id. `claude --resume` reopens the same conversation, so it reads the same file. A **forked** conversation (one branched from an earlier point of another) is a new conversation with a new id, and it starts with an empty register: the records of the conversation it branched from are not copied, even though the transcript it copied contains the same messages. That is the rule for the 0.5.x line; following a fork is tracked in [#39](https://github.com/DazzleML/claude-bookmarks/issues/39) and will come as its own change rather than as a side effect of how files are named.
+The register belongs to one conversation, and its name is that conversation's session id. `claude --resume` reopens the same conversation, so it reads the same file.
+
+Claude Code sometimes carries a conversation on under a **new session id**: a `/branch` or `--fork-session`, a `/rewind` that continues, a background hand-off. The messages come along with their ids, so the plugin can tell which earlier ids the conversation continues: it reads its own transcript once, in the background, a second or two after the start, and remembers the answer. Then, once per new id, it copies the earlier sessions' bookmarks, marks and pins into the new id's file:
+
+- the newest earlier session first; the new conversation's own bookmarks win over a copy of the same place;
+- each copied bookmark keeps its number where it is free, and keeps the earlier session's id, so its note and every link already written to it still work;
+- a bookmark removed in a newer session stays removed, and one you remove after the copy does not come back;
+- the jumplist comes along too when the new conversation has none yet; the reading position comes with the marks;
+- the earlier files are only read, never changed. A conversation that was branched keeps whatever it adds after the branch: the two go their own ways from there.
+
+Links and `bm:` references that name an earlier id of the conversation lead to the place here, since the message is here. To turn the copying off, set "Bring bookmarks into a continued conversation" to `false` in `/config`; a new id then starts empty, as before 0.7.34. Tracked in [#39](https://github.com/DazzleML/claude-bookmarks/issues/39).
 
 The file carries a `version` (how many format migrations it has been through) and a `format` (the oldest plugin that can still handle its data). A plugin that finds a file whose `format` is newer than what it knows reads it in full and refuses to write it (a toast says so once when the conversation loads, and any bookmark action that would save answers "not saved"); update the plugin to write it again. A plugin that finds an older `version` brings the file up to date when the conversation starts, keeping a copy of the original under `backups/` first. The two numbers are explained under [What to back up, and what a reinstall does](#what-to-back-up-and-what-a-reinstall-does).
 

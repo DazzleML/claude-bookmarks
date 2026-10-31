@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.34] - 2026-10-30
+
+### Changed
+
+- **A conversation continued under a new session id now brings its earlier bookmarks with it by default.** 0.7.33's copy of the earlier sessions' bookmarks, marks and pins runs on every first start under a new id, after a trial on copies of real bookmark files (a chain of three sessions, 38 items copied, every number unique, the earlier files unchanged). A new setting, "Bring bookmarks into a continued conversation" in `/config`, turns it off.
+
+### Added
+
+- **The jumplist comes along too**, when the new conversation has none of its own yet, so back and forward walk the earlier session's jumps. The reading position already came with the marks.
+- `docs/usage.md` describes what happens when a conversation continues under a new id; a hand checklist, `tests/checklists/v0.7.34__Feature__a-continued-conversation-keeps-its-bookmarks.md`.
+
 ## [0.7.33] - 2026-10-30
 
 ### Added
@@ -1571,7 +1582,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.33...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.34...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

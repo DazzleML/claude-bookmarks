@@ -18,12 +18,17 @@ const isLineage = (v: unknown): v is Lineage =>
 
 /**
  * At a start: the lineage, then the earlier sessions' bookmarks, marks and pins copied in
- * (U83 unit 4), when the switch is on. Run in the background, never awaited by a hook.
+ * (U83 unit 4), unless the adoptEarlier setting is off. Run in the background, never awaited by a hook.
  */
 export async function lineageAtStart(ports: LineagePorts): Promise<void> {
   const lineage = await ensureLineage(ports)
   if (!lineage?.ancestors.length || !(await ports.adoptOn())) return
-  await ports.adoptEarlier(lineage.ancestors.map(a => a.sessionId))
+  const earlier = lineage.ancestors.map(a => a.sessionId)
+  await ports.adoptEarlier(earlier)
+  // The jumplist (unit 5). The reading position needs no copy: it is a letter in the register,
+  // which adoptEarlier brought; its toggle state (readingState) is about this session's screen.
+  const from = await ports.adoptJumplist(earlier)
+  if (from) ports.log(`[bm] adopt: the jumplist of ${short(from)} taken over`)
 }
 
 /** The lineage of `sessionId`, if it is known yet (read, never waited on). */
