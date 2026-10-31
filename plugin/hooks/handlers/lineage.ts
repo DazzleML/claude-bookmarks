@@ -16,6 +16,16 @@ let pending: { session: string; done: Promise<Lineage | undefined> } | undefined
 const isLineage = (v: unknown): v is Lineage =>
   !!v && typeof v === 'object' && typeof (v as Lineage).self === 'string' && Array.isArray((v as Lineage).ancestors) && Array.isArray((v as Lineage).continuedIn)
 
+/**
+ * At a start: the lineage, then the earlier sessions' bookmarks, marks and pins copied in
+ * (U83 unit 4), when the switch is on. Run in the background, never awaited by a hook.
+ */
+export async function lineageAtStart(ports: LineagePorts): Promise<void> {
+  const lineage = await ensureLineage(ports)
+  if (!lineage?.ancestors.length || !(await ports.adoptOn())) return
+  await ports.adoptEarlier(lineage.ancestors.map(a => a.sessionId))
+}
+
 /** The lineage of `sessionId`, if it is known yet (read, never waited on). */
 export function lineageNow(sessionId: string): Lineage | undefined {
   return current?.session === sessionId.toLowerCase() ? current.lineage : undefined

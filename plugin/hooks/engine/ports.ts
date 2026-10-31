@@ -297,6 +297,10 @@ export type LineagePorts = {
   storeSet: (key: string, value: unknown) => Promise<unknown>
   transcriptPath: () => Promise<string | undefined>
   scanLineage: (path: string) => Promise<{ text: string; truncated: boolean; ms: number } | undefined>
+  /** Whether the earlier sessions' bookmarks are copied in (CONVO_BOOKMARKS_ADOPT=1, until unit 6's dry run settles the default). */
+  adoptOn: () => Promise<boolean>
+  /** The copy itself (handlers/bookmarks.ts adoptEarlier), the earlier ids oldest first. */
+  adoptEarlier: (ancestors: readonly string[]) => Promise<unknown>
 }
 
 /** What the lists (handlers/lists.ts, #45) need: the project's file under the data root, a place found and landed on, the pane, the clipboard and the person's feedback. */

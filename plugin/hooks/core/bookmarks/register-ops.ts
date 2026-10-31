@@ -14,6 +14,7 @@ import { sameMessage } from '../kit/message-id.ts'
 import type { Mark, Marks } from '../marks/marks.ts'
 import { sameBase, type NoteBase } from './note.ts'
 import { setPin, unionPins, type PinFrom, type PinPlace, type PinScope } from './pins.ts'
+import { adoptInto } from './adopt.ts'
 import {
   addOrRelabel, claim, idOf, isRecord, prune, recordById, recordsOn, remove, share,
   type Mint, type RecordId, type Register, type Retention, type Slot, type Tombstone,
@@ -61,6 +62,8 @@ export type Op =
   /** The note's base set on its primary record after the note is written: what a later read-back compares against (unit 9). */
   | { op: 'noteBase'; id: RecordId; base: NoteBase }
   | { op: 'union'; other: Register }
+  /** An earlier session's records, tombstones, letters and pins copied in, this conversation's own winning (adopt.ts, U83). */
+  | { op: 'adopt'; earlier: Register }
 
 export type Applied = {
   register: Register
@@ -74,6 +77,8 @@ export type Applied = {
   missing?: string[]
   /** forget: whether the record left a tombstone (something still refers to it) or went outright. */
   tombstoned?: boolean
+  /** adopt: how many records, tombstones, letters and pins came over. */
+  adopted?: number
   /** True when the register is unchanged (a prune with nothing to prune, a union that adds nothing). */
   unchanged?: boolean
 }
@@ -183,7 +188,8 @@ export function applyOp(reg: Register, op: Op, now: number): OpResult {
       if (!rec) return { register: withSlots(reg, op.owner, next, now) } // already gone from the file: the slot alone is mended
       const namedElsewhere = Object.entries(reg.slots ?? {}).some(([owner, letters]) =>
         Object.entries(letters ?? {}).some(([letter, s]) => !(owner === op.owner && letter === op.letter) && s.history.some(h => h.n === n)))
-      // `rel.to` names a record by its uuid; nothing writes `rel` yet, and its first writer fixes the form this follows.
+      // A `rel` naming a record here would name it by its uuid. The one writer so far, adoption's
+      // `copied-from` (adopt.ts), names a record in another session's file, never one here.
       const referred = reg.perma.some(r => r !== rec && (r.rel ?? []).some(x => x.to === rec.uuid))
       const referenced = history.length > 0 || namedElsewhere || referred || recordsOn(reg, rec.uuid).length > 0
       const perma = reg.perma.filter(r => r !== rec)
@@ -193,6 +199,10 @@ export function applyOp(reg: Register, op: Op, now: number): OpResult {
     }
     case 'union':
       return union(reg, op.other, now)
+    case 'adopt': {
+      const r = adoptInto(reg, op.earlier, now)
+      return r.adopted === 0 ? { register: reg, adopted: 0, unchanged: true } : { register: r.register, adopted: r.adopted }
+    }
   }
 }
 

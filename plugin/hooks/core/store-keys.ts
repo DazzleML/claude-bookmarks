@@ -13,7 +13,10 @@
 //                        pruned when a conversation goes unopened: core/store-prune.ts)
 //   lineage:<sid>        the earlier sessions this one continues (handlers/lineage.ts, U83):
 //                        a few hundred bytes, read once from the transcript and never changing
-//   seen                 when each conversation was last opened (core/store-prune.ts)
+//   adopted:<sid>        set once the earlier sessions' bookmarks, marks and pins were copied
+//                        in (handlers/bookmarks.ts adoptEarlier, U83), so a later start, or a
+//                        record the person removes here, never brings them in again
+//   seen                when each conversation was last opened (core/store-prune.ts)
 //   debug:echo           the machine-wide debug echo policy (handlers/log.ts)
 //
 // Seen in the author's store and written by no code since (2026-10-15): readingBack,
@@ -26,5 +29,6 @@ export const pinsKey = perConversation('pins')
 export const jumplistKey = perConversation('jumplist')
 export const readingStateKey = perConversation('readingState')
 export const lineageKey = perConversation('lineage')
+export const adoptedKey = perConversation('adopted')
 export const SEEN_KEY = 'seen'
 export const ECHO_POLICY_KEY = 'debug:echo'

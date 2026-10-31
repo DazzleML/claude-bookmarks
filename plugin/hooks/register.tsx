@@ -608,12 +608,14 @@ function lineagePorts($: EngineInterface): LineagePorts {
     storeSet: (key, value) => $.store.set(key, value),
     transcriptPath: () => transcriptPath($),
     scanLineage: path => scanLineage($, path),
+    adoptOn: async () => (await $.env.get('CONVO_BOOKMARKS_ADOPT')) === '1',
+    adoptEarlier: ancestors => bookmarks_.adoptEarlier(bookmarksPorts($), ancestors),
   }
 }
 
 // In the background: never awaited by a hook (the scan takes seconds on a large transcript).
 function startLineage($: EngineInterface) {
-  void lineage_.ensureLineage(lineagePorts($)).catch(err => log($, `[bm] lineage failed: ${String(err)}`))
+  void lineage_.lineageAtStart(lineagePorts($)).catch(err => log($, `[bm] lineage failed: ${String(err)}`))
 }
 
 // The message a request names, with its line and byte range: by uuid (full or 8+

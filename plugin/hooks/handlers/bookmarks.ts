@@ -29,6 +29,7 @@ import { forwardSlashes } from '../core/kit/paths.ts'
 import { short } from '../core/kit/message-id.ts'
 import { answer as toolAnswer, brief as briefRow, describe as describeRecord, listActedOn, listName, parseToolInput, tierFor } from '../core/bookmarks/bookmark-tool.ts'
 import type { BookmarksPorts } from '../engine/ports.ts'
+import { adoptedKey } from '../core/store-keys.ts'
 import { parseRef } from '../core/bookmarks/ref.ts'
 import { cachedRegisters, resolveRef, type RefPorts, type RegisterView, type Resolution } from '../core/bookmarks/ref-resolve.ts'
 import { expandRefs, refTokens } from '../core/bookmarks/ref-expand.ts'
@@ -63,6 +64,16 @@ let registerCache: { session: string; register: BookmarkRegister; text?: string;
 async function registerPath(ports: BookmarksPorts): Promise<string | undefined> {
   const root = await ports.dataRoot()
   return root ? `${root}/bookmarks/sessions/${await ports.sessionId()}.json` : undefined
+}
+
+/** Another conversation's register under `root`, only read: undefined when it is absent or does not parse. */
+async function readOtherRegister(ports: BookmarksPorts, root: string | undefined, sid: string): Promise<BookmarkRegister | undefined> {
+  const path = root ? `${root}/bookmarks/sessions/${sid}.json` : undefined
+  try {
+    return path && (await ports.fsExists(path)) ? parseRegister(await ports.fsRead(path)) : undefined
+  } catch {
+    return undefined
+  }
 }
 
 export async function loadRegister(ports: BookmarksPorts): Promise<BookmarkRegister> {
@@ -937,6 +948,47 @@ export async function promoteLetter(ports: BookmarksPorts, letter: string) {
   ports.toast(`${minted.added ? 'bookmarked' : 'already a bookmark, relabelled'}: ${minted.record.label.slice(0, 40)}${copied ? ' (link copied)' : ''}`, 6000)
 }
 
+// --- Adopting the earlier sessions (U83 unit 4, the design 2026-10-30__11-26-12) -------------
+// A conversation Claude Code carried on under a new id gets the earlier ids' bookmarks, marks
+// and pins, once: each earlier register, newest first, applied as one `adopt` operation
+// (core/bookmarks/adopt.ts) through commitOp, so the save is the ordinary one (the disk's
+// version if another window wrote, `.bak`, the read-only guards). The earlier files are only
+// read. The store's `adopted:<sid>` is set when every earlier register was taken in or absent;
+// a failed save leaves it unset, so the next start tries again.
+
+/** Copies `ancestors` (oldest first, as the lineage lists them) into this conversation's register, once per session id. */
+export async function adoptEarlier(ports: BookmarksPorts, ancestors: readonly string[]): Promise<{ adopted: number; from: string[] } | undefined> {
+  const sid = (await ports.sessionId()).toLowerCase()
+  const earlier = ancestors.map(a => a.toLowerCase()).filter(a => a !== sid)
+  if (earlier.length === 0) return undefined
+  if (await ports.storeGet(adoptedKey(sid))) return undefined
+  const root = await ports.dataRoot()
+  if (!root) return undefined
+  let adopted = 0
+  const from: string[] = []
+  for (const a of [...earlier].reverse()) {
+    const reg = await readOtherRegister(ports, root, a)
+    if (!reg) continue
+    if (reg.version < CURRENT) {
+      // Its own start migrates it; an older shape is never copied into a current file.
+      ports.logAlways(`[bm] adopt: ${short(a)}'s bookmark file is version ${reg.version}, older than this build's ${CURRENT}; not copied`)
+      continue
+    }
+    const r = await commitOp(ports, { op: 'adopt', earlier: reg })
+    if ('error' in r) {
+      ports.logAlways(`[bm] adopt: copying ${short(a)} into ${short(sid)} failed: ${r.error}; the next start tries again`)
+      return undefined
+    }
+    if (r.adopted) {
+      adopted += r.adopted
+      from.push(short(a))
+    }
+  }
+  await ports.storeSet(adoptedKey(sid), { at: await ports.now(), from: earlier, adopted })
+  ports.logAlways(`[bm] adopt: ${adopted ? `${adopted} copied into ${short(sid)} from ${from.join(', ')}` : `nothing to copy into ${short(sid)} from ${earlier.map(short).join(', ')}`}`)
+  return { adopted, from }
+}
+
 // The model's tool call (`mcp__bookmarks__bookmark`): what it takes and how it answers is
 // core/bookmarks/bookmark-tool.ts; register.tsx's tool.call hook hands the event here.
 // --- References (the bm: short-reference design, units 2 and 3a) -------------------------
@@ -967,14 +1019,7 @@ export async function refPortsOf(ports: BookmarksPorts, opts: { quick?: boolean 
     }
     return (ids = [...new Set(found)])
   }
-  const otherRegister = async (sid: string): Promise<BookmarkRegister | undefined> => {
-    const path = root ? `${root}/bookmarks/sessions/${sid}.json` : undefined
-    try {
-      return path && (await ports.fsExists(path)) ? parseRegister(await ports.fsRead(path)) : undefined
-    } catch {
-      return undefined
-    }
-  }
+  const otherRegister = (sid: string) => readOtherRegister(ports, root, sid)
   const register = cachedRegisters(async sid => {
     const reg = sid === current ? await loadRegister(ports) : await otherRegister(sid)
     return reg ? registerView(reg) : undefined
