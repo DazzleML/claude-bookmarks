@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.37] - 2026-10-31
+
+### Added
+
+- **Every link of an item, one press away, in the lists pane.** A row with several links shows `+N`; pressing its number opens it to a row per link. Each row is a link of its own, as the item's label is: a click goes to it (a place jumps there; a file, page or issue is copied), a ctrl-click opens it (the file, the page, the issue). A place's row shows the words it was made from. On a bundle the link that leads is starred, and `☆` beside another makes it lead in this list. An item with one link opens as before.
+- **The lists tool makes and shares bundles:** `bundle` makes an item a bundle, `attach` shows a bundle in another list (by its id, which every answer now names), and `face` chooses which of an item's links leads its row.
+
 ## [0.7.36] - 2026-10-31
 
 ### Added
@@ -1594,7 +1601,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.36...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.37...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

@@ -3,6 +3,7 @@
 // tool creates and fills them. Run: claude plugin test plugin
 import { expect, test } from 'claude-code/testing'
 import { applyListOp, emptyLists, serializeLists, type ListsFile } from '../hooks/core/lists/lists.ts'
+import { linkKey } from '../hooks/core/lists/item-links.ts'
 import { addOrRelabel, emptyRegister, serializeRegister } from '../hooks/core/bookmarks/register-file.ts'
 import { BAND_PROPS, DATA_ROOT, world } from './harness.ts'
 
@@ -317,4 +318,118 @@ test('the tool refuses an unknown list and an item with no label', async ($, on)
   world(on, { session: SID, files: seeded() })
   expect(String((await call($, { action: 'add', list: 'nope', label: 'x' })).error)).toContain('no list')
   expect(String((await call($, { action: 'add', list: "What's left" })).error)).toContain('needs `label`')
+})
+
+// Bundles in the pane (the bundles design, unit 6; djdarcy: "all the other link items can be exposed
+// by the user clicking the number in the list expanding it to see the remaining items").
+const BUNDLE_LINKS = [
+  { kind: 'file' as const, path: 'C:/code/x/dwp.md' },
+  { kind: 'issue' as const, repo: 'DazzleML/claude-bookmarks', n: 45 },
+  { kind: 'url' as const, href: 'https://example.com/notes' },
+]
+function bundled(): Record<string, string> {
+  let f: ListsFile = emptyLists('test-project', 'C:/test-project', 'test', 1)
+  for (const op of [
+    { op: 'create', name: 'Work', owner: 'user' },
+    { op: 'add', list: 'work', item: { label: 'bundles', by: 'user', links: BUNDLE_LINKS } },
+    { op: 'add', list: 'work', item: { label: 'one file', by: 'user', links: [{ kind: 'file', path: 'C:/code/x/one.md' }] } },
+  ] as Parameters<typeof applyListOp>[1][]) {
+    const r = applyListOp(f, op, 1)
+    if (!r.ok) throw new Error(r.error)
+    f = r.file
+  }
+  return { [FILE]: serializeLists(f) }
+}
+
+test('an item with several links shows +N on its row; opened, it lists every link, the face first and starred', async ($, on) => {
+  world(on, { session: SID, files: bundled() })
+  const ui = await mountPane($)
+  expect(await texts(ui)).toContain('+2')
+  await ui.press({ key: 'lists-num-i1' })
+  const rows = (await ui.findAll({})).filter(e => (e.key ?? '').startsWith('lists-link-i1-')).map(e => String(e.props.text ?? e.text ?? ''))
+  expect(rows.length).toBe(3)
+  expect(rows[0]).toContain('C:/code/x/dwp.md')
+  expect(rows[1]).toContain('DazzleML/claude-bookmarks#45')
+  // One line per row: the mark and the icon inside the row's own Markdown, never a line of their own
+  // (djdarcy, 2026-10-31: "Notice how the icons are on a line by themselves?").
+  expect(rows[0]).toMatch(/^★ ▤ \[C:\/code\/x\/dwp\.md\]\(/)
+  expect(rows[1]).toMatch(/^\\# \[DazzleML\/claude-bookmarks#45\]\(/)
+})
+
+// djdarcy, 2026-10-31: clicking and ctrl-clicking a file row "only shows the toast that it's copying the filename".
+test('a link row is a link the terminal can open: a file row carries its file: URL, so a ctrl-click opens it', async ($, on) => {
+  world(on, { session: SID, files: bundled() })
+  const ui = await mountPane($)
+  await ui.press({ key: 'lists-num-i1' })
+  const row = (await ui.findAll({ type: 'Markdown' })).find(m => m.key === 'lists-link-i1-0')
+  expect(row?.props.pressableLinks).toEqual(['file:///C:/code/x/dwp.md'])
+  // An issue row too: its GitHub URL, so a ctrl-click opens the issue (djdarcy, 2026-10-31: "#39 ... ctrl-clicking the link should also work").
+  const issue = (await ui.findAll({ type: 'Markdown' })).find(m => m.key === 'lists-link-i1-1')
+  expect(issue?.props.pressableLinks).toEqual(['https://github.com/DazzleML/claude-bookmarks/issues/45'])
+})
+
+test('a place row says what it is about: the words it was made from', async ($, on) => {
+  let f: ListsFile = emptyLists('test-project', 'C:/test-project', 'test', 1)
+  for (const op of [
+    { op: 'create', name: 'Work', owner: 'user' },
+    { op: 'add', list: 'work', item: { label: 'two places', by: 'user', links: [
+      { kind: 'place', session: SID, uuid: 'aaaaaaaa-0000-4000-8000-000000000001', words: 'We will need to handle migrations' },
+      { kind: 'file', path: 'C:/code/x/dwp.md' },
+    ] } },
+  ] as Parameters<typeof applyListOp>[1][]) {
+    const r = applyListOp(f, op, 1)
+    if (!r.ok) throw new Error(r.error)
+    f = r.file
+  }
+  world(on, { session: SID, files: { [FILE]: serializeLists(f) } })
+  const ui = await mountPane($)
+  await ui.press({ key: 'lists-num-i1' })
+  const row = (await ui.findAll({})).find(e => e.key === 'lists-link-i1-0')
+  // The words follow the link, outside it (djdarcy: "it would be nice if the text next to the shortlinks wasn't hyperlinked").
+  expect(String(row?.props.text ?? row?.text)).toMatch(/^★ ⚓ \[11111111\/aaaaaaaa\]\([^)]*\) "We will need to handle migrations"$/)
+})
+
+test('pressing a link row opens that link, not the face', async ($, on) => {
+  const w = world(on, { session: SID, files: bundled() })
+  const ui = await mountPane($)
+  await ui.press({ key: 'lists-num-i1' })
+  await ui.press({ key: 'lists-link-i1-1', link: { href: 'https://github.com/DazzleML/claude-bookmarks/issues/45' } } as never)
+  expect(w.copied()).toEqual(['https://github.com/DazzleML/claude-bookmarks/issues/45'])
+})
+
+test("a link row's ★ button makes it this list's face, and the row leads with it", async ($, on) => {
+  const w = world(on, { session: SID, files: bundled() })
+  const ui = await mountPane($)
+  await ui.press({ key: 'lists-num-i1' })
+  await ui.press({ key: 'lists-face-i1-2' })
+  const item = (JSON.parse(w.file(FILE)!) as ListsFile).lists[0]!.items[0]!
+  expect(item.face).toBe(linkKey(BUNDLE_LINKS[2]!))
+  expect(item.links![0]).toEqual(BUNDLE_LINKS[2])
+})
+
+test('the tool: bundle an item, attach the bundle to another list, choose its face there', async ($, on) => {
+  const w = world(on, { session: SID })
+  await call($, { action: 'create', name: 'Work', owner: 'user' })
+  await call($, { action: 'create', name: 'Board', owner: 'user' })
+  await call($, { action: 'add', list: 'Work', owner: 'user', label: 'notes', link: 'C:/code/x/a.md' })
+  const made = await call($, { action: 'bundle', list: 'Work', owner: 'user', item: '1' })
+  const b = (made.item as { bundle?: string }).bundle
+  expect(b).toBe('b1')
+  await call($, { action: 'link', list: 'Work', owner: 'user', item: '1', link: 'https://github.com/DazzleML/claude-bookmarks/issues/45' })
+  const attached = await call($, { action: 'attach', list: 'Board', owner: 'user', bundle: b })
+  expect((attached.item as { bundle?: string; links: unknown[] }).links.length).toBe(2)
+  await call($, { action: 'face', list: 'Board', owner: 'user', item: '1', at: 2 })
+  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  const board = f.lists.find(l => l.name === 'Board')!.items[0]!
+  expect(board.links![0]).toEqual({ kind: 'issue', repo: 'DazzleML/claude-bookmarks', n: 45 })
+  expect(f.lists.find(l => l.name === 'Work')!.items[0]!.links![0]).toEqual({ kind: 'file', path: 'C:/code/x/a.md' })
+  expect(String((await call($, { action: 'attach', list: 'Board', owner: 'user', bundle: 'b9' })).error)).toContain('no bundle')
+})
+
+test('an item with one link opens as before: no link rows, no +N', async ($, on) => {
+  world(on, { session: SID, files: bundled() })
+  const ui = await mountPane($)
+  await ui.press({ key: 'lists-num-i2' })
+  expect((await ui.findAll({ type: 'Button' })).some(b => (b.key ?? '').startsWith('lists-link-i2-'))).toBe(false)
+  expect(await texts(ui)).toContain('C:/code/x/one.md: press the label to copy it')
 })

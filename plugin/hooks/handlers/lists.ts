@@ -12,7 +12,7 @@ import {
   type List, type ListItem, type ListsFile, type Op,
 } from '../core/lists/lists.ts'
 import { brief, describeItem, describeLink, linkWants, parseListsInput, type LinkWant, type ListsToolInput } from '../core/lists/lists-tool.ts'
-import { hrefOf, linkFromText, linksOf, primaryLink, sameLink, textOf, type ItemLink } from '../core/lists/item-links.ts'
+import { hrefOf, linkFromText, linkKey, linksOf, primaryLink, sameLink, textOf, type ItemLink } from '../core/lists/item-links.ts'
 import { parseRef } from '../core/bookmarks/ref.ts'
 import { answer } from '../core/bookmarks/bookmark-tool.ts'
 import { short } from '../core/kit/message-id.ts'
@@ -152,6 +152,12 @@ export class Lists {
     if (list) await this.changeOrToast(ports, { op: 'done', list, item: itemId })
   }
 
+  /** A bundled item's face in the shown list (the bundles design, unit 6): the ★ on a link row. */
+  async faceShown(ports: ListsPorts, itemId: string, face: string): Promise<void> {
+    const list = this.shownId()
+    if (list) await this.changeOrToast(ports, { op: 'face', list, item: itemId, face })
+  }
+
   async toggleShown(ports: ListsPorts, itemId: string): Promise<void> {
     const list = this.shownId()
     if (!list) return
@@ -206,8 +212,9 @@ export async function listsCommand(ports: ListsPorts, lists: Lists, args: string
  * place in another conversation names it and copies the command that resumes it; a link is
  * copied. A note with no place or link opens in place instead (the pane does that).
  */
-export async function landItem(ports: ListsPorts, item: ListItem): Promise<void> {
-  let first = primaryLink(item)
+export async function landItem(ports: ListsPorts, item: ListItem, link?: ItemLink): Promise<void> {
+  // `link`: one of the item's links pressed in its opened view (the bundles design, unit 6); else its first.
+  let first = link ?? primaryLink(item)
   // A reference kept as typed is read again: it may resolve now (its register came back, or its
   // conversation is on this machine now); if not, it is copied as typed.
   if (first?.kind === 'ref') first = (await ports.resolveRef(first.text)) ?? first
@@ -349,10 +356,28 @@ export async function listsTool(ports: ListsPorts, lists: Lists, input: ListsToo
     const n = r.list!.items.findIndex(i => i.id === r.item!.id) + 1
     return { ok: true, added: describeItem(r.item!, n, root), list: brief(r.list!) }
   }
+  // Bundles (the bundles design, unit 7): a bundle shown in another list.
+  if (input.action === 'attach') {
+    if (!input.bundle) return { error: 'attach needs `bundle` (its id, as an item\'s answer gives it, e.g. "b1")' }
+    const r = await lists.change(ports, { op: 'attach', list: list.id, bundle: input.bundle, by: 'claude', ...(input.label ? { label: input.label } : {}), ...(input.at !== undefined ? { at: input.at } : {}) })
+    if (!r.ok) return { error: r.error }
+    const n = r.list!.items.findIndex(i => i.id === r.item!.id) + 1
+    return { ok: true, item: describeItem(r.item!, n, root), list: brief(r.list!) }
+  }
 
   const item = input.item ? findItem(list, input.item) : undefined
   if (!item) return { error: input.item ? `no item "${input.item}" in "${list.name}"` : 'give `item` (its number in the list, or its id)' }
   const at = list.items.findIndex(i => i.id === item.id) + 1
+  if (input.action === 'bundle') {
+    const r = await lists.change(ports, { op: 'bundle', list: list.id, item: item.id })
+    return r.ok ? { ok: true, item: describeItem(r.item!, at, root) } : { error: r.error }
+  }
+  if (input.action === 'face') {
+    const have = linksOf(item)
+    if (input.at === undefined || input.at < 1 || input.at > have.length) return { error: `face needs \`at\`, the number of the link to lead with (1 to ${have.length})` }
+    const r = await lists.change(ports, { op: 'face', list: list.id, item: item.id, face: linkKey(have[input.at - 1]!) })
+    return r.ok ? { ok: true, item: describeItem(r.item!, at, root) } : { error: r.error }
+  }
   if (input.action === 'link') {
     const wants = linkWants(input)
     if (!wants.length) return { error: 'link needs `query`/`uuid` (a place in this conversation), `link` (a file or URL), or `links`' }

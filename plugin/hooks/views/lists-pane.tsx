@@ -5,7 +5,8 @@
 // and hands in the model and the actions.
 import type { EngineInterface } from 'claude-code'
 import type { List, ListItem, ListsFile } from '../core/lists/lists.ts'
-import { primaryLink, textOf } from '../core/lists/item-links.ts'
+import { linksOf, primaryLink, textOf, type ItemLink } from '../core/lists/item-links.ts'
+import { describeLink } from '../core/lists/lists-tool.ts'
 import type { PaneStyles } from './prompts-pane.tsx'
 
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
@@ -24,6 +25,8 @@ export type ListsPaneModel = {
    * the local file links from /bmlinks with ctrl click, why can't we do that in the panel?").
    */
   hrefOf?: (item: ListItem) => string | undefined
+  /** One link's target, for its row in an opened item: drawn as a Markdown link, so a ctrl-click opens it too. */
+  hrefOfLink?: (link: ItemLink) => string | undefined
   /**
    * The items opened in place, by id: drawn with their whole note wrapped, where they point, and
    * who added them when (djdarcy, 2026-10-27: "how am I supposed to read the entire note?").
@@ -38,7 +41,14 @@ export type ListsPaneActions = {
   done: (item: ListItem) => Promise<unknown>
   /** Open or close an item in place. */
   toggle: (item: ListItem) => Promise<unknown>
+  /** One of an opened item's links, pressed (the bundles design, unit 6). */
+  landLink?: (item: ListItem, link: ItemLink) => Promise<unknown>
+  /** A bundled item's face set to one of its links. */
+  face?: (item: ListItem, link: ItemLink) => Promise<unknown>
 }
+
+// A link's mark in the opened view, by kind.
+const GLYPH: Record<string, string> = { place: '⚓', file: '▤', line: '▤', issue: '#', url: '↗', ref: 'bm' }
 
 const when = (ms: number) => {
   const d = new Date(ms)
@@ -85,6 +95,7 @@ export function listsPaneView(elements: Elements, m: ListsPaneModel, a: ListsPan
         const isOpen = m.expanded?.has(item.id) ?? false
         const href = m.hrefOf?.(item)
         const first = primaryLink(item)
+        const links = linksOf(item)
         return (
         <Box key={`lists-item-${shown.id}-${item.id}`} flexDirection="column">
           <Box flexDirection="row">
@@ -119,6 +130,7 @@ export function listsPaneView(elements: Elements, m: ListsPaneModel, a: ListsPan
                 return <Button key={`lists-go-${item.id}`} label={item.label} plain {...(item.done ? s.button('unreached') : {})} onPress={onPress} />
               })()}
             </Box>
+            {links.length > 1 && <Text {...style('legend')}>{` +${links.length - 1}`}</Text>}
             <Box flexShrink={0} marginLeft={1}>
               <Button key={`lists-up-${item.id}`} label="▲" plain {...(i === 0 ? s.button('unreached') : {})} onPress={() => a.move(item, i)} />
               <Text> </Text>
@@ -138,6 +150,36 @@ export function listsPaneView(elements: Elements, m: ListsPaneModel, a: ListsPan
                     ? `▤ ${textOf(first) ?? ''}: press the label to copy it, ctrl-click to open it`
                     : 'a note: no place or link'}
               </Text>
+              {links.length > 1 &&
+                links.map((l, k) => (
+                  <Box key={`lists-linkrow-${item.id}-${k}`} flexDirection="row">
+                    {(() => {
+                      const glyph = GLYPH[l.kind] ?? '·'
+                      const mark = k === 0 && item.bundle ? '★ ' : ''
+                      // A place says what it is about: the words it was made from (djdarcy, 2026-10-31:
+                      // "some description as to what they were about so it wasn't just a bare anchor").
+                      const words = l.kind === 'place' && l.words ? (l.words.length > 70 ? `${l.words.slice(0, 69)}…` : l.words) : ''
+                      const what = describeLink(l, k + 1, undefined).what
+                      const onPress = () => (a.landLink ? a.landLink(item, l) : a.land(item))
+                      const lh = m.hrefOfLink?.(l)
+                      // A link a terminal can open is drawn as one, as the item's label is: a plain
+                      // click lands (onLinkPress), a ctrl-click opens it (djdarcy, 2026-10-31: clicking
+                      // and ctrl-clicking a file row only copied it). One Markdown line per row, the
+                      // mark and the icon inside it (separate elements put the icon on a line of its
+                      // own), and only the address linked, its words after it as text.
+                      if (lh && /^(https?|file):/i.test(lh)) {
+                        const target = lh.replace(/[()]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+                        const esc = (t: string) => t.replace(/([\\`*_[\]<>#|])/g, '\\$1')
+                        const text = `${mark}${glyph === '#' ? '\\#' : glyph} [${what.replace(/[[\]]/g, ' ')}](${target})${words ? ` "${esc(words)}"` : ''}`
+                        return <Markdown key={`lists-link-${item.id}-${k}`} text={text} pressableLinks={[target]} onLinkPress={onPress} />
+                      }
+                      return <Button key={`lists-link-${item.id}-${k}`} label={`${mark}${glyph} ${what}${words ? ` "${words}"` : ''}`} plain onPress={onPress} />
+                    })()}
+                    {item.bundle && k > 0 && a.face && (
+                      <Button key={`lists-face-${item.id}-${k}`} label=" ☆" plain {...s.button('unreached')} onPress={() => a.face!(item, l)} />
+                    )}
+                  </Box>
+                ))}
               <Text {...style('legend')}>{`added by ${item.by === 'claude' ? 'Claude' : 'you'}, ${when(item.addedAt)}${item.done ? '; done' : ''}`}</Text>
             </Box>
           )}

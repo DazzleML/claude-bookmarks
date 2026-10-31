@@ -73,6 +73,7 @@ import { LISTS_TOOL } from './core/lists/lists-tool'
 import { fnv1a64 } from './core/bookmarks/migrations'
 import { Lists, landItem, listsCommand, listsToolCall } from './handlers/lists'
 import { linkOf } from './core/lists/lists'
+import { hrefOf as linkHref, linkKey } from './core/lists/item-links'
 import { listsPaneView } from './views/lists-pane'
 import { COMMANDS } from './core/band/commands'
 import { promptList, transcriptGuess, type PromptRef } from './core/prompts/prompt-store'
@@ -1918,13 +1919,15 @@ export const register: Register = (on, options) => {
     const root = await dataRoot($)
     return listsPaneView(
       $.ui.resolve(e),
-      { ...(await lists.paneModel(ports)), columns: e.props.bodyColumns, hrefOf: item => linkOf(item, root) },
+      { ...(await lists.paneModel(ports)), columns: e.props.bodyColumns, hrefOf: item => linkOf(item, root), hrefOfLink: l => linkHref(l, root) },
       {
         pick: l => lists.pick(ports, l.id),
         land: item => landItem(ports, item),
         move: (item, to) => lists.moveShown(ports, item.id, to),
         done: item => lists.doneShown(ports, item.id),
         toggle: item => lists.toggleShown(ports, item.id),
+        landLink: (item, link) => landItem(ports, item, link),
+        face: (item, link) => lists.faceShown(ports, item.id, linkKey(link)),
       },
       { text: style, button: buttonStyle },
     )

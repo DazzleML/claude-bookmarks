@@ -28,6 +28,8 @@ export type ListsToolInput = {
   to?: number
   at?: number
   done?: boolean
+  /** attach: the bundle's id (`b1`), as an item's answer names it. */
+  bundle?: string
 }
 
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
@@ -37,7 +39,7 @@ const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.
 export function parseListsInput(input: Record<string, unknown>): ListsToolInput {
   const owner: AnchorOwner = input.owner === 'user' ? 'user' : 'claude'
   const o: ListsToolInput = { action: str(input.action) ?? 'lists', owner }
-  for (const k of ['list', 'name', 'label', 'why', 'query', 'uuid', 'link', 'words'] as const) {
+  for (const k of ['list', 'name', 'label', 'why', 'query', 'uuid', 'link', 'words', 'bundle'] as const) {
     const v = str(input[k])
     if (v !== undefined) o[k] = v
   }
@@ -107,6 +109,7 @@ export function describeItem(i: ListItem, n: number, root: string | undefined) {
     n, id: i.id, label: i.label,
     ...(i.why ? { why: i.why } : {}),
     ...(i.done ? { done: true } : {}),
+    ...(i.bundle ? { bundle: i.bundle } : {}),
     ...(p ? { place: `${short(p.session)}/${short(p.uuid)}${p.file ? ` in ${p.file}` : ''}` } : {}),
     ...(link ? { markdown: `[${i.label.replace(/[[\]]/g, ' ')}](${link})` } : {}),
     links: linksOf(i).map((l, k) => describeLink(l, k + 1, root)),
@@ -119,14 +122,16 @@ export const LISTS_TOOL = {
     'tests to run, ideas. An item can be a place in this conversation (query/uuid, as the bookmark tool takes), a link ' +
     '(file or URL), or plain text, and it can hold several links at once (a place, a file, a GitHub issue): the first is what a ' +
     'press opens. owner: your lists (default) or the person\'s, when they asked. ' +
-    'Actions: lists, show (opens the pane), create, rename, delete, add, link, unlink, move, remove, done, edit, share.',
+    'An item with two or more links is a bundle: its links kept once, so the same bundle can be shown in another list ' +
+    '(attach) leading with a different link (face). ' +
+    'Actions: lists, show (opens the pane), create, rename, delete, add, link, unlink, move, remove, done, edit, share, bundle, attach, face.',
   inputSchema: {
     type: 'object',
     properties: {
       action: {
         type: 'string',
-        enum: ['lists', 'show', 'create', 'rename', 'delete', 'add', 'link', 'unlink', 'move', 'remove', 'done', 'edit', 'share'],
-        description: 'lists (default): every list; show: one list\'s items, and opens the pane on it; create: a new list (`name`); add: an item (`label`, and `query`/`uuid` or `link`, and more in `links`); link: add links to an `item` (`query`/`uuid`/`link`/`links`); unlink: remove an `item`\'s link number `at` (1 the first); move: an item to position `to`; done: tick or untick an item; share: copy the list to the other side',
+        enum: ['lists', 'show', 'create', 'rename', 'delete', 'add', 'link', 'unlink', 'move', 'remove', 'done', 'edit', 'share', 'bundle', 'attach', 'face'],
+        description: 'lists (default): every list; show: one list\'s items, and opens the pane on it; create: a new list (`name`); add: an item (`label`, and `query`/`uuid` or `link`, and more in `links`); link: add links to an `item` (`query`/`uuid`/`link`/`links`); unlink: remove an `item`\'s link number `at` (1 the first); move: an item to position `to`; done: tick or untick an item; share: copy the list to the other side; bundle: make an `item` a bundle (one with two or more links already is); attach: show `bundle` (its id, as an item\'s answer gives it) in `list` as a new item, at position `at`; face: lead an `item` with its link number `at`',
       },
       list: { type: 'string', description: 'The list: its id, its name, or its number among `owner`\'s lists (1 the first)' },
       name: { type: 'string', description: 'create, rename: the list\'s name' },
@@ -146,6 +151,7 @@ export const LISTS_TOOL = {
       to: { type: 'number', description: 'move: the new position, 1 the top' },
       at: { type: 'number', description: 'add: the position to insert at, 1 the top; the end by default. unlink: the number of the link to remove, 1 the first' },
       done: { type: 'boolean', description: 'done: true to tick, false to untick; toggles when left out' },
+      bundle: { type: 'string', description: 'attach: the bundle to show, by its id (`b1`)' },
     },
   },
   isDeferred: true,
