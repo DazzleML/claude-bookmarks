@@ -22,7 +22,11 @@ import { headOf } from '../bookmarks/transcript-lines.ts'
 // into a running turn the way the person's own mid-turn message is, and listed as a
 // prompt by the live capture (djdarcy, 2026-10-12: "The whole point of the "prompts"
 // panel is it is showing genuine user inputs, full stop").
-const NOT_A_PROMPT = /^\s*(<bash-(input|stdout|stderr)>|<command-name>|<command-message>|<local-command-(stdout|stderr)>|<teammate-message[\s>]|<task-notification>|\[Request interrupted by user|This session is being continued from a previous conversation|\[SYSTEM NOTIFICATION|Another Claude session sent a message|Stop hook feedback)/
+// `<tools-used-before-summary>`: the engine's note of the tools used before a compaction,
+// put in front of the next queued row's text. A stored row that begins with it is not the
+// person's (djdarcy, 2026-11-01: the CK3 worker's #377 was a subagent's hand-back, listed
+// as a prompt under that note); a queued prompt of theirs has it stripped (unwrapQueued).
+const NOT_A_PROMPT = /^\s*(<bash-(input|stdout|stderr)>|<command-name>|<command-message>|<local-command-(stdout|stderr)>|<teammate-message[\s>]|<task-notification>|<tools-used-before-summary>|\[Request interrupted by user|This session is being continued from a previous conversation|\[SYSTEM NOTIFICATION|Another Claude session sent a message|Stop hook feedback)/
 
 export function looksLikePrompt(text: string): boolean {
   return text.trim() !== '' && !NOT_A_PROMPT.test(text)
@@ -34,7 +38,10 @@ export function looksLikePrompt(text: string): boolean {
 // framing is the engine's and may change; when it is not recognised the whole text is
 // kept rather than nothing.
 export function unwrapQueued(rendered: string): string {
-  let s = rendered.replace(/<\/?system-reminder[^>]*>/g, '')
+  // The engine's note of the tools used before a compaction rides in front of the row; it is
+  // not what the row says (a row written 2026-10-30 by Claude Code 2.1.312).
+  let s = rendered.replace(/<tools-used-before-summary>[\s\S]*?<\/tools-used-before-summary>/g, '')
+  s = s.replace(/<\/?system-reminder[^>]*>/g, '')
   s = s.replace(/^\s*The user sent a new message while you were working:\s*/, '')
   s = s.replace(/\n\s*This is how Claude Code surfaces messages[\s\S]*$/, '')
   return s.trim() || rendered.trim()

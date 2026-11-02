@@ -49,8 +49,8 @@ test('? in a short band: the four-line help, fitting it', async ($, on) => {
 })
 
 test('q in a list closes the pane and brings the bar back (Q261012-09)', async ($, on) => {
-  // The pane is open (the harness's `panes`), so closing it is observable as a ui.close.
-  const w = world(on, { store: STORE, session: SID, panes: [{ id: 'bm-pane' }] })
+  // The pane `p` opens is tracked (the harness's `trackPanes`), so closing it is observable as a ui.close.
+  const w = world(on, { store: STORE, session: SID, trackPanes: true })
   const band = await mount($)
   await band.input({ key: 'band-cmd-0', text: 'p' }).catch(() => undefined)
   expect((await band.findAll({ type: 'Button' })).some(b => b.key === 'band-num-q')).toBe(true)

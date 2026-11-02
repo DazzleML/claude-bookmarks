@@ -28,6 +28,26 @@ test('classifyAppend: a queued attachment is a prompt, its text unwrapped', () =
   assert.equal(r.footnote, undefined)
 })
 
+// djdarcy, 2026-11-01: the CK3 worker's #377 read "<tools-used-before-summary>WebFetch..." and
+// was a subagent's hand-back, queued as another session's message (2026-10-30, 2.1.312).
+const TOOLS_NOTE = '<system-reminder>\n<tools-used-before-summary>WebFetch</tools-used-before-summary>\n</system-reminder>'
+test('classifyAppend: another session\'s message behind the tools-used note is not a prompt', () => {
+  const peer = '<system-reminder id="0a24">\nAnother Claude session sent a message while you were working:\n<agent-message from="aff9">report</agent-message>\n</system-reminder id="0a24">'
+  const r = classifyAppend(appended({ door: 'attachment', origin: { kind: 'engine' }, message: { type: 'attachment', name: 'queued_command', content: [{ type: 'text', text: TOOLS_NOTE }, { type: 'text', text: peer }] } }))
+  assert.equal(r.row, undefined)
+  assert.equal(r.promptText, undefined)
+})
+
+test('classifyAppend: the person\'s queued message behind the tools-used note is still their prompt', () => {
+  const mine = '<system-reminder>\nThe user sent a new message while you were working:\nwhile you work\n\nThis is how Claude Code surfaces messages the user sends mid-turn.\n</system-reminder>'
+  const r = classifyAppend(appended({ door: 'attachment', origin: { kind: 'engine' }, message: { type: 'attachment', name: 'queued_command', content: [{ type: 'text', text: TOOLS_NOTE }, { type: 'text', text: mine }] } }))
+  assert.equal(r.row?.text, 'while you work')
+})
+
+test('a stored row whose text begins with the tools-used note is not a prompt', () => {
+  assert.equal(looksLikePrompt('<tools-used-before-summary>WebFetch</tools-used-before-summa'), false)
+})
+
 test('classifyAppend: an automated origin, an agent row and a meta row are nothing', () => {
   for (const kind of AUTOMATED_ORIGINS) assert.deepEqual(classifyAppend(appended({ origin: { kind } })), {}, kind)
   assert.deepEqual(classifyAppend(appended({ agentId: 'agent-7' })), {})

@@ -144,6 +144,16 @@ A typed command such as `/bm-prompts` from an empty input box does get a focused
 
 **Proper fix:** grant the focus when a person's press on a plugin's band opens that same plugin's pane, or let `$.ui.focus` move the keyboard between a plugin's own band and pane.
 
+### A pane opened beside another stays behind it — Workaround
+
+**What you notice:** with the lists pane in front, `Ctrl+] p` adds a prompts tab but the side panel keeps showing Lists; before 0.7.41, `Ctrl+] l` then could not bring Lists back either.
+
+**Why:** measured from the plugin's log in two live tries (2026-11-02, Claude Code 2.1.316), with `$.ui.panes()` reporting `isShown` after each step. A pane becomes the shown tab only when it is opened anew without a `focus` request that is refused: the prompts pane, opened with `focus` from the band (refused, as in the entry above), went behind; the lists pane, opened anew without `focus`, came to the front. Opening a pane that is already open raises nothing, with or without `focus`.
+
+**What we do:** when another of the plugin's panes is in front, the pane a command shows is closed if it is open and opened anew without the `focus` request (`register.tsx` `bringForward`; the decision is `core/band/pane-show.ts`). The other pane stays as it was. The kit's harness follows the same rule (`trackPanes`).
+
+**Proper fix:** a way to raise a plugin's own pane, such as `$.ui.open({ id, raise: true })` or `$.ui.place` for a docked pane.
+
 ### Claude Code doesn't say when the band loses the keyboard — Workaround
 
 **What you notice:** before v0.1.6, pressing `Esc` after `Ctrl+X Tab` `j` left the pane open.

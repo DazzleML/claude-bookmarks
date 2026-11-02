@@ -102,11 +102,49 @@ test('a fresh conversation: the prompts button opens the list and closes nothing
   expect(closes(w)).toBe(0)
 })
 
-test('the typed key never toggles: p in the field with the prompts pane open leaves it open', async ($, on) => {
-  const w = world(on, { session: SID, store: STORE, panes: PANE_OPEN })
+// djdarcy's three rules (2026-11-01, core/band/pane-show.ts), for the typed key as for the
+// button: on the pane, close it; open but behind, bring it to the front; not open, open it in
+// front. `trackPanes`: the harness follows the opens and closes, a new pane going behind a
+// shown one, as Claude Code does.
+const closed = (w: { calls: { event: string; input?: unknown }[] }) =>
+  w.calls.filter(c => c.event === 'ui.close').map(c => (c.input as { id?: string } | undefined)?.id)
+const openedIds = (w: { opened: () => unknown[] }) => (w.opened() as { id: string }[]).map(o => o.id)
+
+test('rule 3: p typed on the prompts pane closes it, and only it', async ($, on) => {
+  const w = world(on, { session: SID, store: STORE, panes: [...PANE_OPEN, { id: 'bm-lists', isShown: false }] })
   const band = (await $.ui.mount(BAND as never)) as Pressable
   await band.input({ key: 'band-cmd-0', text: 'p' }).catch(() => undefined)
-  expect(closes(w)).toBe(0)
+  expect(closed(w)).toEqual(['bm-pane'])
+})
+
+test('rule 2: l with the lists pane behind the prompts pane brings it to the front', async ($, on) => {
+  const w = world(on, { session: SID, store: STORE, trackPanes: true, panes: [...PANE_OPEN, { id: 'bm-lists', isShown: false }] })
+  const band = (await $.ui.mount(BAND as never)) as Pressable
+  await band.input({ key: 'band-cmd-0', text: 'l' }).catch(() => undefined)
+  // Claude Code raises only a pane opened anew without a keyboard request: Lists is closed and
+  // opened again; the prompts pane is left as it is.
+  expect(closed(w)).toEqual(['bm-lists'])
+  expect(openedIds(w)).toEqual(['bm-lists'])
+  expect(w.shownPanes()).toEqual(['bm-lists'])
+})
+
+test('rule 3: l with the lists pane in front closes it', async ($, on) => {
+  const w = world(on, { session: SID, store: STORE, panes: [{ id: 'bm-lists' }] })
+  const band = (await $.ui.mount(BAND as never)) as Pressable
+  await band.input({ key: 'band-cmd-0', text: 'l' }).catch(() => undefined)
+  expect(closed(w)).toEqual(['bm-lists'])
+  expect(w.opened().length).toBe(0)
+})
+
+test('rule 1: p with the lists pane in front opens the prompts list in front of it', async ($, on) => {
+  const w = world(on, { session: SID, store: STORE, trackPanes: true, panes: [{ id: 'bm-lists' }] })
+  const band = (await $.ui.mount(BAND as never)) as Pressable
+  await band.input({ key: 'band-cmd-0', text: 'p' }).catch(() => undefined)
+  // Opened without the keyboard request, which the band would refuse and which would leave it behind.
+  expect(closed(w)).toEqual([])
+  expect(openedIds(w)).toEqual(['bm-pane'])
+  expect((w.opened() as { focus?: boolean }[])[0]?.focus).toBe(undefined)
+  expect(w.shownPanes()).toEqual(['bm-pane'])
 })
 
 test('with the lists off, the prompts button pressed twice opens nothing and closes nothing', { options: { panes: 'off' } }, async ($, on) => {

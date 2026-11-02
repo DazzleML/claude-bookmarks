@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.41] - 2026-11-01
+
+### Changed
+
+- **A pane's command shows its pane, and closes it only when you are on it.** The band key, its bar button and `/bm-lists` work alike, for the prompts, bookmarks, search, jump and lists panes: a pane that is not open opens; a pane open behind another of the plugin's panes (or the shared pane showing another list) comes to the front; a pane already in front closes. So `Ctrl+] l`, `Ctrl+] p`, `Ctrl+] l` goes Lists, Prompts, Lists. A command closes only its own pane; `q` still closes them all.
+
+### Fixed
+
+- **A pane opened while another is in front now comes to the front.** Claude Code put it in a tab behind the one shown; it raises only a pane opened anew without asking for the keyboard, so the plugin opens it that way.
+- **`Ctrl+] l` while a list is open in the band now opens Lists.** The list's number field read the `l` as filter text. A command key typed alone there (`l`, `b`, `m`, `r`, `?`) now runs the command; the list's own keys keep their meaning.
+- **Another session's report no longer shows as one of your prompts.** A subagent's report queued into the conversation behind Claude Code's note of the tools used before a compaction was listed as a prompt, and pressing it seemed to jump elsewhere; one already listed drops out of the list.
+
 ## [0.7.40] - 2026-10-31
 
 ### Added
@@ -1635,7 +1647,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.40...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.41...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

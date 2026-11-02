@@ -113,7 +113,7 @@ test('a step draws a fresh empty field showing the number dim, and the next key 
 })
 
 test('Enter on an empty field after a step jumps to the stepped number', async ($, on) => {
-  const w = world(on, { store: STORE, session: SID, panes: [{ id: 'bm-pane' }] })
+  const w = world(on, { store: STORE, session: SID, trackPanes: true })
   const band = await promptsBand($)
   const pane = await mount($, PANE)
   await type(band, 'j')
@@ -133,8 +133,28 @@ test('q alone closes the list and brings the bar back', async ($, on) => {
   expect((await band.findAll({ type: 'Button' })).map(b => b.key)).toEqual(['chord-mark', 'chord-jump', 'chord-read', 'chord-bookmarks', 'chord-lists', 'chord-prompts', 'chord-search', 'chord-help'])
 })
 
+// djdarcy, 2026-11-01: `<leader> p`, then `<leader> l`, did not reach Lists -- the leader
+// lands in the list's field, which read the `l` as filter text. A band command typed alone
+// there is the band's (core/band/field-input.ts bandFieldCommand).
+test('l typed in the prompts list field opens the lists pane, in front', async ($, on) => {
+  const w = world(on, { store: STORE, session: SID, trackPanes: true })
+  const band = await promptsBand($)
+  await type(band, 'l')
+  const ids = (w.opened() as { id: string }[]).map(o => o.id)
+  // The prompts pane opened by `p`, then Lists, in front of it.
+  expect(ids).toEqual(['bm-pane', 'bm-lists'])
+  expect(w.shownPanes()).toEqual(['bm-lists'])
+})
+
+test('j typed in the prompts list field still steps the list, not the jump command', async ($, on) => {
+  const w = world(on, { store: STORE, session: SID, trackPanes: true })
+  const band = await promptsBand($)
+  await type(band, 'j')
+  expect(w.opened().length).toBe(1)
+})
+
 test('Enter with nothing typed ends the list, as go does', async ($, on) => {
-  const w = world(on, { store: STORE, session: SID, panes: [{ id: 'bm-pane' }] })
+  const w = world(on, { store: STORE, session: SID, trackPanes: true })
   const band = await promptsBand($)
   const closesBefore = w.calls.filter(c => c.event === 'ui.close').length
   await enter(band, '')

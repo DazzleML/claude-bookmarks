@@ -25,7 +25,13 @@ export type WorldOptions = {
   // The working directory $.session.cwd answers (C:/test-project by default).
   cwd?: string
   // The plugin's open panes $.ui.panes answers (none by default), e.g. [{ id: 'bm-pane' }].
-  panes?: { id: string; isFocused?: boolean }[]
+  panes?: { id: string; isFocused?: boolean; isShown?: boolean }[]
+  // true: $.ui.panes follows the opens and closes the test makes, starting from `panes`, the way
+  // Claude Code was seen to (djdarcy's tries, 2026-10-31 and 2026-11-02): a pane opened anew
+  // without `focus` is shown; one opened with `focus` (refused while the band holds the keys,
+  // as in these tests) is shown only into an empty panel, else a tab behind; opening a pane
+  // already open raises nothing; closing the shown one shows the first left. Off: `panes` is fixed.
+  trackPanes?: true
   // What $.process.run answers, by argv; by default no program runs in tests.
   process?: (argv: readonly string[]) => { exitCode: number; stdout: string; stderr?: string; isStdoutTruncated?: boolean }
   // What $.ui.selection answers, read at each call (so a test can change it mid-test).
@@ -50,6 +56,8 @@ export type World = {
   logs: () => string[]
   toasts: () => string[]
   opened: () => unknown[]
+  /** The ids of the panes $.ui.panes says are shown now (with `trackPanes`, after the opens and closes). */
+  shownPanes: () => string[]
   /** The text of each $.ui.copy, in order. */
   copied: () => string[]
   clock: ReturnType<typeof mock.clock>
@@ -124,14 +132,37 @@ export function world(on: unknown, options: WorldOptions = {}): World {
 
   answer('ui.log', () => undefined)
   answer('ui.toast', () => undefined)
-  answer('ui.open', () => ({ isPlaced: true }))
-  answer('ui.close', () => undefined)
+  const open = (options.panes ?? []).map(p => ({ id: p.id, title: p.id, isShown: p.isShown ?? true, isFocused: !!p.isFocused }))
+  answer('ui.open', e => {
+    if (options.trackPanes) {
+      const id = String(e.id)
+      const title = typeof e.title === 'string' ? e.title : id
+      const was = open.find(p => p.id === id)
+      if (was) was.title = title
+      else {
+        const shown = e.focus ? !open.some(p => p.isShown) : true
+        if (shown) for (const p of open) p.isShown = false
+        open.push({ id, title, isShown: shown, isFocused: false })
+      }
+    }
+    return { isPlaced: true }
+  })
+  answer('ui.close', e => {
+    if (options.trackPanes) {
+      const at = open.findIndex(p => p.id === e.id)
+      if (at >= 0) {
+        const [gone] = open.splice(at, 1)
+        if (gone!.isShown && open[0]) open[0].isShown = true
+      }
+    }
+    return undefined
+  })
   // A plugin's own $.ui.focus is not routed to test hooks (measured 2026-10-12, Claude
   // Code 2.1.296): the call throws "no implementation for ui.focus" whatever answers it
   // here. Tests let that throw after checking what happened before it.
   answerRaw('ui.focus', () => ({}))
   answerRaw('ui.scroll', () => ({}))
-  answer('ui.panes', () => (options.panes ?? []).map(p => ({ id: p.id, title: p.id, isShown: true, isFocused: !!p.isFocused, isPlaced: true })))
+  answer('ui.panes', () => open.map(p => ({ ...p, isPlaced: true })))
   answer('ui.selection', () => options.selection?.())
   answer('prompt.read', () => ({ text: options.prompt ?? '', cursor: (options.prompt ?? '').length }))
   answer('session.id', () => options.session ?? '00000000-0000-4000-8000-000000000000')
@@ -188,6 +219,7 @@ export function world(on: unknown, options: WorldOptions = {}): World {
     logs: () => of('ui.log').map(e => String(e.text)),
     toasts: () => of('ui.toast').map(e => String(e.text ?? e.message ?? JSON.stringify(e))),
     opened: () => of('ui.open'),
+    shownPanes: () => open.filter(p => p.isShown).map(p => p.id),
     copied: () => of('ui.copy').map(e => String(e.text)),
     clock,
   }

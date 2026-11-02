@@ -21,6 +21,7 @@ import { headOf, resolveRows, rowsFromGrep, targetPattern, type Resolution, type
 import { messageOf, type FoundPlace } from './core/places/resolve'
 import { excerpt, type Channel } from './core/log/debug'
 import { CHORD_ACTIONS, VERIFIED_CLIENTS, bandFocusRoute, barFor, helpFor, listHint, listKeysFor, route, type Operation, type Pane } from './core/band/keys'
+import { covering, type ShownPane } from './core/band/pane-show'
 import type { Cause } from './core/band/after-action'
 import { LEADER_FIELD, isKeyRow, leaderChord, rowDenial, type Problem } from './core/band/keymap'
 import { FOLD_FIELDS, SHOWS_ROWS, foldLabel, rowHidden } from './core/settings-fold'
@@ -849,6 +850,31 @@ function bookmarksPorts($: EngineInterface): BookmarksPorts {
   }
 }
 
+// Pane `id` opened in front of the plugin's other panes (rules 1 and 2, core/band/pane-show.ts).
+// Seen live 2026-11-02 (03:08-03:12, djdarcy's tries): a pane becomes the shown tab only when it
+// is opened anew AND without a `focus` request the band refuses; opening a pane already open
+// raises nothing, and a refused request leaves a new pane behind. So when another of our panes
+// is shown, the target is closed if open and opened again without the request -- the other
+// panes stay as they are. Otherwise `open` runs as it always did, the request and all.
+async function bringForward<T>($: EngineInterface, id: string, open: () => Promise<T>, title?: string): Promise<T | unknown> {
+  const panes = await $.ui.panes()
+  const cover = covering(panes, id)
+  if (!cover.length) return open()
+  const target = panes.find(p => p.id === id)
+  if (target) await $.ui.close({ id })
+  const result = await reopenPane($, { id, title: title ?? target?.title })
+  const shown = (await $.ui.panes()).find(p => p.isShown)?.id ?? 'none'
+  log($, `[bm] ${id} to the front over ${cover.map(p => p.id).join(', ')}: ${target ? 'closed and ' : ''}opened anew without the keyboard request; shown now ${shown}`)
+  return result
+}
+
+// A pane bringForward closed, opened again without the keyboard and with its own size.
+function reopenPane($: EngineInterface, p: ShownPane) {
+  if (p.id === LISTS_PANE) return $.ui.open({ id: LISTS_PANE, title: 'Lists', columns: 44 })
+  if (p.id === PANE) return $.ui.open({ id: PANE, title: p.title ?? 'prompts: type #', closeOnEscape: true, columns: 16, rows: 4 })
+  return $.ui.open({ id: p.id, title: p.title ?? p.id })
+}
+
 // The project's lists (handlers/lists.ts, #45), over listsPorts($).
 function listsPorts($: EngineInterface): ListsPorts {
   return {
@@ -871,6 +897,9 @@ function listsPorts($: EngineInterface): ListsPorts {
     openPane: () => $.ui.open({ id: LISTS_PANE, title: 'Lists', columns: 44 }),
     paneOpen: async () => (await $.ui.panes()).some(p => p.id === LISTS_PANE),
     closePane: () => $.ui.close({ id: LISTS_PANE }),
+    paneId: LISTS_PANE,
+    panes: () => $.ui.panes(),
+    openInFront: () => bringForward($, LISTS_PANE, () => $.ui.open({ id: LISTS_PANE, title: 'Lists', columns: 44 })),
     pluginFile: async relative => {
       const path = `${$.plugin.root}/${relative}`
       return (await $.fs.exists(path)) ? await $.fs.read(path) : undefined
@@ -1171,6 +1200,7 @@ function bandPorts($: EngineInterface): BandPorts {
     listsPaneId: LISTS_PANE,
     closeListsPane: () => $.ui.close({ id: LISTS_PANE }),
     panes: () => $.ui.panes(),
+    bringForward: (id, open, title) => bringForward($, id, open, title),
     closePaneUi: () => $.ui.close({ id: PANE }),
     expectRedraw,
     note,
@@ -1906,7 +1936,7 @@ export const register: Register = (on, options) => {
         digit: d => band_.bandDigit(bandPorts($), d),
         dot: () => band_.bandDot(bandPorts($)),
         go: () => band_.bandNumberGo(bandPorts($)),
-        fieldInput: typed => band_.bandFieldInput(bandPorts($), typed),
+        fieldInput: typed => band_.bandFieldInput(bandPorts($), typed, operation => perform($, operation, 'field')),
         fieldSubmit: typed => band_.bandFieldSubmit(bandPorts($), typed),
         runCommandLine: (typed, kind) => runCommandLine($, typed, kind),
         perform: (key, id, action) => perform($, route(key, { pane: 'none' }, tables).operation, action ?? `button:${id}`),

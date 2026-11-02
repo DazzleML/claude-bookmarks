@@ -4,8 +4,9 @@
 
 import { afterAction } from '../core/band/after-action.ts'
 import { lineHint, route, type Operation } from '../core/band/keys.ts'
+import { showAction } from '../core/band/pane-show.ts'
 import type { CommandLinePorts } from '../engine/ports.ts'
-import { bandOnly, closeAll, handOff, openFor, showHelp } from './band.ts'
+import { bandOnly, closeAll, closeSharedPane, handOff, openFor, showHelp } from './band.ts'
 
 // Design 2026-10-07__02-58-22 (and its POC addendum). The band leader (abovePrompt:focus,
 // Ctrl+] for djdarcy) puts the keyboard on the band, whose first element is a field
@@ -68,14 +69,15 @@ export async function perform(ports: CommandLinePorts, operation: Operation, via
       // Lists off (the `panes` setting): the band takes the key with no pane beside it. Not
       // search, whose results have nowhere else to be drawn.
       if (ports.settings().panes === 'off' && operation.pane !== 'search') return void (await bandOnly(ports, operation.pane))
-      // A pressed button on the pane it opened closes it: the button is a toggle (the keys
-      // design 2026-10-20, unit 4). Never the typed key (djdarcy at the gate: "the BUTTON on
-      // the BAND should have a toggle feature, but elsewhere I think it would be more of an
-      // annoyance"): `<leader> p` may be the start of `<leader> p 12`. Open means the
-      // plugin's own mode AND the pane on screen, since the mode atom starts at 'list' and
-      // closing the pane leaves it, so the mode alone would read a fresh session as open.
-      if (via !== 'field' && (await ports.paneMode()) === operation.pane && (await ports.panes()).some(p => p.id === ports.paneId)) {
-        return void (await closeAll(ports, via))
+      // djdarcy's three rules (2026-11-01, core/band/pane-show.ts), for the key and the button
+      // alike: on this pane -- its tab shown, in this mode -- the command closes it; otherwise
+      // it opens it or brings it to the front (openFor). They replace 0.6.x's "buttons toggle,
+      // keys never" (the keys design 2026-10-20, unit 4). Open means the plugin's own mode AND
+      // the pane on screen, since the mode atom starts at 'list' and closing the pane leaves
+      // it, so the mode alone would read a fresh session as open. Only this pane closes: the
+      // lists pane stays (`q` closes both).
+      if (showAction(await ports.panes(), ports.paneId, (await ports.paneMode()) === operation.pane) === 'close') {
+        return void (await closeSharedPane(ports, via))
       }
       // A pressed button opens the pane as the chords always did; the band's own keys
       // are the fallback openFor sets up when the pane can't take the keyboard.

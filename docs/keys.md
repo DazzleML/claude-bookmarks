@@ -26,7 +26,7 @@ The band's field takes exactly one key (two for the ones that need a letter). An
 | `Space` or `r` | `Space` or `Enter` | Goes to the reading position, or back to where you were; with fresh selected text, sets it there |
 | `p` | see section 3 | Opens the prompts pane |
 | `b` | see section 3 | Opens the bookmarks pane |
-| `l` | -- | Opens the lists pane beside the conversation, or closes it ([Lists](usage.md#lists)); on the bar between `bookmarks` and `prompts` |
+| `l` | -- | Opens the lists pane beside the conversation, switches to it, or closes it when it is in front ([Lists](usage.md#lists)); on the bar between `bookmarks` and `prompts` |
 | `/` | see section 3 | Opens the search pane: the whole conversation, every kind of row ([Searching the conversation](usage.md#searching-the-conversation)) |
 | `P` | a letter `a`-`z`, or `` ` `` | Promotes that mark (or the reading position) into a bookmark on your list; the link goes to your clipboard |
 | `d` | a letter `a`-`z` | Clears that mark: the letter points at nothing, and its history is kept |
@@ -45,7 +45,13 @@ The same letter can mean something else once a list is open: after `p` or `b`, `
 
 These are the default keys. You can choose your own, or take a button off the bar, in `/config`: see [Choosing your own keys](#choosing-your-own-keys).
 
-**A bar button closes the pane it opened.** Clicking `prompts` or `bookmarks` on the bar while its pane is open closes the pane. The key never does: `p` after the leader may be the start of `p 12`, so typing it with the pane open leaves the pane open.
+**A pane's command shows its pane, and closes it only when you are on it.** The key and the bar button work alike, for the prompts, bookmarks, search, jump and lists panes:
+
+- not open: it opens the pane, in front;
+- open, but another of the plugin's panes is the tab in front (or the shared pane shows another list): it switches to it;
+- open and in front: it closes it.
+
+So `Ctrl+] l`, `Ctrl+] p`, `Ctrl+] l` goes Lists, Prompts, Lists. A command closes only its own pane; `q` closes them all. While a list is open in the band, a command key typed alone (`l`, `b`, `m`, `r`, `?`) still runs that command; the list's own keys (digits, `j`, `k`, `s`, `/`, `*`, `q`, and `h`/`l` in the bookmarks list) keep their meaning there.
 
 After any of these the keyboard stays on the band for the next command; `Esc` returns it to the input box. Arrow keys never reach the band ([#23](https://github.com/DazzleML/claude-bookmarks/issues/23)); a terminal mapping can type the leader and a key for you, see [Back and forward](usage.md#back-and-forward).
 

@@ -59,6 +59,23 @@ export function fieldInput(typed: string, list: FieldList, total: number, tables
   return promptNumberComplete(typed, total) ? { op: 'text', filter, go: typed } : { op: 'text', filter }
 }
 
+// The band commands one key completes, which the band's own field passes through.
+const FIELD_COMMAND_OPS: ReadonlySet<string> = new Set(['open', 'lists', 'help', 'reading', 'jumplist'])
+
+/**
+ * A band command typed alone into the band's number field (`l` while the prompts list is
+ * open): its operation, so the band runs it instead of reading it as filter text. #29's rule,
+ * "no layer is a sink"; djdarcy, 2026-11-01: `<leader> p` then `<leader> l` did not reach
+ * Lists. A digit, a list key of this list (`j`, `s`, `h`/`l` in the bookmarks), the field's
+ * own `/` and `*`, and a command that waits for a letter (`P`) stay the field's.
+ */
+export function bandFieldCommand(typed: string, list: FieldList, tables: Tables): Operation | undefined {
+  if (typed.length !== 1 || /^[0-9.]$/.test(typed)) return undefined
+  if (tables.list.some(l => l.key === typed && l.panes.includes(list))) return undefined
+  const operation = route(typed, { pane: 'none' }, tables).operation
+  return FIELD_COMMAND_OPS.has(operation.op) ? operation : undefined
+}
+
 function listKeyAfterNumber(typed: string, list: FieldList, tables: Tables): FieldStep | undefined {
   const last = typed.slice(-1)
   const number = typed.slice(0, -1)

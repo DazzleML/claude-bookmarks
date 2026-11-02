@@ -16,6 +16,7 @@ import { hrefOf, linkFromText, linkKey, linksOf, primaryLink, sameLink, textOf, 
 import { parseRef } from '../core/bookmarks/ref.ts'
 import { answer } from '../core/bookmarks/bookmark-tool.ts'
 import { short } from '../core/kit/message-id.ts'
+import { showAction } from '../core/band/pane-show.ts'
 import type { ListsPorts } from '../engine/ports.ts'
 
 const slash = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
@@ -185,11 +186,15 @@ export class Lists {
 
 /**
  * `/bm-lists [name or number]` (refactor-advisor 2026-10-27, row 5): with a name, opens on that
- * list, found by the tool's own finder; with none, a second `/bm-lists` closes the pane.
+ * list, found by the tool's own finder. With none, the three rules (core/band/pane-show.ts):
+ * open it; open but behind another pane, bring it to the front; open and in front, close it.
+ * The same for `<leader> l` and the bar's button, which come here too.
  */
 export async function listsCommand(ports: ListsPorts, lists: Lists, args: string): Promise<void> {
   const name = args.trim()
-  if (!name && (await ports.paneOpen())) {
+  const panes = ports.panes && ports.paneId ? await ports.panes() : undefined
+  const action = panes ? showAction(panes, ports.paneId!) : (await ports.paneOpen()) ? 'close' : 'open'
+  if (!name && action === 'close') {
     await ports.closePane()
     return
   }
@@ -203,8 +208,8 @@ export async function listsCommand(ports: ListsPorts, lists: Lists, args: string
     }
   }
   await ports.redraw()
-  const opened = await ports.openPane()
-  ports.log(`[bm] lists pane opened: ${JSON.stringify(opened)}`)
+  const opened = await (ports.openInFront ?? ports.openPane)()
+  ports.log(`[bm] lists pane opened (${action}): ${JSON.stringify(opened)}`)
 }
 
 /**

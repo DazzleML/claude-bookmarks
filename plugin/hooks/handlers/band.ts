@@ -9,7 +9,7 @@ import { afterAction, isList, type Cause } from '../core/band/after-action.ts'
 import { ownerOf } from '../core/bookmarks/anchor.ts'
 import { centreDelays, promptNumberComplete, stepNumber } from '../core/band/band-entry.ts'
 import { parseListNumber, type Operation, type Pane } from '../core/band/keys.ts'
-import { fieldInput } from '../core/band/field-input.ts'
+import { bandFieldCommand, fieldInput } from '../core/band/field-input.ts'
 import { searchField, stepResult } from '../core/search/results.ts'
 import { short } from '../core/kit/message-id.ts'
 import type { BandCorePorts, ListPorts, PanePorts } from '../engine/ports.ts'
@@ -151,8 +151,17 @@ export async function bandNumberGo(ports: BandCorePorts & PanePorts & ListPorts)
 // as it does for the panes' `#` fields. Backspace is the field's own: a shorter text
 // arrives here like any other. Every path returns its promise, so a jump runs while the
 // field's handler is still running and counts as the person's.
-export async function bandFieldInput(ports: BandCorePorts & PanePorts & ListPorts, typed: string) {
+export async function bandFieldInput(ports: BandCorePorts & PanePorts & ListPorts, typed: string, perform?: (operation: Operation) => Promise<unknown>) {
   const mode = await ports.bandMode()
+  // A band command typed alone (`l` while the prompts list is open) is the band's, not the
+  // field's (core/band/field-input.ts bandFieldCommand): the band runs it. Not in the search
+  // list, whose every key is the query.
+  const command = perform && mode !== 'search' ? bandFieldCommand(typed, mode === 'bookmarks' ? 'bookmarks' : 'list', ports.tables()) : undefined
+  if (command) {
+    ports.log(`[bm] band field: "${typed}" is a band command (${command.op}), run from the list's field`)
+    await ports.setBandNum('')
+    return void (await perform!(command))
+  }
   // The search list's field is the query (core/search/results.ts searchField): `#N` and `*N`
   // wait for Enter, anything else searches as it is typed. No key in it is a list key.
   if (mode === 'search') {
@@ -397,7 +406,12 @@ export async function openFor(ports: BandCorePorts & PanePorts & ListPorts, mode
   // scrolled up 30 or 40 pages, "the user doesn't have to scroll in the panel"). The
   // `listOpensAt` setting: 'newest' skips it, and the list opens at its top, the newest.
   const hereAtOpen = mode === 'list' && ports.settings().listOpensAt === 'nearest' ? await ports.promptHere() : undefined
-  const opened = await ports.openPane(title)
+  // In front of the lists pane when that is the tab shown (rules 1 and 2, core/band/pane-show.ts):
+  // Claude Code would add this pane behind it. Then it opens without the keyboard request,
+  // which the band would refuse anyway.
+  let opened = undefined as Awaited<ReturnType<typeof ports.openPane>>
+  const open = async () => { opened = await ports.openPane(title) }
+  await (ports.bringForward ? ports.bringForward(ports.paneId, open, title) : open())
   // Probe (2026-10-09): below the engine's width floor the pane waits undrawn and the
   // person sees nothing. Say why, instead of looking broken (djdarcy's shrunk RDP terminal).
   if (opened && opened.isPlaced === false) {
@@ -519,6 +533,13 @@ export async function paneCommand(ports: BandCorePorts & PanePorts) {
   // The slash-command route to a focused pane (typed, or a `command:bm-pane`
   // keybinding, 2.1.290): record whether the pane actually got the keyboard.
   ports.log(`[bm] /bm-pane opened; pane has the keyboard: ${(await paneFocused(ports)) ? 'yes' : 'NO'}`)
+}
+
+/** The shared pane closed and the band's mode ended, the lists pane left alone: a command's close (rule 3, core/band/pane-show.ts). */
+export async function closeSharedPane(ports: BandCorePorts & PanePorts, via: string) {
+  ports.log(`[bm] close (${via}): the pane it is on`)
+  await closePane(ports)
+  await endBandMode(ports)
 }
 
 async function closePane(ports: BandCorePorts & PanePorts) {

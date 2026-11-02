@@ -465,7 +465,7 @@ These are for power users, and not part of the recommended setup:
 | `/bm-prompts` | Opens the prompts pane |
 | `/bm-read` | Goes to the reading position, or back |
 | `/bm-bookmarks` | Opens the bookmarks pane |
-| `/bm-lists [name]` | Opens the lists pane (on that list), or closes it |
+| `/bm-lists [name]` | Opens the lists pane (on that list) or switches to it; with no name and the pane in front, closes it |
 | `/bm-promote a` | Promotes mark `a` into a bookmark on your list |
 | `/bm-delmarks a b`, `/bm-delmarks all` | Deletes marks |
 | `/bm-pin [N]` | Pins or unpins prompt #N (the newest without a number) |

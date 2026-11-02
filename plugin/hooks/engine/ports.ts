@@ -122,7 +122,13 @@ export type PanePorts = {
   /** The lists pane's own id (bm-lists), and its close: `q` closes it too (djdarcy, 2026-10-31). */
   listsPaneId?: string
   closeListsPane?: () => Promise<unknown>
-  panes: () => Promise<readonly { id: string; isFocused?: boolean }[]>
+  panes: () => Promise<readonly { id: string; title?: string; isShown?: boolean; isFocused?: boolean }[]>
+  /**
+   * Pane `id` opened in front of the plugin's other panes: `open` when none of them is shown,
+   * else the pane closed if open and opened anew, titled `title`, without the keyboard request
+   * (register.tsx bringForward). Absent: `open` alone.
+   */
+  bringForward?: (id: string, open: () => Promise<unknown>, title?: string) => Promise<unknown>
   closePaneUi: () => Promise<unknown>
   expectRedraw: (why: string) => void
   /** The placement and width the pane's render recorded (its writer is the render hook). */
@@ -334,6 +340,11 @@ export type ListsPorts = {
   /** Whether the lists pane is open now; close it (`/bm-lists` toggles). */
   paneOpen: () => Promise<boolean>
   closePane: () => Promise<unknown>
+  /** The lists pane's id (bm-lists) and the plugin's open panes, which is shown (core/band/pane-show.ts); absent: `paneOpen` alone decides, as before. */
+  paneId?: string
+  panes?: () => Promise<readonly { id: string; title?: string; isShown?: boolean }[]>
+  /** Open the lists pane in front of the plugin's other panes (`bringForward` below); absent: `openPane`. */
+  openInFront?: () => Promise<unknown>
   /** One of the plugin's own files by its path relative to the plugin folder (the page's template), or undefined when missing. */
   pluginFile: (relative: string) => Promise<string | undefined>
   /** A place of this conversation by a verbatim fragment or a uuid, as the bookmark tool finds one; the outcome as found (handlers/lists.ts reads it). `quick`: prompts and replies only, never the place reader's wait. */

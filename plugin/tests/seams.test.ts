@@ -177,7 +177,7 @@ test('M control: without a session start, a re-mounted pane keeps the footnote u
 })
 
 test('2 go with nothing typed closes the list and brings the bar back (settle, esc)', { options: { listInput: 'buttons' } }, async ($, on) => {
-  const w = world(on, { session: SID, store: STORE, panes: [{ id: 'bm-pane' }] })
+  const w = world(on, { session: SID, store: STORE, trackPanes: true })
   const band = await mount($, BAND)
   await band.input({ key: 'band-cmd-0', text: 'p' }).catch(() => undefined)
   const closesBefore = w.calls.filter(c => c.event === 'ui.close').length
