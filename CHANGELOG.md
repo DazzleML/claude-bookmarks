@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-02
+
+The first release of the 0.8 line, which moves the plugin's data to a layout kept per project. This one is a small step toward the lists' age line.
+
+### Changed
+
+- **A bookmark's age in the bookmarks pane counts down to the last whole unit.** It now floors instead of rounding, so something saved 23 hours and 59 minutes ago reads `23h`, not `1d`. From a week on it reads in weeks, months and years instead of counting days: 9 days reads `1wk`, 400 days `1y`. Under a minute it still reads `0m`. The same counting, shown two or three units deep (`1wk 2d`), is what the lists will use later in 0.8 to say how long ago a bundle started and when it last changed.
+
 ## [0.7.42] - 2026-11-02
 
 ### Added
@@ -1659,7 +1667,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.42...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.0...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

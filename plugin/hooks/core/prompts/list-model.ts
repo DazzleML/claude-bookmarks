@@ -6,6 +6,7 @@
 import { firstFour } from '../kit/message-id.ts'
 import { numberFootnotes, type FootnoteRef } from './prompt-rows.ts'
 import { ownerOf, type AnchorRecord } from '../bookmarks/anchor.ts'
+import { since } from '../time/since.ts'
 
 /** Numbered in the order sent (#1 the first), listed newest first (djdarcy, 2026-10-04). */
 export function numberNewestFirst<T>(all: readonly T[]): (T & { n: number })[] {
@@ -54,11 +55,8 @@ export const pointerFor = (fromBand: string | undefined, targetN: number | undef
 export const drawnFourOf = (drawnIds: Iterable<string>): Set<string> => new Set([...drawnIds].map(firstFour))
 export const unreached = (drawnFour: ReadonlySet<string>, uuid: string): boolean => !drawnFour.has(firstFour(uuid))
 
-/** A bookmark's age in the list: minutes, then hours, then days. */
-export function age(now: number, t: number): string {
-  const m = Math.round((now - t) / 60_000)
-  return m < 60 ? `${m}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`
-}
+/** A bookmark's age in the list: one unit of the age ladder, minutes the smallest. */
+export const age = (now: number, t: number): string => since(now, t, { depth: 0, floor: 'm' })
 
 /** The bookmarks pane's second line: how old, who said it, whose it is, temporary. */
 export function bookmarkWho(r: Pick<AnchorRecord, 'owner' | 'by' | 'role' | 'sharedFrom' | 'source' | 'temporary' | 'createdAt'>, now: number): string {
