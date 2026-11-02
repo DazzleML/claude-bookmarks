@@ -8,6 +8,7 @@ The plugin's docs, in the order a new reader would probably want them. If you're
 | [Tutorial](tutorial.md) | Chords, leader keys and vim marks explained, then a hands-on walkthrough. |
 | [Every key](keys.md) | The complete key reference, grouped by where the keyboard is. |
 | [Using the plugin](usage.md) | Each feature in detail: marks, jumps, the reading position, the prompts pane, bookmarks, the log echo, and what is kept where. |
+| [How the data fits together](data-model.md) | The pieces the plugin keeps, from a place in a conversation to a list of bundles: what each adds, where it lives, and which part of the plugin works with it. |
 | [Troubleshooting](troubleshooting.md) | The band doesn't appear, a key does nothing, a jump is refused, the terminal is too narrow. |
 | [Platform support](platform-support.md) | Terminals and renderers, tested and expected. |
 | [Claude Code quirks to work around](engine-quirks.md) | Each limit of the plugin API hit so far, what the plugin does about it, and what a proper fix would look like. |

@@ -340,6 +340,9 @@ let conversationId: string | undefined
 async function sameConversation($: EngineInterface): Promise<void> {
   const id = await $.session.id()
   if (conversationId === undefined || id === conversationId) {
+    // The first look after a load: a reload starts no session, so the lineage is asked for
+    // here too (startLineage runs once per session id).
+    if (conversationId === undefined) startLineage($)
     conversationId = id
     return
   }
@@ -507,13 +510,13 @@ async function transcriptPath($: EngineInterface): Promise<string | undefined> {
 
 // --- For reviewers: the four places this plugin runs a program ---------------------
 // userRows() and grepTranscript() below, readChunk in transcriptPorts() after them, and
-// scanLineage() (sh only: `grep -o -E "$1" "$2" | uniq`, the tests/fixtures/session-lineage pattern;
-// with no sh it is skipped), are the plugin's only $.process.run calls. Each reads the conversation's transcript and
+// scanLineage() (`grep -o -E "$1" "$2" | uniq`, the tests/fixtures/session-lineage pattern, or
+// lineage-scan.ps1 first on a Windows path), are the plugin's only $.process.run calls. Each reads the conversation's transcript and
 // nothing else. Why a program at all: the transcript is often larger than the 4 MiB that
 // $.fs.read accepts (it rejects above that), so the file is searched, or read in 4 MB
 // pieces by byte offset, by a tool already on the machine. What runs: `sh -c 'grep ...'`
 // or `sh -c 'tail -c +"$1" "$2" | head -c 4000000'` where sh exists, else `powershell
-// -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <one of the three .ps1 files
+// -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <one of the four .ps1 files
 // shipped in hooks/scripts/>`. The transcript path, the search text and the offset are
 // always separate argv elements ("$1"/"$2" to sh, named -Path/-Pattern/-Offset
 // parameters to PowerShell), never spliced into the command string, so selected or
@@ -588,6 +591,22 @@ async function grepTranscript($: EngineInterface, path: string, pattern: string)
 // The earlier sessions a transcript names (tests/fixtures/session-lineage, U83): one pass of grep for the
 // three lineage fields, consecutive repeats dropped. sh only; with none, undefined (no lineage).
 async function scanLineage($: EngineInterface, path: string): Promise<{ text: string; truncated: boolean; ms: number } | undefined> {
+  // Windows PowerShell first on a Windows path, as userRows does: Claude Code's process there
+  // often has no sh (djdarcy's sessions logged "no sh" on every start, 2026-11-02, so a
+  // continued conversation never took its earlier bookmarks). The script is the same
+  // `grep -o -E | uniq` (2.9 s on a 328 MB transcript, output identical to grep's).
+  if (/^[A-Za-z]:[\\/]/.test(path)) {
+    try {
+      const started = Date.now()
+      const r = await $.process.run(
+        ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', `${$.plugin.root}/hooks/scripts/lineage-scan.ps1`, '-Path', path, '-Pattern', LINEAGE_SCAN_PATTERN],
+        { timeoutMs: 60_000 },
+      )
+      if (r.exitCode === 0 || r.stdout) return { text: r.stdout.replace(/\r/g, ''), truncated: r.isStdoutTruncated, ms: Date.now() - started }
+    } catch {
+      // PowerShell is not there: try sh.
+    }
+  }
   try {
     const started = Date.now()
     const r = await $.process.run(
@@ -617,6 +636,12 @@ function lineagePorts($: EngineInterface): LineagePorts {
 }
 
 // In the background: never awaited by a hook (the scan takes seconds on a large transcript).
+// A session start and the first look after a reload (sameConversation) both ask, since a reload
+// starts no session -- so a fix to the scan reaches a running conversation (2026-11-02: 265b0cca
+// had been skipped for want of sh). Asking twice costs nothing: ensureLineage shares a scan in
+// flight and keeps the answer, and adoptEarlier copies once per session (its `adopted:` flag).
+// A once-per-session guard here was tried and removed: the red-green audit of 0.7.42 found it
+// changed nothing observable.
 function startLineage($: EngineInterface) {
   void lineage_.lineageAtStart(lineagePorts($)).catch(err => log($, `[bm] lineage failed: ${String(err)}`))
 }
@@ -1201,6 +1226,7 @@ function bandPorts($: EngineInterface): BandPorts {
     closeListsPane: () => $.ui.close({ id: LISTS_PANE }),
     panes: () => $.ui.panes(),
     bringForward: (id, open, title) => bringForward($, id, open, title),
+    reopenPane: pane => reopenPane($, pane),
     closePaneUi: () => $.ui.close({ id: PANE }),
     expectRedraw,
     note,

@@ -2,13 +2,14 @@
 
 **Plugin:** Bookmarks (`bookmarks`), published by DazzleML
 **Applies to:** version 0.3.4 and later, until this page changes
-**Last changed:** 2026-10-26
+**Last changed:** 2026-11-02
 
 The short version: the plugin runs inside Claude Code on your machine, reads the conversation Claude Code already keeps on your disk, writes its own small files next to it, and sends nothing anywhere. There is no account, no telemetry, no network connection and no third party.
 
 ## What it reads
 
-- **The conversation transcript.** Claude Code keeps every conversation as a file on your disk (`~/.claude/projects/<project>/<session id>.jsonl`, or under `CLAUDE_CONFIG_DIR`). The plugin reads this file to list the prompts you have typed and to find the message a bookmark points at. It never writes to it.
+- **The conversation transcript.** Claude Code keeps every conversation as a file on your disk (`~/.claude/projects/<project>/<session id>.jsonl`, or under `CLAUDE_CONFIG_DIR`). The plugin reads this file to list the prompts you have typed and to find the message a bookmark points at. Once per conversation, in the background, it also searches the file for the ids of the earlier sessions the conversation continues (after a branch, a resume or a background hand-off, Claude Code carries a conversation on under a new id). It never writes to it.
+- **The bookmark files of those earlier sessions**, which the plugin itself wrote, under `~/claude/bookmarks/sessions/`: when a conversation continues earlier ones, their bookmarks, marks and pins are copied once into the new session's file. The earlier files are only read, never changed. "Bring bookmarks into a continued conversation" in `/config` turns this off.
 - **The conversation's own adjacent files**, which Claude Code keeps in a folder beside the transcript (`<session id>/subagents/` for each agent's messages, `<session id>/tool-results/` for tool outputs too large for the transcript), and any other transcript file the conversation continues in. The plugin reads them the first time you search the conversation or link to a row that is not a prompt or a reply (a tool call, its output, an agent's message), so that every row can be found. It never writes to them.
 - **Its own files.** The marks, bookmarks and settings it wrote earlier (listed below).
 - **A few environment variables**, only to find folders and to know its own state: `HOME` or `USERPROFILE`, `CLAUDE_CONFIG_DIR`, `CLAUDE_USER_DIR`, `CONVO_BOOKMARKS_DEBUG`, and `DCC_PATCH_H`, `DCC_PATCHES`, `DCC_PATCHER` (present only if you run a patched build of Claude Code; the plugin only displays them).
@@ -35,7 +36,7 @@ It writes nothing else: no configuration file, no settings file, no start-up fil
 To search the transcript and read the conversation's other files, which can be larger than the plugin API will read at once, the plugin runs a program already on your machine with the file's path and the search text or offset as arguments:
 
 - on macOS, Linux and Git Bash on Windows: `sh` running `grep`, and, to read the whole conversation once in pieces, `sh` running `tail -c +<offset> <transcript> | head -c 4000000` (the offset and the path are arguments, never part of the command text);
-- on Windows: three PowerShell scripts shipped inside the plugin, `hooks/scripts/user-rows.ps1`, `hooks/scripts/grep-offsets.ps1` and `hooks/scripts/read-chunk.ps1` (the whole-conversation read, one piece of the file by byte offset), started as `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <script>` with the path, the search text or the offset as named parameters.
+- on Windows: four PowerShell scripts shipped inside the plugin, `hooks/scripts/user-rows.ps1`, `hooks/scripts/grep-offsets.ps1`, `hooks/scripts/read-chunk.ps1` (the whole-conversation read, one piece of the file by byte offset) and `hooks/scripts/lineage-scan.ps1` (the search for the earlier sessions a conversation continues), started as `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <script>` with the path, the search text or the offset as named parameters. Each call falls back to the other form when the first is missing.
 
 Their output is read back by the plugin and goes nowhere else. Nothing else is executed, and nothing is installed.
 

@@ -5,6 +5,8 @@
 // from the pane opening, the help, the band's keys, the focus and edit hooks, the band's
 // render and the session start; here each write is a named method.
 
+import type { PaneSet } from './pane-show.ts'
+
 /** A timer as the engine hands it back: something that can be cancelled. */
 export type Cancellable = { cancel: () => void }
 
@@ -53,6 +55,20 @@ export class BandState {
   newConversation(): void {
     this.escOwed = false
     this.ringOn = undefined
+    this.closedSet = undefined
+  }
+
+  // The panes `q` last closed, for `q` with nothing open to reopen (core/band/pane-show.ts PaneSet).
+  private closedSet: PaneSet | undefined
+  /** `q` closed these panes. */
+  rememberClosed(set: PaneSet | undefined): void {
+    if (set) this.closedSet = set
+  }
+  /** The panes to reopen, taken: a second `q` with nothing open says there is nothing. */
+  takeClosed(): PaneSet | undefined {
+    const set = this.closedSet
+    this.closedSet = undefined
+    return set
   }
 
   get ring(): string | undefined {

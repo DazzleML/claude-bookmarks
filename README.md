@@ -102,7 +102,7 @@ That's the whole setup. Every key in these docs is written as `Ctrl+]`. Until th
 - **Works while you type** - The leader works with a draft in the input box and while Claude is working; your draft is untouched
 - **Per conversation** - Marks, the reading position and the prompt list belong to the conversation they were made in, and survive restarting Claude Code and `--resume`
 - **Display only** - Highlights change what is drawn on screen, never what Claude reads or what is saved in the session file
-- **No extra installs** - TypeScript that runs inside Claude Code; the prompt back-fill uses the shell your system already has (PowerShell on Windows, `sh` and `grep` elsewhere)
+- **No extra installs** - TypeScript that runs inside Claude Code; reading the conversation's file uses the shell your system already has (PowerShell on Windows, `sh` and `grep` elsewhere)
 
 ## Usage
 

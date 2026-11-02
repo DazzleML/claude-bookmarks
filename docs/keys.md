@@ -34,7 +34,7 @@ The band's field takes exactly one key (two for the ones that need a letter). An
 | `o` | | Back to where you were before the last jump |
 | `i` | | Forward again |
 | `?` | | Shows every command and list key, and how the band's switches are set, in the band; `Enter` or `Esc` closes it |
-| `q` | | Closes the plugin's pane and ends whatever the band is doing (for a list left open after a jump) |
+| `q` | | Closes every pane of the plugin's and ends whatever the band is doing (for a list left open after a jump); with none open, reopens the panes it last closed, the one that was in front back in front |
 | `Esc` | | Leaves the band; the keyboard returns to the input box |
 
 ### Why some commands have two keys

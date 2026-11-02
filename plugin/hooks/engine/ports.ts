@@ -129,6 +129,8 @@ export type PanePorts = {
    * (register.tsx bringForward). Absent: `open` alone.
    */
   bringForward?: (id: string, open: () => Promise<unknown>, title?: string) => Promise<unknown>
+  /** One of the plugin's panes opened again, anew, without the keyboard request and with its own size (`q`'s reopen; register.tsx reopenPane). */
+  reopenPane?: (pane: { id: string; title?: string }) => Promise<unknown>
   closePaneUi: () => Promise<unknown>
   expectRedraw: (why: string) => void
   /** The placement and width the pane's render recorded (its writer is the render hook). */

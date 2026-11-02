@@ -40,6 +40,7 @@ When a sweep is run, add its report beside the others (`vX.Y.Z__sweep__<slug>.md
 | [ ] | 0.7.38 | a6bc81f | a link's `about`: stored, merged by identity, shown on its row |
 | [ ] | 0.7.39 | cc3c91e | the listLinkClick setting and the copy button; the ● face mark |
 | [ ] | 0.7.40 | 9ba5015 | the band order; the Prompts fold in `/config`; `q` closes the lists pane |
-| [ ] | 0.7.41 | (this commit) | the three pane rules and bringing a pane forward; a band command through the list's field; the tools-used note on a queued row |
+| [ ] | 0.7.41 | eddf8a4 | the three pane rules and bringing a pane forward; a band command through the list's field; the tools-used note on a queued row |
+| [ ] | 0.7.42 | (this commit) | the lineage scan through PowerShell on Windows, and at the first look after a load; `<leader> q` closes and reopens the panes |
 
 Not listed: 0.7.29 (59eb80d) and 0.7.32 (bf66372) add tests only; docs and build commits.

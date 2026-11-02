@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.42] - 2026-11-02
+
+### Added
+
+- **`Ctrl+] q` brings back what it closed.** With any of the plugin's panes open, `q` closes them all, as before, and remembers them; with none open, `q` reopens the same panes, the one that was in front back in front and the shared pane on the same list. With nothing to bring back, it says so. The `q` inside a list still only closes.
+- **A page on how the plugin's data fits together** ([docs/data-model.md](docs/data-model.md)): the pieces from a place in a conversation to a list, what each adds and where it is kept, how a mark differs from a bookmark, what a link is, and which one to use.
+
+### Fixed
+
+- **A continued or branched conversation brings in its earlier sessions' bookmarks on Windows.** The search for the earlier sessions a conversation continues ran only through `sh`, which Claude Code's process on Windows often does not have, so it never ran there and a continued conversation started with an empty bookmarks list. It now runs a PowerShell script shipped with the plugin first, and also runs the first time the plugin looks at a conversation after it reloads, so a conversation that is already open picks it up without a restart.
+- **The `/bm-lists` line in the usage docs** says it switches to the pane when it is behind another and closes it only when it is in front, as it has since 0.7.41.
+
 ## [0.7.41] - 2026-11-01
 
 ### Changed
@@ -1647,7 +1659,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.41...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.7.42...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

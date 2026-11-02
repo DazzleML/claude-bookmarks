@@ -55,7 +55,7 @@ export async function ensureLineage(ports: LineagePorts): Promise<Lineage | unde
     if (!path) return undefined
     const scan = await ports.scanLineage(path)
     if (!scan) {
-      ports.log(`[bm] lineage: the transcript could not be scanned (no sh); this conversation's earlier sessions are not looked for`)
+      ports.log(`[bm] lineage: the transcript could not be scanned (no PowerShell or sh); this conversation's earlier sessions are not looked for`)
       return undefined
     }
     const lineage = lineageOf(rowsOfScan(scan.text), sid)

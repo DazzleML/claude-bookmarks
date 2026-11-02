@@ -34,6 +34,31 @@ export function showAction(panes: readonly ShownPane[], id: string, sameContent 
 }
 
 /**
+ * What `q` closed, so `q` with nothing open can bring it back (djdarcy, 2026-10-31: "reopens
+ * whatever was open previously so a person doesn't have to think of what they'd previously
+ * been working in"): the panes in the order they were open, which was in front, and the list
+ * the shared pane showed.
+ */
+export type PaneSet = { panes: readonly ShownPane[]; shown?: string; mode?: string }
+
+/** The set to remember from the panes open now and the shared pane's mode; undefined when none is open. */
+export function paneSetOf(panes: readonly ShownPane[], mode: string | undefined): PaneSet | undefined {
+  if (!panes.length) return undefined
+  const shown = panes.find(p => p.isShown !== false)?.id
+  return { panes: panes.map(p => ({ id: p.id, ...(p.title !== undefined ? { title: p.title } : {}) })), ...(shown ? { shown } : {}), ...(mode ? { mode } : {}) }
+}
+
+/**
+ * The order to reopen a set in: the panes that were behind first, the one in front last. Claude
+ * Code shows the pane opened anew last (without a keyboard request), so it lands in front again.
+ */
+export function reopenOrder(set: PaneSet): ShownPane[] {
+  const behind = set.panes.filter(p => p.id !== set.shown)
+  const front = set.panes.filter(p => p.id === set.shown)
+  return [...behind, ...front]
+}
+
+/**
  * The plugin's panes shown in front of `id`: empty when `id` is the shown tab or none of the
  * plugin's panes is shown, and then a plain open does. Otherwise `id` must be opened anew
  * without a keyboard request to come forward (register.tsx bringForward): Claude Code raises

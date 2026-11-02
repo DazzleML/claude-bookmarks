@@ -10,6 +10,7 @@ import { ownerOf } from '../core/bookmarks/anchor.ts'
 import { centreDelays, promptNumberComplete, stepNumber } from '../core/band/band-entry.ts'
 import { parseListNumber, type Operation, type Pane } from '../core/band/keys.ts'
 import { bandFieldCommand, fieldInput } from '../core/band/field-input.ts'
+import { paneSetOf, reopenOrder } from '../core/band/pane-show.ts'
 import { searchField, stepResult } from '../core/search/results.ts'
 import { short } from '../core/kit/message-id.ts'
 import type { BandCorePorts, ListPorts, PanePorts } from '../engine/ports.ts'
@@ -561,9 +562,39 @@ async function closePane(ports: BandCorePorts & PanePorts) {
 export async function closeAll(ports: BandCorePorts & PanePorts, via: string) {
   ports.log(`[bm] close (${via}): the pane and the band's mode`)
   const open = await ports.panes()
+  // What was open, for `<leader> q` with nothing open to bring back (toggleAll below).
+  ports.band.rememberClosed(paneSetOf(open, await ports.paneMode()))
   if (open.some(p => p.id === ports.paneId)) await closePane(ports)
   // The lists pane has its own id, so it is closed by name (djdarcy, 2026-10-31: "if I open the
   // "lists" pane and if I hit <leader>q it does not close").
   if (ports.listsPaneId && ports.closeListsPane && open.some(p => p.id === ports.listsPaneId)) await ports.closeListsPane()
   await endBandMode(ports)
+}
+
+/**
+ * `<leader> q` (djdarcy, 2026-10-31: "it might be nice to have <leader>q act like a toggle where
+ * it reopens whatever was open previously"): with any of the plugin's panes open, close them all
+ * and remember them; with none open, reopen what `q` last closed -- the panes that were behind
+ * first, the one in front last, the shared pane on the list it showed. The `q` inside a list
+ * (its field, its button) only closes.
+ */
+export async function toggleAll(ports: BandCorePorts & PanePorts & ListPorts, via: string) {
+  if ((await ports.panes()).length) return closeAll(ports, via)
+  const set = ports.band.takeClosed()
+  if (!set || !ports.reopenPane) {
+    ports.toast('Nothing to reopen: q brings back the panes it last closed.')
+    return
+  }
+  for (const pane of reopenOrder(set)) {
+    if (pane.id === ports.paneId && set.mode) {
+      await ports.setPaneMode(set.mode)
+      // The search pane opens on its last query, as openFor does.
+      if (set.mode === 'search') {
+        ports.searchOpened()
+        ports.searchFor(ports.searchQuery())
+      }
+    }
+    await ports.reopenPane(pane)
+  }
+  ports.log(`[bm] reopen (${via}): ${reopenOrder(set).map(p => p.id).join(', ')}${set.mode ? `, the shared pane on ${set.mode}` : ''}`)
 }

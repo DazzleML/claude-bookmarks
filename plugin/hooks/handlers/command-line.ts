@@ -6,7 +6,7 @@ import { afterAction } from '../core/band/after-action.ts'
 import { lineHint, route, type Operation } from '../core/band/keys.ts'
 import { showAction } from '../core/band/pane-show.ts'
 import type { CommandLinePorts } from '../engine/ports.ts'
-import { bandOnly, closeAll, closeSharedPane, handOff, openFor, showHelp } from './band.ts'
+import { bandOnly, closeSharedPane, handOff, openFor, showHelp, toggleAll } from './band.ts'
 
 // Design 2026-10-07__02-58-22 (and its POC addendum). The band leader (abovePrompt:focus,
 // Ctrl+] for djdarcy) puts the keyboard on the band, whose first element is a field
@@ -59,8 +59,9 @@ export async function perform(ports: CommandLinePorts, operation: Operation, via
       await showHelp(ports)
       return
     case 'close':
+      // `<leader> q`: close every pane of the plugin's, or reopen what it last closed (toggleAll).
       await ports.clearCommandLine()
-      await closeAll(ports, via)
+      await toggleAll(ports, via)
       return
     case 'open':
       await ports.clearCommandLine()

@@ -110,6 +110,70 @@ test('with the adoptEarlier setting off, nothing is copied', { options: { adoptE
   expect(writes.some(w => w.key === `jumplist:${SID}`)).toBe(false)
 })
 
+// The lineage scan on Windows (0.7.42): Claude Code's process there often has no sh (djdarcy's
+// sessions logged "no sh" on every start, 2026-11-02), so on a Windows path the shipped
+// PowerShell script runs first, and sh is the fallback. The transcript names OLD once: the row
+// a fork copies with its earlier session's id.
+const COPIED_SCAN = `"session_id":"${OLD}"\n"session_id":"${SID}"\n`
+const isPowerShellScan = (argv: readonly string[]) => argv[0] === 'powershell' && argv.some(a => /lineage-scan\.ps1$/.test(a.replace(/\\/g, '/')))
+const isShScan = (argv: readonly string[]) => argv[0] === 'sh' && argv.some(a => a.includes('grep -o -E'))
+const scansIn = (w: { calls: { event: string; input?: unknown }[] }, isScan: (argv: readonly string[]) => boolean) =>
+  w.calls.filter(c => c.event === 'process.run' && isScan(((c.input as { argv?: readonly string[] }).argv ?? []))).length
+const noLineageKept = () => {
+  const c = chain()
+  return { ...c, options: { ...c.options, store: {} } }
+}
+
+test('on a Windows path the lineage scan runs the shipped PowerShell script, and the earlier bookmarks come in', async ($, on) => {
+  const c = noLineageKept()
+  const w = world(on, { ...c.options, process: (argv: readonly string[]) => (isPowerShellScan(argv) ? { exitCode: 0, stdout: COPIED_SCAN } : { exitCode: 1, stdout: '' }) })
+  await start($)
+  await settle()
+  expect(scansIn(w, isPowerShellScan)).toBe(1)
+  expect(scansIn(w, isShScan)).toBe(0)
+  expect(parseRegister(w.file(HERE) ?? '')?.perma.map(r => [r.uuid, r.sessionId])).toEqual([[B, OLD]])
+})
+
+test('with no PowerShell, the lineage scan falls back to sh', async ($, on) => {
+  const c = noLineageKept()
+  const w = world(on, { ...c.options, process: (argv: readonly string[]) => (isShScan(argv) ? { exitCode: 0, stdout: COPIED_SCAN } : { exitCode: 1, stdout: '' }) })
+  await start($)
+  await settle()
+  expect(scansIn(w, isPowerShellScan)).toBe(1)
+  expect(scansIn(w, isShScan)).toBe(1)
+  expect(parseRegister(w.file(HERE) ?? '')?.perma.map(r => [r.uuid, r.sessionId])).toEqual([[B, OLD]])
+})
+
+// A reload starts no session, so the first look after a load asks for the lineage too (djdarcy's
+// 265b0cca had been skipped for want of sh, and a fix to the scan had to reach it without a restart).
+const mountBand = async ($: unknown) =>
+  (await ($ as { ui: { mount: (t: never) => Promise<unknown> } }).ui.mount({ plugin: 'bookmarks', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS, requestId: 'band-1' } as never)) as { input: (t: object) => Promise<unknown> }
+const psAnswers = (argv: readonly string[]) => (isPowerShellScan(argv) ? { exitCode: 0, stdout: COPIED_SCAN } : { exitCode: 1, stdout: '' })
+
+test('the first look after a load asks for the lineage, with no session start', async ($, on) => {
+  const c = noLineageKept()
+  const w = world(on, { ...c.options, process: psAnswers })
+  const band = await mountBand($)
+  await band.input({ key: 'band-cmd-0', text: '?' }).catch(() => undefined)
+  await settle()
+  expect(scansIn(w, isPowerShellScan)).toBe(1)
+  expect(parseRegister(w.file(HERE) ?? '')?.perma.map(r => [r.uuid, r.sessionId])).toEqual([[B, OLD]])
+})
+
+// A first look and a session start arriving together copy the earlier bookmarks once, not twice
+// over each other: ensureLineage shares the scan in flight, and adoptEarlier's `adopted:` flag
+// copies once per session. A guard: it fences that contract (0.7.42's red-green found a
+// once-per-session check in startLineage added nothing to it, and the check was removed).
+test('a first look and a session start together copy the earlier bookmarks once', async ($, on) => {
+  const c = noLineageKept()
+  const w = world(on, { ...c.options, process: psAnswers })
+  const band = await mountBand($)
+  await Promise.all([band.input({ key: 'band-cmd-0', text: '?' }).catch(() => undefined), start($)])
+  await settle()
+  expect(w.logs().filter(l => l.includes('[bm] adopt:') && l.includes('copied'))).toEqual([expect.stringContaining('1 copied')])
+  expect(parseRegister(w.file(HERE) ?? '')?.perma.map(r => [r.uuid, r.sessionId])).toEqual([[B, OLD]])
+})
+
 // #39's own shape: `/branch` goes on in the same process under the fork's id, with no
 // session.start; the next band command notices the new id (seams.test.ts M2), and the fork's
 // transcript names its parent with `forkedFrom`.

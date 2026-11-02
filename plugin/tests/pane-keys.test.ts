@@ -147,6 +147,31 @@ test('rule 1: p with the lists pane in front opens the prompts list in front of 
   expect(w.shownPanes()).toEqual(['bm-pane'])
 })
 
+// `<leader> q` as a toggle (djdarcy, 2026-10-31): q closes every pane of the plugin's and
+// remembers them; q with none open reopens them, the one that was in front opened last.
+const commandField = async (band: Pressable) => ((await band.findAll({ type: 'Input' })) as { key?: string }[]).find(i => (i.key ?? '').startsWith('band-cmd'))?.key
+const typeCommand = async (band: Pressable, text: string) => band.input({ key: await commandField(band), text }).catch(() => undefined)
+
+test('q closes both panes, and q again reopens them with the one in front last', async ($, on) => {
+  const w = world(on, { session: SID, store: STORE, trackPanes: true, panes: [...PANE_OPEN, { id: 'bm-lists', isShown: false }] })
+  const band = (await $.ui.mount(BAND as never)) as Pressable
+  await typeCommand(band, 'q')
+  expect(closed(w).sort()).toEqual(['bm-lists', 'bm-pane'])
+  expect(w.shownPanes()).toEqual([])
+  await typeCommand(band, 'q')
+  expect(openedIds(w)).toEqual(['bm-lists', 'bm-pane'])
+  expect((w.opened() as { focus?: boolean }[]).every(o => o.focus === undefined)).toBe(true)
+  expect(w.shownPanes()).toEqual(['bm-pane'])
+})
+
+test('q with nothing open and nothing closed before says so and opens nothing', async ($, on) => {
+  const w = world(on, { session: SID, store: STORE, trackPanes: true })
+  const band = (await $.ui.mount(BAND as never)) as Pressable
+  await typeCommand(band, 'q')
+  expect(w.opened().length).toBe(0)
+  expect(w.toasts().some(t => t.startsWith('Nothing to reopen'))).toBe(true)
+})
+
 test('with the lists off, the prompts button pressed twice opens nothing and closes nothing', { options: { panes: 'off' } }, async ($, on) => {
   const w = world(on, { session: SID, store: STORE, panes: PANE_OPEN })
   const band = (await $.ui.mount(BAND as never)) as Pressable

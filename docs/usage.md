@@ -419,7 +419,7 @@ A list is a named, ordered list of things you are keeping track of: what is left
 - press an item's number to open it in place: its whole note, wrapped, where it points, and who added it and when. Press the number again to close it. A plain note, with no place or link, opens on a press of its label too;
 - `▲` and `▼` move an item; `·` ticks it done (`✓`), and a done item stays in the list, dimmed.
 
-`/bm-lists <name>` opens on that list (a part of its name is enough), `/bm-lists 2` on the second tab; `/bm-lists` again closes the pane.
+`/bm-lists <name>` opens on that list (a part of its name is enough), `/bm-lists 2` on the second tab; `/bm-lists` with the pane open behind another switches to it, and with the pane in front closes it.
 
 Claude keeps lists through its `lists` tool: it can create a list, add items (by a fragment of the place, as its bookmark links do, or by a link, or as plain text, and with several links at once), add links to an item later or remove one, move, tick and remove items, and share a list onto the other side. A place Claude adds to a list is kept as one of its own references, so the item's note exists and a ctrl-click opens it. Ask it to "keep a list of what's left" and it makes one on your side; it also keeps lists of its own. The tool is found when needed rather than sent with every message, so it costs nothing while unused.
 

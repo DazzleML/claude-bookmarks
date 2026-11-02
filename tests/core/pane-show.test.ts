@@ -1,6 +1,36 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { covering, showAction } from '../../plugin/hooks/core/band/pane-show.ts'
+import { covering, paneSetOf, reopenOrder, showAction } from '../../plugin/hooks/core/band/pane-show.ts'
+import { BandState } from '../../plugin/hooks/core/band/band-state.ts'
+
+// `<leader> q` as a toggle (djdarcy, 2026-10-31): what it closes is remembered, and reopened
+// behind-first so the pane that was in front is opened last and lands in front again.
+test('paneSetOf: the panes open, the one in front, the shared pane mode; nothing when none is open', () => {
+  assert.deepEqual(paneSetOf([{ id: 'bm-pane', title: 'prompts: type #', isShown: true }, { id: 'bm-lists', title: 'Lists', isShown: false }], 'list'), {
+    panes: [{ id: 'bm-pane', title: 'prompts: type #' }, { id: 'bm-lists', title: 'Lists' }],
+    shown: 'bm-pane',
+    mode: 'list',
+  })
+  assert.equal(paneSetOf([], 'list'), undefined)
+})
+
+test('reopenOrder: the panes behind first, the one in front last', () => {
+  const set = { panes: [{ id: 'bm-pane' }, { id: 'bm-lists' }], shown: 'bm-pane' }
+  assert.deepEqual(reopenOrder(set).map(p => p.id), ['bm-lists', 'bm-pane'])
+  assert.deepEqual(reopenOrder({ ...set, shown: 'bm-lists' }).map(p => p.id), ['bm-pane', 'bm-lists'])
+})
+
+test('BandState: a set is remembered, taken once, kept over a close of nothing, and gone with the conversation', () => {
+  const band = new BandState()
+  const set = { panes: [{ id: 'bm-lists' }], shown: 'bm-lists' }
+  band.rememberClosed(set)
+  band.rememberClosed(undefined)
+  assert.deepEqual(band.takeClosed(), set)
+  assert.equal(band.takeClosed(), undefined)
+  band.rememberClosed(set)
+  band.newConversation()
+  assert.equal(band.takeClosed(), undefined)
+})
 import { bandFieldCommand } from '../../plugin/hooks/core/band/field-input.ts'
 import { DEFAULT_TABLES } from '../../plugin/hooks/core/band/keys.ts'
 
