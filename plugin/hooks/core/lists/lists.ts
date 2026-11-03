@@ -51,6 +51,8 @@ export type ListItem = {
   done?: boolean
   /** The bundle this item shows (core/lists/bundles.ts); its `links` are then the bundle's, face first. */
   bundle?: string
+  /** Format 3: the project whose set holds `bundle`, when it is not this list's own project (core/lists/bundle-set.ts). */
+  bundleProject?: string
   /** The link this item leads with: a link's identity (item-links.ts linkKey). */
   face?: string
 }
