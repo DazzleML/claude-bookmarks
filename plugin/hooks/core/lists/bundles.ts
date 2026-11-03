@@ -13,6 +13,13 @@
 //
 // `bundles` and the item fields are additive within lists format 2: parseLists keeps keys it does
 // not know (lists.ts), so no version moves. Pure; lists.ts applyListOp calls it.
+//
+// An item's own links (0.8.x unit 5b; the bundles design's 00:32 addendum, djdarcy: "people should
+// still be able to use the list to add other slightly disconnected entries as well that aren't a
+// part of the bundle"): a bundled item may hold `own` links, this list's and not the bundle's. Its
+// `links` copy is the bundle's links followed by its own, the face first among all of them; a link
+// added to a bundled item joins the bundle unless the edit says `into: 'item'`; an attach never
+// carries another list's own links; an own link the bundle also holds is dropped from `own`.
 import type { AnchorOwner } from '../bookmarks/anchor.ts'
 import { linkKey, linksOf, sameLink, type ItemLink } from './item-links.ts'
 import type { List, ListItem, ListsFile } from './lists.ts'
@@ -30,7 +37,8 @@ export type Bundle = {
 
 /** The operations on bundles, beside lists.ts's own. */
 export type BundleOp =
-  | { op: 'bundle'; list: string; item: string }
+  /** `own`: the identities (linkKey) of the item's links that stay its own rather than join the bundle; on an item already a bundle, those links move out of the bundle to the item's own. */
+  | { op: 'bundle'; list: string; item: string; own?: string[] }
   | { op: 'attach'; list: string; bundle: string; face?: string; label?: string; at?: number; by?: AnchorOwner }
   | { op: 'face'; list: string; item: string; face: string }
   | { op: 'bundle-link'; bundle: string; links: ItemLink[] }
@@ -68,13 +76,28 @@ const union = (have: readonly ItemLink[], more: readonly ItemLink[]): ItemLink[]
 const withBundle = (f: ListsFile, b: Bundle): ListsFile =>
   ({ ...f, bundles: bundlesOf(f).some(x => x.id === b.id) ? bundlesOf(f).map(x => (x.id === b.id ? b : x)) : [...bundlesOf(f), b] })
 
-/** A bundle made from an item's own links; the item now points at it, its face its first link. */
-function bundleItem(f: ListsFile, list: List, item: ListItem, now: number): { file: ListsFile; item: ListItem; bundle: Bundle } {
-  const links = linksOf(item)
+const withItem = (f: ListsFile, list: string, item: ListItem): ListsFile =>
+  ({ ...f, lists: f.lists.map(l => (l.id === list ? { ...l, items: l.items.map(i => (i.id === item.id ? item : i)) } : l)) })
+
+/** A bundled item's own links, less any the bundle also holds (nothing doubles). */
+export const ownOf = (b: Pick<Bundle, 'links'>, item: Pick<ListItem, 'own'>): ItemLink[] =>
+  (item.own ?? []).filter(o => !b.links.some(x => sameLink(x, o)))
+
+/** Every link a bundled item shows, before its face is put first: the bundle's, then its own. */
+export const allLinksOf = (b: Pick<Bundle, 'links'>, item: Pick<ListItem, 'own'>): ItemLink[] => [...b.links, ...ownOf(b, item)]
+
+/**
+ * A bundle made from an item's links; the item now points at it, its face its first link. The
+ * links named in `ownKeys` stay the item's own and the rest form the bundle (the reviewed pass:
+ * a link that is not truly part of the bundle sits beside it).
+ */
+function bundleItem(f: ListsFile, list: List, item: ListItem, now: number, ownKeys: ReadonlySet<string> = new Set()): { file: ListsFile; item: ListItem; bundle: Bundle } {
+  const all = linksOf(item)
+  const own = all.filter(l => ownKeys.has(linkKey(l)))
+  const links = all.filter(l => !ownKeys.has(linkKey(l)))
   const bundle: Bundle = { id: freshBundleId(f), label: item.label, ...(item.why ? { why: item.why } : {}), links, by: item.by, createdAt: now, updatedAt: now }
-  const changed: ListItem = { ...item, bundle: bundle.id, ...(links[0] ? { face: linkKey(links[0]) } : {}), links }
-  const file = withBundle({ ...f, lists: f.lists.map(l => (l.id === list.id ? { ...l, items: l.items.map(i => (i.id === item.id ? changed : i)) } : l)) }, bundle)
-  return { file, item: changed, bundle }
+  const changed: ListItem = { ...item, bundle: bundle.id, ...(all[0] ? { face: linkKey(all[0]) } : {}), links: all, ...(own.length ? { own } : {}) }
+  return { file: withBundle(withItem(f, list.id, changed), bundle), item: changed, bundle }
 }
 
 /** The bundle ops. */
@@ -102,13 +125,27 @@ export function applyBundleOp(f: ListsFile, op: BundleOp, now: number, findItem:
   const item = findItem(list, op.item)
   if (!item) return { ok: false, error: `no item "${op.item}" in "${list.name}"` }
   if (op.op === 'bundle') {
-    if (item.bundle) return { ok: false, error: `item "${item.label}" is already bundle "${item.bundle}"` }
-    const r = bundleItem(f, list, item, now)
+    const ownKeys = new Set(op.own ?? [])
+    const have = linksOf(item)
+    if ([...ownKeys].some(k => !have.some(l => linkKey(l) === k))) return { ok: false, error: 'a link named to stay the item\'s own is not one of its links' }
+    if (item.bundle) {
+      if (!ownKeys.size) return { ok: false, error: `item "${item.label}" is already bundle "${item.bundle}"` }
+      // An item already a bundle: the named links leave the bundle and become this item's own.
+      const b = findBundle(f, item.bundle)
+      if (!b) return { ok: false, error: `no bundle "${item.bundle}"` }
+      const stays = b.links.filter(l => !ownKeys.has(linkKey(l)))
+      if (!stays.length) return { ok: false, error: 'a bundle keeps at least one link' }
+      const changed: ListItem = { ...item, own: [...ownOf(b, item), ...b.links.filter(l => ownKeys.has(linkKey(l)))] }
+      const bundle = { ...b, links: stays, updatedAt: now }
+      return { ok: true, file: { ...withBundle(withItem(f, list.id, changed), bundle), updatedAt: now }, item: changed, bundle }
+    }
+    if (ownKeys.size >= have.length) return { ok: false, error: 'a bundle keeps at least one link' }
+    const r = bundleItem(f, list, item, now, ownKeys)
     return { ok: true, file: { ...r.file, updatedAt: now }, item: r.item, bundle: r.bundle }
   }
-  // face
+  // face: any of the item's links, the bundle's or its own.
   const b = item.bundle ? findBundle(f, item.bundle) : undefined
-  const links = b ? b.links : linksOf(item)
+  const links = b ? allLinksOf(b, item) : linksOf(item)
   if (!links.some(l => linkKey(l) === op.face)) return { ok: false, error: `that face is not one of the item's links` }
   const changed: ListItem = { ...item, face: op.face, links: faceFirst(links, op.face) }
   const l: List = { ...list, items: list.items.map(i => (i.id === item.id ? changed : i)), updatedAt: now }
@@ -116,16 +153,27 @@ export function applyBundleOp(f: ListsFile, op: BundleOp, now: number, findItem:
 }
 
 /**
- * An `edit` that gives a bundled item a new set of links changes its bundle: links it adds join
- * the bundle (after those there), links it leaves out leave it. So the `link` and `unlink` a person
- * already uses work on a bundled item, and reach every list that shows the bundle.
+ * An `edit` that gives a bundled item a new set of links changes its bundle and its own links: a
+ * link it leaves out leaves wherever it was, the bundle or the item's own; a link it adds joins the
+ * bundle (after those there), or the item's own with `into: 'item'`. So the `link` and `unlink` a
+ * person already uses work on a bundled item, and a change to the bundle reaches every list that
+ * shows it, while the item's own links stay this list's.
  */
-export function editBundled(f: ListsFile, item: ListItem, links: readonly ItemLink[], now: number): ListsFile {
+export function editBundled(f: ListsFile, list: string, item: ListItem, links: readonly ItemLink[], now: number, into: 'bundle' | 'item' = 'bundle'): ListsFile {
   const b = item.bundle ? findBundle(f, item.bundle) : undefined
   if (!b) return f
-  // union carries a changed `about` onto the kept link.
-  const kept = b.links.filter(l => links.some(x => sameLink(x, l)))
-  return withBundle(f, { ...b, links: union(kept, links), updatedAt: now })
+  const own = ownOf(b, item)
+  const has = (set: readonly ItemLink[]) => (l: ItemLink) => set.some(x => sameLink(x, l))
+  const kept = b.links.filter(has(links))
+  const keptOwn = own.filter(has(links))
+  const added = links.filter(l => !has(b.links)(l) && !has(own)(l))
+  // union carries a changed `about` onto the kept link, in the bundle and in the item's own alike.
+  const bundleLinks = union(kept, [...links.filter(has(kept)), ...(into === 'bundle' ? added : [])])
+  const ownLinks = union(keptOwn, [...links.filter(has(keptOwn)), ...(into === 'item' ? added : [])])
+  const changed: ListItem = { ...item }
+  if (ownLinks.length) changed.own = ownLinks
+  else delete changed.own
+  return withBundle(withItem(f, list, changed), { ...b, links: bundleLinks, updatedAt: now })
 }
 
 /**
@@ -148,13 +196,18 @@ export function settle(f: ListsFile, now: number, touched?: { list: string; item
     const items = l.items.map(i => {
       const b = i.bundle ? byId.get(i.bundle) : undefined
       if (!b) return i
-      const face = i.face !== undefined && b.links.some(x => linkKey(x) === i.face) ? i.face : b.links[0] ? linkKey(b.links[0]) : undefined
-      const links = faceFirst(b.links, face)
-      if (face === i.face && JSON.stringify(links) === JSON.stringify(i.links ?? [])) return i
+      // The bundle's links, then this item's own (less any the bundle now holds), the face first.
+      const own = ownOf(b, i)
+      const all = [...b.links, ...own]
+      const face = i.face !== undefined && all.some(x => linkKey(x) === i.face) ? i.face : all[0] ? linkKey(all[0]) : undefined
+      const links = faceFirst(all, face)
+      if (face === i.face && JSON.stringify(own) === JSON.stringify(i.own ?? []) && JSON.stringify(links) === JSON.stringify(i.links ?? [])) return i
       touchedList = true
       const next: ListItem = { ...i, links }
       if (face !== undefined) next.face = face
       else delete next.face
+      if (own.length) next.own = own
+      else delete next.own
       return next
     })
     if (!touchedList) return l

@@ -11,7 +11,7 @@ import {
   applyListOp, emptyLists, findItem, findList, linkOf, listsBaseName, listsPage, LISTS_PAGE_TEMPLATE, LISTS_VERSION, parseLists, projectOf, serializeLists,
   type List, type ListItem, type ListsFile, type Op,
 } from '../core/lists/lists.ts'
-import { brief, describeItem, describeLink, linkWants, parseListsInput, type LinkWant, type ListsToolInput } from '../core/lists/lists-tool.ts'
+import { brief, describeItem, describeLink, isOwnLink, linkWants, parseListsInput, type LinkWant, type ListsToolInput } from '../core/lists/lists-tool.ts'
 import { hrefOf, linkFromText, linkKey, linksOf, primaryLink, sameLink, textOf, type ItemLink } from '../core/lists/item-links.ts'
 import { parseRef } from '../core/bookmarks/ref.ts'
 import { answer } from '../core/bookmarks/bookmark-tool.ts'
@@ -179,7 +179,8 @@ export class Lists {
     const page = listsPage(file, path.slice(path.lastIndexOf('/') + 1), i => linkOf(i, root), template, i =>
       linksOf(i).slice(1).flatMap(l => {
         const href = hrefOf(l, root)
-        return href ? [{ label: describeLink(l, 0, root).what, href }] : []
+        // A bundled item's own link is marked as this list's (0.8.x unit 5b).
+        return href ? [{ label: `${describeLink(l, 0, root).what}${isOwnLink(i, l) ? ' (this list)' : ''}`, href }] : []
       }))
     if ('missing' in page) return ports.log(`[bm] lists: the page's template lacks ${page.missing.join(', ')}; the page is not written`)
     await ports.fsWrite(path.replace(/\.json$/, '.md'), page.text)
@@ -470,7 +471,12 @@ export async function listsTool(ports: ListsPorts, lists: Lists, input: ListsToo
   if (!item) return { error: input.item ? `no item "${input.item}" in "${list.name}"` : 'give `item` (its number in the list, or its id)' }
   const at = list.items.findIndex(i => i.id === item.id) + 1
   if (input.action === 'bundle') {
-    const r = await lists.change(ports, { op: 'bundle', list: list.id, item: item.id })
+    // `own`: the numbers of the links that stay the item's own (0.8.x unit 5b, the reviewed pass's instrument).
+    const have = linksOf(item)
+    const bad = (input.own ?? []).filter(n => n < 1 || n > have.length)
+    if (bad.length) return { error: `own names link ${bad.join(', ')}, but the item has links 1 to ${have.length}` }
+    const own = (input.own ?? []).map(n => linkKey(have[n - 1]!))
+    const r = await lists.change(ports, { op: 'bundle', list: list.id, item: item.id, ...(own.length ? { own } : {}) })
     return r.ok ? { ok: true, item: describeItem(r.item!, at, root) } : { error: r.error }
   }
   if (input.action === 'face') {
@@ -500,7 +506,7 @@ export async function listsTool(ports: ListsPorts, lists: Lists, input: ListsToo
     })
     // By identity (the bundles design, unit 1): what a link points at, not how it was stored.
     const fresh = got.links.filter((l, k) => !have.some(h => sameLink(h, l)) && got.links.findIndex(x => sameLink(x, l)) === k)
-    const r = await lists.change(ports, { op: 'edit', list: list.id, item: item.id, links: [...have, ...fresh] })
+    const r = await lists.change(ports, { op: 'edit', list: list.id, item: item.id, links: [...have, ...fresh], ...(input.into ? { into: input.into } : {}) })
     return r.ok ? { ok: true, item: describeItem(r.item!, at, root) } : { error: r.error }
   }
   if (input.action === 'unlink') {

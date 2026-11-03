@@ -69,8 +69,14 @@ export type ListItem = {
   bundle?: string
   /** Format 3: the project whose set holds `bundle`, when it is not this list's own project (core/lists/bundle-set.ts). */
   bundleProject?: string
-  /** The link this item leads with: a link's identity (item-links.ts linkKey). */
+  /** The link this item leads with: a link's identity (item-links.ts linkKey); any of its links, the bundle's or its own. */
   face?: string
+  /**
+   * A bundled item's own links (0.8.x unit 5b; the bundles design's 00:32 addendum): this list's
+   * links for the item that are not part of its bundle. `links` is the bundle's links followed by
+   * these, the face first, so a reader that knows nothing of `own` still sees every link.
+   */
+  own?: ItemLink[]
 }
 
 /** Reserved (L-9): a list whose items are read from a file. Never written by version 1. */
@@ -199,7 +205,8 @@ export type Op =
   | { op: 'move'; list: string; item: string; to: number }
   | { op: 'remove'; list: string; item: string }
   | { op: 'done'; list: string; item: string; done?: boolean }
-  | { op: 'edit'; list: string; item: string; label?: string; why?: string; links?: ItemLink[] }
+  /** `into`: on a bundled item, where links the edit adds go -- the bundle (the default) or the item's own. */
+  | { op: 'edit'; list: string; item: string; label?: string; why?: string; links?: ItemLink[]; into?: 'bundle' | 'item' }
   | { op: 'share'; list: string }
   | BundleOp
 
@@ -262,7 +269,7 @@ export function applyListOp(f: ListsFile, op: Op, now: number): OpResult {
   const r = applyPlainOp(f, op as Exclude<Op, BundleOp>, now)
   if (!r.ok) return r
   let file = r.file
-  if (op.op === 'edit' && op.links && r.item?.bundle) file = editBundled(file, r.item, op.links, now)
+  if (op.op === 'edit' && op.links && r.item?.bundle && r.list) file = editBundled(file, r.list.id, r.item, op.links, now, op.into)
   const touched = (op.op === 'add' || op.op === 'edit') && r.list && r.item ? { list: r.list.id, item: r.item.id } : undefined
   file = settle(file, now, touched)
   return { ok: true, file, ...again(file, r.list, r.item) }

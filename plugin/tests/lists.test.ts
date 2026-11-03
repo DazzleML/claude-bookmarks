@@ -543,6 +543,34 @@ test('about on an existing link reaches every list that shows its bundle; a link
   }
 })
 
+// An item's own links beside its bundle (0.8.x unit 5b; djdarcy, 2026-11-03: "our list can still
+// include OTHER items sitting next to a bundle even when the bundle is the top entry").
+test("the tool keeps a link the item's own beside its bundle; the pane marks it as this list's, and an attach does not carry it", async ($, on) => {
+  const w = world(on, { session: SID })
+  await call($, { action: 'create', name: 'Work', owner: 'user' })
+  await call($, { action: 'create', name: 'Board', owner: 'user' })
+  await call($, { action: 'add', list: 'Work', owner: 'user', label: 'csb groups sessions', links: [{ link: 'C:/code/x/lineage.py' }, { link: 'https://github.com/DazzleML/Claude-Session-Backup/issues/114' }, { link: 'C:/code/x/an-unrelated-goal.md' }] })
+  // The reviewed pass: link 3 is not truly part of the bundle, so it moves out to the item's own.
+  const moved = await call($, { action: 'bundle', list: 'Work', owner: 'user', item: '1', own: [3] })
+  const links = (moved.item as { links: { what: string; own?: boolean }[] }).links
+  expect(links.map(l => [l.what, l.own === true])).toEqual([['C:/code/x/lineage.py', false], ['DazzleML/Claude-Session-Backup#114', false], ['C:/code/x/an-unrelated-goal.md', true]])
+  // A later link kept the item's own; then the bundle shown on the Board carries only the bundle's two.
+  await call($, { action: 'link', list: 'Work', owner: 'user', item: '1', link: 'https://example.com/aside', into: 'item' })
+  await call($, { action: 'attach', list: 'Board', owner: 'user', bundle: 'b1' })
+  const f = JSON.parse(listsText(w)!) as ListsFile
+  const work = f.lists.find(l => l.name === 'Work')!.items[0]!
+  expect(work.own?.length).toBe(2)
+  expect(f.lists.find(l => l.name === 'Board')!.items[0]!.links!.length).toBe(2)
+  const ui = await mountPane($)
+  await ui.press({ key: 'lists-tab-work' }) // the attach left the pane on the Board
+  await ui.press({ key: 'lists-num-i1' })
+  const rows = (await ui.findAll({})).filter(e => (e.key ?? '').startsWith('lists-link-i1-')).map(e => String(e.props.text ?? e.text ?? ''))
+  expect(rows.length).toBe(4)
+  expect(rows.filter(r => r.endsWith(' · this list')).length).toBe(2)
+  expect(rows[0]).not.toContain('this list')
+  expect(String((await call($, { action: 'bundle', list: 'Work', owner: 'user', item: '1', own: [9] })).error)).toContain('links 1 to 4')
+})
+
 // djdarcy, 2026-10-31: "I'm not sure we need the info text in the middle of the foldout pane
 // explaining how to use the links" -- each link's row says where it goes, the footer how to use it.
 test('an item with one link opens to its one link row, no +N, and no how-to line', async ($, on) => {

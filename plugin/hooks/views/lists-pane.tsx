@@ -6,7 +6,7 @@
 import type { EngineInterface } from 'claude-code'
 import type { List, ListItem, ListsFile } from '../core/lists/lists.ts'
 import { linksOf, primaryLink, type ItemLink } from '../core/lists/item-links.ts'
-import { describeLink } from '../core/lists/lists-tool.ts'
+import { describeLink, isOwnLink } from '../core/lists/lists-tool.ts'
 import type { PaneStyles } from './prompts-pane.tsx'
 
 type Elements = ReturnType<EngineInterface['ui']['resolve']>
@@ -162,6 +162,9 @@ export function listsPaneView(elements: Elements, m: ListsPaneModel, a: ListsPan
                       // "some description as to what they were about so it wasn't just a bare anchor").
                       const words = l.kind === 'place' && l.words ? (l.words.length > 70 ? `${l.words.slice(0, 69)}…` : l.words) : ''
                       const what = describeLink(l, k + 1, undefined).what
+                      // A bundled item's own link is this list's, not the bundle's (0.8.x unit 5b; djdarcy:
+                      // "OTHER items sitting next to a bundle"): said after it, so the bundle's links read as one set.
+                      const ownTag = isOwnLink(item, l) ? ' · this list' : ''
                       const onPress = () => (a.landLink ? a.landLink(item, l) : a.land(item))
                       const lh = m.hrefOfLink?.(l)
                       // A link a terminal can open is drawn as one, as the item's label is: a plain
@@ -175,10 +178,10 @@ export function listsPaneView(elements: Elements, m: ListsPaneModel, a: ListsPan
                         // The link's one sentence of what it is, when it has one (the bundles design,
                         // addendum 2026-10-31), else a place's words.
                         const tail = l.about ? ` — ${esc(l.about)}` : words ? ` "${esc(words)}"` : ''
-                        const text = `${mark}${glyph === '#' ? '\\#' : glyph} [${what.replace(/[[\]]/g, ' ')}](${target})${tail}`
+                        const text = `${mark}${glyph === '#' ? '\\#' : glyph} [${what.replace(/[[\]]/g, ' ')}](${target})${tail}${ownTag}`
                         return <Markdown key={`lists-link-${item.id}-${k}`} text={text} pressableLinks={[target]} onLinkPress={onPress} />
                       }
-                      return <Button key={`lists-link-${item.id}-${k}`} label={`${mark}${glyph} ${what}${l.about ? ` — ${l.about}` : words ? ` "${words}"` : ''}`} plain onPress={onPress} />
+                      return <Button key={`lists-link-${item.id}-${k}`} label={`${mark}${glyph} ${what}${l.about ? ` — ${l.about}` : words ? ` "${words}"` : ''}${ownTag}`} plain onPress={onPress} />
                     })()}
                     {item.bundle && k > 0 && a.face && (
                       <Button key={`lists-face-${item.id}-${k}`} label=" ○" plain {...s.button('unreached')} onPress={() => a.face!(item, l)} />

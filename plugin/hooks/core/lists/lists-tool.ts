@@ -4,7 +4,7 @@
 // when needed), since it is used far less often than `bookmark` and every non-deferred tool's
 // schema is sent every turn. The handler is handlers/lists.ts listsTool.
 import { linkOf, type List, type ListItem } from './lists.ts'
-import { hrefOf, linksOf, placeLinkOf, type ItemLink } from './item-links.ts'
+import { hrefOf, linksOf, placeLinkOf, sameLink, type ItemLink } from './item-links.ts'
 import { short } from '../kit/message-id.ts'
 import type { AnchorOwner } from '../bookmarks/anchor.ts'
 
@@ -32,6 +32,10 @@ export type ListsToolInput = {
   bundle?: string
   /** add, link: one sentence of what the top-level link is; about: the text set on link `at`. */
   about?: string
+  /** link, on a bundled item: where the new links go -- the bundle (the default) or the item's own. */
+  into?: 'bundle' | 'item'
+  /** bundle: the numbers of the item's links (1 the first) that stay its own, beside the bundle. */
+  own?: number[]
 }
 
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
@@ -52,6 +56,21 @@ export function parseListsInput(input: Record<string, unknown>): ListsToolInput 
     if (v !== undefined) o[k] = v
   }
   if (typeof input.done === 'boolean') o.done = input.done
+  const into = str(input.into)
+  if (into === 'item' || into === 'bundle') o.into = into
+  // `own` as numbers, a JSON string of them, or "1, 3" -- whichever form the call arrives in.
+  let rawOwn: unknown = input.own
+  if (typeof rawOwn === 'string') {
+    try {
+      rawOwn = JSON.parse(rawOwn.trim().startsWith('[') ? rawOwn : `[${rawOwn}]`)
+    } catch {
+      rawOwn = undefined
+    }
+  }
+  if (Array.isArray(rawOwn)) {
+    const own = rawOwn.map(num).filter((n): n is number => n !== undefined)
+    if (own.length) o.own = own
+  } else if (num(rawOwn) !== undefined) o.own = [num(rawOwn)!]
   // Claude Code delivers an array parameter as a JSON string (seen live, 2026-10-27): read either.
   let rawLinks: unknown = input.links
   if (typeof rawLinks === 'string') {
@@ -116,9 +135,13 @@ export function describeItem(i: ListItem, n: number, root: string | undefined) {
     ...(i.bundle ? { bundle: i.bundle } : {}),
     ...(p ? { place: `${short(p.session)}/${short(p.uuid)}${p.file ? ` in ${p.file}` : ''}` } : {}),
     ...(link ? { markdown: `[${i.label.replace(/[[\]]/g, ' ')}](${link})` } : {}),
-    links: linksOf(i).map((l, k) => describeLink(l, k + 1, root)),
+    // A bundled item's own links are flagged: this list's, not the bundle's (0.8.x unit 5b).
+    links: linksOf(i).map((l, k) => ({ ...describeLink(l, k + 1, root), ...(isOwnLink(i, l) ? { own: true } : {}) })),
   }
 }
+
+/** Whether a link of a bundled item is the item's own rather than its bundle's. */
+export const isOwnLink = (i: Pick<ListItem, 'bundle' | 'own'>, l: ItemLink): boolean => !!i.bundle && !!i.own?.some(o => sameLink(o, l))
 export const LISTS_TOOL = {
   name: 'lists',
   description:
@@ -127,7 +150,8 @@ export const LISTS_TOOL = {
     '(file or URL), or plain text, and it can hold several links at once (a place, a file, a GitHub issue): the first is what a ' +
     'press opens. owner: your lists (default) or the person\'s, when they asked. ' +
     'An item with two or more links is a bundle: its links kept once, so the same bundle can be shown in another list ' +
-    '(attach) leading with a different link (face). ' +
+    '(attach) leading with a different link (face). A bundled item may also hold links of its own beside the bundle, ' +
+    'this list\'s and not the bundle\'s (link with into "item"; bundle with own); an attach never carries them. ' +
     'Actions: lists, show (opens the pane), create, rename, delete, add, link, unlink, move, remove, done, edit, share, bundle, attach, face.',
   inputSchema: {
     type: 'object',
@@ -135,7 +159,7 @@ export const LISTS_TOOL = {
       action: {
         type: 'string',
         enum: ['lists', 'show', 'create', 'rename', 'delete', 'add', 'link', 'unlink', 'move', 'remove', 'done', 'edit', 'share', 'bundle', 'attach', 'face', 'about'],
-        description: 'lists (default): every list; show: one list\'s items, and opens the pane on it; create: a new list (`name`); add: an item (`label`, and `query`/`uuid` or `link`, and more in `links`); link: add links to an `item` (`query`/`uuid`/`link`/`links`); unlink: remove an `item`\'s link number `at` (1 the first); move: an item to position `to`; done: tick or untick an item; share: copy the list to the other side; bundle: make an `item` a bundle (one with two or more links already is); attach: show `bundle` (its id, as an item\'s answer gives it) in `list` as a new item, at position `at`; face: lead an `item` with its link number `at`; about: set the one-sentence `about` of an `item`\'s link number `at`',
+        description: 'lists (default): every list; show: one list\'s items, and opens the pane on it; create: a new list (`name`); add: an item (`label`, and `query`/`uuid` or `link`, and more in `links`); link: add links to an `item` (`query`/`uuid`/`link`/`links`; on a bundled item they join the bundle, or with `into` "item" stay the item\'s own); unlink: remove an `item`\'s link number `at` (1 the first); move: an item to position `to`; done: tick or untick an item; share: copy the list to the other side; bundle: make an `item` a bundle (one with two or more links already is), `own` naming the numbers of its links that stay its own beside the bundle; on an item already a bundle, `own` moves those links out of the bundle to the item\'s own; attach: show `bundle` (its id, as an item\'s answer gives it) in `list` as a new item, at position `at`; face: lead an `item` with its link number `at`; about: set the one-sentence `about` of an `item`\'s link number `at`',
       },
       list: { type: 'string', description: 'The list: its id, its name, or its number among `owner`\'s lists (1 the first)' },
       name: { type: 'string', description: 'create, rename: the list\'s name' },
@@ -157,6 +181,8 @@ export const LISTS_TOOL = {
       done: { type: 'boolean', description: 'done: true to tick, false to untick; toggles when left out' },
       bundle: { type: 'string', description: 'attach: the bundle to show, by its id (`b1`)' },
       about: { type: 'string', description: 'add, link: one sentence of what the `query`/`uuid`/`link` link is (shown after it in the pane); about: the text for link `at`' },
+      into: { type: 'string', enum: ['bundle', 'item'], description: 'link, on a bundled item: where the new links go -- the bundle (default, so every list showing it gains them) or the item\'s own (this list only)' },
+      own: { type: 'array', items: { type: 'number' }, description: 'bundle: the numbers of the item\'s links (1 the first) that stay its own, beside the bundle; the rest form the bundle' },
     },
   },
   isDeferred: true,

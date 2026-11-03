@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.9] - 2026-11-03
+
+### Added
+
+- **An item in a list can hold links of its own beside its bundle**: links for that list that are not part of the bundle. The pane marks them "this list", the lists page "(this list)", and showing the bundle in another list does not carry them. Claude's lists tool keeps a new link the item's own when asked (`into: "item"`); by default a link added to a bundled item still joins the bundle, so every list that shows it gains it. Its `bundle` action takes the numbers of an item's links that stay the item's own; on an item that is already a bundle, it moves those links out of the bundle. An item may lead with any of its links, its bundle's or its own.
+
+### Changed
+
+- In this project's two lists, every item with two or more links is now a bundle. Each item's links were reviewed first, and those that did not belong with the rest were kept as the item's own.
+
 ## [0.8.8] - 2026-11-03
 
 ### Changed
@@ -1719,7 +1729,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.8...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.9...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

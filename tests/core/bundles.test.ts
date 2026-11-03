@@ -115,6 +115,81 @@ test('bundle: an item with links made into a bundle by hand; a second time says 
   assert.ok(!again.ok && /already/.test(again.error))
 })
 
+// An item's own links beside its bundle (0.8.x unit 5b; the bundles design's 00:32 addendum).
+/** A plain item with three links, as the items made before bundles are (no `bundle` field). */
+function legacy(links: ItemLink[] = [ISSUE, DWP, NOTE]): ListsFile {
+  let f = emptyLists('p', 'C:/p', 'test', 1)
+  f = step(f, { op: 'create', name: 'Work', owner: 'user' })
+  f = step(f, { op: 'create', name: 'Board', owner: 'user' })
+  return { ...f, lists: f.lists.map(l => (l.id === 'work' ? { ...l, next: 2, items: [{ id: 'i1', label: 'csb groups sessions', by: 'claude', addedAt: 1, links }] } : l)) }
+}
+const bundleOf = (f: ListsFile, i: { bundle?: string }) => f.bundles!.find(b => b.id === i.bundle)!
+
+test('bundle with own: the named links stay the item\'s own beside the bundle; every link still shows, the face first', () => {
+  const f = step(legacy(), { op: 'bundle', list: 'work', item: 'i1', own: [linkKey(NOTE)] })
+  const i = item(f, 'work')
+  assert.deepEqual(bundleOf(f, i).links, [ISSUE, DWP])
+  assert.deepEqual(i.own, [NOTE])
+  assert.deepEqual(i.links, [ISSUE, DWP, NOTE], 'a reader that knows nothing of own still sees every link')
+  assert.equal(i.face, linkKey(ISSUE))
+})
+
+test("an item's own links survive another operation, a save and a load", () => {
+  let f = step(legacy(), { op: 'bundle', list: 'work', item: 'i1', own: [linkKey(NOTE)] })
+  f = step(f, { op: 'done', list: 'work', item: 'i1' })
+  const back = parseLists(serializeLists(f))
+  assert.equal(back.kind, 'ok')
+  if (back.kind !== 'ok') return
+  assert.deepEqual(item(back.file, 'work').own, [NOTE])
+  assert.deepEqual(item(back.file, 'work').links, [ISSUE, DWP, NOTE])
+})
+
+test("a link added to a bundled item joins the bundle; with into: 'item' it stays the item's own", () => {
+  const base = step(legacy(), { op: 'bundle', list: 'work', item: 'i1' })
+  const toBundle = step(base, { op: 'edit', list: 'work', item: 'i1', links: [...item(base, 'work').links!, PLACE] })
+  assert.deepEqual(bundleOf(toBundle, item(toBundle, 'work')).links, [ISSUE, DWP, NOTE, PLACE])
+  assert.equal(item(toBundle, 'work').own, undefined)
+  const toItem = step(base, { op: 'edit', list: 'work', item: 'i1', links: [...item(base, 'work').links!, PLACE], into: 'item' })
+  assert.deepEqual(bundleOf(toItem, item(toItem, 'work')).links, [ISSUE, DWP, NOTE], 'the bundle is unchanged')
+  assert.deepEqual(item(toItem, 'work').own, [PLACE])
+  assert.deepEqual(item(toItem, 'work').links, [ISSUE, DWP, NOTE, PLACE])
+})
+
+test("an attach carries the bundle and never another list's own links; a face may be an own link", () => {
+  let f = step(legacy(), { op: 'bundle', list: 'work', item: 'i1', own: [linkKey(NOTE)] })
+  f = step(f, { op: 'attach', list: 'board', bundle: item(f, 'work').bundle! })
+  assert.deepEqual(item(f, 'board').links, [ISSUE, DWP])
+  assert.equal(item(f, 'board').own, undefined)
+  f = step(f, { op: 'face', list: 'work', item: 'i1', face: linkKey(NOTE) })
+  assert.deepEqual(item(f, 'work').links, [NOTE, ISSUE, DWP], 'the own link leads in its own list')
+  assert.deepEqual(item(f, 'board').links, [ISSUE, DWP], 'and nowhere else')
+})
+
+test("unlink removes a link from wherever it is; an own link the bundle comes to hold is dropped from own", () => {
+  const f = step(legacy(), { op: 'bundle', list: 'work', item: 'i1', own: [linkKey(NOTE)] })
+  const unlinked = step(f, { op: 'edit', list: 'work', item: 'i1', links: [ISSUE, DWP] })
+  assert.equal('own' in item(unlinked, 'work'), false, 'its last own link removed, the key goes')
+  assert.deepEqual(bundleOf(unlinked, item(unlinked, 'work')).links, [ISSUE, DWP])
+  const joined = step(f, { op: 'bundle-link', bundle: item(f, 'work').bundle!, links: [NOTE] })
+  assert.equal('own' in item(joined, 'work'), false)
+  assert.deepEqual(item(joined, 'work').links, [ISSUE, DWP, NOTE], 'nothing doubles')
+})
+
+test('bundle on an item already a bundle moves the named links out to its own; it refuses to empty a bundle or name a link the item lacks', () => {
+  let f = twoLists()
+  f = step(f, { op: 'attach', list: 'board', bundle: item(f, 'work').bundle! })
+  f = step(f, { op: 'bundle', list: 'work', item: 'i1', own: [linkKey(DWP)] })
+  assert.deepEqual(bundleOf(f, item(f, 'work')).links, [ISSUE, NOTE])
+  assert.deepEqual(item(f, 'work').own, [DWP])
+  assert.deepEqual(item(f, 'board').links, [ISSUE, NOTE], 'gone from the bundle everywhere it is shown')
+  const all = applyListOp(legacy(), { op: 'bundle', list: 'work', item: 'i1', own: [ISSUE, DWP, NOTE].map(linkKey) }, 10)
+  assert.ok(!all.ok && /at least one link/.test(all.error))
+  const emptied = applyListOp(f, { op: 'bundle', list: 'work', item: 'i1', own: [ISSUE, NOTE].map(linkKey) }, 10)
+  assert.ok(!emptied.ok && /at least one link/.test(emptied.error), 'nor on an item already a bundle')
+  const stranger = applyListOp(legacy(), { op: 'bundle', list: 'work', item: 'i1', own: [linkKey(PLACE)] }, 10)
+  assert.ok(!stranger.ok && /not one of its links/.test(stranger.error))
+})
+
 test("today's reader keeps the bundles and the items' fields across a save and a load", () => {
   let f = twoLists()
   f = step(f, { op: 'attach', list: 'board', bundle: item(f, 'work').bundle!, face: linkKey(NOTE) })
