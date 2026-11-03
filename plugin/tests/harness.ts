@@ -40,6 +40,8 @@ export type WorldOptions = {
   templates?: false
   // A write to a path this names fails (throws), as a full disk or a locked file would; nothing is written there.
   failWrite?: (path: string) => boolean
+  // Answer $.fs.stat from the files map (off: unanswered, so a stat rejects, as before 0.8.x; the loader's tests rely on that).
+  stat?: true
 }
 
 /** What the harness answers for plugin/templates/data-readme.md: the placeholders the real template uses, in a short page. */
@@ -178,7 +180,16 @@ export function world(on: unknown, options: WorldOptions = {}): World {
     if (isTemplate(p)) return options.templates !== false
     return p in files || Object.keys(files).some(k => k.startsWith(p + '\\'))
   })
-  answer('fs.read', e => files[norm(e.path)] ?? (isTemplate(e.path) && options.templates !== false ? (isListsTemplate(e.path) ? LISTS_PAGE_STANDIN : README_TEMPLATE_STANDIN) : ''))
+  // With `stat`, a file's stat from the map: its length, and a last change that moves whenever its
+  // text does (a hash of the text, standing in for a clock); a path not in the map rejects, as ENOENT does.
+  if (options.stat) answer('fs.stat', e => {
+    const text = files[norm(e.path)]
+    if (text === undefined) throw new Error('ENOENT (test)')
+    let h = 0
+    for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0
+    return { kind: 'file', size: text.length, mtimeMs: h, isLink: false }
+  })
+  answer('fs.read', e => files[norm(e.path)] ??(isTemplate(e.path) && options.templates !== false ? (isListsTemplate(e.path) ? LISTS_PAGE_STANDIN : README_TEMPLATE_STANDIN) : ''))
   answer('fs.write', e => {
     if (options.failWrite?.(norm(e.path))) throw new Error(`write refused (test): ${norm(e.path)}`)
     files[norm(e.path)] = String(e.text ?? '')

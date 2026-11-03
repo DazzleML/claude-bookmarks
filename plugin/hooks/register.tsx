@@ -916,6 +916,8 @@ function listsPorts($: EngineInterface): ListsPorts {
     fsExists: path => $.fs.exists(path),
     fsRead: path => $.fs.read(path),
     fsWrite: (path, text) => $.fs.write(path, text),
+    // The lists pane's per-draw freshness check: a missing file rejects (ENOENT), read here as not there.
+    fsStat: path => $.fs.stat(path).then(s => ({ size: s.size, mtimeMs: s.mtimeMs }), () => undefined),
     copy: copyVia($),
     clickCopies: () => currentSettings().listLinkClick !== 'nothing',
     redraw: async () => { await update($, listsRev, n => n + 1) },

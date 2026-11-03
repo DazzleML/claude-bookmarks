@@ -57,6 +57,65 @@ test('▼ moves an item down and writes the file; ✓ ticks it done', async ($, 
   expect(w.file(`${FILE}.bak`)).toBeDefined()
 })
 
+// The per-draw freshness check (0.8.x unit 0b): each draw stats the cached file and reads it
+// again only when its size or last change moved, so another session's change shows at the next
+// draw and an unchanged file is not read again.
+const readsOf = (w: { calls: { event: string; input: unknown }[] }) =>
+  w.calls.filter(c => c.event === 'fs.read' && String((c.input as { path?: unknown }).path).replace(/\\/g, '/').endsWith('lists/test-project.json')).length
+const keyOf = (w: { files: Record<string, string> }) => Object.keys(w.files).find(k => k.replace(/\\/g, '/').endsWith('lists/test-project.json'))!
+/** One draw of the pane: mounted, read, unmounted (a pane mounts once at a time). */
+const draw = async ($: unknown): Promise<string> => {
+  const ui = await mountPane($)
+  const t = await texts(ui)
+  await (ui as Ui & { unmount: () => Promise<unknown> }).unmount()
+  return t
+}
+
+test("another session's change to the lists file shows at the pane's next draw", async ($, on) => {
+  const w = world(on, { session: SID, files: seeded(), stat: true })
+  expect(await draw($)).not.toContain('written by the other session')
+  const r = applyListOp(JSON.parse(w.files[keyOf(w)]!) as ListsFile, { op: 'add', list: 'what-s-left', item: { label: 'written by the other session', by: 'claude' } }, 2)
+  if (!r.ok) throw new Error(r.error)
+  w.files[keyOf(w)] = serializeLists(r.file)
+  expect(await draw($)).toContain('written by the other session')
+})
+
+test('an unchanged lists file is not read again at the next draw', async ($, on) => {
+  const w = world(on, { session: SID, files: seeded(), stat: true })
+  await draw($)
+  const after = readsOf(w)
+  expect(after).toBeGreaterThan(0)
+  await draw($)
+  await draw($)
+  expect(readsOf(w)).toBe(after)
+  expect(w.calls.some(c => c.event === 'fs.stat')).toBe(true)
+})
+
+// The write's own redraw reads the file once (its watermark is dropped at the write, so a second
+// writer between our write and that read is not missed); after that, draws read nothing more.
+test('after a press writes the file, the pane shows it and later draws do not read it again', async ($, on) => {
+  const w = world(on, { session: SID, files: seeded(), stat: true })
+  const ui = await mountPane($)
+  await ui.press({ key: 'lists-down-i1' })
+  await (ui as Ui & { unmount: () => Promise<unknown> }).unmount()
+  const settled = readsOf(w)
+  expect(order(w)).toEqual(['the release', 'push 0.7.5'])
+  await draw($)
+  await draw($)
+  expect(readsOf(w)).toBe(settled)
+})
+
+test("after a press of ours, another session's later change still shows at the next draw", async ($, on) => {
+  const w = world(on, { session: SID, files: seeded(), stat: true })
+  const ui = await mountPane($)
+  await ui.press({ key: 'lists-down-i1' })
+  await (ui as Ui & { unmount: () => Promise<unknown> }).unmount()
+  const r = applyListOp(JSON.parse(w.files[keyOf(w)]!) as ListsFile, { op: 'add', list: 'what-s-left', item: { label: 'written after our press', by: 'claude' } }, 3)
+  if (!r.ok) throw new Error(r.error)
+  w.files[keyOf(w)] = serializeLists(r.file)
+  expect(await draw($)).toContain('written after our press')
+})
+
 // An item with a target is a Markdown link, as a reply's links are: a plain click is the
 // plugin's (lands or copies), a ctrl-click the terminal's own open (djdarcy, 2026-10-27). An
 // item with no target stays a Button.

@@ -25,7 +25,8 @@ const slash = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
 export type ListsPaneState = { file?: ListsFile; shown?: List; error?: string; expanded: ReadonlySet<string> }
 
 export class Lists {
-  private cache: { path: string; file: ListsFile } | undefined
+  /** The file last read or written; `mark` is its size and last change when it was read (none after a write of ours, so the next draw reads it once). */
+  private cache: { path: string; file: ListsFile; mark?: string } | undefined
   /** The list the pane shows, by id; the first list when unset or gone. */
   private shown: string | undefined
   /** The items opened in place in the pane, as `<list id>/<item id>`. */
@@ -54,15 +55,31 @@ export class Lists {
     const writer = `${ports.pluginName} ${await ports.pluginVersion()}`
     const fresh = emptyLists(projectOf(cwd), slash(cwd), writer, await ports.now())
     if (!path) return { path: undefined, file: this.cache?.file ?? fresh }
+    // Taken before the read: a write landing between the two makes the next draw read again, never miss it.
+    const mark = await this.markOf(ports, path)
     if (!(await ports.fsExists(path))) {
-      this.cache = { path, file: fresh }
+      this.cache = { path, file: fresh, mark }
       return { path, file: fresh }
     }
     const r = parseLists(await ports.fsRead(path))
     if (r.kind === 'newer') return { error: `the lists file was written by a newer version of the plugin (format ${r.version}); update the plugin to change it` }
     if (r.kind === 'bad') return { error: `the lists file could not be read (${r.why}); it is left as it is: ${path}` }
-    this.cache = { path, file: r.file }
+    this.cache = { path, file: r.file, mark }
     return { path, file: r.file }
+  }
+
+  /** The file's size and last change as one string, `absent` when it is not there; undefined without the stat port. */
+  private async markOf(ports: ListsPorts, path: string): Promise<string | undefined> {
+    if (!ports.fsStat) return undefined
+    const s = await ports.fsStat(path)
+    return s ? `${s.size}:${s.mtimeMs}` : 'absent'
+  }
+
+  /** Whether the cached file has changed on disk since it was read: one stat, no read. */
+  private async moved(ports: ListsPorts): Promise<boolean> {
+    const c = this.cache
+    if (!ports.fsStat || !c?.path) return false
+    return c.mark === undefined || (await this.markOf(ports, c.path)) !== c.mark
   }
 
   /** The last file read or written, without touching the disk. */
@@ -119,11 +136,11 @@ export class Lists {
 
   // --- The pane (refactor-advisor 2026-10-27, row 1) -------------------------------------------
 
-  /** What the pane draws: the file (read when nothing is cached), the shown list, its opened items. */
+  /** What the pane draws: the file (read when nothing is cached, or when it changed on disk since), the shown list, its opened items. */
   async paneModel(ports: ListsPorts): Promise<ListsPaneState> {
     let file = this.current()
     let error: string | undefined
-    if (!file) {
+    if (!file || (await this.moved(ports))) {
       const got = await this.load(ports)
       if ('error' in got) error = got.error
       else file = got.file

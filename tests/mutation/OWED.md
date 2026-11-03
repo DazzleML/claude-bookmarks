@@ -42,6 +42,7 @@ When a sweep is run, add its report beside the others (`vX.Y.Z__sweep__<slug>.md
 | [ ] | 0.7.40 | 9ba5015 | the band order; the Prompts fold in `/config`; `q` closes the lists pane |
 | [ ] | 0.7.41 | eddf8a4 | the three pane rules and bringing a pane forward; a band command through the list's field; the tools-used note on a queued row |
 | [ ] | 0.7.42 | 944380e | the lineage scan through PowerShell on Windows, and at the first look after a load; `<leader> q` closes and reopens the panes |
-| [ ] | 0.8.0 | (this commit) | the age ladder `since()`; the bookmarks pane's `age()` becomes it (red-green: 10 behaviour mutants, 14 of 15 tests caught one; `tests/one-offs/thinking/redgreen-080-since/run.mjs`) |
+| [ ] | 0.8.0 | f95e2f4 | the age ladder `since()`; the bookmarks pane's `age()` becomes it (red-green: 10 behaviour mutants, 14 of 15 tests caught one; `tests/one-offs/thinking/redgreen-080-since/run.mjs`) |
+| [ ] | 0.8.1 | (this commit) | the lists pane's per-draw freshness check (red-green: 4 kit mutants on a scratch copy of plugin/, all killed; `tests/one-offs/thinking/redgreen-080b-freshness/run.mjs`) |
 
 Not listed: 0.7.29 (59eb80d) and 0.7.32 (bf66372) add tests only; docs and build commits.

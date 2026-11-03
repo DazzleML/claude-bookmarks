@@ -332,6 +332,8 @@ export type ListsPorts = {
   fsExists: (path: string) => Promise<boolean>
   fsRead: (path: string) => Promise<string>
   fsWrite: (path: string, text: string) => Promise<unknown>
+  /** A file's size and last change, or undefined when it is not there: the pane's per-draw freshness check. Absent: the pane reads the file only when nothing is cached, as before. */
+  fsStat?: (path: string) => Promise<{ size: number; mtimeMs: number } | undefined>
   copy: (text: string) => Promise<{ isCopied: boolean }>
   /** Whether a click on a list's link writes the clipboard (the listLinkClick setting; absent: it does). */
   clickCopies?: () => boolean
