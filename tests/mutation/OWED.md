@@ -45,6 +45,7 @@ When a sweep is run, add its report beside the others (`vX.Y.Z__sweep__<slug>.md
 | [ ] | 0.8.0 | f95e2f4 | the age ladder `since()`; the bookmarks pane's `age()` becomes it (red-green: 10 behaviour mutants, 14 of 15 tests caught one; `tests/one-offs/thinking/redgreen-080-since/run.mjs`) |
 | [ ] | 0.8.1 | 1d70694 | the lists pane's per-draw freshness check (red-green: 4 kit mutants on a scratch copy of plugin/, all killed; `tests/one-offs/thinking/redgreen-080b-freshness/run.mjs`) |
 | [ ] | 0.8.2 | 014b16b | the registry core: identity, placement, `project.json`, membership, reconcile, rebuild, import (red-green: 15 mutants, all killed; `tests/one-offs/thinking/redgreen-unit1-registry/run.mjs`) |
-| [ ] | 0.8.3 | (this commit) | lists format 3, the pure step and its inverse (red-green: 8 mutants, all killed; `tests/one-offs/thinking/redgreen-unit2-format3/run.mjs`) |
+| [ ] | 0.8.3 | 409e796 | lists format 3, the pure step and its inverse (red-green: 8 mutants, all killed; `tests/one-offs/thinking/redgreen-unit2-format3/run.mjs`) |
+| [ ] | 0.8.4 | (this commit) | the link script, `link-project.ps1` and `.sh` (red-green: 8 mutants of the `.ps1`, all killed through the scratch shell test; the `.sh` not mutated; `tests/one-offs/thinking/redgreen-unit6a-link/run.mjs`) |
 
 Not listed: 0.7.29 (59eb80d) and 0.7.32 (bf66372) add tests only; docs and build commits.

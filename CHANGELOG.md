@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-11-02
+
+### Added
+
+- **Groundwork, not yet run by the plugin: a script that links a project's data folder into its vault.** It refuses a target on a network drive, a target that already holds anything, a folder that is already linked, and a folder that is not a project's. It proves the link works, by writing a marker through it and finding the marker at the other end, before it moves anything. It moves the contents one entry at a time, stopping at the first failure with both halves readable, and renames the emptied folder aside instead of deleting it. A dry run prints the steps and changes nothing. A later 0.8 release runs it when you ask.
+- **A two-minute checklist, and a sample file, for checking that Obsidian leaves a bundle file's links alone** when you edit the file's properties ([tests/checklists/v0.8.x__Feature__obsidian-keeps-the-bundle-files-block.md](tests/checklists/v0.8.x__Feature__obsidian-keeps-the-bundle-files-block.md)).
+
 ## [0.8.3] - 2026-11-02
 
 ### Added
@@ -1685,7 +1692,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.3...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.4...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
