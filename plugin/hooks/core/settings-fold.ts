@@ -54,6 +54,38 @@ export function rowHidden(field: string, values: Readonly<Record<string, unknown
   return false
 }
 
+/**
+ * How many folds a row sits inside: 0 for the Bookmarks fold, 1 for a row or fold inside it, 2 for a
+ * row inside an inner fold (Prompts, Search, Keys, Debug). A row that one value of another row
+ * shows sits at its fold's depth. djdarcy, 2026-10-31: "add a space in front of each level of fold
+ * depth as a parameter of whatever depth an item is at so it should be dynamic not fixed".
+ */
+export function foldDepth(field: string): number {
+  if (field === SETTINGS_SHOWN_FIELD) return 0
+  if (isKeyRow(field) || DEBUG_ROWS.has(field) || PROMPTS_ROWS.has(field) || CUSTOM_ROWS.has(field) || SEARCH_ROWS.has(field)) return 2
+  return 1
+}
+
+/**
+ * The indent before a row's label, one per fold it sits inside. Not a space: /config strips a plugin
+ * label's leading blanks and folds every run of blanks inside one into a single space -- measured on
+ * 2026-11-03 with three probes in a fresh session: spaces, U+2800, U+3000, U+2007, U+00A0, U+3164,
+ * U+2003, U+FFA0, U+200B, U+034F, U+2060 and U+E0020 all vanished at the start, and every blank after
+ * a visible speck came out as one space. So a level is a visible mark; djdarcy chose the middle dot
+ * ("I think the best looking was" the `· ` version).
+ */
+export const FOLD_INDENT = '· '
+
+/**
+ * A row's label as /config draws it: one mark per fold it sits inside, a fold row with its marker.
+ * A fold row carries one mark fewer: its ▸ or ▾ stands in the last mark's place (djdarcy,
+ * 2026-11-03: "when we have a ▾ or a similar fold symbol we don't need to use the preceding " ·"").
+ */
+export function rowLabel(field: string, label: string, values: Readonly<Record<string, unknown>>): string {
+  const marks = Math.max(0, foldDepth(field) - (FOLD_FIELDS.has(field) ? 1 : 0))
+  return FOLD_INDENT.repeat(marks) + foldLabel(field, label.replace(/^[\s⠀·]+/, ''), values)
+}
+
 /** A fold row's label with its marker for the fold's state (`▾` open, `▸` closed); any other row's label as it is. */
 export function foldLabel(field: string, label: string, values: Readonly<Record<string, unknown>>): string {
   if (!FOLD_FIELDS.has(field)) return label

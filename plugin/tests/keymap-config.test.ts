@@ -108,15 +108,20 @@ test('Bookmarks open, keys folded: the settings show, the key rows do not', { op
   expect((await describe($, 'keyList')).isHidden).toBe(true)
 })
 
-test('an open fold leads with ▾, a closed one with ▸, and the debug rows wait behind theirs', { options: { settingsShown: true } }, async ($, on) => {
+test('an open fold leads with ▾, a closed one with ▸, each row indented one space per fold, and the rows of a closed fold wait behind it', { options: { settingsShown: true, debugShown: true } }, async ($, on) => {
   world(on, { store: STORE, session: SID })
   answerBase(on)
   const d = $ as unknown as { config: { describe: (i: object) => Promise<{ isHidden: boolean; label: string }> } }
   const row = (field: string) => d.config.describe({ key: `bookmarks.${field}`, label: field, description: 'd', isHidden: false, provider: PROVIDER })
-  expect((await row('settingsShown')).label.startsWith('▾')).toBe(true)
-  expect((await row('debugShown')).label.startsWith('▸')).toBe(true)
-  expect((await row('debugText')).isHidden).toBe(true)
-  expect((await row('rowLines')).label).toBe('rowLines')
+  expect((await row('settingsShown')).label).toBe('▾ settingsShown')
+  // The indent is a visible mark per level: /config showed neither leading spaces nor braille blanks.
+  const i = '· '
+  // A fold row's marker stands in its last mark's place.
+  expect((await row('keysShown')).label).toBe('▸ keysShown')
+  expect((await row('debugShown')).label).toBe('▾ debugShown')
+  expect((await row('debugText')).label).toBe(`${i}${i}debugText`)
+  expect((await row('keyMark')).isHidden).toBe(true)
+  expect((await row('rowLines')).label).toBe(`${i}rowLines`)
 })
 
 test('unfolded: the key rows show, and the Leader row names the chord in keybindings.json', { options: { settingsShown: true, keysShown: true } }, async ($, on) => {

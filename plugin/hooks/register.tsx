@@ -24,7 +24,7 @@ import { CHORD_ACTIONS, VERIFIED_CLIENTS, bandFocusRoute, barFor, helpFor, listH
 import { covering, type ShownPane } from './core/band/pane-show'
 import type { Cause } from './core/band/after-action'
 import { LEADER_FIELD, isKeyRow, leaderChord, rowDenial, type Problem } from './core/band/keymap'
-import { FOLD_FIELDS, SHOWS_ROWS, foldLabel, rowHidden } from './core/settings-fold'
+import { FOLD_FIELDS, SHOWS_ROWS, rowHidden, rowLabel } from './core/settings-fold'
 import { installedFromCache, type Settings } from './core/settings'
 import { SettingsState } from './core/settings-state'
 import type { Role, Style } from './core/palette'
@@ -1432,8 +1432,8 @@ export const register: Register = (on, options) => {
     const field = e.key.slice('bookmarks.'.length)
     const values = currentSettings() as unknown as Record<string, unknown>
     const isHidden = rowHidden(field, values)
-    // A fold row leads with its state's marker (▸ closed, ▾ open).
-    const label = foldLabel(field, r.label, values)
+    // Indented one space per fold the row sits inside; a fold row leads with its marker (▸ closed, ▾ open).
+    const label = rowLabel(field, r.label, values)
     if (field !== LEADER_FIELD) return { ...r, isHidden, label }
     const dir = await configDir($)
     const path = dir ? `${dir}/keybindings.json` : undefined

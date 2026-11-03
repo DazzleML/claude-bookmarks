@@ -4,7 +4,7 @@
 // /config row the menu leaves out, with the keys' own fold inside it.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { CUSTOM_ROWS, DEBUG_ROWS, DEBUG_SHOWN_FIELD, PROMPTS_ROWS, PROMPTS_SHOWN_FIELD, SEARCH_ROWS, SEARCH_SHOWN_FIELD, SETTINGS_SHOWN_FIELD, foldLabel, rowHidden } from '../../plugin/hooks/core/settings-fold.ts'
+import { CUSTOM_ROWS, DEBUG_ROWS, DEBUG_SHOWN_FIELD, PROMPTS_ROWS, PROMPTS_SHOWN_FIELD, SEARCH_ROWS, SEARCH_SHOWN_FIELD, SETTINGS_SHOWN_FIELD, FOLD_INDENT, foldDepth, foldLabel, rowHidden, rowLabel } from '../../plugin/hooks/core/settings-fold.ts'
 import { DEFAULTS, FIELDS, FOLD_CLOSED, FOLD_OPEN } from '../../plugin/hooks/core/settings.ts'
 
 const values = (over: Record<string, boolean> = {}) => ({ ...DEFAULTS, ...over }) as unknown as Record<string, unknown>
@@ -100,4 +100,32 @@ test('a fold row leads with ▸ while closed and ▾ while open; any other row k
   assert.equal(foldLabel(SETTINGS_SHOWN_FIELD, `${FOLD_CLOSED} Bookmarks`, values({ [SETTINGS_SHOWN_FIELD]: true })), `${FOLD_OPEN} Bookmarks`)
   assert.equal(foldLabel('keysShown', 'Keys: show the key rows', values({ keysShown: true })), `${FOLD_OPEN} Keys: show the key rows`)
   assert.equal(foldLabel('rowLines', 'Lines per row in the lists', values()), 'Lines per row in the lists')
+})
+
+// djdarcy, 2026-10-31: "add a space in front of each level of fold depth as a parameter of whatever
+// depth an item is at so it should be dynamic not fixed". The depth is read against rowHidden, so a
+// fold added later cannot leave its rows at the wrong depth: a row is at 2 exactly when opening the
+// Bookmarks fold alone still hides it (with the value that shows a conditional row set).
+test('every row is indented by the folds it sits inside, agreeing with which folds hide it', () => {
+  const shownBy = { searchView: 'custom', searchLabels: 'short' }
+  const outerOnly = { ...values({ [SETTINGS_SHOWN_FIELD]: true }), ...shownBy }
+  for (const field of Object.keys(FIELDS)) {
+    const want = field === SETTINGS_SHOWN_FIELD ? 0 : rowHidden(field, outerOnly) ? 2 : 1
+    assert.equal(foldDepth(field), want, field)
+  }
+  assert.equal(foldDepth(PROMPTS_SHOWN_FIELD), 1)
+  assert.equal(foldDepth('keyMark'), 2)
+  assert.equal(foldDepth('searchShortLength'), 2)
+})
+
+test('a row label carries one indent mark per depth, the fold marker after it, and never doubles an indent', () => {
+  const open = values({ [SETTINGS_SHOWN_FIELD]: true, [SEARCH_SHOWN_FIELD]: true })
+  assert.equal(rowLabel(SETTINGS_SHOWN_FIELD, `${FOLD_CLOSED} Bookmarks`, open), `${FOLD_OPEN} Bookmarks`)
+  // A fold row's marker stands in its last mark's place (djdarcy, 2026-11-03).
+  assert.equal(rowLabel(SEARCH_SHOWN_FIELD, `${FOLD_CLOSED} Search`, open), `${FOLD_OPEN} Search`)
+  assert.equal(rowLabel('rowLines', 'Lines per row in the lists', open), `${FOLD_INDENT}Lines per row in the lists`)
+  assert.equal(rowLabel('debugText', 'Debug: text', open), `${FOLD_INDENT.repeat(2)}Debug: text`)
+  assert.equal(rowLabel('debugText', '  Debug: text', open), `${FOLD_INDENT.repeat(2)}Debug: text`)
+  assert.equal(rowLabel('debugText', `${FOLD_INDENT}Debug: text`, open), `${FOLD_INDENT.repeat(2)}Debug: text`)
+  assert.equal(FOLD_INDENT.trimStart(), FOLD_INDENT, 'the indent must not start with whitespace, which /config strips')
 })
