@@ -47,6 +47,7 @@ When a sweep is run, add its report beside the others (`vX.Y.Z__sweep__<slug>.md
 | [ ] | 0.8.2 | 014b16b | the registry core: identity, placement, `project.json`, membership, reconcile, rebuild, import (red-green: 15 mutants, all killed; `tests/one-offs/thinking/redgreen-unit1-registry/run.mjs`) |
 | [ ] | 0.8.3 | 409e796 | lists format 3, the pure step and its inverse (red-green: 8 mutants, all killed; `tests/one-offs/thinking/redgreen-unit2-format3/run.mjs`) |
 | [ ] | 0.8.4 | 3c9f0a9 | the link script, `link-project.ps1` and `.sh` (red-green: 8 mutants of the `.ps1`, all killed through the scratch shell test; the `.sh` not mutated; `tests/one-offs/thinking/redgreen-unit6a-link/run.mjs`) |
-| [ ] | 0.8.5 | (this commit) | the bundle set and cross-project references (red-green: 10 mutants, all killed; `tests/one-offs/thinking/redgreen-unit4-bundle-set/run.mjs`) |
+| [ ] | 0.8.5 | c091787 | the bundle set and cross-project references (red-green: 10 mutants, all killed; `tests/one-offs/thinking/redgreen-unit4-bundle-set/run.mjs`) |
+| [ ] | 0.8.6 | (this commit) | the bundle file: regions, end line, write-back (red-green: 10 mutants, all killed; `tests/one-offs/thinking/redgreen-unit3-bundle-file/run.mjs`) |
 
 Not listed: 0.7.29 (59eb80d) and 0.7.32 (bf66372) add tests only; docs and build commits.

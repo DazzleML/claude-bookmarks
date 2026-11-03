@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.6] - 2026-11-02
+
+### Added
+
+- **Groundwork, not yet used: a bundle as a Markdown file of its own.** The file holds the bundle's properties, its links in a block the plugin owns, a list of the links for people to read, then your notes, which the plugin never rewrites, and a closing line. A file cut short by a crash or a half-finished save is never taken as whole, so the next save cannot shorten your notes. Edits you make to the label, the why, the tags or the started date are taken; the id and the rest are the plugin's. Checked in Obsidian: its Properties panel changes only the property you edit and leaves the rest of the file byte for byte as it was.
+
 ## [0.8.5] - 2026-11-02
 
 ### Added
@@ -1698,7 +1704,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.5...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.6...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
