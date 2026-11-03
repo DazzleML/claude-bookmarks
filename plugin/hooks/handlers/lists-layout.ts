@@ -158,7 +158,8 @@ export async function resolveLayout(ports: LayoutPorts): Promise<Resolved | unde
       if (normPath(back) !== normPath(`${projectsDir}/${a.layout.folder}`) && (await ports.fsExists(`${back}/project.json`))) {
         const n = await copyTree(ports, back, `${projectsDir}/${a.layout.folder}`)
         ports.log(`[bm] lists: the project's link was removed after an unlink; ${n} files copied back from ${back} into ${projectsDir}/${a.layout.folder}`)
-        return resolveLayout(ports)
+        // Resolved again only when something was copied: a copy that wrote nothing must not recurse (scenario S1 of 0.8.17's pass).
+        if (n > 0) return resolveLayout(ports)
       }
     }
     const identity = parseIdentity(await ports.fsRead(`${root}/projects/${a.layout.id}.json`).catch(() => ''))
