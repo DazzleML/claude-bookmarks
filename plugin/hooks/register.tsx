@@ -525,6 +525,12 @@ async function transcriptPath($: EngineInterface): Promise<string | undefined> {
 // it is not sent anywhere, and the plugin opens no network connection. Each run is
 // capped at 60 seconds and at 4 MiB of output by the engine. See README "What it
 // runs, reads, writes and sends" and PRIVACY.md.
+// The fifth, since 0.8.16, reads no transcript: runLink in projectsPorts() runs the shipped
+// link script (hooks/scripts/link-project.ps1, or .sh off Windows) only on the person's
+// /bm-project link or relink, with the source folder, the target and the project id as
+// separate argv elements (core/projects/link.ts linkArgv). It moves the project's data
+// folder into its vault and leaves a link; it refuses before moving anything unsafe and
+// deletes nothing.
 
 // The user rows of the transcript, one JSON line each, from the platform's own tool.
 async function userRows($: EngineInterface, path: string) {
@@ -911,6 +917,14 @@ function projectsPorts($: EngineInterface): ProjectsPorts {
       const r = await bookmarks_.commitOp(bookmarksPorts($), { op: 'home', ...(id ? { id } : {}) })
       return 'error' in r && r.error ? { error: r.error } : {}
     },
+    // The fifth program the plugin runs (see the reviewers' note above scanLineage): the link script, on the person's /bm-project link.
+    runLink: async argv => {
+      const r = await $.process.run(argv, { timeoutMs: 60_000 })
+      return { exitCode: r.exitCode ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
+    },
+    scriptsDir: () => `${$.plugin.root}/hooks/scripts`,
+    projectVault: () => currentSettings().projectVault,
+    junctionPoint: () => currentSettings().junctionPoint,
   }
 }
 

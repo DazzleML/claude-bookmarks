@@ -8,12 +8,14 @@ import type { Lists } from './lists.ts'
 import { readPlacements, resolveLayout, sessionHome } from './lists-layout.ts'
 import { excludePlan, includePlan, registerPlan, renamePlan, whereRows, whereText, type OwnFolder } from '../core/projects/project-ops.ts'
 import { foldersWithId, parseProjectFile } from '../core/projects/project-file.ts'
+import { linkArgv, linkedAt, linkedPlacement, linkTarget, parseLinkResult } from '../core/projects/link.ts'
+import { placementPath, serializePlacement } from '../core/projects/placement.ts'
 import { parseIdentity } from '../core/projects/registry.ts'
 import { isUnderPath, listsFolderOf, membershipOf, normPath, resolveFolderArg, type Placement } from '../core/projects/placement.ts'
 
 const slash = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
 const iso = (ms: number) => new Date(ms).toISOString()
-export const PROJECT_USAGE = '/bm-project: where | register [name] [--yes] | rename <name> | exclude <folder> | include <folder> | home [<project> | --clear]'
+export const PROJECT_USAGE = '/bm-project: where | register [name] [--yes] | rename <name> | exclude <folder> | include <folder> | home [<project> | --clear] | link [--dry-run] | relink <path>'
 const ID_IN_NAME = /__([a-z2-7]{8})__/
 
 /** The `cwd` a lists file records, read raw (no format gate). */
@@ -172,6 +174,42 @@ export async function projectsCommand(ports: ProjectsPorts, lists: Lists, args: 
     return
   }
 
-  if (verb === 'link' || verb === 'unlink' || verb === 'relink') return ports.say(`[bm] /bm-project ${verb} comes with the next build (the link script's wiring)`)
+  if (verb === 'link' || verb === 'relink') {
+    // The project this folder belongs to (its home does not move another project's data).
+    const m = membershipOf(cwdReal, placements)
+    const placement = m ? placements.find(p => p.id === m.id) : undefined
+    if (!placement) return ports.say(`[bm] /bm-project ${verb} is for a registered project: /bm-project register first`)
+    if (!ports.projectVault()) return ports.say("[bm] not linked: keeping a project's lists and bundles in its vault is off in /config (Bookmarks: keep a project's data in its vault)")
+    const folder = foldersWithId(folders, placement.id)[0]
+    if (!folder) return ports.say(`[bm] not linked: #${placement.n} has no data folder yet; it is made on the first list written`)
+    const dryRun = rest.includes('--dry-run')
+    const pathArg = rest.filter(t => t !== '--dry-run').join(' ')
+    // relink <path>: the vault is now at <path>. A folder still linked to the old one is left as it is, with the way to finish.
+    const vaultFor = verb === 'relink' ? (pathArg ? await folderArg(ports, cwdReal, pathArg) : '') : undefined
+    if (verb === 'relink' && !vaultFor) return ports.say('[bm] /bm-project relink <path>: the vault folder the project\'s data should appear in now')
+    const based = vaultFor ? { ...placement, vault: vaultFor } : placement
+    const t = linkTarget(based, ports.junctionPoint())
+    const source = `${root}/bookmarks/projects/${folder}`
+    if (!dryRun && (await ports.fsStatLink(source))?.isLink) {
+      if (verb === 'link') return ports.say(`[bm] already linked: ${source} is a link${placement.linked ? ` to ${linkTarget(placement, placement.junction_point ?? ports.junctionPoint()).target}` : ''}`)
+      return ports.say(`[bm] not relinked yet: ${source} is still a link to the old vault. Remove that link (dz safedel "${source}" removes the link and keeps the files it pointed at), then /bm-project link`)
+    }
+    const argv = linkArgv({ scriptsDir: ports.scriptsDir(), source, target: t.target, id: placement.id, dryRun })
+    const run = await ports.runLink(argv).catch(err => ({ exitCode: 1, stdout: '', stderr: String(err) }))
+    const r = parseLinkResult(run.stdout)
+    if (!r) return ports.say(`[bm] the link script did not answer (exit ${run.exitCode})${run.stderr ? `: ${run.stderr.trim().split('\n')[0]}` : ''}; nothing was changed`)
+    for (const s of r.steps) ports.say(`[bm]   ${r.dryRun ? 'would ' : ''}${s}`)
+    if (r.refused) return ports.say(`[bm] not linked: ${r.refused}`)
+    if (!r.ok) return ports.say(`[bm] the link stopped${r.failedAt ? ` at ${r.failedAt}` : ''}; both folders are left readable, nothing was deleted`)
+    if (r.dryRun) return ports.say(`[bm] dry run: nothing was changed; /bm-project ${verb}${pathArg ? ` ${pathArg}` : ''} links ${source} into ${t.target}`)
+    if (!linkedAt(r, t.target)) ports.say(`[bm] the script reports ${r.realPath ?? 'no real path'}, not ${t.target}; check it with /bm-project`)
+    const placementNow = linkedPlacement(based, t, iso(await ports.now()))
+    await ports.fsWrite(placementPath(`${root}/projects`, await ports.machine(), await ports.user(), placement.id), serializePlacement(placementNow))
+    lists.newConversation()
+    ports.say(`[bm] linked #${placement.n} ${names.get(placement.id) ?? placement.id}: its lists and bundles now live in ${t.target} (${r.moved} moved${r.movedAside ? `; the emptied folder is kept as ${r.movedAside}` : ''})`)
+    await ports.redraw()
+    return
+  }
+  if (verb === 'unlink') return ports.say('[bm] /bm-project unlink comes with the next build')
   ports.say(`[bm] ${PROJECT_USAGE}`)
 }

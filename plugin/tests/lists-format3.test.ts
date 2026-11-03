@@ -244,6 +244,39 @@ test('/bm-project home #1 sets the session home in its bookmark file; where show
   expect(await draw($)).toContain('the epic')
 })
 
+// 0.8.16 (the registry design's 17:50 addendum): /bm-project link runs the link script -- never in
+// a test: $.process.run is the harness's stub here, which records each argv and answers for it.
+const REGISTERED = () => ({ ...own(), 'C:/test-project/.git/HEAD': 'ref: refs/heads/dev\n' })
+
+test('/bm-project link with the vault option off runs nothing and says so', { options: { projectVault: false } }, async ($, on) => {
+  if (LISTS_VERSION < 3) return
+  const runs: (readonly string[])[] = []
+  const w = world(on, { session: SID, files: REGISTERED(), stat: true, process: argv => { runs.push(argv); return { exitCode: 0, stdout: '' } } })
+  await ($ as Engine).command.run({ command: 'bm-project', args: 'register' })
+  await ($ as Engine).command.run({ command: 'bm-project', args: 'link' })
+  expect(w.logs().some(l => l.includes('not linked') && l.includes('off in /config'))).toBe(true)
+  expect(runs.length).toBe(0)
+})
+
+test('/bm-project link shows the script\'s refusal and changes nothing; a success marks the placement linked', async ($, on) => {
+  if (LISTS_VERSION < 3) return
+  let answer = '{"ok":false,"dryRun":false,"steps":["checked the target"],"refused":"the target is not empty","moved":0}'
+  const runs: (readonly string[])[] = []
+  const w = world(on, { session: SID, files: REGISTERED(), stat: true, process: argv => { runs.push(argv); return { exitCode: 0, stdout: answer + '\n' } } })
+  await ($ as Engine).command.run({ command: 'bm-project', args: 'register' })
+  const placementKey = () => key(w, new RegExp(`/claude/projects/${MACHINE}/${USER}/${ID}\\.json$`))!
+  await ($ as Engine).command.run({ command: 'bm-project', args: 'link' })
+  expect(w.logs().some(l => l.includes('not linked: the target is not empty'))).toBe(true)
+  expect(JSON.parse(w.files[placementKey()]!).linked).toBe(false)
+  expect(runs[0]!.some(a => a.endsWith('link-project.ps1'))).toBe(true)
+  expect(runs[0]![runs[0]!.indexOf('-Target') + 1]).toBe('C:/test-project/private/claude/bookmarks')
+  answer = '{"ok":true,"dryRun":false,"steps":["made the link","moved 4 entries"],"realPath":"C:/test-project/private/claude/bookmarks","moved":4}'
+  await ($ as Engine).command.run({ command: 'bm-project', args: 'link' })
+  const placement = JSON.parse(w.files[placementKey()]!)
+  expect([placement.linked, placement.junction_point]).toEqual([true, 'private/claude/bookmarks'])
+  expect(w.logs().some(l => l.includes('linked #1 test-project') && l.includes('4 moved'))).toBe(true)
+})
+
 test('a bundle file whose block does not parse refuses writes to that bundle and names the file in a toast, once', async ($, on) => {
   if (LISTS_VERSION < 3) return
   const broken = (t: string) => t.replace('```bm-links\n{', '```bm-links\n{not json')

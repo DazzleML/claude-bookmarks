@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.16] - 2026-11-03
+
+### Added
+
+- `/bm-project link` moves a registered project's lists and bundles into the project's own vault (`private/claude/bookmarks` by default, set in `/config`) and leaves a link in their place, so notes tools like Obsidian see them and the plugin keeps working from the same place. It runs the plugin's link script, which refuses a network path, a target that is not empty, a folder already linked, or one without its `project.json`, and deletes nothing. `/bm-project link --dry-run` shows the steps and changes nothing. `/bm-project relink <path>` links into a vault that has moved. With "keep a project's data in its vault" off in `/config`, `link` does nothing and says so.
+
 ## [0.8.15] - 2026-11-03
 
 ### Added
@@ -1776,7 +1782,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.15...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.16...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

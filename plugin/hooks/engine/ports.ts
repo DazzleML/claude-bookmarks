@@ -393,6 +393,16 @@ export type ProjectsPorts = ListsPorts & {
   say: (line: string) => void
   /** Sets or clears the conversation's home in its bookmark file, through the register's own operation (0.8.15). */
   setHome: (id: string | undefined) => Promise<{ error?: string }>
+  /**
+   * Runs the link script (0.8.16, `/bm-project link`): argv as built by core/projects/link.ts, each
+   * argument its own element, never a command string. The plugin's fifth program (README).
+   */
+  runLink: (argv: readonly string[]) => Promise<{ exitCode: number; stdout: string; stderr: string }>
+  /** The folder the plugin's scripts ship in (`<plugin root>/hooks/scripts`). */
+  scriptsDir: () => string
+  /** The /config rows the link reads: keep a project's data in its vault (projectVault), and where in the vault (junctionPoint). */
+  projectVault: () => boolean
+  junctionPoint: () => string
 }
 
 /** What the bookmarks cluster (handlers/bookmarks.ts) needs: the register's files, who and where this session is, the transcript, the jump, the mark highlight, the clipboard and the person's feedback. */
