@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.7] - 2026-11-02
+
+### Added
+
+- **Groundwork, not yet used: the rules for the project layout.** They decide where a folder's lists and its project's bundles live once lists move into project folders, and whether the link into a project's vault is healthy. They also decide when the plugin may write, or create a folder: never when the link is broken or points elsewhere, and never into a folder left behind by a rename. A step for the format move refuses to read an old lists file at the new format until its bundles have been moved out, so none can be lost.
+
 ## [0.8.6] - 2026-11-02
 
 ### Added
@@ -1704,7 +1710,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.6...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.7...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

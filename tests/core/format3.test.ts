@@ -85,6 +85,18 @@ test("a flat file under no registered root becomes its own project folder, its l
   assert.deepEqual([p.projectFile.id, p.projectFile.name, p.projectFile.user], ['k7mq2xab', 'demo', 'Extreme'])
 })
 
+test('the 2 -> 3 step is registered; a version 2 file with bundles needs the split, one without does not', async () => {
+  const { LISTS_MIGRATIONS, needsSplit } = await import('../../plugin/hooks/core/lists/lists.ts')
+  assert.equal(LISTS_MIGRATIONS.length, 2)
+  assert.equal(needsSplit(FILE), true)
+  assert.equal(needsSplit({ ...FILE, bundles: [] }), false)
+  assert.equal(needsSplit({ ...FILE, version: 3 }), false)
+  const stepped = LISTS_MIGRATIONS[1]!({ ...FILE, bundles: [] } as never) as unknown as Record<string, unknown>
+  assert.equal(stepped.version, 3)
+  assert.equal('bundles' in stepped, false)
+  assert.deepEqual(stepped.lists, FILE.lists)
+})
+
 test("the set's index round-trips; a newer one is not read; a malformed one is refused", () => {
   const { index } = toFormat3(FILE)
   const back = parseBundleIndex(serializeBundleIndex(index))

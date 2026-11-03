@@ -28,7 +28,18 @@ const itemsTo2 = (l: unknown) => {
 export const LISTS_MIGRATIONS: readonly ((f: RawFile) => RawFile)[] = [
   // 1 -> 2: an item's `place`/`words`/`link` become its typed `links` (core/lists/item-links.ts).
   f => ({ ...f, version: 2, lists: Array.isArray(f.lists) ? f.lists.map(itemsTo2) : f.lists, removed: Array.isArray(f.removed) ? f.removed.map(itemsTo2) : f.removed }),
+  // 2 -> 3 (0.8.x, format 3): the bundles leave the file for the project's set (core/lists/format3.ts
+  // toFormat3, run by the handler before a version 2 file is parsed). A file with bundles never
+  // reaches this step -- parseLists refuses it as `needsSplit` -- so here only an empty array goes.
+  f => {
+    const { bundles: _none, ...rest } = f as RawFile & { bundles?: unknown }
+    return { ...rest, version: 3 }
+  },
 ]
+
+/** A version 2 file whose bundles must move to the project's set before it can be read at version 3. */
+export const needsSplit = (raw: { version?: unknown; bundles?: unknown }): boolean =>
+  raw.version === 2 && Array.isArray(raw.bundles) && raw.bundles.length > 0
 
 /** A row of a conversation, as a record addresses it (core/places/place.ts PlaceAddress, with the id it is drawn under). */
 export type ListPlace = { session: string; uuid: string; file?: string; part?: number; drawn?: string }
@@ -133,6 +144,7 @@ export function parseLists(text: string): ParsedLists {
   for (let v = Math.max(1, Math.trunc(raw.version)); v < LISTS_VERSION; v++) {
     const step = LISTS_MIGRATIONS[v - 1]
     if (!step) return { kind: 'bad', why: `no step from version ${v} to ${v + 1}` }
+    if (v === 2 && needsSplit(raw)) return { kind: 'bad', why: 'a version 2 file with bundles is split into its project folder first (core/lists/format3.ts)' }
     raw = step(raw)
   }
   const f = raw as Partial<ListsFile> & Record<string, unknown>
