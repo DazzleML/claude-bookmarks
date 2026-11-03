@@ -76,6 +76,18 @@ function split(at: string, tweak: (t: string) => string = t => t): Record<string
 }
 const B1_FILE = /\/bundles\/2026-10-30__the-epic\.md$/
 
+// The autoMigrate setting off (0.8.11; the red-green owed since then): the older flat file waits,
+// nothing is split or written, and the pane names where the waiting lists are.
+test('with "move older lists into their project folder" off, the flat file waits: nothing is written and the pane says where it is', { options: { autoMigrate: false } }, async ($, on) => {
+  if (LISTS_VERSION < 3) return
+  const before = flat()
+  const w = world(on, { session: SID, files: { [FLAT]: before }, stat: true })
+  const t = await draw($)
+  expect(t).toContain('wait to be moved into their project folder')
+  expect(key(w, /\/projects\/test-project__[a-z2-7]{8}__user\/project\.json$/)).toBeUndefined()
+  expect(w.files[key(w, /\/lists\/test-project\.json$/)!]).toBe(before)
+})
+
 test('the first load at format 3 splits the flat file into its project folder: project.json, lists.json, the index, one file per bundle; the flat file untouched', async ($, on) => {
   if (LISTS_VERSION < 3) return
   const before = flat()
