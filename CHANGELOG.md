@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-11-02
+
+### Added
+
+- **Groundwork, not yet used: the step that will move each lists file into its project's folder.** A project's lists go into one file and its bundles into an index beside it, so a bundle can belong to the whole project. The step has an exact inverse, and it was run on copies of real lists files: every list, item and bundle came back unchanged. Nothing moves yet; your lists stay in their current file until a later 0.8 release moves them, after taking a backup.
+
 ## [0.8.2] - 2026-11-02
 
 ### Added
@@ -1679,7 +1685,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.3...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
