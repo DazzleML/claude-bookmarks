@@ -15,8 +15,9 @@ import { hrefOf } from '../core/lists/item-links.ts'
 import { checkFolder, projectFolderName, serializeProjectFile, type FolderCheck, type ProjectFile } from '../core/projects/project-file.ts'
 import { mintId, newIdentity, parseIdentity, projectFileOf } from '../core/projects/registry.ts'
 import { fileSafe } from '../core/lists/lists.ts'
-import { parsePlacement, type Placement } from '../core/projects/placement.ts'
+import { normPath, parsePlacement, type Placement } from '../core/projects/placement.ts'
 import { parseRegister } from '../core/bookmarks/register-file.ts'
+import { linkTarget } from '../core/projects/link.ts'
 export type { Layout }
 export { layoutFor, ownFolderFor }
 
@@ -94,6 +95,21 @@ export async function readPlacements(ports: LayoutPorts, root: string): Promise<
   return { placements, names }
 }
 
+/**
+ * Copies a folder's files, folders included, from one path to another, through the ports (0.8.17,
+ * unlink): read and written as text, which is all a project's data folder holds (JSON and Markdown).
+ * Nothing at `from` is changed; returns how many files were written.
+ */
+export async function copyTree(ports: LayoutPorts, from: string, to: string): Promise<number> {
+  let n = 0
+  for (const e of await ports.fsList(from).catch(() => [])) {
+    const src = `${from}/${e.name}`, dst = `${to}/${e.name}`
+    if (e.kind === 'dir') n += await copyTree(ports, src, dst)
+    else if (e.kind === 'file') { await ports.fsWrite(dst, await ports.fsRead(src)); n++ }
+  }
+  return n
+}
+
 /** The project this session works on, from its own bookmark file (0.8.15, `/bm-project home`); undefined when it has said none. */
 export async function sessionHome(ports: LayoutPorts, root: string): Promise<string | undefined> {
   if (!ports.sessionId) return undefined
@@ -134,6 +150,17 @@ export async function resolveLayout(ports: LayoutPorts): Promise<Resolved | unde
   const a = layoutFor({ dataRoot: root, cwdReal, user, placements, names, folders, hash: ports.hash, ...(homeId ? { homeId } : {}) })
   if (a.kind !== 'own') {
     const placement = placements.find(p => p.id === a.layout.id)
+    // An unlink finished (0.8.17): the project is marked unlinked, its link was removed, and no data folder
+    // is left here -- the vault still holds the current files, so they are copied back into place before
+    // anything would make an empty folder. The `.__unlinked-` copy beside it is kept, never removed.
+    if (a.kind === 'new-folder' && placement && !placement.linked && placement.vault) {
+      const back = linkTarget(placement, placement.junction_point ?? 'private/claude/bookmarks').target
+      if (normPath(back) !== normPath(`${projectsDir}/${a.layout.folder}`) && (await ports.fsExists(`${back}/project.json`))) {
+        const n = await copyTree(ports, back, `${projectsDir}/${a.layout.folder}`)
+        ports.log(`[bm] lists: the project's link was removed after an unlink; ${n} files copied back from ${back} into ${projectsDir}/${a.layout.folder}`)
+        return resolveLayout(ports)
+      }
+    }
     const identity = parseIdentity(await ports.fsRead(`${root}/projects/${a.layout.id}.json`).catch(() => ''))
     return {
       root, layout: a.layout, folderPath: `${projectsDir}/${a.layout.folder}`, id: a.layout.id, found: a.kind === 'found', placement, linked: placement?.linked === true, flatPath,

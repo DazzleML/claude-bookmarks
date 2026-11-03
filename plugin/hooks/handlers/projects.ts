@@ -5,7 +5,7 @@
 // `relink` (the link script) are the unit's second half.
 import type { ProjectsPorts } from '../engine/ports.ts'
 import type { Lists } from './lists.ts'
-import { readPlacements, resolveLayout, sessionHome } from './lists-layout.ts'
+import { copyTree, readPlacements, resolveLayout, sessionHome } from './lists-layout.ts'
 import { excludePlan, includePlan, registerPlan, renamePlan, whereRows, whereText, type OwnFolder } from '../core/projects/project-ops.ts'
 import { foldersWithId, parseProjectFile } from '../core/projects/project-file.ts'
 import { linkArgv, linkedAt, linkedPlacement, linkTarget, parseLinkResult } from '../core/projects/link.ts'
@@ -15,7 +15,7 @@ import { isUnderPath, listsFolderOf, membershipOf, normPath, resolveFolderArg, t
 
 const slash = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
 const iso = (ms: number) => new Date(ms).toISOString()
-export const PROJECT_USAGE = '/bm-project: where | register [name] [--yes] | rename <name> | exclude <folder> | include <folder> | home [<project> | --clear] | link [--dry-run] | relink <path>'
+export const PROJECT_USAGE = '/bm-project: where | register [name] [--yes] | rename <name> | exclude <folder> | include <folder> | home [<project> | --clear] | link [--dry-run] | relink <path> | unlink'
 const ID_IN_NAME = /__([a-z2-7]{8})__/
 
 /** The `cwd` a lists file records, read raw (no format gate). */
@@ -109,7 +109,7 @@ export async function projectsCommand(ports: ProjectsPorts, lists: Lists, args: 
     lists.newConversation()
     const name = names.get(placement.id) ?? placement.id
     ports.say(verb === 'exclude'
-      ? `[bm] excluded ${f} from #${placement.n} ${name}: it is its own project now; any lists it had inside ${name} stay there, unread, until it is included again`
+      ? `[bm] excluded ${f} from #${placement.n} ${name}: it is in no registered project now (nothing is registered for it; it keeps lists of its own only if you make some there); any lists it had inside ${name} stay there, unread, until it is included again`
       : `[bm] included ${f} in #${placement.n} ${name} again: its lists inside ${name} are read from there`)
     await ports.redraw()
     return
@@ -210,6 +210,23 @@ export async function projectsCommand(ports: ProjectsPorts, lists: Lists, args: 
     await ports.redraw()
     return
   }
-  if (verb === 'unlink') return ports.say('[bm] /bm-project unlink comes with the next build')
+  if (verb === 'unlink') {
+    // A copy back, a mark and a recipe (the registry design's 18:4x ruling): nothing is removed here.
+    const m = membershipOf(cwdReal, placements)
+    const placement = m ? placements.find(p => p.id === m.id) : undefined
+    if (!placement) return ports.say('[bm] /bm-project unlink is for a registered project')
+    const folder = foldersWithId(folders, placement.id)[0]
+    const source = folder ? `${root}/bookmarks/projects/${folder}` : ''
+    if (!folder || !(await ports.fsStatLink(source))?.isLink) return ports.say(`[bm] not unlinked: #${placement.n}'s data folder is not linked into a vault${placement.linked ? ' (the placement said it was; nothing changed)' : ''}`)
+    const stamp = iso(await ports.now()).replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z')
+    const copy = `${source}.__unlinked-${stamp}`
+    const n = await copyTree(ports, source, copy)
+    const placementNow: Placement = { ...placement, linked: false, updated_at: iso(await ports.now()) }
+    await ports.fsWrite(placementPath(`${root}/projects`, await ports.machine(), await ports.user(), placement.id), serializePlacement(placementNow))
+    ports.say(`[bm] unlinked #${placement.n} ${names.get(placement.id) ?? placement.id}: ${n} files copied out of the vault to ${copy}; the lists still read the vault through the link until it is removed`)
+    ports.say(`[bm]   to finish: dz safedel "${source}" removes the link and keeps the vault's files; the next draw then copies the vault's current files back into ${source} (the copy above is kept as it is)`)
+    await ports.redraw()
+    return
+  }
   ports.say(`[bm] ${PROJECT_USAGE}`)
 }

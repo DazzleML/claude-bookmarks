@@ -248,6 +248,35 @@ test('/bm-project home #1 sets the session home in its bookmark file; where show
 // a test: $.process.run is the harness's stub here, which records each argv and answers for it.
 const REGISTERED = () => ({ ...own(), 'C:/test-project/.git/HEAD': 'ref: refs/heads/dev\n' })
 
+// 0.8.17: unlink copies the vault's files back beside the link, marks the project unlinked, and says
+// how to finish; once the link is gone, the next draw copies the vault's current files into place.
+test('/bm-project unlink copies the vault back beside the link, marks the project unlinked and leaves the link', async ($, on) => {
+  if (LISTS_VERSION < 3) return
+  const w = world(on, { session: SID, files: { ...registered(true), ...split(TARGET) }, links: { [FOLDER]: { realPath: TARGET } }, stat: true })
+  const before = Object.keys(w.files).filter(k => k.replace(/\\/g, '/').startsWith(TARGET)).length
+  await ($ as Engine).command.run({ command: 'bm-project', args: 'unlink' })
+  const copied = Object.keys(w.files).filter(k => /__unlinked-\d{8}T\d{6}Z[\\/]/.test(k))
+  expect(copied.length).toBe(before)
+  expect(copied.some(k => /project\.json$/.test(k))).toBe(true)
+  expect(JSON.parse(w.files[key(w, new RegExp(`/claude/projects/${MACHINE}/${USER}/${ID}\\.json$`))!]!).linked).toBe(false)
+  expect(w.logs().some(l => l.includes('to finish: dz safedel'))).toBe(true)
+  // The link is still there and still read: the pane draws the vault's lists.
+  expect(await draw($)).toContain('the epic')
+})
+
+test('after an unlink, with the link removed, the next draw copies the vault\'s current files into place', async ($, on) => {
+  if (LISTS_VERSION < 3) return
+  const unlinked = registered(true)
+  const pk = `${ROOT}/projects/${MACHINE}/${USER}/${ID}.json`
+  unlinked[pk] = unlinked[pk]!.replace('"linked": true', '"linked": false')
+  const w = world(on, { session: SID, files: { ...unlinked, ...split(TARGET) }, stat: true })
+  expect(await draw($)).toContain('the epic')
+  expect(key(w, new RegExp(`/bookmarks/projects/test-project__${ID}__${USER}/project\\.json$`))).toBeDefined()
+  expect(key(w, new RegExp(`/bookmarks/projects/test-project__${ID}__${USER}/lists/_root/lists\\.json$`))).toBeDefined()
+  // The vault's files are left as they were.
+  expect(key(w, /\/private\/claude\/bookmarks\/project\.json$/)).toBeDefined()
+})
+
 test('/bm-project link with the vault option off runs nothing and says so', { options: { projectVault: false } }, async ($, on) => {
   if (LISTS_VERSION < 3) return
   const runs: (readonly string[])[] = []

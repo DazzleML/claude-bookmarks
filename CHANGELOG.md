@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.17] - 2026-11-03
+
+### Added
+
+- `/bm-project unlink` takes a linked project's lists and bundles back out of its vault without removing anything. It copies the vault's files back beside the link, marks the project unlinked, and tells you how to finish: remove the link with `dz safedel`, which keeps the vault's files. Once the link is gone, the next time the lists are drawn the vault's current files are copied back into place, so nothing written after the unlink is lost.
+
+### Changed
+
+- `/bm-project exclude` now says plainly that an excluded folder is in no registered project and nothing is registered for it.
+
 ## [0.8.16] - 2026-11-03
 
 ### Added
@@ -26,7 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- `/bm-project exclude <folder>` takes a folder beneath a project out of it. The folder becomes its own project, and any lists it had inside the project stay there, unread, until `/bm-project include <folder>` puts it back. `/bm-project` lists each project's excluded folders. A relative folder is read from the folder you are in.
+- `/bm-project exclude <folder>` takes a folder beneath a project out of it. Nothing is registered for it: like any folder outside a registered project, it keeps lists of its own only if you make some there. Any lists it had inside the project stay there, unread, until `/bm-project include <folder>` puts it back. `/bm-project` lists each project's excluded folders. A relative folder is read from the folder you are in.
 
 ## [0.8.13] - 2026-11-03
 
@@ -1782,7 +1792,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.16...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.17...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29
