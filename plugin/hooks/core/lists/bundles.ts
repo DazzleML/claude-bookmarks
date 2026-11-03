@@ -96,7 +96,8 @@ function bundleItem(f: ListsFile, list: List, item: ListItem, now: number, ownKe
   const own = all.filter(l => ownKeys.has(linkKey(l)))
   const links = all.filter(l => !ownKeys.has(linkKey(l)))
   const bundle: Bundle = { id: freshBundleId(f), label: item.label, ...(item.why ? { why: item.why } : {}), links, by: item.by, createdAt: now, updatedAt: now }
-  const changed: ListItem = { ...item, bundle: bundle.id, ...(all[0] ? { face: linkKey(all[0]) } : {}), links: all, ...(own.length ? { own } : {}) }
+  // The face defaults to the bundle's first link, never to a link just kept as the item's own (the Director's rule 2, 2026-11-03).
+  const changed: ListItem = { ...item, bundle: bundle.id, ...(links[0] ? { face: linkKey(links[0]) } : {}), links: all, ...(own.length ? { own } : {}) }
   return { file: withBundle(withItem(f, list.id, changed), bundle), item: changed, bundle }
 }
 

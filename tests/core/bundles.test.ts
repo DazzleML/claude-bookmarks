@@ -132,6 +132,10 @@ test('bundle with own: the named links stay the item\'s own beside the bundle; e
   assert.deepEqual(i.own, [NOTE])
   assert.deepEqual(i.links, [ISSUE, DWP, NOTE], 'a reader that knows nothing of own still sees every link')
   assert.equal(i.face, linkKey(ISSUE))
+  // When the item's first link is the one kept as its own, the face is still the bundle's first link.
+  const g = item(step(legacy(), { op: 'bundle', list: 'work', item: 'i1', own: [linkKey(ISSUE)] }), 'work')
+  assert.equal(g.face, linkKey(DWP))
+  assert.deepEqual(g.links, [DWP, NOTE, ISSUE], 'the face, the rest of the bundle, then the own link')
 })
 
 test("an item's own links survive another operation, a save and a load", () => {

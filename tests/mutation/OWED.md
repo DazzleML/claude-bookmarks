@@ -51,6 +51,7 @@ When a sweep is run, add its report beside the others (`vX.Y.Z__sweep__<slug>.md
 | [ ] | 0.8.6 | 297adb6 | the bundle file: regions, end line, write-back (red-green: 10 mutants, all killed; `tests/one-offs/thinking/redgreen-unit3-bundle-file/run.mjs`) |
 | [ ] | 0.8.7 | 13821c1 | unit 5's pure layer: layout, split, link state, write verdict, the 2->3 guard (red-green: 7 mutants, all killed; `tests/one-offs/thinking/redgreen-unit5-pure/run.mjs`) |
 | [ ] | 0.8.8 | c9230d3 | unit 5's live switch: the format-3 layer (`handlers/lists-layout.ts`) and the handler wiring (red-green: 16 mutants on core and 6 through the kit at version 3, all killed; `tests/one-offs/thinking/redgreen-unit5-layer/run.mjs`, `v3-trial/run.mjs --mutant`). The mtime re-check before a bundle-file write is not a sweep: it is the design's retry rule for two writers a tick apart, built in unit 6b or 8 (the Director's ruling, 2026-11-03) |
-| [ ] | 0.8.9 | (this commit) | unit 5b, an item's own links beside its bundle (red-green: 8 mutants, all killed after one test strengthened; `tests/one-offs/thinking/redgreen-unit5b-own/run.mjs`) |
+| [ ] | 0.8.9 | acc12ec | unit 5b, an item's own links beside its bundle (red-green: 8 mutants, all killed after one test strengthened; `tests/one-offs/thinking/redgreen-unit5b-own/run.mjs`) |
+| [ ] | 0.8.10 | (this commit) | a new bundle's face defaults to the bundle's first link (red-green: the old default turns the new assertion red, on a scratch copy) |
 
 Not listed: 0.7.29 (59eb80d) and 0.7.32 (bf66372) add tests only; docs and build commits.
