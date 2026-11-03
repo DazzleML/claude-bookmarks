@@ -51,6 +51,29 @@ A link is not a kind of place; it is one of the things an item on a list points 
 
 So a link to a place and a bookmark can name the same message, and that is fine: the bookmark says *"I kept this"*, the link says *"this belongs with these other things"*. Linking a place does not make a bookmark, and bookmarking a place does not put it on a list.
 
+## How one piece belongs to another
+
+Several pieces belong to others: a link to a bundle, a bundle to a list, a link to one list's item beside its bundle, a folder to a project, and one project to another that uses it. Each of these memberships has a state, the same five steps on the same continuum, whichever pieces it joins:
+
+| State | Means |
+|---|---|
+| **grouped** | it belongs |
+| **tentative, toward grouped** | it is close to belonging: being attached, or starting to come away |
+| **neutral** | no connection yet: nobody has said whether it belongs or how to handle it |
+| **tentative, toward ungrouped** | it is close to not belonging: being let go, or starting to come back |
+| **ungrouped** | it does not belong, and the plugin remembers that it once did |
+
+Whether a tentative piece is coming or going is kept beside its state, because the state says where it is and not which way it is moving. A membership with no state written is grouped, so files from earlier versions need no change.
+
+Each kind of membership is its own continuum: a folder's neutral and a link's neutral are not compared. Folders inside a registered project belong to it; a registered project inside another one starts neutral toward it, so nothing is shared by accident. A tentative link stays on the item of the list that added it until it is confirmed into its bundle. Meanwhile the bundle notes that a link is pending, so another list showing the bundle can see it and act on it.
+
+The plugin does not write these states yet; they come with the project registry and the lists tools that use them. For developers, the names reserved in the files are:
+- in a bundle file's links: `state`, `dir`, `since`, `by`;
+- on a list item: `bundleState`, `hidden`, `shown`;
+- in a bundle's index entry: `pending`;
+- in a project's identity file: `projects`, a project's relations to others by id;
+- in a conversation's bookmark file: `home`, the project a session works on whatever folder it runs in.
+
 ## Which one do I want?
 
 | You want to | Use |

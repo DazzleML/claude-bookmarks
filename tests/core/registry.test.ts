@@ -12,7 +12,7 @@ import {
 } from '../../plugin/hooks/core/projects/placement.ts'
 import {
   ID_PATTERN, identityOf, identityPath, importIdentity, lookupProject, mintId, newIdentity, parseIdentity, projectFileOf, reconcile, renamed,
-  serializeIdentity, withMembers, type Identity,
+  serializeIdentity, mergeEdges, withEdge, type Identity,
 } from '../../plugin/hooks/core/projects/registry.ts'
 import { fnv1a64 } from '../../plugin/hooks/core/bookmarks/migrations.ts'
 
@@ -117,7 +117,7 @@ test("a folder whose project.json names another id is the wrong folder; an empty
 // --- the two halves rebuild each other (arms 2 and 3, and the control) --------------------------
 
 test('a lost identity file is rebuilt from project.json byte for byte, and the reverse', () => {
-  const identity = withMembers(CB, ['C:/code/dazzle-claude-plugins'], T1)
+  const identity = withEdge(CB, { id: 'dzlbdzlb', as: 'uses' }, T1)
   const idText = serializeIdentity(identity), pjText = serializeProjectFile(projectFileOf(identity))
   const pj = parseProjectFile(pjText)
   assert.equal(pj.kind, 'ok')
@@ -143,16 +143,79 @@ test('keys a later build wrote into the identity file are kept as they were', ()
 
 // --- reconcile: per-field stamps, mirror only when newer ------------------------------------------
 
-test('a name edit and a members edit made apart, one in each half, both survive', () => {
+test('a name edit and a relation added apart, one in each half, both survive', () => {
   const entry = renamed(CB, 'bookmarks-plugin', T1)
-  const file = withMembers(projectFileOf(CB), ['C:/code/dazzle-claude-plugins'], T2)
+  const file = withEdge(projectFileOf(CB), { id: 'dzlbdzlb', as: 'uses' }, T2)
   const r = reconcile(entry, file)
   assert.equal(r.identity.name, 'bookmarks-plugin')
-  assert.deepEqual(r.identity.members, ['C:/code/dazzle-claude-plugins'])
-  assert.deepEqual(r.identity.stamps, { name: T1, members: T2 })
+  assert.deepEqual(r.identity.projects, [{ id: 'dzlbdzlb', as: 'uses', since: T2 }])
+  assert.deepEqual(r.identity.stamps, { name: T1 })
   assert.equal(r.writeIdentity, true)
   assert.equal(r.writeProjectFile, true)
   assert.equal(serializeProjectFile(r.projectFile), serializeProjectFile(projectFileOf(r.identity)))
+})
+
+// --- relations between projects (the registry design's 14:50 addendum; the umbrella consultation's
+// prototype, tests/one-offs/thinking/discuss-edge-state-2026-11-03/) --------------------------------
+
+test('two machines add different relations apart: after syncing both ways, both keep all of them', () => {
+  const T3 = '2026-11-02T22:30:00Z', T4 = '2026-11-02T22:40:00Z'
+  const plzwork = withEdge(withEdge(CB, { id: 'bbbbbbbb' }, T1), { id: 'cccccccc' }, T4)
+  const badbox = withEdge(CB, { id: 'dddddddd' }, T3)
+  const a = importIdentity([plzwork], badbox), b = importIdentity([badbox], plzwork)
+  const ids = (r: typeof a) => (r.kind === 'same' ? (r.reconciled.projects ?? []).map(e => e.id).sort() : [])
+  assert.deepEqual(ids(a), ['bbbbbbbb', 'cccccccc', 'dddddddd'])
+  assert.deepEqual(ids(b), ids(a))
+})
+
+test('a removal is the ungrouped rank, and it beats an older copy that still holds the relation', () => {
+  const kept = withEdge(CB, { id: 'bbbbbbbb' }, T1)
+  const removed = withEdge(CB, { id: 'bbbbbbbb', state: -2 }, T2)
+  assert.deepEqual(mergeEdges(kept.projects, removed.projects), [{ id: 'bbbbbbbb', state: -2, since: T2 }])
+  assert.deepEqual(mergeEdges(removed.projects, kept.projects), [{ id: 'bbbbbbbb', state: -2, since: T2 }])
+})
+
+test('a relation survives a rename of either project, a rebuild from project.json, and the other project being deleted', () => {
+  const a = withEdge(CB, { id: 'bbbbbbbb', as: 'uses' }, T1)
+  assert.deepEqual(renamed(a, 'bookmarks-plugin', T2).projects, a.projects)
+  assert.deepEqual(identityOf(projectFileOf(a)).projects, a.projects)
+  assert.equal(lookupProject([a], 'bbbbbbbb'), 'unregistered') // B gone: the edge dangles, it is not lost
+  assert.deepEqual(a.projects?.map(e => e.id), ['bbbbbbbb'])
+})
+
+test('a relation written under a key the build does not know is kept as it was, never read as a relation', () => {
+  const text = JSON.stringify({ ...JSON.parse(serializeIdentity(CB)), related: [{ id: 'bbbbbbbb' }] }, null, 2) + '\n'
+  const r = parseIdentity(text)
+  assert.equal(r.kind, 'ok')
+  const id = (r as { value: Identity }).value
+  assert.equal(id.projects, undefined)
+  assert.deepEqual(id.extra, { related: [{ id: 'bbbbbbbb' }] })
+  assert.equal(projectFileOf(id).projects, undefined)
+})
+
+test('a relation added by hand with no since is kept and mirrored', () => {
+  const hand: Identity = { ...CB, projects: [{ id: 'eeeeeeee' }] }
+  const r = reconcile(hand, projectFileOf(CB))
+  assert.deepEqual(r.identity.projects, [{ id: 'eeeeeeee' }])
+  assert.equal(r.writeProjectFile, true)
+})
+
+test('a relation with a rank outside -2..2, or a direction other than 1 or -1, is refused', () => {
+  const base = JSON.parse(serializeIdentity(CB))
+  assert.equal(parseIdentity(JSON.stringify({ ...base, projects: [{ id: 'bbbbbbbb', state: 3 }] })).kind, 'bad')
+  assert.equal(parseIdentity(JSON.stringify({ ...base, projects: [{ id: 'bbbbbbbb', dir: 0 }] })).kind, 'bad')
+  assert.equal(parseIdentity(JSON.stringify({ ...base, projects: [{ id: 'bbbbbbbb', state: -1, dir: -1 }] })).kind, 'ok')
+})
+
+test('a project with no relations writes no projects key; an older file with the empty members reads and drops it', () => {
+  assert.equal('projects' in JSON.parse(serializeIdentity(CB)), false)
+  const older = JSON.stringify({ version: 1, id: CB.id, name: CB.name, user: 'Extreme', created_at: T0, members: [], stamps: { name: T0, members: T0 } }, null, 2) + '\n'
+  const pj = parseProjectFile(older)
+  assert.equal(pj.kind, 'ok')
+  assert.equal(serializeProjectFile((pj as { value: ProjectFile }).value), serializeProjectFile(projectFileOf(CB)))
+  const id = parseIdentity(older)
+  assert.equal(id.kind, 'ok')
+  assert.equal(serializeIdentity((id as { value: Identity }).value), serializeIdentity(CB)) // not kept as an extra key
 })
 
 test('the mirror is written only when the entry is newer: two equal halves write nothing', () => {

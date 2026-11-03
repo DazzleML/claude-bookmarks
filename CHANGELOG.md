@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.12] - 2026-11-03
+
+### Changed
+
+- A project can now record which other projects it relates to (for example, a project that uses a shared library). The relation is stored once, in the project's identity file, by the other project's id, so renaming either project keeps it. Two machines that each add a relation keep both when their files meet, and removing one is recorded rather than forgotten. The commands that set relations come later; this release settles the format.
+- The project identity no longer carries a list of member folders. It was always empty, and folder paths belong to each machine's own record, never to a file shared between machines. Existing files read as before.
+
+### Added
+
+- The data model page explains how one piece belongs to another: grouped, tentative toward grouped, neutral (no connection yet), tentative toward ungrouped, or ungrouped.
+
 ## [0.8.11] - 2026-11-03
 
 ### Added
@@ -1743,7 +1754,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.11...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.12...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

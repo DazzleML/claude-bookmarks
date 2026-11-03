@@ -5,11 +5,24 @@
 // project's: a folder is found by the id in its name and confirmed by the id in this file, never by
 // its name alone (a rename's stub keeps the old name and holds `moved-to.json` instead).
 import { fileSafe } from '../lists/lists.ts'
+import { isEdgeDir, isEdgeRank, type EdgeDir, type EdgeRank } from '../kit/edge-state.ts'
 
 export const PROJECT_FILE_VERSION = 1
 
-/** The stamp of each reconciled field: when it last changed, ISO. */
-export type Stamps = { name: string; members: string }
+/**
+ * The stamp of each reconciled field: when it last changed, ISO. `projects` has none: each edge's own
+ * `since` is its stamp (a list-level stamp lost an edge when two machines added different ones apart,
+ * the umbrella consultation's prototype, 2026-11-03). `members` was dropped in 0.8.12: it was always
+ * empty, nothing read it, and machine paths belong in the placement, never in a synced file.
+ */
+export type Stamps = { name: string }
+
+/**
+ * A relation to another project, stored once at the project that asserts it, by id (ids never change,
+ * so a rename at either end breaks nothing). The other end reads it by a scan. A removal is the
+ * ungrouped rank, never an absence: an absent edge is never a deletion.
+ */
+export type ProjectEdge = { id: string; state?: EdgeRank; dir?: EdgeDir; since?: string; by?: string; as?: string }
 
 export type ProjectFile = {
   version: number
@@ -18,16 +31,32 @@ export type ProjectFile = {
   /** The OS account the folder belongs to (the `<user>` of the folder name). */
   user: string
   created_at: string
-  /** Member folders outside any root, by real path. */
-  members: string[]
+  /** The projects this one relates to (the umbrella); absent when it relates to none. */
+  projects?: ProjectEdge[]
   stamps: Stamps
 }
 
 export type Parsed<T> = { kind: 'ok'; value: T } | { kind: 'newer'; version: number } | { kind: 'bad'; why: string }
 
 const isText = (v: unknown): v is string => typeof v === 'string' && v.length > 0
-const isStamps = (v: unknown): v is Stamps => !!v && typeof v === 'object' && isText((v as Stamps).name) && isText((v as Stamps).members)
-const isMembers = (v: unknown): v is string[] => Array.isArray(v) && v.every(m => typeof m === 'string')
+const isStamps = (v: unknown): v is Stamps => !!v && typeof v === 'object' && isText((v as Stamps).name)
+const isEdge = (v: unknown): v is ProjectEdge => {
+  if (!v || typeof v !== 'object') return false
+  const e = v as Record<string, unknown>
+  return isText(e.id)
+    && (e.state === undefined || isEdgeRank(e.state))
+    && (e.dir === undefined || isEdgeDir(e.dir))
+    && (e.since === undefined || isText(e.since))
+    && (e.by === undefined || isText(e.by))
+    && (e.as === undefined || isText(e.as))
+}
+/** A list of relation edges, each with an id and, where present, a rank, a direction and text fields. */
+export const isProjects = (v: unknown): v is ProjectEdge[] => Array.isArray(v) && v.every(isEdge)
+/** The stamps as written: the reconciled fields only (an older file's `members` stamp is not carried). */
+export const stampsOf = (s: Stamps): Stamps => ({ name: s.name })
+/** The edges as written: absent when there are none, so a file with no relations is unchanged. */
+export const projectsOf = (p: { projects?: readonly ProjectEdge[] }): { projects?: ProjectEdge[] } =>
+  p.projects && p.projects.length ? { projects: p.projects.map(e => ({ ...e })) } : {}
 
 /** Reads a JSON object with a numeric `version`, refusing a newer one (so it is never written over). */
 export function parseVersioned(text: string, current: number): Parsed<Record<string, unknown>> {
@@ -49,15 +78,16 @@ export function parseProjectFile(text: string): Parsed<ProjectFile> {
   if (r.kind !== 'ok') return r
   const o = r.value
   if (!isText(o.id) || !isText(o.name) || !isText(o.user) || !isText(o.created_at)) return { kind: 'bad', why: 'id, name, user or created_at missing' }
-  if (!isMembers(o.members)) return { kind: 'bad', why: 'members is not a list of paths' }
+  if (o.projects !== undefined && !isProjects(o.projects)) return { kind: 'bad', why: 'projects is not a list of edges with an id' }
   if (!isStamps(o.stamps)) return { kind: 'bad', why: 'stamps missing' }
-  return { kind: 'ok', value: { version: o.version as number, id: o.id, name: o.name, user: o.user, created_at: o.created_at, members: o.members, stamps: o.stamps } }
+  // An older file's `members` (always empty) is read past and not written back.
+  return { kind: 'ok', value: { version: o.version as number, id: o.id, name: o.name, user: o.user, created_at: o.created_at, ...projectsOf(o as { projects?: ProjectEdge[] }), stamps: stampsOf(o.stamps) } }
 }
 
 /** The file's text, keys in one order, so a rebuild is byte-equal to what it replaces. */
 export function serializeProjectFile(p: ProjectFile): string {
-  const { version, id, name, user, created_at, members, stamps } = p
-  return JSON.stringify({ version, id, name, user, created_at, members, stamps: { name: stamps.name, members: stamps.members } }, null, 2) + '\n'
+  const { version, id, name, user, created_at, stamps } = p
+  return JSON.stringify({ version, id, name, user, created_at, ...projectsOf(p), stamps: stampsOf(stamps) }, null, 2) + '\n'
 }
 
 /** The project's data folder name: the readable concept, the id references carry, the account. */
