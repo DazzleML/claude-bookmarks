@@ -1,9 +1,10 @@
-// The /bm-project operations (0.8.x unit 6b): register adopts an own folder's id or mints one and
-// refuses umbrellas; where lists every project with its ordinal and warns about a linked cwd or a
-// gone root; rename changes one field and leaves the folder's name. Pure.
+// The /bm-project operations (0.8.x unit 6b, 0.8.14): register adopts an own folder's id or mints one,
+// and asks first for a wide root (a dry run; --yes registers); exclude and include change a
+// project's scope; where lists every project with its ordinal and exclusions and warns about a
+// linked cwd or a gone root; rename changes one field and leaves the folder's name. Pure.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { registerPlan, renamePlan, whereRows, whereText } from '../../plugin/hooks/core/projects/project-ops.ts'
+import { excludePlan, includePlan, registerPlan, renamePlan, whereRows, whereText } from '../../plugin/hooks/core/projects/project-ops.ts'
 import { newIdentity, parseIdentity, projectFileOf } from '../../plugin/hooks/core/projects/registry.ts'
 import { parsePlacement, type Placement } from '../../plugin/hooks/core/projects/placement.ts'
 import { parseProjectFile } from '../../plugin/hooks/core/projects/project-file.ts'
@@ -47,17 +48,68 @@ test('registering with a new name renames the adopted identity and mirrors it in
   assert.ok(pj && parseProjectFile(pj.text).kind === 'ok')
 })
 
-test('a folder with no project folder yet gets a minted id; an umbrella is refused; a registered root says so', () => {
+test('a folder with no project folder yet gets a minted id; a wide root asks first; a registered root says so', () => {
   const minted = registerPlan({ ...base, cwdReal: 'C:/code/ck3-save-migrator' })
   assert.ok(minted.kind === 'register' && !minted.adopted && /^[a-z2-7]{8}$/.test(minted.id))
-  assert.equal(registerPlan({ ...base, cwdReal: 'C:/Users/Extreme' }).kind, 'refused')
-  assert.equal(registerPlan({ ...base, cwdReal: 'C:/tmp/plain', facts: { home: 'C:/Users/Extreme', hasGit: false, hasRepokit: false } }).kind, 'refused')
+  assert.equal(registerPlan({ ...base, cwdReal: 'C:/Users/Extreme' }).kind, 'confirm')
+  assert.equal(registerPlan({ ...base, cwdReal: 'C:/tmp/plain', facts: { home: 'C:/Users/Extreme', hasGit: false, hasRepokit: false } }).kind, 'confirm')
   if (minted.kind !== 'register') return
   const again = registerPlan({ ...base, cwdReal: 'c:\\code\\ck3-save-migrator\\', placements: [minted.placement], names: new Map([[minted.id, 'ck3-save-migrator']]) })
   assert.deepEqual([again.kind, again.kind === 'already' && again.name], ['already', 'ck3-save-migrator'])
   // The next one takes the next ordinal.
   const second = registerPlan({ ...base, cwdReal: CB, own: OWN, placements: [minted.placement] })
   assert.equal(second.kind === 'register' && second.placement.n, 2)
+})
+
+// --- wide roots (0.8.14; the registry design's 13:41 addendum: no location is refused, and the
+// scope changes over time) -------------------------------------------------------------------------
+
+test('a wide root without --yes is a dry run: no writes, the reason, what would join and what stays its own', () => {
+  const inner: Placement = { version: 1, id: 'q4b8ztab', root: 'C:/Users/Extreme/code/tool', members: [], exclude: [], linked: false, n: 1, updated_at: NOW }
+  const r = registerPlan({
+    ...base, cwdReal: 'C:/Users/Extreme', placements: [inner], names: new Map([['q4b8ztab', 'tool']]),
+    ownBeneath: ['C:/Users/Extreme/notes', 'C:/elsewhere/x', 'C:/Users/Extreme'],
+  })
+  assert.equal(r.kind, 'confirm')
+  if (r.kind !== 'confirm') return
+  assert.equal(r.why, 'the home folder')
+  assert.deepEqual(r.ownBeneath, ['C:/Users/Extreme/notes']) // the root itself and folders elsewhere are not beneath it
+  assert.deepEqual(r.registeredBeneath, [{ n: 1, name: 'tool', root: 'C:/Users/Extreme/code/tool' }])
+  assert.equal('writes' in r, false)
+})
+
+test('a wide root with --yes registers like any other folder; an unmarked folder too', () => {
+  const home = registerPlan({ ...base, cwdReal: 'C:/Users/Extreme', yes: true })
+  assert.equal(home.kind, 'register')
+  assert.ok(home.kind === 'register' && home.writes.length === 2 && home.placement.exclude.length === 0)
+  const plain = registerPlan({ ...base, cwdReal: 'C:/tmp/plain', facts: { home: 'C:/Users/Extreme', hasGit: false, hasRepokit: false }, yes: true })
+  assert.equal(plain.kind, 'register')
+})
+
+test('exclude takes a folder out of its project and include puts it back; only the placement is written', () => {
+  const p: Placement = { version: 1, id: 'homehome', root: 'C:/Users/Extreme', members: [], exclude: [], linked: false, n: 1, updated_at: NOW }
+  const o = { dataRoot: ROOT, machine: 'PLZWORK', user: 'Extreme', now: '2026-11-03T13:00:00Z' }
+  const ex = excludePlan({ ...o, placement: p, folderReal: 'C:\\Users\\Extreme\\Downloads\\' })
+  assert.ok(!('error' in ex))
+  if ('error' in ex) return
+  assert.deepEqual(ex.placement.exclude, ['C:/Users/Extreme/Downloads'])
+  assert.equal(ex.placement.updated_at, '2026-11-03T13:00:00Z')
+  assert.deepEqual(ex.writes.map(w => w.path), [`${ROOT}/projects/PLZWORK/Extreme/homehome.json`])
+  assert.deepEqual(parsePlacement(ex.writes[0]!.text).kind === 'ok' && (parsePlacement(ex.writes[0]!.text) as { value: Placement }).value.exclude, ['C:/Users/Extreme/Downloads'])
+  assert.match((excludePlan({ ...o, placement: ex.placement, folderReal: 'c:/users/extreme/downloads' }) as { error: string }).error, /already excluded/)
+  assert.match((excludePlan({ ...o, placement: p, folderReal: 'C:/Users/Extreme' }) as { error: string }).error, /root/)
+  assert.match((excludePlan({ ...o, placement: p, folderReal: 'D:/other' }) as { error: string }).error, /not inside/)
+  const inc = includePlan({ ...o, placement: ex.placement, folderReal: 'C:/Users/Extreme/Downloads' })
+  assert.ok(!('error' in inc) && inc.placement.exclude.length === 0)
+  assert.match((includePlan({ ...o, placement: p, folderReal: 'C:/Users/Extreme/Downloads' }) as { error: string }).error, /not excluded/)
+})
+
+test('where lists each exclusion, and says when an excluded folder\'s lists are still inside the project', () => {
+  const p: Placement = { version: 1, id: 'homehome', root: 'C:/Users/Extreme', members: [], exclude: ['C:/Users/Extreme/Downloads', 'C:/Users/Extreme/tmp'], linked: false, n: 1, updated_at: NOW }
+  const r = whereRows({ placements: [p], names: new Map([['homehome', 'home']]), folders: [], cwd: 'C:/Users/Extreme', cwdReal: 'C:/Users/Extreme', rootsMissing: new Set(), leftBehind: new Map([['homehome', ['c:/users/extreme/tmp']]]) })
+  const text = whereText(r)
+  assert.ok(text.includes('    excluded: C:/Users/Extreme/Downloads'))
+  assert.ok(text.some(l => l.startsWith('    excluded: C:/Users/Extreme/tmp (its lists from before are still inside the project')))
 })
 
 test('where: every project by ordinal, this one marked; a linked cwd and a gone root are warned of', () => {

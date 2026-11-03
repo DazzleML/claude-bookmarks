@@ -199,6 +199,30 @@ test("/bm-project register keeps the id of the folder's own project folder; /bm-
   expect(await draw($)).toContain('the epic')
 })
 
+// 0.8.14 (the registry design's 13:41 addendum): no location is refused. A folder without markers
+// is registered only after a dry run that writes nothing; --yes registers; a subfolder can then be
+// excluded, and where says so.
+test('/bm-project register on a folder without .git or .repokit.json is a dry run; --yes registers; exclude, then where lists it', async ($, on) => {
+  if (LISTS_VERSION < 3) return
+  const w = world(on, { session: SID, files: own(), stat: true })
+  const before = Object.keys(w.files).length
+  await ($ as Engine).command.run({ command: 'bm-project', args: 'register' })
+  expect(w.logs().some(l => l.includes('not registered yet') && l.includes('neither .git nor .repokit.json'))).toBe(true)
+  expect(w.logs().some(l => l.includes('register --yes'))).toBe(true)
+  expect(Object.keys(w.files).length).toBe(before)
+  expect(key(w, new RegExp(`/claude/projects/${ID}\\.json$`))).toBeUndefined()
+  await ($ as Engine).command.run({ command: 'bm-project', args: 'register --yes' })
+  expect(key(w, new RegExp(`/claude/projects/${ID}\\.json$`))).toBeDefined()
+  expect(w.logs().some(l => l.includes(`registered #1 test-project (${ID})`))).toBe(true)
+  await ($ as Engine).command.run({ command: 'bm-project', args: 'exclude scratch' })
+  const placement = w.files[key(w, new RegExp(`/claude/projects/${MACHINE}/${USER}/${ID}\\.json$`))!]!
+  expect(JSON.parse(placement).exclude).toEqual(['C:/test-project/scratch'])
+  await ($ as Engine).command.run({ command: 'bm-project', args: 'where' })
+  expect(w.logs().some(l => l.includes('excluded: C:/test-project/scratch'))).toBe(true)
+  await ($ as Engine).command.run({ command: 'bm-project', args: 'include scratch' })
+  expect(JSON.parse(w.files[key(w, new RegExp(`/claude/projects/${MACHINE}/${USER}/${ID}\\.json$`))!]!).exclude).toEqual([])
+})
+
 test('a bundle file whose block does not parse refuses writes to that bundle and names the file in a toast, once', async ($, on) => {
   if (LISTS_VERSION < 3) return
   const broken = (t: string) => t.replace('```bm-links\n{', '```bm-links\n{not json')

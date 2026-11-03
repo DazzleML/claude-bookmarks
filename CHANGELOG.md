@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.14] - 2026-11-03
+
+### Changed
+
+- `/bm-project register` no longer refuses your home folder, a drive root, or a folder that is neither a repository nor has `.repokit.json`. For those it first shows what the project would take in: the folders beneath it that have lists of their own today, and the registered projects beneath it, which stay their own. It registers when you run it again with `--yes`.
+
+### Added
+
+- `/bm-project exclude <folder>` takes a folder beneath a project out of it. The folder becomes its own project, and any lists it had inside the project stay there, unread, until `/bm-project include <folder>` puts it back. `/bm-project` lists each project's excluded folders. A relative folder is read from the folder you are in.
+
 ## [0.8.13] - 2026-11-03
 
 ### Changed
@@ -1760,7 +1770,7 @@ Experimental: the leader works, with known rough edges listed under Known issues
   - probe commands used to verify the mod API: `/bm-ids`, `/bm-jump`, `/bm-pane`, `/bm-marks`, `/bm-sel`, `/bm-timeline`, `/bm-env`.
 - Repo tooling: root `version.py`, `git-repokit-common` subtree, tests that keep `.claude-plugin/plugin.json` in step with `version.py`.
 
-[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.13...HEAD
+[Unreleased]: https://github.com/DazzleML/claude-bookmarks/compare/v0.8.14...HEAD
 [0.4.31]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.30...v0.4.31
 [0.4.30]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.29...v0.4.30
 [0.4.29]: https://github.com/DazzleML/claude-bookmarks/compare/v0.4.28...v0.4.29

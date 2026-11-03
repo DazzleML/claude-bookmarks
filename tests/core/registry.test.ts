@@ -8,7 +8,7 @@ import {
   checkFolder, foldersWithId, parseProjectFile, pickFolder, projectFolderName, serializeProjectFile, type ProjectFile,
 } from '../../plugin/hooks/core/projects/project-file.ts'
 import {
-  listsFolderOf, membershipOf, nextOrdinal, normPath, parsePlacement, placementPath, serializePlacement, umbrellaReason, type Placement,
+  listsFolderOf, membershipOf, nextOrdinal, normPath, parsePlacement, placementPath, serializePlacement, confirmReason, resolveFolderArg, type Placement,
 } from '../../plugin/hooks/core/projects/placement.ts'
 import {
   ID_PATTERN, identityOf, identityPath, importIdentity, lookupProject, mintId, newIdentity, parseIdentity, projectFileOf, reconcile, renamed,
@@ -19,7 +19,7 @@ import { fnv1a64 } from '../../plugin/hooks/core/bookmarks/migrations.ts'
 const T0 = '2026-11-02T22:00:00Z', T1 = '2026-11-02T22:10:00Z', T2 = '2026-11-02T22:20:00Z'
 const CB = newIdentity({ id: 'k7mq2xab', name: 'claude-bookmarks', user: 'Extreme', now: T0 })
 const place = (id: string, root: string, n: number, members: string[] = []): Placement =>
-  ({ version: 1, id, root, members, linked: false, n, updated_at: T0 })
+  ({ version: 1, id, root, members, exclude: [], linked: false, n, updated_at: T0 })
 
 // --- the id ---------------------------------------------------------------------------------
 
@@ -54,6 +54,51 @@ test('a folder under no registered root is its own project folder: no membership
   assert.equal(membershipOf('C:/elsewhere/scratch', [place(CB.id, 'C:/code/claude-bookmarks', 1)]), undefined)
 })
 
+// --- exclusions (0.8.14; the registry design's 13:41 and 15:03 addenda: the folder edge's ungrouped side) ---
+
+test('an excluded folder, and everything beneath it, is no longer the project\'s: it is its own project folder', () => {
+  const home = { ...place('homehome', 'C:/Users/Extreme', 1), exclude: ['C:/Users/Extreme/Downloads'] }
+  assert.equal(membershipOf('C:/Users/Extreme/notes', [home])?.id, 'homehome')
+  assert.equal(membershipOf('C:\\Users\\Extreme\\Downloads', [home]), undefined)
+  assert.equal(membershipOf('c:/users/extreme/downloads/x/y', [home]), undefined)
+  assert.equal(membershipOf('C:/Users/Extreme/DownloadsMore', [home])?.id, 'homehome') // a sibling with the same prefix is not excluded
+})
+
+test('a project registered beneath an excluded path is still itself; another project\'s exclusion cancels only its own claim', () => {
+  const home = { ...place('homehome', 'C:/Users/Extreme', 1), exclude: ['C:/Users/Extreme/code'] }
+  const inner = place('innerinn', 'C:/Users/Extreme/code/tool', 2)
+  assert.equal(membershipOf('C:/Users/Extreme/code/tool/src', [home, inner])?.id, 'innerinn')
+  assert.equal(membershipOf('C:/Users/Extreme/code/other', [home, inner]), undefined)
+  const outer = { ...place('outerout', 'C:/x', 3), exclude: ['C:/x/y/z'] }
+  const mid = place('midmidmi', 'C:/x/y', 4)
+  assert.equal(membershipOf('C:/x/y/z/w', [outer, mid])?.id, 'midmidmi') // outer's exclusion is not mid's
+})
+
+test('an exclusion shallower than the claim it would cancel does not cancel it; removing the exclusion brings the folder back', () => {
+  const p = { ...place('pppppppp', 'C:/a', 1, ['C:/a/b/c']), exclude: ['C:/a/b'] }
+  assert.equal(membershipOf('C:/a/b/c/d', [p])?.via, 'member') // the member is deeper than the exclusion
+  assert.equal(membershipOf('C:/a/b/x', [p]), undefined)
+  assert.equal(membershipOf('C:/a/b/x', [{ ...p, exclude: [] }])?.id, 'pppppppp')
+})
+
+test('a folder named on the command line: relative to the working folder, with . and .. resolved', () => {
+  assert.equal(resolveFolderArg('C:/code/x', '.'), 'C:/code/x')
+  assert.equal(resolveFolderArg('C:/code/x', './scratch/'), 'C:/code/x/scratch')
+  assert.equal(resolveFolderArg('C:/code/x/sub', '../other'), 'C:/code/x/other')
+  assert.equal(resolveFolderArg('C:\\code\\x', 'a\\b'), 'C:/code/x/a/b')
+  assert.equal(resolveFolderArg('C:/code/x', '"D:/elsewhere/y"'), 'D:/elsewhere/y')
+  assert.equal(resolveFolderArg('/home/me/proj', '../../..'), '/')
+})
+
+test('a placement written before exclusions reads as excluding nothing, and writes the empty list', () => {
+  const older = JSON.stringify({ version: 1, id: 'k7mq2xab', root: 'C:/code/x', members: [], linked: false, n: 1, updated_at: T0 })
+  const r = parsePlacement(older)
+  assert.equal(r.kind, 'ok')
+  assert.deepEqual((r as { value: Placement }).value.exclude, [])
+  assert.deepEqual(JSON.parse(serializePlacement((r as { value: Placement }).value)).exclude, [])
+  assert.equal(parsePlacement(JSON.stringify({ ...JSON.parse(older), exclude: [1] })).kind, 'bad')
+})
+
 test("a working folder's lists folder: _root, the path below the root, or a member's base and hash", () => {
   assert.equal(listsFolderOf('C:/code/claude-bookmarks', 'C:\\code\\claude-bookmarks\\', fnv1a64), '_root')
   assert.equal(listsFolderOf('C:/code/claude-bookmarks', 'C:/code/claude-bookmarks/private/claude', fnv1a64), 'private--claude')
@@ -63,13 +108,13 @@ test("a working folder's lists folder: _root, the path below the root, or a memb
   assert.equal(outside, listsFolderOf('C:/code/claude-bookmarks', 'c:\\code\\DAZZLE-claude-plugins', fnv1a64).replace(/^DAZZLE/, 'dazzle'))
 })
 
-test('umbrella vaults are refused, with the reason: the home folder, a drive root, a folder with neither marker', () => {
+test('a wide root or an unmarked folder asks for a confirmation, with the reason: the home folder, a drive root, a folder with neither marker', () => {
   const home = 'C:/Users/Extreme'
-  assert.equal(umbrellaReason('C:\\Users\\Extreme\\', { home, hasGit: true, hasRepokit: false }), 'the home folder')
-  assert.equal(umbrellaReason('C:/', { home, hasGit: true, hasRepokit: false }), 'a drive root')
-  assert.equal(umbrellaReason('C:/code', { home, hasGit: false, hasRepokit: false }), 'neither .git nor .repokit.json')
-  assert.equal(umbrellaReason('C:/code/claude-bookmarks', { home, hasGit: true, hasRepokit: false }), undefined)
-  assert.equal(umbrellaReason('C:/code/new-thing', { home, hasGit: false, hasRepokit: true }), undefined)
+  assert.equal(confirmReason('C:\\Users\\Extreme\\', { home, hasGit: true, hasRepokit: false }), 'the home folder')
+  assert.equal(confirmReason('C:/', { home, hasGit: true, hasRepokit: false }), 'a drive root')
+  assert.equal(confirmReason('C:/code', { home, hasGit: false, hasRepokit: false }), 'neither .git nor .repokit.json')
+  assert.equal(confirmReason('C:/code/claude-bookmarks', { home, hasGit: true, hasRepokit: false }), undefined)
+  assert.equal(confirmReason('C:/code/new-thing', { home, hasGit: false, hasRepokit: true }), undefined)
 })
 
 // --- the placement file and the ordinal -------------------------------------------------------
