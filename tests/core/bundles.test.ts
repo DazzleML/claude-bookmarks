@@ -194,6 +194,17 @@ test('bundle on an item already a bundle moves the named links out to its own; i
   assert.ok(!stranger.ok && /not one of its links/.test(stranger.error))
 })
 
+test("an item showing another project's bundle is left alone by settle and an edit: this file's bundle of the same id is a different one", () => {
+  let f = twoLists()
+  const local = item(f, 'work').bundle!
+  // A Board item naming bundle `local` of another project (bundleProject), its links its own copy.
+  f = { ...f, lists: f.lists.map(l => (l.id === 'board' ? { ...l, next: 2, items: [{ id: 'i1', label: 'theirs', by: 'user', addedAt: 1, bundle: local, bundleProject: 'zzzzzzzz', links: [PLACE] }] } : l)) }
+  const after = step(f, { op: 'done', list: 'work', item: 'i1' })
+  assert.deepEqual(item(after, 'board').links, [PLACE], 'not overwritten with this file\'s bundle')
+  const edited = step(after, { op: 'edit', list: 'board', item: 'i1', links: [PLACE, NOTE] })
+  assert.deepEqual(bundleOf(edited, item(edited, 'work')).links, [ISSUE, DWP, NOTE], 'this file\'s bundle is not touched')
+})
+
 test("today's reader keeps the bundles and the items' fields across a save and a load", () => {
   let f = twoLists()
   f = step(f, { op: 'attach', list: 'board', bundle: item(f, 'work').bundle!, face: linkKey(NOTE) })

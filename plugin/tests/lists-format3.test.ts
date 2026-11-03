@@ -19,7 +19,7 @@ const CWD = 'C:/test-project'
 const USER = 'user', MACHINE = 'machine'
 type Found = { type: string; key?: string; text?: string; props: Record<string, unknown> }
 type Ui = { press: (t: object) => Promise<unknown>; findAll: (q: object) => Promise<Found[]>; unmount: () => Promise<unknown> }
-type Engine = { tool: { call: (i: never) => Promise<unknown> }; ui: { mount: (t: never) => Promise<unknown> } }
+type Engine = { tool: { call: (i: never) => Promise<unknown> }; ui: { mount: (t: never) => Promise<unknown> }; command: { run: (c: object) => Promise<unknown> } }
 const PANE = { plugin: 'bookmarks', surface: 'terminal', component: 'Pane', requestId: 'bm-lists', props: { title: 'Lists', isFocused: false, bodyColumns: 44, placement: 'dock', scroll: { offset: 0, bodyRows: 20 } } }
 const mountPane = async ($: unknown) => (await ($ as Engine).ui.mount(PANE as never)) as Ui
 const texts = async (ui: Ui) => (await ui.findAll({})).filter(e => e.type === 'Text' || e.type === 'Button' || e.type === 'Markdown').map(e => e.type === 'Markdown' ? String(e.props.text) : e.text ?? '').join(' | ')
@@ -179,6 +179,24 @@ test('a bundle file with no end line is read twice and accepted when the second 
   expect(t).toContain('the epic')
   expect(readsOf(w, B1_FILE)).toBe(2)
   expect(w.toasts().length).toBe(0)
+})
+
+// `/bm-project` (0.8.x unit 6b): registering a folder that already has its own project folder keeps
+// that folder's id (the Director's ruling, 2026-11-03), and `where` then names it as #1.
+test("/bm-project register keeps the id of the folder's own project folder; /bm-project then lists it as #1", async ($, on) => {
+  if (LISTS_VERSION < 3) return
+  const w = world(on, { session: SID, files: { ...own(), 'C:/test-project/.git/HEAD': 'ref: refs/heads/dev\n' }, stat: true })
+  await ($ as Engine).command.run({ command: 'bm-project', args: 'register' })
+  const identity = key(w, new RegExp(`/claude/projects/${ID}\\.json$`))
+  expect(identity).toBeDefined()
+  expect(JSON.parse(w.files[identity!]!).id).toBe(ID)
+  expect(key(w, new RegExp(`/claude/projects/${MACHINE}/${USER}/${ID}\\.json$`))).toBeDefined()
+  expect(Object.keys(w.files).filter(k => /[\\/]project\.json$/.test(k)).length).toBe(1)
+  expect(w.logs().some(l => l.includes(`registered #1 test-project (${ID})`) && l.includes('keeping the id'))).toBe(true)
+  await ($ as Engine).command.run({ command: 'bm-project', args: '' })
+  expect(w.logs().some(l => l.includes(`▸ #1 test-project (${ID})`))).toBe(true)
+  // The pane still draws the same lists, now through the registry.
+  expect(await draw($)).toContain('the epic')
 })
 
 test('a bundle file whose block does not parse refuses writes to that bundle and names the file in a toast, once', async ($, on) => {

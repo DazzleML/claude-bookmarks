@@ -144,8 +144,8 @@ export function applyBundleOp(f: ListsFile, op: BundleOp, now: number, findItem:
     const r = bundleItem(f, list, item, now, ownKeys)
     return { ok: true, file: { ...r.file, updatedAt: now }, item: r.item, bundle: r.bundle }
   }
-  // face: any of the item's links, the bundle's or its own.
-  const b = item.bundle ? findBundle(f, item.bundle) : undefined
+  // face: any of the item's links, the bundle's or its own (another project's bundle is not in this set).
+  const b = item.bundle && !item.bundleProject ? findBundle(f, item.bundle) : undefined
   const links = b ? allLinksOf(b, item) : linksOf(item)
   if (!links.some(l => linkKey(l) === op.face)) return { ok: false, error: `that face is not one of the item's links` }
   const changed: ListItem = { ...item, face: op.face, links: faceFirst(links, op.face) }
@@ -161,7 +161,8 @@ export function applyBundleOp(f: ListsFile, op: BundleOp, now: number, findItem:
  * shows it, while the item's own links stay this list's.
  */
 export function editBundled(f: ListsFile, list: string, item: ListItem, links: readonly ItemLink[], now: number, into: 'bundle' | 'item' = 'bundle'): ListsFile {
-  const b = item.bundle ? findBundle(f, item.bundle) : undefined
+  // Another project's bundle is not in this file's set (a `b1` here is a different bundle): never edited through it until unit 8 wires the reference.
+  const b = item.bundle && !item.bundleProject ? findBundle(f, item.bundle) : undefined
   if (!b) return f
   const own = ownOf(b, item)
   const has = (set: readonly ItemLink[]) => (l: ItemLink) => set.some(x => sameLink(x, l))
@@ -195,7 +196,8 @@ export function settle(f: ListsFile, now: number, touched?: { list: string; item
   const lists = file.lists.map(l => {
     let touchedList = false
     const items = l.items.map(i => {
-      const b = i.bundle ? byId.get(i.bundle) : undefined
+      // An item showing another project's bundle is left as it is: this file's bundle of the same id is a different one.
+      const b = i.bundle && !i.bundleProject ? byId.get(i.bundle) : undefined
       if (!b) return i
       // The bundle's links, then this item's own (less any the bundle now holds), the face first.
       const own = ownOf(b, i)

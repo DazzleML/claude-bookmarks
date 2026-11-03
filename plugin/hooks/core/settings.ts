@@ -202,6 +202,28 @@ export const FIELDS = {
     title: 'A click on a link in a list',
     description: "copy: a file, page or issue is copied (ctrl-click opens it); nothing: the clipboard is left alone and each link in an opened item gets a copy button. A place in this conversation is jumped to either way",
   },
+  // A project's data folder and its vault (0.8.x unit 6b; the registry design's 17:50 addendum and
+  // djdarcy's 18:02 gate: the junction point private/claude/bookmarks). `/bm-project link` uses the
+  // first and the third; the second is whether an older lists file moves into its project folder on
+  // its first load, or waits.
+  projectVault: {
+    kind: 'boolean',
+    default: true,
+    title: "Keep a project's lists and bundles in its vault",
+    description: "true: /bm-project link may link a registered project's data folder into its vault, so the vault's notes and searches see the lists and bundle files; false: link does nothing and says so (the data stays under your claude folder)",
+  },
+  autoMigrate: {
+    kind: 'boolean',
+    default: true,
+    title: 'Move older lists into their project folder',
+    description: "true: a folder's lists file from before the project folders is moved into its project folder the first time the plugin loads it (the old file is left as it was); false: it waits, and the pane says so",
+  },
+  junctionPoint: {
+    kind: 'text',
+    default: 'private/claude/bookmarks',
+    title: "Where in a vault a project's data appears",
+    description: "The folder inside a project's vault that /bm-project link makes into a link to the project's data folder, relative to the vault's root (private/claude/bookmarks by default)",
+  },
   // The search pane's rows behind their own fold, as the keys and the debug rows are (djdarcy,
   // 2026-10-26: "Is there a reason we didn't set this up as a proper foldable?").
   searchShown: {

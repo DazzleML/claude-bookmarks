@@ -99,6 +99,8 @@ export class Lists {
     const readable = chk.link === 'ok' ? chk.check === 'ok' || chk.check === 'missing' : chk.link === 'removed' && !r.linked
     if (!readable) return { error: `the lists are not read: ${chk.verdict.why} (${r.folderPath})` }
     if (!(await ports.fsExists(path)) && (await ports.fsExists(r.flatPath))) {
+      // The autoMigrate setting off: the older file waits, and the pane says where it is (0.8.x unit 6b).
+      if (ports.autoMigrate && !ports.autoMigrate()) return { error: `the lists in ${r.flatPath} wait to be moved into their project folder (/config: Move older lists into their project folder)` }
       const m = await migrateFlat(ports, r, await ports.fsRead(r.flatPath))
       if (!m.ok) return { error: m.error }
       ports.toast(`The lists for this folder moved into their project folder: ${r.folderPath}`, 8000)

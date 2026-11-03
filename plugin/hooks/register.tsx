@@ -50,7 +50,7 @@ import { needsRow, toolFoldView } from './views/tool-fold'
 import { ToolFold, callLine, foldsTool, resultObject } from './core/bookmarks/tool-fold'
 import * as search_ from './handlers/search'
 import { configCommand, envCommand, idsCommand, jumpCommand, marksCommand, selCommand, timelineCommand } from './handlers/diagnostics-commands'
-import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LineagePorts, ListsPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PlacesPorts, PromptsPorts, ResolveOutcome, SearchPorts, TranscriptPorts, ViewPorts } from './engine/ports'
+import type { BandPorts, BookmarksPorts, CommandLinePorts, DiagnosticsPorts, EchoPorts, LineagePorts, ListsPorts, LogFilesPorts, LoggerPorts, MarksPorts, NavigationPorts, PlacesPorts, ProjectsPorts, PromptsPorts, ResolveOutcome, SearchPorts, TranscriptPorts, ViewPorts } from './engine/ports'
 import { closeAll as bandCloseAll, endBandMode as bandEnd, settle as bandSettle, paneOf } from './handlers/band'
 import * as band_ from './handlers/band'
 import * as commandLine from './handlers/command-line'
@@ -73,6 +73,7 @@ import { BOOKMARK_TOOL } from './core/bookmarks/bookmark-tool'
 import { LISTS_TOOL } from './core/lists/lists-tool'
 import { fnv1a64 } from './core/bookmarks/migrations'
 import { Lists, copyLink, landItem, listsCommand, listsToolCall } from './handlers/lists'
+import { projectsCommand } from './handlers/projects'
 import { linkOf } from './core/lists/lists'
 import { hrefOf as linkHref, linkKey } from './core/lists/item-links'
 import { listsPaneView } from './views/lists-pane'
@@ -900,6 +901,12 @@ function reopenPane($: EngineInterface, p: ShownPane) {
   return $.ui.open({ id: p.id, title: p.title ?? p.id })
 }
 
+// `/bm-project` (handlers/projects.ts, 0.8.x unit 6b): the lists' ports, the home folder (an
+// umbrella is refused), and its answer said into the conversation whatever the debug setting.
+function projectsPorts($: EngineInterface): ProjectsPorts {
+  return { ...listsPorts($), home: () => homeDir($), say: line => log($, line, { always: true }) }
+}
+
 // The project's lists (handlers/lists.ts, #45), over listsPorts($).
 function listsPorts($: EngineInterface): ListsPorts {
   return {
@@ -927,6 +934,7 @@ function listsPorts($: EngineInterface): ListsPorts {
     fsList: path => $.fs.list(path),
     fsStatLink: path => $.fs.stat(path, { resolve: true }).then(s => ({ kind: s.kind, isLink: s.isLink, ...(s.realPath !== undefined ? { realPath: s.realPath } : {}) }), () => undefined),
     randomBytes: n => crypto.getRandomValues(new Uint8Array(n)),
+    autoMigrate: () => currentSettings().autoMigrate !== false,
     copy: copyVia($),
     clickCopies: () => currentSettings().listLinkClick !== 'nothing',
     redraw: async () => { await update($, listsRev, n => n + 1) },
@@ -1908,6 +1916,11 @@ export const register: Register = (on, options) => {
   })
   // /bm-lists (#45): the lists pane, docked beside the conversation without the keyboard;
   // `/bm-lists <name>` opens on that list; with no name, a second /bm-lists closes it.
+  // `/bm-project [where | register [name] | rename <name>]` (0.8.x unit 6b).
+  on('command.run', { command: 'bm-project' }, async ($, e) => {
+    await projectsCommand(projectsPorts($), lists, e.args)
+    return {}
+  })
   on('command.run', { command: 'bm-lists' }, async ($, e) => {
     await listsCommand(listsPorts($), lists, e.args)
     return {}

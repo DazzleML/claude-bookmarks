@@ -1,7 +1,7 @@
 {
   "name": "bookmarks",
   "displayName": "Bookmarks",
-  "version": "0.8.10",
+  "version": "0.8.11",
   "description": "Bookmarks and vim-style marks inside Claude Code conversations: mark a line, jump back, keep a reading position, browse your prompts, and let Claude cite earlier places as clickable links.",
   "author": {
     "name": "DazzleML",
@@ -189,6 +189,24 @@
         "copy",
         "nothing"
       ]
+    },
+    "projectVault": {
+      "type": "boolean",
+      "title": "Keep a project's lists and bundles in its vault",
+      "description": "true: /bm-project link may link a registered project's data folder into its vault, so the vault's notes and searches see the lists and bundle files; false: link does nothing and says so (the data stays under your claude folder)",
+      "default": true
+    },
+    "autoMigrate": {
+      "type": "boolean",
+      "title": "Move older lists into their project folder",
+      "description": "true: a folder's lists file from before the project folders is moved into its project folder the first time the plugin loads it (the old file is left as it was); false: it waits, and the pane says so",
+      "default": true
+    },
+    "junctionPoint": {
+      "type": "string",
+      "title": "Where in a vault a project's data appears",
+      "description": "The folder inside a project's vault that /bm-project link makes into a link to the project's data folder, relative to the vault's root (private/claude/bookmarks by default)",
+      "default": "private/claude/bookmarks"
     },
     "searchShown": {
       "type": "boolean",

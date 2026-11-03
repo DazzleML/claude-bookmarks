@@ -383,6 +383,14 @@ export type ListsPorts = {
    * are readable here (the bm: short-reference design, unit 6: the item then keeps it as typed).
    */
   resolveRef: (text: string) => Promise<import('../core/lists/item-links.ts').PlaceLink | undefined>
+  /** Whether an older lists file moves into its project folder on its first load (the autoMigrate setting; absent: it does). */
+  autoMigrate?: () => boolean
+}
+
+/** What `/bm-project` (handlers/projects.ts, 0.8.x unit 6b) needs beyond the lists': the home folder (an umbrella is refused) and lines said into the conversation. */
+export type ProjectsPorts = ListsPorts & {
+  home: () => Promise<string | undefined>
+  say: (line: string) => void
 }
 
 /** What the bookmarks cluster (handlers/bookmarks.ts) needs: the register's files, who and where this session is, the transcript, the jump, the mark highlight, the clipboard and the person's feedback. */
