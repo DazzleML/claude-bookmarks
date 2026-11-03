@@ -9,8 +9,13 @@ import type { AnchorOwner } from '../bookmarks/anchor.ts'
 import { hrefOf, primaryLink, v1to2Item, type ItemLink } from './item-links.ts'
 import { applyBundleOp, BUNDLE_OPS, editBundled, settle, type Bundle, type BundleOp } from './bundles.ts'
 
-/** 2 (0.7.10): an item's typed `links` replace its one `place`/`link`; the file keeps keys it does not know. */
-export const LISTS_VERSION = 2
+/**
+ * 2 (0.7.10): an item's typed `links` replace its one `place`/`link`; the file keeps keys it does not know.
+ * 3 (0.8.8): the file lives under its project's folder (`projects/<concept>__<id>__<user>/lists/<folder>/lists.json`)
+ * and holds no bundles: they are the project's set, `bundles/index.json` and one file each (format3.ts,
+ * bundle-file.ts; handlers/lists-layout.ts moves a flat file there on its first load).
+ */
+export const LISTS_VERSION = 3
 
 type RawFile = Record<string, unknown> & { version: number; lists?: unknown; removed?: unknown }
 
@@ -128,8 +133,12 @@ const sameFolder = (a: string, b: string) => slash(a).toLowerCase() === slash(b)
 
 export type ParsedLists = { kind: 'ok'; file: ListsFile } | { kind: 'newer'; version: number } | { kind: 'bad'; why: string }
 
-/** Reads the file's text. A newer version is not read (and so never written over). */
-export function parseLists(text: string): ParsedLists {
+/**
+ * Reads the file's text, brought up to `at` (this build's version unless the caller names an older
+ * one: the format-3 split reads a flat file at 2). A newer version is not read (and so never
+ * written over).
+ */
+export function parseLists(text: string, at: number = LISTS_VERSION): ParsedLists {
   let o: unknown
   try {
     o = JSON.parse(text)
@@ -139,9 +148,9 @@ export function parseLists(text: string): ParsedLists {
   if (!o || typeof o !== 'object') return { kind: 'bad', why: 'not an object' }
   let raw = o as RawFile
   if (typeof raw.version !== 'number') return { kind: 'bad', why: 'no version' }
-  if (raw.version > LISTS_VERSION) return { kind: 'newer', version: raw.version }
-  // Older files are brought up to this version one step at a time.
-  for (let v = Math.max(1, Math.trunc(raw.version)); v < LISTS_VERSION; v++) {
+  if (raw.version > at) return { kind: 'newer', version: raw.version }
+  // Older files are brought up to `at` one step at a time.
+  for (let v = Math.max(1, Math.trunc(raw.version)); v < at; v++) {
     const step = LISTS_MIGRATIONS[v - 1]
     if (!step) return { kind: 'bad', why: `no step from version ${v} to ${v + 1}` }
     if (v === 2 && needsSplit(raw)) return { kind: 'bad', why: 'a version 2 file with bundles is split into its project folder first (core/lists/format3.ts)' }
@@ -155,7 +164,7 @@ export function parseLists(text: string): ParsedLists {
     file: {
       // Keys this version does not know are kept, so a newer writer's additions survive a rewrite (add-only).
       ...f,
-      version: LISTS_VERSION,
+      version: at,
       writer: typeof f.writer === 'string' ? f.writer : '',
       project: typeof f.project === 'string' ? f.project : '',
       cwd: typeof f.cwd === 'string' ? f.cwd : '',

@@ -2,14 +2,26 @@
 // lists from their file, a press reorders or ticks and writes the file, and Claude's `lists`
 // tool creates and fills them. Run: claude plugin test plugin
 import { expect, test } from 'claude-code/testing'
-import { applyListOp, emptyLists, serializeLists, type ListsFile } from '../hooks/core/lists/lists.ts'
+import { applyListOp, emptyLists, LISTS_VERSION, serializeLists, type ListsFile } from '../hooks/core/lists/lists.ts'
 import { linkKey } from '../hooks/core/lists/item-links.ts'
 import { addOrRelabel, emptyRegister, serializeRegister } from '../hooks/core/bookmarks/register-file.ts'
-import { BAND_PROPS, DATA_ROOT, world } from './harness.ts'
+import { BAND_PROPS, DATA_ROOT, world as harnessWorld } from './harness.ts'
+
+// Every world here answers $.fs.stat, as the engine always does: at format 3 the handler stats the
+// project folder (the dangling check) and a world whose stat is unanswered reads as a broken link.
+const world = (on: unknown, options: Parameters<typeof harnessWorld>[1] = {}) => harnessWorld(on, { stat: true, ...options })
 
 const SID = '11111111-2222-4333-8444-999999999999'
 const FILE = `${DATA_ROOT}/lists/test-project.json`
-type Found = { type: string; key?: string; text?: string; props: Record<string, unknown> }
+// The lists file this world writes, found by its suffix: the flat file at format 2; at format 3
+// (0.8.x unit 5) a seeded flat file is split into the project folder on the first load, and the
+// writes land at lists/_root/lists.json there (plugin/tests/lists-format3.test.ts has the split itself).
+const SUFFIX = LISTS_VERSION >= 3 ? '/lists/_root/lists.json' : '/lists/test-project.json'
+type Files = { files: Record<string, string> }
+const listsKey = (w: Files) => Object.keys(w.files).find(k => k.replace(/\\/g, '/').endsWith(SUFFIX))!
+const listsText = (w: Files) => w.files[listsKey(w)]
+const pageText = (w: Files) => w.files[listsKey(w).replace(/\.json$/, '.md')]
+type Found ={ type: string; key?: string; text?: string; props: Record<string, unknown> }
 type Ui = { press: (t: object) => Promise<unknown>; findAll: (q: object) => Promise<Found[]> }
 type Engine = { command: { run: (c: object) => Promise<unknown> }; tool: { call: (i: never) => Promise<unknown> }; ui: { mount: (t: never) => Promise<unknown> } }
 const PANE = { plugin: 'bookmarks', surface: 'terminal', component: 'Pane', requestId: 'bm-lists', props: { title: 'Lists', isFocused: false, bodyColumns: 44, placement: 'dock', scroll: { offset: 0, bodyRows: 20 } } }
@@ -17,7 +29,7 @@ const mountPane = async ($: unknown) => (await ($ as Engine).ui.mount(PANE as ne
 const texts = async (ui: Ui) => (await ui.findAll({})).filter(e => e.type === 'Text' || e.type === 'Button' || e.type === 'Markdown').map(e => e.type === 'Markdown' ? String(e.props.text) : e.text ?? '').join(' | ')
 
 function seeded(): Record<string, string> {
-  let f: ListsFile = emptyLists('test-project', 'C:/test-project', 'test', 1)
+  let f: ListsFile = { ...emptyLists('test-project', 'C:/test-project', 'test', 1), version: 2 }
   const step = (op: Parameters<typeof applyListOp>[1]) => {
     const r = applyListOp(f, op, 1)
     if (!r.ok) throw new Error(r.error)
@@ -28,7 +40,7 @@ function seeded(): Record<string, string> {
   step({ op: 'add', list: 'what-s-left', item: { label: 'the release', by: 'claude', link: 'https://example.com/release' } })
   return { [FILE]: serializeLists(f) }
 }
-const order = (w: { file: (p: string) => string | undefined }) => (JSON.parse(w.file(FILE)!) as ListsFile).lists[0]!.items.map(i => i.label)
+const order = (w: { file: (p: string) => string | undefined }) => (JSON.parse(listsText(w)!) as ListsFile).lists[0]!.items.map(i => i.label)
 
 test('/bm-lists opens the lists pane, docked and without the keyboard', async ($, on) => {
   const w = world(on, { session: SID })
@@ -52,17 +64,17 @@ test('▼ moves an item down and writes the file; ✓ ticks it done', async ($, 
   await ui.press({ key: 'lists-down-i1' })
   expect(order(w)).toEqual(['the release', 'push 0.7.5'])
   await ui.press({ key: 'lists-done-i2' })
-  expect((JSON.parse(w.file(FILE)!) as ListsFile).lists[0]!.items[0]!.done).toBe(true)
-  expect(w.file(`${DATA_ROOT}/lists/test-project.md`)).toContain('~~[the release](https://example.com/release)~~')
-  expect(w.file(`${FILE}.bak`)).toBeDefined()
+  expect((JSON.parse(listsText(w)!) as ListsFile).lists[0]!.items[0]!.done).toBe(true)
+  expect(pageText(w)).toContain('~~[the release](https://example.com/release)~~')
+  expect(w.files[`${listsKey(w)}.bak`]).toBeDefined()
 })
 
 // The per-draw freshness check (0.8.x unit 0b): each draw stats the cached file and reads it
 // again only when its size or last change moved, so another session's change shows at the next
 // draw and an unchanged file is not read again.
 const readsOf = (w: { calls: { event: string; input: unknown }[] }) =>
-  w.calls.filter(c => c.event === 'fs.read' && String((c.input as { path?: unknown }).path).replace(/\\/g, '/').endsWith('lists/test-project.json')).length
-const keyOf = (w: { files: Record<string, string> }) => Object.keys(w.files).find(k => k.replace(/\\/g, '/').endsWith('lists/test-project.json'))!
+  w.calls.filter(c => c.event === 'fs.read' && String((c.input as { path?: unknown }).path).replace(/\\/g, '/').endsWith(SUFFIX)).length
+const keyOf = listsKey
 /** One draw of the pane: mounted, read, unmounted (a pane mounts once at a time). */
 const draw = async ($: unknown): Promise<string> => {
   const ui = await mountPane($)
@@ -131,7 +143,7 @@ test('an item with a link is drawn as a pressable Markdown link; one without sta
 // djdarcy, 2026-10-27: "how am I supposed to read the entire note?" -- an item's number opens it
 // in place, its whole note wrapped; a note with nowhere to go opens on a press of its label.
 test("an item's number opens it in place with its whole note, and a second press closes it", async ($, on) => {
-  let f: ListsFile = emptyLists('test-project', 'C:/test-project', 'test', 1)
+  let f: ListsFile = { ...emptyLists('test-project', 'C:/test-project', 'test', 1), version: 2 }
   const long = 'the order and ticks should survive closing and reopening the pane, and this sentence runs well past the dock'
   for (const op of [
     { op: 'create', name: 'Proof', owner: 'user' },
@@ -164,7 +176,7 @@ test("Claude's tool creates a list on the person's side, adds to it, and moves a
   await call($, { action: 'add', list: 'Tests to run', owner: 'user', label: 'the landing, live', why: 'an AskUserQuestion link' })
   const moved = await call($, { action: 'move', list: 'Tests to run', owner: 'user', item: '2', to: 1 })
   expect(moved.order).toEqual(['1. the landing, live', '2. the fold, live'])
-  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  const f = JSON.parse(listsText(w)!) as ListsFile
   expect(f.lists[0]!.owner).toBe('user')
   expect((await call($, { action: 'lists' })).yours).toEqual([{ id: 'tests-to-run', name: 'Tests to run', owner: 'user', items: 2, done: 0 }])
 })
@@ -215,7 +227,7 @@ test("the tool adds a place of this conversation by a quote, and pressing the it
   await call($, { action: 'create', name: 'Places', owner: 'user' })
   const added = await call($, { action: 'add', list: 'Places', owner: 'user', label: 'where it was asked', query: 'keep a list of what is left' })
   expect((added.added as { place?: string }).place).toBe(`${SID.slice(0, 8)}/${U.slice(0, 8)}`)
-  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  const f = JSON.parse(listsText(w)!) as ListsFile
   // The file holds the item's typed links (lists v2, the links-in-files design, 2026-10-27).
   expect(f.lists[0]!.items[0]!.links?.[0]).toEqual({ kind: 'place', session: SID, uuid: U, words: 'keep a list of what is left' })
   const ui = await mountPane($)
@@ -240,7 +252,7 @@ test('the tool adds an item with a place, a file and an issue; the place is mint
   const links = (added.added as { links: { kind: string; what: string }[] }).links
   expect(links.map(l => l.kind)).toEqual(['place', 'file', 'issue'])
   expect(links[2]!.what).toBe('DazzleML/claude-bookmarks#45')
-  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  const f = JSON.parse(listsText(w)!) as ListsFile
   expect(f.lists[0]!.items[0]!.links?.length).toBe(3)
   // The place's note: written by the bookmark tool's mint, so the item's ctrl-click opens a file that exists.
   expect(w.file(`${DATA_ROOT}/sessions/${SID}/${U.slice(0, 8)}.md`)).toBeDefined()
@@ -255,7 +267,7 @@ test('link adds a link to an item; unlink removes one by its number', async ($, 
   const unlinked = await call($, { action: 'unlink', list: 'Reading', owner: 'user', item: '1', at: 1 })
   expect(((unlinked.item as { links: { kind: string; what: string }[] }).links).map(l => l.what)).toEqual(['C:/code/b.md'])
   expect(String((await call($, { action: 'unlink', list: 'Reading', owner: 'user', item: '1', at: 5 })).error)).toContain('1 to 1')
-  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  const f = JSON.parse(listsText(w)!) as ListsFile
   expect(f.lists[0]!.items[0]!.links).toEqual([{ kind: 'file', path: 'C:/code/b.md' }])
 })
 
@@ -266,7 +278,7 @@ test('links given as a JSON string are read; a link the item already has is not 
   await call($, { action: 'create', name: 'Reading', owner: 'user' })
   await call($, { action: 'add', list: 'Reading', owner: 'user', label: 'the epic', links: JSON.stringify([{ link: 'https://github.com/DazzleML/claude-bookmarks/issues/45' }]) })
   await call($, { action: 'link', list: 'Reading', owner: 'user', item: '1', links: '[{"link":"https://github.com/DazzleML/claude-bookmarks/issues/45"},{"link":"C:/code/b.md"}]' })
-  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  const f = JSON.parse(listsText(w)!) as ListsFile
   expect(f.lists[0]!.items[0]!.links).toEqual([{ kind: 'issue', repo: 'DazzleML/claude-bookmarks', n: 45 }, { kind: 'file', path: 'C:/code/b.md' }])
 })
 
@@ -276,7 +288,7 @@ test('a link the item has, written with other slashes or case, is not added agai
   await call($, { action: 'create', name: 'Reading', owner: 'user' })
   await call($, { action: 'add', list: 'Reading', owner: 'user', label: 'notes', link: 'C:/code/b.md' })
   await call($, { action: 'link', list: 'Reading', owner: 'user', item: '1', link: 'c:\\code\\b.md' })
-  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  const f = JSON.parse(listsText(w)!) as ListsFile
   expect(f.lists[0]!.items[0]!.links).toEqual([{ kind: 'file', path: 'C:/code/b.md' }])
 })
 
@@ -341,7 +353,7 @@ test('a bm: lookup given as a link is stored as the place it names, its check ma
   await call($, { action: 'create', name: 'Refs', owner: 'user' })
   const added = await call($, { action: 'add', list: 'Refs', owner: 'user', label: 'that place', link: `bm:${SID.slice(0, 8)}.1~${REC.slice(0, 8)}` })
   expect((added.added as { links: { kind: string }[] }).links.map(l => l.kind)).toEqual(['place'])
-  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  const f = JSON.parse(listsText(w)!) as ListsFile
   expect(f.lists[0]!.items[0]!.links).toEqual([{ kind: 'place', session: SID, uuid: REC }])
 })
 
@@ -350,7 +362,7 @@ test('a bm: reference that names no place here is kept as typed, and a press cop
   await call($, { action: 'create', name: 'Refs', owner: 'user' })
   const wrongCheck = `bm:${SID.slice(0, 8)}.1~dddddddd`
   await call($, { action: 'add', list: 'Refs', owner: 'user', label: 'a lost place', link: wrongCheck, links: [{ link: 'bm:99999999/12345678' }] })
-  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  const f = JSON.parse(listsText(w)!) as ListsFile
   expect(f.lists[0]!.items[0]!.links).toEqual([{ kind: 'ref', text: wrongCheck }, { kind: 'ref', text: 'bm:99999999/12345678' }])
   const ui = await mountPane($)
   await ui.press({ key: 'lists-go-i1' } as never)
@@ -387,7 +399,7 @@ const BUNDLE_LINKS = [
   { kind: 'url' as const, href: 'https://example.com/notes' },
 ]
 function bundled(): Record<string, string> {
-  let f: ListsFile = emptyLists('test-project', 'C:/test-project', 'test', 1)
+  let f: ListsFile = { ...emptyLists('test-project', 'C:/test-project', 'test', 1), version: 2 }
   for (const op of [
     { op: 'create', name: 'Work', owner: 'user' },
     { op: 'add', list: 'work', item: { label: 'bundles', by: 'user', links: BUNDLE_LINKS } },
@@ -429,7 +441,7 @@ test('a link row is a link the terminal can open: a file row carries its file: U
 })
 
 test('a place row says what it is about: the words it was made from', async ($, on) => {
-  let f: ListsFile = emptyLists('test-project', 'C:/test-project', 'test', 1)
+  let f: ListsFile = { ...emptyLists('test-project', 'C:/test-project', 'test', 1), version: 2 }
   for (const op of [
     { op: 'create', name: 'Work', owner: 'user' },
     { op: 'add', list: 'work', item: { label: 'two places', by: 'user', links: [
@@ -476,7 +488,7 @@ test("a link row's ○ button makes it this list's face, and the row leads with 
   const ui = await mountPane($)
   await ui.press({ key: 'lists-num-i1' })
   await ui.press({ key: 'lists-face-i1-2' })
-  const item = (JSON.parse(w.file(FILE)!) as ListsFile).lists[0]!.items[0]!
+  const item = (JSON.parse(listsText(w)!) as ListsFile).lists[0]!.items[0]!
   expect(item.face).toBe(linkKey(BUNDLE_LINKS[2]!))
   expect(item.links![0]).toEqual(BUNDLE_LINKS[2])
 })
@@ -493,7 +505,7 @@ test('the tool: bundle an item, attach the bundle to another list, choose its fa
   const attached = await call($, { action: 'attach', list: 'Board', owner: 'user', bundle: b })
   expect((attached.item as { bundle?: string; links: unknown[] }).links.length).toBe(2)
   await call($, { action: 'face', list: 'Board', owner: 'user', item: '1', at: 2 })
-  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  const f = JSON.parse(listsText(w)!) as ListsFile
   const board = f.lists.find(l => l.name === 'Board')!.items[0]!
   expect(board.links![0]).toEqual({ kind: 'issue', repo: 'DazzleML/claude-bookmarks', n: 45 })
   expect(f.lists.find(l => l.name === 'Work')!.items[0]!.links![0]).toEqual({ kind: 'file', path: 'C:/code/x/a.md' })
@@ -508,7 +520,7 @@ test('an about given with a link is kept on it and shown after it on its row', a
     { link: 'C:/code/x/dwp.md', about: 'the design and its addenda' },
     { link: 'https://github.com/DazzleML/claude-bookmarks/issues/39', about: 'A branched conversation keeps its data' },
   ] })
-  const item = (JSON.parse(w.file(FILE)!) as ListsFile).lists[0]!.items[0]!
+  const item = (JSON.parse(listsText(w)!) as ListsFile).lists[0]!.items[0]!
   expect(item.links!.map(l => (l as { about?: string }).about)).toEqual(['the design and its addenda', 'A branched conversation keeps its data'])
   const ui = await mountPane($)
   await ui.press({ key: 'lists-num-i1' })
@@ -524,7 +536,7 @@ test('about on an existing link reaches every list that shows its bundle; a link
   await call($, { action: 'attach', list: 'Board', owner: 'user', bundle: 'b1' })
   await call($, { action: 'about', list: 'Work', owner: 'user', item: '1', at: 2, about: 'the second note' })
   await call($, { action: 'link', list: 'Board', owner: 'user', item: '1', links: [{ link: 'c:\\code\\x\\a.md', about: 'the first note' }] })
-  const f = JSON.parse(w.file(FILE)!) as ListsFile
+  const f = JSON.parse(listsText(w)!) as ListsFile
   for (const name of ['Work', 'Board']) {
     const links = f.lists.find(l => l.name === name)!.items[0]!.links as { path: string; about?: string }[]
     expect(links.map(l => [l.path, l.about])).toEqual([['C:/code/x/a.md', 'the first note'], ['C:/code/x/b.md', 'the second note']])

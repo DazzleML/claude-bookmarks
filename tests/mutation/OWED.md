@@ -49,6 +49,7 @@ When a sweep is run, add its report beside the others (`vX.Y.Z__sweep__<slug>.md
 | [ ] | 0.8.4 | 3c9f0a9 | the link script, `link-project.ps1` and `.sh` (red-green: 8 mutants of the `.ps1`, all killed through the scratch shell test; the `.sh` not mutated; `tests/one-offs/thinking/redgreen-unit6a-link/run.mjs`) |
 | [ ] | 0.8.5 | c091787 | the bundle set and cross-project references (red-green: 10 mutants, all killed; `tests/one-offs/thinking/redgreen-unit4-bundle-set/run.mjs`) |
 | [ ] | 0.8.6 | 297adb6 | the bundle file: regions, end line, write-back (red-green: 10 mutants, all killed; `tests/one-offs/thinking/redgreen-unit3-bundle-file/run.mjs`) |
-| [ ] | 0.8.7 | (this commit) | unit 5's pure layer: layout, split, link state, write verdict, the 2->3 guard (red-green: 7 mutants, all killed; `tests/one-offs/thinking/redgreen-unit5-pure/run.mjs`) |
+| [ ] | 0.8.7 | 13821c1 | unit 5's pure layer: layout, split, link state, write verdict, the 2->3 guard (red-green: 7 mutants, all killed; `tests/one-offs/thinking/redgreen-unit5-pure/run.mjs`) |
+| [ ] | 0.8.8 | (this commit) | unit 5's live switch: the format-3 layer (`handlers/lists-layout.ts`) and the handler wiring (red-green: 16 mutants on core and 6 through the kit at version 3, all killed; `tests/one-offs/thinking/redgreen-unit5-layer/run.mjs`, `v3-trial/run.mjs --mutant`). Owed besides the sweep: the mtime re-check before a bundle-file write (a person's edit in the window between the plugin's read and its write; found by the unit's scenario pass, deferred) |
 
 Not listed: 0.7.29 (59eb80d) and 0.7.32 (bf66372) add tests only; docs and build commits.

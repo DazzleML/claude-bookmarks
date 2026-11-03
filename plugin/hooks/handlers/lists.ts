@@ -8,7 +8,7 @@
 // It owns the file's cache, which list the pane shows, and which items are open (the one-owner
 // principle; the ownership table in engine/ports.ts).
 import {
-  applyListOp, emptyLists, findItem, findList, linkOf, listsBaseName, listsPage, LISTS_PAGE_TEMPLATE, parseLists, projectOf, serializeLists,
+  applyListOp, emptyLists, findItem, findList, linkOf, listsBaseName, listsPage, LISTS_PAGE_TEMPLATE, LISTS_VERSION, parseLists, projectOf, serializeLists,
   type List, type ListItem, type ListsFile, type Op,
 } from '../core/lists/lists.ts'
 import { brief, describeItem, describeLink, linkWants, parseListsInput, type LinkWant, type ListsToolInput } from '../core/lists/lists-tool.ts'
@@ -17,6 +17,7 @@ import { parseRef } from '../core/bookmarks/ref.ts'
 import { answer } from '../core/bookmarks/bookmark-tool.ts'
 import { short } from '../core/kit/message-id.ts'
 import { showAction } from '../core/band/pane-show.ts'
+import { assemble, checkLayout, migrateFlat, readSet, resolveLayout, setMark, writeAll, type Resolved, type SetRead } from './lists-layout.ts'
 import type { ListsPorts } from '../engine/ports.ts'
 
 const slash = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
@@ -25,15 +26,26 @@ const slash = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
 export type ListsPaneState = { file?: ListsFile; shown?: List; error?: string; expanded: ReadonlySet<string> }
 
 export class Lists {
-  /** The file last read or written; `mark` is its size and last change when it was read (none after a write of ours, so the next draw reads it once). */
-  private cache: { path: string; file: ListsFile; mark?: string } | undefined
+  /**
+   * The file last read or written; `mark` is its size and last change when it was read (none after
+   * a write of ours, so the next draw reads it once). At format 3 (0.8.x unit 5): `resolved` is
+   * where it lives and `set` its project's bundle set as read, with its own per-draw mark.
+   */
+  private cache: { path: string; file: ListsFile; mark?: string; resolved?: Resolved; set?: SetRead } | undefined
+  /** Bundle files named in a toast this session: a file that cannot be read is said once. */
+  private toasted = new Set<string>()
   /** The list the pane shows, by id; the first list when unset or gone. */
   private shown: string | undefined
   /** The items opened in place in the pane, as `<list id>/<item id>`. */
   private opened = new Set<string>()
 
-  /** Where the project's lists file is: `<dataRoot>/bookmarks/lists/<project>.json`, or undefined with no data root. */
+  /**
+   * Where this folder's lists file is, or undefined with no data root. Format 3: under its project's
+   * folder, `<dataRoot>/bookmarks/projects/<folder>/lists/<lists folder>/lists.json` (handlers/lists-layout.ts);
+   * before: `<dataRoot>/bookmarks/lists/<project>.json`.
+   */
   async pathOf(ports: ListsPorts): Promise<string | undefined> {
+    if (LISTS_VERSION >= 3) return (await resolveLayout(ports))?.layout.listsPath
     const root = await ports.dataRoot()
     if (!root) return undefined
     const cwd = await ports.cwd()
@@ -50,6 +62,7 @@ export class Lists {
 
   /** The project's lists, read fresh from disk (a second session may have changed them). */
   async load(ports: ListsPorts): Promise<{ path: string | undefined; file: ListsFile } | { error: string }> {
+    if (LISTS_VERSION >= 3) return this.loadLayout(ports)
     const path = await this.pathOf(ports)
     const cwd = await ports.cwd()
     const writer = `${ports.pluginName} ${await ports.pluginVersion()}`
@@ -68,6 +81,46 @@ export class Lists {
     return { path, file: r.file }
   }
 
+  /**
+   * Format 3 (0.8.x unit 5): the lists under the project folder, with the project's bundle set read
+   * beside them; a format-2 flat file is split into the folder on the first load that finds no
+   * `lists.json` there. The dangling check runs first: a folder that is not there is fine for a
+   * read (it is made on the first write); a broken or redirected link, or a folder that is not this
+   * project's, refuses the read and says why.
+   */
+  private async loadLayout(ports: ListsPorts): Promise<{ path: string | undefined; file: ListsFile } | { error: string }> {
+    const cwd = await ports.cwd()
+    const writer = `${ports.pluginName} ${await ports.pluginVersion()}`
+    const fresh = emptyLists(projectOf(cwd), slash(cwd), writer, await ports.now())
+    const r = await resolveLayout(ports)
+    if (!r) return { path: undefined, file: this.cache?.file ?? fresh }
+    const path = r.layout.listsPath
+    const chk = await checkLayout(ports, r)
+    const readable = chk.link === 'ok' ? chk.check === 'ok' || chk.check === 'missing' : chk.link === 'removed' && !r.linked
+    if (!readable) return { error: `the lists are not read: ${chk.verdict.why} (${r.folderPath})` }
+    if (!(await ports.fsExists(path)) && (await ports.fsExists(r.flatPath))) {
+      const m = await migrateFlat(ports, r, await ports.fsRead(r.flatPath))
+      if (!m.ok) return { error: m.error }
+      ports.toast(`The lists for this folder moved into their project folder: ${r.folderPath}`, 8000)
+    }
+    // Taken before the read: a write landing between the two makes the next draw read again, never miss it.
+    const mark = await this.markOf(ports, path)
+    if (!(await ports.fsExists(path))) {
+      const set = await readSet(ports, r, this.toasted)
+      this.cache = { path, file: assemble(fresh, set), mark, resolved: r, set }
+      return { path, file: this.cache.file }
+    }
+    const p = parseLists(await ports.fsRead(path))
+    if (p.kind === 'newer') return { error: `the lists file was written by a newer version of the plugin (format ${p.version}); update the plugin to change it` }
+    if (p.kind === 'bad') return { error: `the lists file could not be read (${p.why}); it is left as it is: ${path}` }
+    const set = await readSet(ports, r, this.toasted)
+    const file = assemble(p.file, set)
+    this.cache = { path, file, mark, resolved: r, set }
+    // The split leaves no page beside the new file until the first change; write it now, once.
+    if (!(await ports.fsExists(path.replace(/\.json$/, '.md')))) await this.writePage(ports, path, file)
+    return { path, file }
+  }
+
   /** The file's size and last change as one string, `absent` when it is not there; undefined without the stat port. */
   private async markOf(ports: ListsPorts, path: string): Promise<string | undefined> {
     if (!ports.fsStat) return undefined
@@ -75,11 +128,13 @@ export class Lists {
     return s ? `${s.size}:${s.mtimeMs}` : 'absent'
   }
 
-  /** Whether the cached file has changed on disk since it was read: one stat, no read. */
+  /** Whether the cached file, or its project's bundle set, has changed on disk since it was read: one stat and one listing, no read. */
   private async moved(ports: ListsPorts): Promise<boolean> {
     const c = this.cache
     if (!ports.fsStat || !c?.path) return false
-    return c.mark === undefined || (await this.markOf(ports, c.path)) !== c.mark
+    if (c.mark === undefined || (await this.markOf(ports, c.path)) !== c.mark) return true
+    if (!c.resolved || !c.set) return false
+    return setMark(await ports.fsList(c.resolved.layout.bundlesDir).catch(() => [])) !== c.set.mark
   }
 
   /** The last file read or written, without touching the disk. */
@@ -95,7 +150,14 @@ export class Lists {
     if (!r.ok) return r
     const writer = `${ports.pluginName} ${await ports.pluginVersion()}`
     const file: ListsFile = { ...r.file, writer }
-    if (got.path) {
+    const at = this.cache
+    if (got.path && LISTS_VERSION >= 3 && at?.resolved && at.set) {
+      // Format 3: the bundle files and the set's index before lists.json (handlers/lists-layout.ts).
+      const w = await writeAll(ports, at.resolved, file, at.set)
+      if (!w.ok) return { ok: false, error: w.error }
+      await this.writePage(ports, got.path, file)
+      this.cache = { path: got.path, file, resolved: at.resolved, set: { ...at.set, index: w.index, mark: '' } }
+    } else if (got.path) {
       if (await ports.fsExists(got.path)) await ports.fsWrite(`${got.path}.bak`, await ports.fsRead(got.path))
       await ports.fsWrite(got.path, serializeLists(file))
       await this.writePage(ports, got.path, file)

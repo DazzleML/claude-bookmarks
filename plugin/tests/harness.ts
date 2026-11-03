@@ -42,6 +42,11 @@ export type WorldOptions = {
   failWrite?: (path: string) => boolean
   // Answer $.fs.stat from the files map (off: unanswered, so a stat rejects, as before 0.8.x; the loader's tests rely on that).
   stat?: true
+  // Folders that are links (0.8.x unit 5, the dangling check), by path. With a `realPath`, the link
+  // stats as a folder with `isLink` and that real path, and reads, writes and listings through it
+  // land at the target; without one it is broken: its stat rejects, `exists` is false, and only its
+  // parent's listing shows it (kind `other`, `isLink`), as a junction whose target is gone does.
+  links?: Record<string, { realPath?: string }>
 }
 
 /** What the harness answers for plugin/templates/data-readme.md: the placeholders the real template uses, in a short page. */
@@ -175,38 +180,65 @@ export function world(on: unknown, options: WorldOptions = {}): World {
   // missing. The real template's text is the core suite's to check (tests/core/data-readme.test.ts).
   const isListsTemplate = (p: unknown) => /\\templates\\lists-page\.md$/.test(norm(p))
   const isTemplate = (p: unknown) => /\\templates\\data-readme\.md$/.test(norm(p)) || isListsTemplate(p)
+  // The links, by their keyed path; `through` lands a path under a link with a real path at the target.
+  const links = Object.fromEntries(Object.entries(options.links ?? {}).map(([p, l]) => [norm(p).replace(/\\+$/, ''), l]))
+  const linkAt = (p: string) => links[p]
+  const through = (p: string): string => {
+    for (const [lp, l] of Object.entries(links)) if (l.realPath && (p === lp || p.startsWith(`${lp}\\`))) return norm(l.realPath).replace(/\\+$/, '') + p.slice(lp.length)
+    return p
+  }
+  const isDir = (p: string) => Object.keys(files).some(k => k.startsWith(p + '\\'))
   answer('fs.exists', e => {
     const p = norm(e.path).replace(/\\+$/, '')
     if (isTemplate(p)) return options.templates !== false
-    return p in files || Object.keys(files).some(k => k.startsWith(p + '\\'))
+    const l = linkAt(p)
+    if (l && !l.realPath) return false
+    const q = through(p)
+    return q in files || isDir(q)
   })
   // With `stat`, a file's stat from the map: its length, and a last change that moves whenever its
-  // text does (a hash of the text, standing in for a clock); a path not in the map rejects, as ENOENT does.
+  // text does (a hash of the text, standing in for a clock); a folder (anything in the map lies under
+  // it) stats as `dir`; a link as the engine answers one (above); a path not in the map rejects, as ENOENT does.
   if (options.stat) answer('fs.stat', e => {
-    const text = files[norm(e.path)]
-    if (text === undefined) throw new Error('ENOENT (test)')
+    const p = norm(e.path).replace(/\\+$/, '')
+    const l = linkAt(p)
+    if (l) {
+      if (!l.realPath) throw new Error('ENOENT (test: a broken link)')
+      return { kind: 'dir', size: 0, mtimeMs: 0, isLink: true, realPath: l.realPath }
+    }
+    const q = through(p)
+    const text = files[q]
+    if (text === undefined) {
+      if (isDir(q)) return { kind: 'dir', size: 0, mtimeMs: 0, isLink: false, realPath: q }
+      throw new Error('ENOENT (test)')
+    }
     let h = 0
     for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0
-    return { kind: 'file', size: text.length, mtimeMs: h, isLink: false }
+    return { kind: 'file', size: text.length, mtimeMs: h, isLink: false, realPath: q }
   })
-  answer('fs.read', e => files[norm(e.path)] ??(isTemplate(e.path) && options.templates !== false ? (isListsTemplate(e.path) ? LISTS_PAGE_STANDIN : README_TEMPLATE_STANDIN) : ''))
+  answer('fs.read', e => files[through(norm(e.path))] ??(isTemplate(e.path) && options.templates !== false ? (isListsTemplate(e.path) ? LISTS_PAGE_STANDIN : README_TEMPLATE_STANDIN) : ''))
   answer('fs.write', e => {
     if (options.failWrite?.(norm(e.path))) throw new Error(`write refused (test): ${norm(e.path)}`)
-    files[norm(e.path)] = String(e.text ?? '')
+    files[through(norm(e.path))] = String(e.text ?? '')
     return undefined
   })
   answer('process.run', e => ({ stderr: '', isStdoutTruncated: false, ...(options.process?.(e.argv as readonly string[]) ?? { exitCode: 1, stdout: '', stderr: 'no process in tests' }) }))
-  // A folder's entries from the files map: the names one level below `path`, files and folders.
+  // A folder's entries from the files map: the names one level below `path`, files and folders; a
+  // link under it lists as the engine lists one (`other`, `isLink`), broken or not. A file's size
+  // and a last change that moves with its text, as the engine's dirent carries (and `fs.stat` above).
   answer('fs.list', e => {
-    const dir = norm(e.path).replace(/\\+$/, '') + '\\'
-    const seen = new Map<string, { name: string; kind: 'file' | 'dir'; size: number; mtimeMs: number; isLink: boolean }>()
+    const dir = through(norm(e.path).replace(/\\+$/, '')) + '\\'
+    const seen = new Map<string, { name: string; kind: 'file' | 'dir' | 'other'; size: number; mtimeMs: number; isLink: boolean }>()
     for (const [p, text] of Object.entries(files)) {
       if (!p.startsWith(dir)) continue
       const rest = p.slice(dir.length)
       const slash = rest.indexOf('\\')
       const name = slash < 0 ? rest : rest.slice(0, slash)
-      if (!seen.has(name)) seen.set(name, { name, kind: slash < 0 ? 'file' : 'dir', size: slash < 0 ? text.length : 0, mtimeMs: 0, isLink: false })
+      let h = 0
+      if (slash < 0) for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0
+      if (!seen.has(name)) seen.set(name, { name, kind: slash < 0 ? 'file' : 'dir', size: slash < 0 ? text.length : 0, mtimeMs: h, isLink: false })
     }
+    for (const lp of Object.keys(links)) if (lp.slice(0, lp.lastIndexOf('\\')) === dir.slice(0, -1)) seen.set(lp.slice(lp.lastIndexOf('\\') + 1), { name: lp.slice(lp.lastIndexOf('\\') + 1), kind: 'other', size: 0, mtimeMs: 0, isLink: true })
     return [...seen.values()]
   })
   // The start path (a test's $.session.start, measured 2026-10-12): the base event passes

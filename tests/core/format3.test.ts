@@ -74,7 +74,8 @@ test('the step twice changes nothing; the split itself refuses a file already at
 })
 
 test('a version 2 reader refuses a version 3 lists file as newer, so it never writes over it', () => {
-  const r = parseLists(serializeLists(toFormat3(FILE).lists as ListsFile))
+  // Read at 2 explicitly: the reader an older build is (this build is at 3 once unit 5 flips).
+  const r = parseLists(serializeLists(toFormat3(FILE).lists as ListsFile), 2)
   assert.deepEqual(r, { kind: 'newer', version: 3 })
 })
 

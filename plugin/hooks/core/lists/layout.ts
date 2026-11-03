@@ -37,7 +37,9 @@ const join = (...p: string[]) => p.map((s, i) => (i === 0 ? s.replace(/[\\/]+$/,
 export function splitFlatFile(text: string):
   | { kind: 'split'; lists: string; index: string; bundles: number; dangling: string[] }
   | { kind: 'not-v2'; why: string } {
-  const r = parseLists(text)
+  // Read at version 2 whatever this build's version is: at 3, parseLists would refuse the
+  // bundles (the 2->3 guard) or step a file without them past the split.
+  const r = parseLists(text, 2)
   if (r.kind !== 'ok') return { kind: 'not-v2', why: r.kind === 'newer' ? `already at version ${r.version}` : r.why }
   if (r.file.version !== 2) return { kind: 'not-v2', why: `version ${r.file.version}` }
   const out = toFormat3(r.file)

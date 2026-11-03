@@ -5,7 +5,7 @@
 // a plain item is left exactly as it was.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { applyListOp, emptyLists, parseLists, serializeLists, type ListsFile, type Op } from '../../plugin/hooks/core/lists/lists.ts'
+import { applyListOp, emptyLists, LISTS_VERSION, parseLists, serializeLists, type ListsFile, type Op } from '../../plugin/hooks/core/lists/lists.ts'
 import { linkKey, type ItemLink } from '../../plugin/hooks/core/lists/item-links.ts'
 
 const ISSUE: ItemLink = { kind: 'issue', repo: 'DazzleML/claude-bookmarks', n: 45 }
@@ -123,5 +123,5 @@ test("today's reader keeps the bundles and the items' fields across a save and a
   if (back.kind !== 'ok') return
   assert.deepEqual(back.file.bundles, f.bundles)
   assert.deepEqual(item(back.file, 'board'), item(f, 'board'))
-  assert.equal(back.file.version, 2, 'no version move')
+  assert.equal(back.file.version, LISTS_VERSION, 'no version move within this build (at format 3 the handler splits the bundles out before the file is written; the reader itself keeps them)')
 })

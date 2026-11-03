@@ -27,7 +27,8 @@ test("a registered project with no data folder yet is named from the registry, a
 test('a version 2 flat file splits into lists.json v3 and the index; anything else is left as it is', async () => {
   const { emptyLists, serializeLists } = await import('../../plugin/hooks/core/lists/lists.ts')
   const { splitFlatFile } = await import('../../plugin/hooks/core/lists/layout.ts')
-  const f = { ...emptyLists('demo', 'C:/demo', 't', 1), bundles: [{ id: 'b1', label: 'x', links: [], by: 'claude', createdAt: 1, updatedAt: 1 }] }
+  // A flat file is version 2 whatever this build's version is.
+  const f = { ...emptyLists('demo', 'C:/demo', 't', 1), version: 2, bundles: [{ id: 'b1', label: 'x', links: [], by: 'claude', createdAt: 1, updatedAt: 1 }] }
   const r = splitFlatFile(serializeLists(f as never))
   assert.equal(r.kind, 'split')
   if (r.kind !== 'split') return

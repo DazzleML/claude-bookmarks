@@ -334,6 +334,16 @@ export type ListsPorts = {
   fsWrite: (path: string, text: string) => Promise<unknown>
   /** A file's size and last change, or undefined when it is not there: the pane's per-draw freshness check. Absent: the pane reads the file only when nothing is cached, as before. */
   fsStat?: (path: string) => Promise<{ size: number; mtimeMs: number } | undefined>
+  // The format-3 layout (0.8.x unit 5; handlers/lists-layout.ts): the registry's placement files, the project folders and the bundle set.
+  /** The OS account and the machine, for the placement files' folder (`USERNAME`/`USER`, `COMPUTERNAME`/`HOSTNAME`). */
+  user: () => Promise<string>
+  machine: () => Promise<string>
+  /** `$.fs.list`: `{ name, kind, size, mtimeMs, isLink }` each; a link lists as `other` with `isLink`. Rejects on a missing folder. */
+  fsList: (path: string) => Promise<readonly { name: string; kind: string; size?: number; mtimeMs?: number; isLink?: boolean }[]>
+  /** `$.fs.stat(path, { resolve: true })`, or undefined when it rejects: the dangling check. */
+  fsStatLink: (path: string) => Promise<{ kind: string; isLink?: boolean; realPath?: string } | undefined>
+  /** Random bytes for a minted project id (core/projects/registry.ts mintId). */
+  randomBytes: (n: number) => ArrayLike<number>
   copy: (text: string) => Promise<{ isCopied: boolean }>
   /** Whether a click on a list's link writes the clipboard (the listLinkClick setting; absent: it does). */
   clickCopies?: () => boolean

@@ -918,6 +918,15 @@ function listsPorts($: EngineInterface): ListsPorts {
     fsWrite: (path, text) => $.fs.write(path, text),
     // The lists pane's per-draw freshness check: a missing file rejects (ENOENT), read here as not there.
     fsStat: path => $.fs.stat(path).then(s => ({ size: s.size, mtimeMs: s.mtimeMs }), () => undefined),
+    // The format-3 layout (0.8.x unit 5): the OS account and machine name the placement files are
+    // kept under (the variables literal here for the validator), the folder listings, the stat
+    // with resolve the dangling check reads (a rejection is a state, so it answers undefined),
+    // and the bytes a minted project id is made of.
+    user: async () => (await $.env.get('USERNAME')) ?? (await $.env.get('USER')) ?? 'user',
+    machine: async () => (await $.env.get('COMPUTERNAME')) ?? (await $.env.get('HOSTNAME')) ?? 'machine',
+    fsList: path => $.fs.list(path),
+    fsStatLink: path => $.fs.stat(path, { resolve: true }).then(s => ({ kind: s.kind, isLink: s.isLink, ...(s.realPath !== undefined ? { realPath: s.realPath } : {}) }), () => undefined),
+    randomBytes: n => crypto.getRandomValues(new Uint8Array(n)),
     copy: copyVia($),
     clickCopies: () => currentSettings().listLinkClick !== 'nothing',
     redraw: async () => { await update($, listsRev, n => n + 1) },
