@@ -62,6 +62,8 @@ export type Op =
   /** The note's base set on its primary record after the note is written: what a later read-back compares against (unit 9). */
   | { op: 'noteBase'; id: RecordId; base: NoteBase }
   | { op: 'union'; other: Register }
+  /** The project this conversation works on, set by id or cleared (0.8.15, `/bm-project home`). */
+  | { op: 'home'; id?: string }
   /** An earlier session's records, tombstones, letters and pins copied in, this conversation's own winning (adopt.ts, U83). */
   | { op: 'adopt'; earlier: Register }
 
@@ -199,6 +201,11 @@ export function applyOp(reg: Register, op: Op, now: number): OpResult {
     }
     case 'union':
       return union(reg, op.other, now)
+    case 'home': {
+      if ((op.id || undefined) === reg.home) return { register: reg, unchanged: true }
+      const { home: _old, ...rest } = reg
+      return { register: { ...rest, ...(op.id ? { home: op.id } : {}), rev: reg.rev + 1, updatedAt: now } }
+    }
     case 'adopt': {
       const r = adoptInto(reg, op.earlier, now)
       return r.adopted === 0 ? { register: reg, adopted: 0, unchanged: true } : { register: r.register, adopted: r.adopted }

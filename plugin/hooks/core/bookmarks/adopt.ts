@@ -84,11 +84,16 @@ export function adoptInto(current: Register, earlier: Register, now: number): Ad
   const pins = p.pins
   if (p.changed) adopted += Math.max(1, pins.length - (current.pins?.length ?? 0))
 
+  // The project the earlier conversation worked on (0.8.15), when this one has not said its own.
+  const home = current.home ?? earlier.home
+  if (!current.home && earlier.home) adopted += 1
+
   if (adopted === 0) return { register: current, adopted }
   const nextN = Math.max(current.nextN ?? 1, ...[...taken].map(n => n + 1))
   return {
     register: {
       ...current,
+      ...(home ? { home } : {}),
       perma,
       tombstones,
       ...(Object.keys(slots).length ? { slots } : {}),

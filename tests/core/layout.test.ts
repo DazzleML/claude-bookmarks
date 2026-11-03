@@ -24,6 +24,21 @@ test("a registered project with no data folder yet is named from the registry, a
   assert.equal(r.kind === 'new-folder' && r.layout.indexPath, `${ROOT}/bookmarks/projects/claude-bookmarks__k7mq2xab__Extreme/bundles/index.json`)
 })
 
+// The session home (0.8.15; the 14:50 ruling): a session that says it works on a project resolves
+// to that project's root lists from any folder; an id with no placement here changes nothing.
+test('a session with a home resolves to that project\'s root lists from any folder; an unknown home falls back', () => {
+  const folders = ['claude-bookmarks__k7mq2xab__Extreme']
+  const away = layoutFor({ ...base, cwdReal: 'C:/code/claude-projects/dazzle-claude-plugins', folders, homeId: 'k7mq2xab' })
+  assert.equal(away.kind, 'found')
+  assert.equal(away.kind !== 'own' && away.layout.listsPath, `${ROOT}/bookmarks/projects/claude-bookmarks__k7mq2xab__Extreme/lists/_root/lists.json`)
+  // From inside the project's own subfolder too, the home is the root's lists.
+  const inside = layoutFor({ ...base, cwdReal: 'C:/code/claude-projects/claude-bookmarks/private/claude', folders, homeId: 'k7mq2xab' })
+  assert.ok(inside.kind !== 'own' && inside.layout.listsPath.endsWith('/lists/_root/lists.json'))
+  // Cleared, or naming a project this machine does not have: containment decides, as before.
+  assert.equal(layoutFor({ ...base, cwdReal: 'C:/code/claude-projects/dazzle-claude-plugins', folders }).kind, 'own')
+  assert.equal(layoutFor({ ...base, cwdReal: 'C:/code/claude-projects/dazzle-claude-plugins', folders, homeId: 'qqqqqqqq' }).kind, 'own')
+})
+
 test('a version 2 flat file splits into lists.json v3 and the index; anything else is left as it is', async () => {
   const { emptyLists, serializeLists } = await import('../../plugin/hooks/core/lists/lists.ts')
   const { splitFlatFile } = await import('../../plugin/hooks/core/lists/layout.ts')

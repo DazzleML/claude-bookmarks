@@ -68,7 +68,19 @@ export const nextOrdinal = (placements: readonly Pick<Placement, 'n'>[]): number
 
 const isUnder = (path: string, base: string): boolean => path === base || path.startsWith(base.endsWith('/') ? base : `${base}/`)
 
-export type Membership = { id: string; root: string; via: 'root' | 'member'; base: string }
+export type Membership = { id: string; root: string; via: 'root' | 'member' | 'home'; base: string }
+
+/**
+ * The session's home, when it names a registered project (0.8.15): that project, as if the session
+ * worked at its root -- its root lists and its bundles -- whatever folder it runs in. An id this
+ * machine has no placement for is no home: the folder's own membership decides, and `where` says so.
+ * (Which lists a home shows -- the root's -- is the lead worker's provisional reading of the 14:50
+ * ruling, put to djdarcy with that default.)
+ */
+export function homeMembership(homeId: string | undefined, placements: readonly Placement[]): Membership | undefined {
+  const p = homeId ? placements.find(x => x.id === homeId) : undefined
+  return p ? { id: p.id, root: p.root, via: 'home', base: p.root } : undefined
+}
 
 /**
  * The project a working folder belongs to: each placement claims the folder by the deepest of its

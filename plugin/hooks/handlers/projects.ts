@@ -5,7 +5,7 @@
 // `relink` (the link script) are the unit's second half.
 import type { ProjectsPorts } from '../engine/ports.ts'
 import type { Lists } from './lists.ts'
-import { readPlacements, resolveLayout } from './lists-layout.ts'
+import { readPlacements, resolveLayout, sessionHome } from './lists-layout.ts'
 import { excludePlan, includePlan, registerPlan, renamePlan, whereRows, whereText, type OwnFolder } from '../core/projects/project-ops.ts'
 import { foldersWithId, parseProjectFile } from '../core/projects/project-file.ts'
 import { parseIdentity } from '../core/projects/registry.ts'
@@ -13,7 +13,7 @@ import { isUnderPath, listsFolderOf, membershipOf, normPath, resolveFolderArg, t
 
 const slash = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
 const iso = (ms: number) => new Date(ms).toISOString()
-export const PROJECT_USAGE = '/bm-project: where | register [name] [--yes] | rename <name> | exclude <folder> | include <folder>'
+export const PROJECT_USAGE = '/bm-project: where | register [name] [--yes] | rename <name> | exclude <folder> | include <folder> | home [<project> | --clear]'
 const ID_IN_NAME = /__([a-z2-7]{8})__/
 
 /** The `cwd` a lists file records, read raw (no format gate). */
@@ -57,7 +57,37 @@ export async function projectsCommand(ports: ProjectsPorts, lists: Lists, args: 
     }
     const r = await resolveLayout(ports)
     const own = r && !r.placement ? (r.found ? { folder: r.layout.folder } : {}) : undefined
-    for (const line of whereText(whereRows({ placements, names, folders, cwd, cwdReal, rootsMissing, leftBehind }), own)) ports.say(`[bm] ${line}`)
+    const homeId = await sessionHome(ports, root)
+    for (const line of whereText(whereRows({ placements, names, folders, cwd, cwdReal, rootsMissing, leftBehind, ...(homeId ? { homeId } : {}) }), own)) ports.say(`[bm] ${line}`)
+    return
+  }
+
+  if (verb === 'home') {
+    if (!tail) {
+      const homeId = await sessionHome(ports, root)
+      const p = homeId ? placements.find(x => x.id === homeId) : undefined
+      return ports.say(homeId
+        ? `[bm] this session's home: ${p ? `#${p.n} ${names.get(p.id) ?? p.id}` : `${homeId} (not registered on this machine)`}; /bm-project home --clear forgets it`
+        : '[bm] this session has no home: its folder decides its project. /bm-project home <project> (a name, #n or id) works on that project from here')
+    }
+    if (tail === '--clear') {
+      const r = await ports.setHome(undefined)
+      if (r.error) return ports.say(`[bm] the home was not cleared: ${r.error}`)
+      lists.newConversation()
+      ports.say("[bm] this session's home is cleared: its folder decides its project again")
+      await ports.redraw()
+      return
+    }
+    // A project by #n, by id, or by name (the registered name, case-insensitive).
+    const want = tail.replace(/^#/, '')
+    const p = placements.find(x => String(x.n) === want) ?? placements.find(x => x.id === want)
+      ?? placements.find(x => (names.get(x.id) ?? '').toLowerCase() === tail.toLowerCase())
+    if (!p) return ports.say(`[bm] no registered project matches ${tail}; /bm-project lists them`)
+    const r = await ports.setHome(p.id)
+    if (r.error) return ports.say(`[bm] the home was not set: ${r.error}`)
+    lists.newConversation()
+    ports.say(`[bm] this session now works on #${p.n} ${names.get(p.id) ?? p.id} (its home), whatever folder it runs in: that project's root lists and its bundles`)
+    await ports.redraw()
     return
   }
 

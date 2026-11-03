@@ -94,6 +94,12 @@ export type Register = {
   title?: string
   /** The project folder's name (the last segment of `cwd`), refreshed on save. */
   project?: string
+  /**
+   * The project this conversation works on, by id, whatever folder it runs in (0.8.15; the registry
+   * design's 14:50 ruling, djdarcy: "sometimes projects move outside of their domain for touchup
+   * work"): read before the folder's own membership when the lists find their home. Never synced.
+   */
+  home?: string
   /** Bumped on every write; the higher wins when two copies meet (#6). */
   rev: number
   updatedAt: number
@@ -360,7 +366,7 @@ function bump(reg: Register, now: number): Register {
 }
 
 // Fixed key order, so a hand edit and a program write diff cleanly.
-const REGISTER_KEYS = ['version', 'format', 'sessionId', 'transcript', 'configDir', 'cwd', 'title', 'project', 'rev', 'updatedAt', 'writer', 'nextN', 'perma', 'tombstones', 'pins', 'slots', 'stars'] as const
+const REGISTER_KEYS = ['version', 'format', 'sessionId', 'transcript', 'configDir', 'cwd', 'title', 'project', 'home', 'rev', 'updatedAt', 'writer', 'nextN', 'perma', 'tombstones', 'pins', 'slots', 'stars'] as const
 const RECORD_KEYS = [
   'n', 'sessionId', 'uuid', 'file', 'part', 'drawn', 'idKind', 'owner', 'label', 'why', 'words', 'head', 'line', 'bytes', 'role', 'timestamp',
   'temporary', 'tier', 'createdAt', 'updatedAt', 'by', 'source', 'sharedFrom', 'transcript', 'tags', 'axes', 'rel', 'x', 'md',
@@ -457,6 +463,7 @@ export function parseRegister(text: string): Register | undefined {
     ...(typeof o.cwd === 'string' ? { cwd: o.cwd } : {}),
     ...(typeof o.title === 'string' ? { title: o.title } : {}),
     ...(typeof o.project === 'string' ? { project: o.project } : {}),
+    ...(typeof o.home === 'string' && o.home ? { home: o.home } : {}),
     rev: typeof o.rev === 'number' ? o.rev : 0,
     updatedAt: typeof o.updatedAt === 'number' ? o.updatedAt : 0,
     writer: typeof o.writer === 'string' ? o.writer : '?',

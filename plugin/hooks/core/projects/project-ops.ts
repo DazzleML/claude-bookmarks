@@ -5,7 +5,7 @@
 // that folder's id -- never a fresh one -- so the identity, the placement and the data folder agree
 // and no second folder is made. handlers/projects.ts reads and writes.
 import { identityOf, mintId, newIdentity, projectFileOf, renamed, serializeIdentity, type Identity } from './registry.ts'
-import { confirmReason, isUnderPath, membershipOf, nextOrdinal, normPath, placementPath, serializePlacement, PLACEMENT_VERSION, type Placement, type RootFacts } from './placement.ts'
+import { confirmReason, homeMembership, isUnderPath, membershipOf, nextOrdinal, normPath, placementPath, serializePlacement, PLACEMENT_VERSION, type Placement, type RootFacts } from './placement.ts'
 import { foldersWithId, serializeProjectFile, type ProjectFile } from './project-file.ts'
 import { projectOf } from '../lists/lists.ts'
 
@@ -102,8 +102,11 @@ export function whereRows(o: {
   cwd: string; cwdReal: string; rootsMissing: ReadonlySet<string>
   /** By project id, the excluded folders whose lists the handler found still inside the project. */
   leftBehind?: ReadonlyMap<string, readonly string[]>
-}): { rows: WhereRow[]; warnings: string[] } {
-  const here = membershipOf(o.cwdReal, o.placements)?.id
+  /** The session's home (0.8.15), as its bookmark file holds it. */
+  homeId?: string
+}): { rows: WhereRow[]; warnings: string[]; home?: { n: number; name: string } } {
+  const homeM = homeMembership(o.homeId, o.placements)
+  const here = homeM?.id ?? membershipOf(o.cwdReal, o.placements)?.id
   const rows = [...o.placements].sort((a, b) => a.n - b.n).map(p => {
     const folder = foldersWithId(o.folders, p.id)[0]
     return {
@@ -116,7 +119,9 @@ export function whereRows(o: {
   const warnings: string[] = []
   if (normPath(o.cwd) !== normPath(o.cwdReal)) warnings.push(`this session's folder ${slash(o.cwd)} is reached through a link: its real path is ${slash(o.cwdReal)}, and that is what decides its project`)
   for (const p of o.placements) if (o.rootsMissing.has(p.id)) warnings.push(`the root of #${p.n} ${o.names.get(p.id) ?? p.id} is gone: ${p.root}`)
-  return { rows, warnings }
+  if (o.homeId && !homeM) warnings.push(`this session's home ${o.homeId} is not registered on this machine, so this folder's own project is used; /bm-project home --clear forgets it`)
+  const hp = homeM ? o.placements.find(p => p.id === homeM.id) : undefined
+  return { rows, warnings, ...(hp ? { home: { n: hp.n, name: o.names.get(hp.id) ?? projectOf(hp.root) } } : {}) }
 }
 
 /** The `where` answer as lines; `own` names this folder's own project folder when it is under no registered root. */
@@ -127,7 +132,8 @@ export function whereText(r: ReturnType<typeof whereRows>, own?: { folder?: stri
         ...x.exclude.map(e => `    excluded: ${e}${x.leftBehind.some(l => normPath(l) === normPath(e)) ? ' (its lists from before are still inside the project, unread; include it again to read them)' : ''}`),
       ])
     : ['No project is registered on this machine.']
-  if (!r.rows.some(x => x.here)) lines.push(own?.folder ? `This folder is its own project: ${own.folder}` : 'This folder is its own project; its folder is made on the first write.')
+  if (r.home) lines.push(`This session works on #${r.home.n} ${r.home.name} (its home), whatever folder it runs in: the project's root lists and its bundles; /bm-project home --clear goes back to this folder's own`)
+  else if (!r.rows.some(x => x.here)) lines.push(own?.folder ? `This folder is its own project: ${own.folder}` : 'This folder is its own project; its folder is made on the first write.')
   return [...lines, ...r.warnings.map(w => `! ${w}`)]
 }
 

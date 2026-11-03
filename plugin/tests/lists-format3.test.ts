@@ -223,6 +223,27 @@ test('/bm-project register on a folder without .git or .repokit.json is a dry ru
   expect(JSON.parse(w.files[key(w, new RegExp(`/claude/projects/${MACHINE}/${USER}/${ID}\\.json$`))!]!).exclude).toEqual([])
 })
 
+// 0.8.15 (the 14:50 ruling): a session says which project it works on; the key lands in the
+// conversation's own bookmark file, where shows it, and --clear forgets it.
+test('/bm-project home #1 sets the session home in its bookmark file; where shows it; home --clear forgets it', async ($, on) => {
+  if (LISTS_VERSION < 3) return
+  const w = world(on, { session: SID, files: { ...own(), 'C:/test-project/.git/HEAD': 'ref: refs/heads/dev\n' }, stat: true })
+  await ($ as Engine).command.run({ command: 'bm-project', args: 'register' })
+  await ($ as Engine).command.run({ command: 'bm-project', args: 'home #1' })
+  expect(w.logs().some(l => l.includes('now works on #1 test-project (its home)'))).toBe(true)
+  const sessionFile = key(w, new RegExp(`/bookmarks/sessions/${SID}\\.json$`))
+  expect(sessionFile).toBeDefined()
+  expect(JSON.parse(w.files[sessionFile!]!).home).toBe(ID)
+  await ($ as Engine).command.run({ command: 'bm-project', args: 'where' })
+  expect(w.logs().some(l => l.includes('This session works on #1 test-project (its home)'))).toBe(true)
+  await ($ as Engine).command.run({ command: 'bm-project', args: 'home --clear' })
+  expect(JSON.parse(w.files[sessionFile!]!).home).toBeUndefined()
+  await ($ as Engine).command.run({ command: 'bm-project', args: 'home nothing-like-it' })
+  expect(w.logs().some(l => l.includes('no registered project matches nothing-like-it'))).toBe(true)
+  // The pane still draws the project's lists.
+  expect(await draw($)).toContain('the epic')
+})
+
 test('a bundle file whose block does not parse refuses writes to that bundle and names the file in a toast, once', async ($, on) => {
   if (LISTS_VERSION < 3) return
   const broken = (t: string) => t.replace('```bm-links\n{', '```bm-links\n{not json')

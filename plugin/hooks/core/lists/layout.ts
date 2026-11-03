@@ -6,7 +6,7 @@
 // lists the folders and reads the files.
 import { fileSafe, parseLists, projectOf, serializeLists, type ListsFile } from './lists.ts'
 import { serializeBundleIndex, toFormat3 } from './format3.ts'
-import { listsFolderOf, membershipOf, normPath, type Placement } from '../projects/placement.ts'
+import { homeMembership, listsFolderOf, membershipOf, normPath, type Placement } from '../projects/placement.ts'
 import { foldersWithId, projectFolderName } from '../projects/project-file.ts'
 
 export type Layout = {
@@ -121,13 +121,16 @@ export function pathsIn(dataRoot: string, folder: string, listsFolder: string, i
 export function layoutFor(o: {
   dataRoot: string; cwdReal: string; user: string; placements: readonly Placement[]
   names: ReadonlyMap<string, string>; folders: readonly string[]; hash: (s: string) => string
+  /** The session's home (0.8.15): a registered project's id, read before the folder's own membership. */
+  homeId?: string
 }): LayoutAnswer {
-  const m = membershipOf(o.cwdReal, o.placements)
+  const home = homeMembership(o.homeId, o.placements)
+  const m = home ?? membershipOf(o.cwdReal, o.placements)
   if (!m) {
     const base = fileSafe(projectOf(o.cwdReal))
     return { kind: 'own', base, candidates: o.folders.filter(f => f.startsWith(`${base}__`)) }
   }
-  const listsFolder = listsFolderOf(m.root, o.cwdReal, o.hash)
+  const listsFolder = home ? '_root' : listsFolderOf(m.root, o.cwdReal, o.hash)
   const candidates = foldersWithId(o.folders, m.id)
   if (candidates.length) return { kind: 'found', layout: pathsIn(o.dataRoot, candidates[0]!, listsFolder, m.id), candidates }
   const name = o.names.get(m.id) ?? projectOf(m.root)

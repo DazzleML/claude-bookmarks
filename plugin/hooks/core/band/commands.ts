@@ -23,7 +23,7 @@ export const COMMANDS: readonly (readonly [string, string])[] = [
   ['bm-bookmarks', 'List the bookmarks of this conversation; type a number and Enter to jump'],
   ['bm-search', 'Search this conversation: every prompt, reply, tool call, output and agent message; /bm-search words starts with them'],
   ['bm-lists', "Show this project's lists in a pane beside the conversation (/bm-lists <name> opens on that list); again to close"],
-  ['bm-project', "Where this folder's lists and bundles live and which project it belongs to (where | register [name] [--yes] | rename <name> | exclude <folder> | include <folder>)"],
+  ['bm-project', "Where this folder's lists and bundles live and which project it belongs to (where | register [name] [--yes] | rename <name> | exclude <folder> | include <folder> | home [<project> | --clear])"],
   ['bm-promote', 'Promote a mark into a bookmark: /bm-promote a'],
   ['bm-diag-keys', 'Diagnostics: log each keystroke in the input box (on | off | toggle)'],
   ['bm-debug', 'Echo the plugin\'s log lines into this conversation as dim rows (on | off | status), or turn debug channels on (channels | enable | disable); off by default'],

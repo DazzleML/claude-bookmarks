@@ -391,6 +391,8 @@ export type ListsPorts = {
 export type ProjectsPorts = ListsPorts & {
   home: () => Promise<string | undefined>
   say: (line: string) => void
+  /** Sets or clears the conversation's home in its bookmark file, through the register's own operation (0.8.15). */
+  setHome: (id: string | undefined) => Promise<{ error?: string }>
 }
 
 /** What the bookmarks cluster (handlers/bookmarks.ts) needs: the register's files, who and where this session is, the transcript, the jump, the mark highlight, the clipboard and the person's feedback. */

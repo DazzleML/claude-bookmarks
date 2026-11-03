@@ -16,6 +16,7 @@ import { checkFolder, projectFolderName, serializeProjectFile, type FolderCheck,
 import { mintId, newIdentity, parseIdentity, projectFileOf } from '../core/projects/registry.ts'
 import { fileSafe } from '../core/lists/lists.ts'
 import { parsePlacement, type Placement } from '../core/projects/placement.ts'
+import { parseRegister } from '../core/bookmarks/register-file.ts'
 export type { Layout }
 export { layoutFor, ownFolderFor }
 
@@ -23,6 +24,8 @@ export { layoutFor, ownFolderFor }
 export type LayoutPorts = {
   dataRoot: () => Promise<string | undefined>
   cwd: () => Promise<string>
+  /** The conversation's id, to read its home (0.8.15); absent: no session home. */
+  sessionId?: () => Promise<string>
   /** The OS account and the machine, for the placement files' folder. */
   user: () => Promise<string>
   machine: () => Promise<string>
@@ -91,6 +94,13 @@ export async function readPlacements(ports: LayoutPorts, root: string): Promise<
   return { placements, names }
 }
 
+/** The project this session works on, from its own bookmark file (0.8.15, `/bm-project home`); undefined when it has said none. */
+export async function sessionHome(ports: LayoutPorts, root: string): Promise<string | undefined> {
+  if (!ports.sessionId) return undefined
+  const text = await ports.fsRead(`${root}/bookmarks/sessions/${await ports.sessionId()}.json`).catch(() => '')
+  return text ? parseRegister(text)?.home : undefined
+}
+
 /** The format-2 flat file for a working folder: `<root>/bookmarks/lists/<project>[--<hash8>].json` (the plain name's file may hold another folder of the same name, L-1). */
 export async function flatPathOf(ports: LayoutPorts, root: string, cwd: string): Promise<string> {
   const dir = `${root}/bookmarks/lists`
@@ -120,7 +130,8 @@ export async function resolveLayout(ports: LayoutPorts): Promise<Resolved | unde
   const projectsDir = `${root}/bookmarks/projects`
   const folders = (await ports.fsList(projectsDir).catch(() => [])).filter(e => e.kind === 'dir' || e.isLink).map(e => e.name)
   const flatPath = await flatPathOf(ports, root, cwd)
-  const a = layoutFor({ dataRoot: root, cwdReal, user, placements, names, folders, hash: ports.hash })
+  const homeId = await sessionHome(ports, root)
+  const a = layoutFor({ dataRoot: root, cwdReal, user, placements, names, folders, hash: ports.hash, ...(homeId ? { homeId } : {}) })
   if (a.kind !== 'own') {
     const placement = placements.find(p => p.id === a.layout.id)
     const identity = parseIdentity(await ports.fsRead(`${root}/projects/${a.layout.id}.json`).catch(() => ''))

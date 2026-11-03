@@ -904,7 +904,14 @@ function reopenPane($: EngineInterface, p: ShownPane) {
 // `/bm-project` (handlers/projects.ts, 0.8.x unit 6b): the lists' ports, the home folder (an
 // umbrella is refused), and its answer said into the conversation whatever the debug setting.
 function projectsPorts($: EngineInterface): ProjectsPorts {
-  return { ...listsPorts($), home: () => homeDir($), say: line => log($, line, { always: true }) }
+  return {
+    ...listsPorts($), home: () => homeDir($), say: line => log($, line, { always: true }),
+    // The session home goes through commitOp, so another window's write to the same file is kept (0.8.15).
+    setHome: async id => {
+      const r = await bookmarks_.commitOp(bookmarksPorts($), { op: 'home', ...(id ? { id } : {}) })
+      return 'error' in r && r.error ? { error: r.error } : {}
+    },
+  }
 }
 
 // The project's lists (handlers/lists.ts, #45), over listsPorts($).
